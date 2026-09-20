@@ -1,0 +1,1 @@
+{"name":"fraiha-xadrez-server","version":"0.21.0","private":true,"main":"online_v021/server.js","scripts":{"start":"node online_v021/server.js"},"dependencies":{"ws":"^8.18.0"}}
