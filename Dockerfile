@@ -16,6 +16,7 @@ RUN printf '%s\n' \
 '    listen 10000;' \
 '    location = /health { add_header Content-Type text/plain; return 200 "FRAIHA online\\n"; }' \
 '    location / {' \
+'      if ($http_upgrade = "") { return 200 "FRAIHA multiplayer server\\n"; }' \
 '      proxy_pass http://127.0.0.1:10001;' \
 '      proxy_http_version 1.1;' \
 '      proxy_set_header Upgrade $http_upgrade;' \
