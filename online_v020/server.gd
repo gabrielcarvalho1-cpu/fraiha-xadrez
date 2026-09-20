@@ -23,40 +23,12 @@ func _process(delta):
         if peers.size() >= 512:
             stream.disconnect_from_host()
             continue
-        # Render terminates TLS and forwards a normal HTTP WebSocket Upgrade
-        # request to this service. Parse that request first, then hand the
-        # already-read headers to WebSocketPeer. Calling accept_stream(stream)
-        # directly makes Godot expect one more HTTP header and produces:
-        # "Not enough response headers, got: 3, expected >= 4".
-        stream.set_no_delay(true)
-        var request = ""
-        var deadline = Time.get_ticks_msec() + 5000
-        while request.find("\r\n\r\n") == -1 and Time.get_ticks_msec() < deadline:
-            stream.poll()
-            var available = stream.get_available_bytes()
-            if available > 0:
-                request += stream.get_utf8_string(available)
-                if request.length() > 16384:
-                    break
-            else:
-                OS.delay_msec(1)
-        if request.find("\r\n\r\n") == -1:
-            stream.disconnect_from_host()
-            continue
-        var lines = request.split("\r\n")
-        if lines.size() < 2 or not String(lines[0]).begins_with("GET "):
-            stream.disconnect_from_host()
-            continue
-        var headers = PackedStringArray()
-        for i in range(1, lines.size()):
-            var line = String(lines[i])
-            if line.is_empty():
-                break
-            headers.append(line)
         var socket = WebSocketPeer.new()
         socket.inbound_buffer_size = 16384
         socket.max_queued_packets = 32
-        if socket.accept_stream(stream, headers) != OK:
+        # Godot 4.5.1 accepts only the TCP stream here. Render terminates TLS
+        # before forwarding the WebSocket connection to this process.
+        if socket.accept_stream(stream) != OK:
             stream.disconnect_from_host()
             continue
         next_peer += 1
