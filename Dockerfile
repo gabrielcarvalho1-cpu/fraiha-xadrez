@@ -11,6 +11,7 @@ RUN printf '%s\n' \
 'http {' \
 '  access_log /dev/stdout;' \
 '  error_log /dev/stderr warn;' \
+'  map $http_upgrade $connection_upgrade { default upgrade; "" close; }' \
 '  server {' \
 '    listen 10000;' \
 '    location = /health { add_header Content-Type text/plain; return 200 "FRAIHA online\\n"; }' \
@@ -18,8 +19,12 @@ RUN printf '%s\n' \
 '      proxy_pass http://127.0.0.1:10001;' \
 '      proxy_http_version 1.1;' \
 '      proxy_set_header Upgrade $http_upgrade;' \
-'      proxy_set_header Connection "upgrade";' \
+'      proxy_set_header Connection $connection_upgrade;' \
 '      proxy_set_header Host $host;' \
+'      proxy_set_header X-Real-IP $remote_addr;' \
+'      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
+'      proxy_set_header X-Forwarded-Proto $scheme;' \
+'      proxy_buffering off;' \
 '      proxy_read_timeout 3600s;' \
 '      proxy_send_timeout 3600s;' \
 '    }' \
