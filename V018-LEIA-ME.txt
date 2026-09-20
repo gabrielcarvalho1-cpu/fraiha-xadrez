@@ -1,0 +1,25 @@
+FRAIHA XADREZ V0.18 — FLORESTA
+
+Abrir no Windows: execute FRAIHA-XADREZ.exe, mantendo o .pck ao lado.
+Abrir no Godot 4.7.2: importe project.godot e pressione F6/F5.
+
+Controles: clique na peça e no destino. Enter inicia. R reinicia.
+Promoção: clique na opção ou use 1–4. M silencia/ativa os dois ambientes.
+
+Reconstrução: cenário dedicado sem peças pintadas; 12 sprites independentes em
+atlas transparente; tabuleiro integrado à textura do terreno; cena ambiental
+separada da lógica; animação localizada de água, fogo e vegetação por material;
+iluminação quente discreta; áudio original mais água/vento/pássaros sintetizados.
+A arte aproxima a referência, mas não é reprodução pixel a pixel. A vegetação e
+as chamas usam deformação sutil da arte, não animação quadro a quadro.
+
+Preservado: motor de regras existente, seleção e fluxo de partida, capturas,
+promoção, checagem de xeque/mate, reinício e sons de jogadas.
+Validado no Godot 4.7.2 com renderização OpenGL: 32 peças iniciais, movimento de
+peão, bloqueio do turno incorreto, clique/mapeamento, captura, mate do louco,
+cravada, promoção e reinício. Todos os 10 testes passaram.
+
+O projeto original foi atualizado diretamente na pasta enviada.
+Backup-original-v017.zip contém os três arquivos originais modificados.
+Assets antigos permanecem no projeto para recuperação.
+O executável portátil inclui o runtime Godot 4.7.2 instalado nesta máquina.

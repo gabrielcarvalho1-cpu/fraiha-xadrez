@@ -1,0 +1,27 @@
+FRAIHA XADREZ V0.19 — 16:9 E ARRASTAR PEÇAS
+
+WINDOWS: extraia a pasta e abra FRAIHA-XADREZ.exe. Mantenha o .pck ao lado.
+GODOT 4.7.2: importe project.godot e execute com F5.
+
+Alt+Enter alterna janela/tela cheia, inclusive na tela inicial e na promoção.
+A engrenagem contém o botão Tela Cheia. A janela anterior é restaurada ao sair.
+Mova com clique/clique ou arraste e solte. Destinos inválidos não movem a peça.
+Enter inicia; R reinicia; M silencia ambiente; promoção com clique ou teclas 1–4.
+
+Viewport base: 1920x1080, canvas_items, aspecto expand.
+Tabuleiro centralizado com escala uniforme. Arte lateral ampliada e preenchida
+com escala uniforme. A região original do tabuleiro fica preservada sobre a
+extensão da floresta; mistura apenas nas margens externas do terreno.
+A lógica, os sprites das peças e os áudios foram preservados nesta versão.
+
+VALIDAÇÃO
+- Executável empacotado executado com renderização NVIDIA/OpenGL, em tela cheia
+  1920x1080. Captura confirmada com 1920x1080 pixels, sem faixas pretas laterais.
+- Renderização em 1280x720, 1920x1080 e 2560x1440, com cobertura das bordas,
+  escala uniforme e centralização verificados automaticamente.
+- 17 verificações passaram: regressões de xadrez, cliques, arraste legal/ilegal,
+  proporção, centralização, Alt+Enter e opção de tela cheia.
+- Comparação do código confirma funções de regras e handler original intactos.
+
+O projeto da pasta enviada foi atualizado diretamente. A versão anterior
+continua nos pacotes V018 já entregues. V019 é a versão nova para usar.

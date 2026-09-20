@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: fraiha-xadrez-salas
+    runtime: docker
+    plan: free
+    numInstances: 1
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: "10000"
