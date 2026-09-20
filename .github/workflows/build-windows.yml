@@ -1,0 +1,37 @@
+name: Build Windows
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'online.cfg'
+      - 'online_v020/**'
+      - 'world.gd'
+      - 'project.godot'
+      - 'export_presets.cfg'
+      - '.github/workflows/build-windows.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.7 and export templates
+        run: |
+          wget -q https://github.com/godotengine/godot-builds/releases/download/4.7-stable/Godot_v4.7-stable_linux.x86_64.zip
+          unzip -q Godot_v4.7-stable_linux.x86_64.zip
+          sudo mv Godot_v4.7-stable_linux.x86_64 /usr/local/bin/godot
+          mkdir -p ~/.local/share/godot/export_templates/4.7.stable
+          wget -q https://github.com/godotengine/godot-builds/releases/download/4.7-stable/Godot_v4.7-stable_export_templates.tpz
+          unzip -q Godot_v4.7-stable_export_templates.tpz
+          mv templates/* ~/.local/share/godot/export_templates/4.7.stable/
+      - name: Export Windows
+        run: |
+          mkdir -p build
+          godot --headless --editor --path . --import --quit
+          godot --headless --path . --export-release "Windows Desktop" build/FRAIHA-Xadrez-Online.exe
+          cp online.cfg build/online.cfg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FRAIHA-Xadrez-Online-Windows
+          path: build/
+          if-no-files-found: error
