@@ -1,38 +1,8 @@
-FROM debian:bookworm-slim
-ARG GODOT_VERSION=4.5.1
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip nginx libasound2 libx11-6 libxcursor1 libxinerama1 libxrandr2 libxi6 libgl1 libfontconfig1 && rm -rf /var/lib/apt/lists/*
-RUN curl -fL "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o /tmp/godot.zip && unzip /tmp/godot.zip -d /tmp/godot && mv /tmp/godot/Godot* /usr/local/bin/godot && chmod +x /usr/local/bin/godot && rm -rf /tmp/godot /tmp/godot.zip
-RUN useradd --create-home godot
+FROM node:22-bookworm-slim
 WORKDIR /app
-COPY . /app
-RUN godot --headless --editor --path /app --import --quit
-RUN printf '%s\n' \
-'events {}' \
-'http {' \
-'  access_log /dev/stdout;' \
-'  error_log /dev/stderr warn;' \
-'  map $http_upgrade $connection_upgrade { default upgrade; "" close; }' \
-'  server {' \
-'    listen 10000;' \
-'    location = /health { add_header Content-Type text/plain; return 200 "FRAIHA online\\n"; }' \
-'    location / {' \
-'      if ($http_upgrade = "") { return 200 "FRAIHA multiplayer server\\n"; }' \
-'      proxy_pass http://127.0.0.1:10001;' \
-'      proxy_http_version 1.1;' \
-'      proxy_set_header Upgrade $http_upgrade;' \
-'      proxy_set_header Connection $connection_upgrade;' \
-'      proxy_set_header Host $host;' \
-'      proxy_set_header Sec-WebSocket-Protocol $http_sec_websocket_protocol;' \
-'      proxy_set_header X-Real-IP $remote_addr;' \
-'      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
-'      proxy_set_header X-Forwarded-Proto $scheme;' \
-'      proxy_set_header Accept-Encoding "";' \
-'      proxy_buffering off;' \
-'      proxy_read_timeout 3600s;' \
-'      proxy_send_timeout 3600s;' \
-'    }' \
-'  }' \
-'}' > /etc/nginx/nginx.conf
+COPY package.json ./
+RUN npm install --omit=dev
+COPY . .
 ENV PORT=10000
 EXPOSE 10000
-CMD ["sh", "-c", "PORT=10001 godot --headless --path /app --script res://online_v020/server.gd & exec nginx -g 'daemon off;'"]
+CMD ["node","online_v021/server.js"]
