@@ -31,12 +31,17 @@ func _process(delta):
         if socket.accept_stream(stream) != OK:
             stream.disconnect_from_host()
             continue
+        # accept_stream() starts the HTTP/WebSocket handshake asynchronously.
+        # Do not poll the peer until the TCP request has had time to arrive;
+        # otherwise Godot 4.5 parses an incomplete header block ("got: 3").
         next_peer += 1
-        peers[next_peer] = {"socket":socket,"room":"","color":"","connected_at":Time.get_ticks_msec(),"rate_at":0,"count":0}
+        peers[next_peer] = {"socket":socket,"room":"","color":"","connected_at":Time.get_ticks_msec(),"poll_after":Time.get_ticks_msec()+250,"rate_at":0,"count":0}
     for id in peers.keys():
         if not peers.has(id): continue
         var peer = peers[id]
         var socket = peer.socket
+        if Time.get_ticks_msec() < int(peer.get("poll_after",0)):
+            continue
         socket.poll()
         if socket.get_ready_state() == WebSocketPeer.STATE_CLOSED:
             disconnected(id)
