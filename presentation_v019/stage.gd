@@ -51,3 +51,23 @@ func toggle_fullscreen():
         windowed_mode = window.mode
         window.mode = Window.MODE_FULLSCREEN
     game.queue_redraw()
+
+
+func _unhandled_key_input(event):
+    if event is InputEventKey and event.pressed and not event.echo and event.keycode==KEY_ESCAPE:
+        return_to_home()
+
+func return_to_home():
+    var hub=$MainHub
+    var online=$Online
+    if online.online_mode and online.joined:
+        online.leave_room()
+        return
+    online.online_mode=false
+    online.game.online=null
+    online.menu.hide()
+    online.hud.hide()
+    online.game.cancel_drag()
+    online.game.game_started=false
+    hub.open_home()
+    get_viewport().set_input_as_handled()
