@@ -9,6 +9,19 @@ var windowed_mode := Window.MODE_WINDOWED
 func _ready():
     get_viewport().size_changed.connect(_layout)
     _layout()
+    var hub=$MainHub
+    var online=$Online
+    hub.play_local_requested.connect(func():
+        hub.hide_hub()
+        online.start_local()
+    )
+    hub.play_online_requested.connect(func():
+        hub.hide_hub()
+        online.open_online_menu()
+    )
+    hub.bot_requested.connect(func(level):
+        hub._message("Modo Bot %s será conectado ao novo motor de regras na próxima etapa." % level)
+    )
 
 func _layout():
     var size = get_viewport_rect().size
