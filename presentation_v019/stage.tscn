@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" path="res://presentation_v019/forest_wide.png" id="3"]
 [ext_resource type="Shader" path="res://presentation_v019/wide_forest.gdshader" id="4"]
 [ext_resource type="Script" path="res://online_v020/client.gd" id="5"]
+[ext_resource type="Script" path="res://ui_v022/main_hub.gd" id="6"]
 [sub_resource type="ShaderMaterial" id="Material"]
 shader = ExtResource("4")
 [node name="WidescreenPresentation" type="Node2D"]
@@ -16,3 +17,6 @@ material = SubResource("Material")
 
 [node name="Online" type="CanvasLayer" parent="."]
 script = ExtResource("5")
+
+[node name="MainHub" type="CanvasLayer" parent="."]
+script = ExtResource("6")
