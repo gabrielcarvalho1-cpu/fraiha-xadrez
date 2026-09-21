@@ -75,9 +75,10 @@ func build_ui():
     box.add_theme_constant_override("separation",10)
     menu.add_child(box)
     var title=Label.new()
-    title.text="FRAIHA • XADREZ"
+    title.text="FRAIHA XADREZ  •  ONLINE"
     title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size",27)
+    title.add_theme_font_size_override("font_size",30)
+    title.add_theme_color_override("font_color",Color("#e4bd67"))
     box.add_child(title)
     button(box,"Criar Sala",func(): connect_room({"type":"create"}))
     var row=HBoxContainer.new(); box.add_child(row)
@@ -305,6 +306,17 @@ func open_online_menu():
     menu_info.text="Crie uma sala ou entre com o código de um amigo."
 
 func return_to_main_hub():
+    if socket and connected and joined:
+        leave_room()
+        return
+    online_mode=false
+    connected=false
+    joined=false
+    game.online=null
+    game.game_started=false
+    game.cancel_drag()
     menu.hide()
+    hud.hide()
     var hub=get_parent().get_node_or_null("MainHub")
     if hub: hub.open_home()
+    game.queue_redraw()
