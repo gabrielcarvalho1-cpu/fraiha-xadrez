@@ -29,6 +29,7 @@ var promotion_color := "w"
 var game_over := false
 var server_mode := false
 var online = null
+var bot = null
 var sound_move: AudioStreamPlayer
 var sound_capture: AudioStreamPlayer
 var sound_promotion: AudioStreamPlayer
@@ -73,6 +74,9 @@ func _ready():
     set_process(true)
 
 func _new_game():
+    if bot != null:
+        bot.restart()
+        return
     if online != null:
         online.send_action("restart")
         return
@@ -210,6 +214,7 @@ func _in_check(color:String)->bool:
     return _square_attacked(king,"b" if color=="w" else "w")
 
 func _moves(fr:Vector2i)->Array[Vector2i]:
+    if bot != null: return bot.legal_from(fr)
     var legal:Array[Vector2i]=[]
     if not pieces.has(fr): return legal
     var color=_color_at(fr)
@@ -275,6 +280,9 @@ func _draw_promotion_overlay():
         draw_string(font,Vector2(rr.position.x+43,595),str(i+1),HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("#f0cf77"))
 
 func _finish_promotion(kind:String):
+    if bot != null:
+        bot.promote(kind)
+        return
     if online != null:
         online.send_action("promote", {"kind":kind})
         return
@@ -395,6 +403,7 @@ func _captured_text(a:Array[String])->String:
     return s
 
 func _select(cell:Vector2i):
+    if bot != null and not bot.can_interact(): return
     if online != null and not online.can_interact():
         return
     if game_over: return
@@ -430,8 +439,12 @@ func _handle_game_input(event):
     if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
         if gear_button.has_point(event.position):
             settings_open = not settings_open
+            cancel_drag()
+            selected = Vector2i(-1,-1)
+            legal_moves.clear()
             queue_redraw()
             return
+        if settings_open: return
         if not game_started:
             if start_button.has_point(event.position):
                 game_started = true
@@ -443,6 +456,7 @@ func _handle_game_input(event):
             _new_game()
             queue_redraw()
             return
+    if settings_open: return
     if not game_started:
         if event is InputEventKey and event.pressed and (event.keycode==KEY_ENTER or event.keycode==KEY_SPACE):
             game_started=true
@@ -481,6 +495,9 @@ func _handle_game_input(event):
         elif cell==selected:
             selected=Vector2i(-1,-1); legal_moves.clear()
         elif cell in legal_moves:
+            if bot != null:
+                bot.request_move(selected,cell)
+                return
             if online != null:
                 online.send_action("move", {"from":[selected.x,selected.y],"to":[cell.x,cell.y]})
                 return
@@ -540,7 +557,7 @@ func _drag_input(event: InputEvent) -> bool:
     if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
         if event.pressed:
             cancel_drag()
-            if not game_started or game_over or promotion_pending or settings_open or (online != null and not online.can_interact()):
+            if not game_started or game_over or promotion_pending or settings_open or (online != null and not online.can_interact()) or (bot != null and not bot.can_interact()):
                 return false
             var cell = Vector2i(floor((event.position.x-ORIGIN.x)/TILE), floor((event.position.y-ORIGIN.y)/TILE))
             if _inside(cell) and pieces.has(cell) and _color_at(cell) == turn:

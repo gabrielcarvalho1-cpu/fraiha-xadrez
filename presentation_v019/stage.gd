@@ -12,13 +12,19 @@ var pending_navigation := ""
 var navigation_confirmed := false
 var home_button: Button
 var navigation_dialog: ConfirmationDialog
+var bot_controller: Node
+var bot_info: Label
 
 func _ready():
     get_tree().auto_accept_quit = false
+    bot_controller = preload("res://bot/controller.gd").new()
+    bot_controller.name = "BotController"
+    add_child(bot_controller)
     _build_navigation()
     get_viewport().size_changed.connect(_layout)
     hub.play_local_requested.connect(_start_local)
     hub.play_online_requested.connect(_open_online)
+    hub.play_bot_requested.connect(_start_bot)
     hub.quit_requested.connect(request_quit)
     online.room_joined.connect(_room_joined)
     online.room_left.connect(_room_left)
@@ -38,6 +44,15 @@ func _build_navigation():
     home_button.add_theme_font_size_override("font_size", 18)
     home_button.pressed.connect(return_to_home)
     overlay.add_child(home_button)
+    bot_info = Label.new()
+    bot_info.name = "BotInfo"
+    bot_info.add_theme_font_size_override("font_size", 20)
+    bot_info.add_theme_color_override("font_color", Color("efcf83"))
+    bot_info.add_theme_color_override("font_outline_color", Color("102018"))
+    bot_info.add_theme_constant_override("outline_size", 5)
+    bot_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    bot_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    overlay.add_child(bot_info)
     navigation_dialog = ConfirmationDialog.new()
     navigation_dialog.name = "LeaveConfirmation"
     navigation_dialog.title = "FRAIHA XADREZ"
@@ -54,12 +69,15 @@ func _clear_selection():
     game.queue_redraw()
 
 func _refresh_input():
-    var playing = mode in ["local", "online"]
+    var playing = mode in ["local", "online", "bot"]
+    bot_controller.set_paused(not pending_navigation.is_empty())
+    bot_info.visible = mode == "bot"
     game.set_process_unhandled_input(playing and pending_navigation.is_empty())
     home_button.visible = mode != "home"
     home_button.disabled = not pending_navigation.is_empty()
 
 func _start_local():
+    bot_controller.stop()
     hub.hide_hub()
     online.cancel_connection()
     online.start_local()
@@ -69,10 +87,22 @@ func _start_local():
     _refresh_input()
 
 func _open_online():
+    bot_controller.stop()
     hub.hide_hub()
     mode = "online_menu"
     game.hide()
     online.open_online_menu()
+    _clear_selection()
+    _refresh_input()
+
+func _start_bot(difficulty: String, side: String):
+    bot_controller.stop()
+    online.cancel_connection()
+    hub.hide_hub()
+    mode = "bot"
+    game.show()
+    bot_controller.start(game,difficulty,side)
+    bot_info.text = "BOT %s  ·  VOCÊ: %s" % ["MÉDIO" if difficulty == "medium" else "FÁCIL", "BRANCAS" if bot_controller.human_color == "w" else "PRETAS"]
     _clear_selection()
     _refresh_input()
 
@@ -99,6 +129,7 @@ func _connection_failed():
     _refresh_input()
 
 func open_home():
+    bot_controller.stop()
     pending_navigation = ""
     navigation_confirmed = false
     navigation_dialog.hide()
@@ -116,7 +147,7 @@ func return_to_home():
     if not pending_navigation.is_empty():
         return
     if mode == "home":
-        hub.open_home()
+        hub.back()
         return
     _request_navigation("home")
 
@@ -127,20 +158,25 @@ func request_quit():
 func _request_navigation(destination: String):
     _clear_selection()
     # Returning from an empty board or a pending connection is lossless.
-    var needs_confirmation = destination == "quit" or online.joined or mode == "online" or (mode == "local" and game.move_count > 0)
+    var needs_confirmation = destination == "quit" or online.joined or mode in ["online","bot"] or (mode == "local" and game.move_count > 0)
     pending_navigation = destination
     navigation_confirmed = false
     _refresh_input()
     if not needs_confirmation:
         _confirm_navigation()
         return
-    if online.joined or mode == "online":
+    navigation_dialog.ok_button_text = "Confirmar"
+    if mode == "bot":
+        navigation_dialog.dialog_text = "Deseja abandonar a partida?"
+        navigation_dialog.ok_button_text = "Sair para Home" if destination == "home" else "Sair do jogo"
+    elif online.joined or mode == "online":
         navigation_dialog.dialog_text = "Sair da sala encerra sua participação nesta partida. Continuar?"
     elif mode == "local" and game.move_count > 0:
         navigation_dialog.dialog_text = "A partida local será encerrada. Voltar à tela inicial?" if destination == "home" else "A partida local será encerrada. Sair do jogo?"
     else:
         navigation_dialog.dialog_text = "Sair do FRAIHA Xadrez?"
     navigation_dialog.cancel_button_text = "Continuar jogando" if mode in ["local", "online"] else "Cancelar"
+    if mode == "bot": navigation_dialog.cancel_button_text = "Continuar partida"
     navigation_dialog.popup_centered(Vector2i(480, 160))
 
 func _cancel_navigation():
@@ -157,6 +193,7 @@ func _confirm_navigation():
         online.leave_room()
         return
     online.cancel_connection()
+    bot_controller.stop()
     if pending_navigation == "quit":
         get_tree().quit()
     else:
@@ -184,6 +221,9 @@ func _layout():
     var size = get_viewport_rect().size
     if is_instance_valid(home_button):
         home_button.position = Vector2(20, size.y - 66)
+    if is_instance_valid(bot_info):
+        bot_info.position = Vector2(size.x/2.0-250,16)
+        bot_info.size = Vector2(500,38)
     var factor = min(size.y / 1024.0, size.x / 1024.0)
     game.scale = Vector2.ONE * factor
     var board_center = game.ORIGIN + Vector2.ONE * game.BOARD / 2.0

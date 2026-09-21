@@ -1,7 +1,8 @@
 extends CanvasLayer
-## Reference-led artwork, individually sliced interactive sprites, live text.
+## One proportional composition; artwork stays untouched and text remains live.
 signal play_local_requested
 signal play_online_requested
+signal play_bot_requested(difficulty: String, side: String)
 signal quit_requested
 
 const DESIGN = Vector2(1672, 941)
@@ -16,8 +17,13 @@ const PREFS = "user://home_preferences.cfg"
 var root: Control
 var canvas: Control
 var pages := {}
+var page_scrolls := {}
 var page := "main"
+var selected_difficulty := "easy"
+var difficulty_label: Label
 var menu_buttons: Array[TextureButton] = []
+var difficulty_buttons := {}
+var side_buttons := {}
 var profile_button: TextureButton
 var profile_name: Label
 var player_name := "Jogador"
@@ -45,11 +51,11 @@ func _slice(texture: Texture2D, region: Rect2) -> AtlasTexture:
     t.filter_clip = true
     return t
 
-func _text(parent: Node, value: String, pos: Vector2, box: Vector2, font_size: int, color: Color = CREAM) -> Label:
+func _label(parent: Node, value: String, font_size: int, color: Color = CREAM) -> Label:
     var label = Label.new()
     label.text = value
-    label.position = pos
-    label.size = box
+    label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     label.add_theme_font_size_override("font_size", font_size)
     label.add_theme_color_override("font_color", color)
     label.add_theme_color_override("font_shadow_color", Color(0,0,0,0.9))
@@ -57,6 +63,22 @@ func _text(parent: Node, value: String, pos: Vector2, box: Vector2, font_size: i
     label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     parent.add_child(label)
     return label
+
+func _stack(parent: Node, pos: Vector2, dimensions: Vector2, margins := Vector4(0,0,0,0), separation := 3) -> VBoxContainer:
+    var margin = MarginContainer.new()
+    margin.position = pos
+    margin.size = dimensions
+    margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    margin.add_theme_constant_override("margin_left", int(margins.x))
+    margin.add_theme_constant_override("margin_top", int(margins.y))
+    margin.add_theme_constant_override("margin_right", int(margins.z))
+    margin.add_theme_constant_override("margin_bottom", int(margins.w))
+    parent.add_child(margin)
+    var box = VBoxContainer.new()
+    box.add_theme_constant_override("separation", separation)
+    box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    margin.add_child(box)
+    return box
 
 func _frame(parent: Node, pos: Vector2, dimensions: Vector2) -> NinePatchRect:
     var frame = NinePatchRect.new()
@@ -76,19 +98,34 @@ func _button(parent: Node, row: int, title: String, subtitle: String, pos: Vecto
     button.texture_normal = _slice(BUTTON_ATLAS, ROWS[row])
     button.texture_hover = button.texture_normal
     button.texture_pressed = button.texture_normal
+    button.texture_disabled = button.texture_normal
     button.ignore_texture_size = true
     button.stretch_mode = TextureButton.STRETCH_SCALE
     button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     button.position = pos
     button.size = dimensions
+    button.custom_minimum_size = Vector2(0, dimensions.y)
+    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     button.focus_mode = Control.FOCUS_ALL
     button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     button.tooltip_text = title
     button.name = "MenuButton" + str(row)
     parent.add_child(button)
-    var title_label = _text(button, title, Vector2(105,11), Vector2(dimensions.x-150,23), 18)
-    title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    _text(button, subtitle, Vector2(105,35), Vector2(dimensions.x-150,21), 15, MUTED)
+    var margin = MarginContainer.new()
+    margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    margin.add_theme_constant_override("margin_left", int(dimensions.x * 0.232))
+    margin.add_theme_constant_override("margin_right", int(dimensions.x * 0.094))
+    margin.add_theme_constant_override("margin_top", 7)
+    margin.add_theme_constant_override("margin_bottom", 7)
+    margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    button.add_child(margin)
+    var labels = VBoxContainer.new()
+    labels.add_theme_constant_override("separation", 1)
+    labels.alignment = BoxContainer.ALIGNMENT_CENTER
+    labels.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    margin.add_child(labels)
+    _label(labels, title, 18)
+    _label(labels, subtitle, 14, MUTED)
     button.pressed.connect(callback)
     button.mouse_entered.connect(func(): _highlight(button, true))
     button.mouse_exited.connect(func(): _highlight(button, button.has_focus()))
@@ -99,7 +136,10 @@ func _button(parent: Node, row: int, title: String, subtitle: String, pos: Vecto
     return button
 
 func _highlight(button: TextureButton, active: bool):
-    button.self_modulate = Color(1.22,1.24,1.12) if active else Color.WHITE
+    if button.disabled:
+        button.self_modulate = Color(0.55,0.59,0.55)
+    else:
+        button.self_modulate = Color(1.22,1.24,1.12) if active else Color.WHITE
 
 func _build():
     root = Control.new()
@@ -107,10 +147,9 @@ func _build():
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(root)
-    var backdrop = TextureRect.new()
-    backdrop.texture = FOREST
-    backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    var backdrop = ColorRect.new()
+    backdrop.name = "DeepForestBackdrop"
+    backdrop.color = Color("061b15")
     backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root.add_child(backdrop)
@@ -119,8 +158,8 @@ func _build():
     canvas.size = DESIGN
     canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root.add_child(canvas)
-    # Keep artwork and controls in one design coordinate system on every aspect.
     var art = TextureRect.new()
+    art.name = "ForestArtwork"
     art.texture = FOREST
     art.size = DESIGN
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -139,14 +178,14 @@ func _build():
     _build_pages()
     var version_bg = ColorRect.new()
     version_bg.color = Color("09110de0")
-    version_bg.size = Vector2(246,30)
+    version_bg.size = Vector2(266,30)
     version_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(version_bg)
-    _text(canvas, "FRAIHA Xadrez V0.22 · TESTE", Vector2(7,4), Vector2(235,23), 16)
+    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.23 · TESTE", 16)
     var footer = ColorRect.new()
     footer.color = Color("06100ce6")
     footer.position = Vector2(0,867)
-    footer.size = Vector2(370,74)
+    footer.size = Vector2(385,74)
     footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(footer)
     var crown = TextureRect.new()
@@ -157,73 +196,106 @@ func _build():
     crown.size = Vector2(43,45)
     crown.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(crown)
-    _text(canvas, "FRAIHA XADREZ", Vector2(82,879), Vector2(268,25), 18)
-    _text(canvas, "Feito por jogadores, para jogadores.", Vector2(82,907), Vector2(280,22), 15, MUTED)
-    var signature = _text(canvas, "Versão 0.22 · Home de teste\nMaringá · PR · Brasil", Vector2(1342,879), Vector2(307,48), 15)
+    var footer_text = _stack(canvas, Vector2(82,877), Vector2(291,55))
+    _label(footer_text, "FRAIHA XADREZ", 18)
+    _label(footer_text, "Feito por jogadores, para jogadores.", 14, MUTED)
+    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.23 · Home e Bot de teste\nMaringá · PR · Brasil", 15)
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     signature.add_theme_constant_override("outline_size", 4)
     signature.add_theme_color_override("font_outline_color", Color("09110dee"))
 
 func _build_profile():
     _frame(canvas, Vector2(1254,24), Vector2(396,178))
+    var profile = _stack(canvas, Vector2(1254,24), Vector2(396,178), Vector4(18,13,18,13), 4)
     profile_button = TextureButton.new()
     profile_button.name = "ProfileButton"
-    profile_button.position = Vector2(1269,38)
-    profile_button.size = Vector2(365,90)
+    profile_button.custom_minimum_size = Vector2(0,106)
     profile_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     profile_button.focus_mode = Control.FOCUS_ALL
-    canvas.add_child(profile_button)
+    profile.add_child(profile_button)
     var portrait = TextureRect.new()
     portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     portrait.texture = AVATAR
-    portrait.position = Vector2(0,-5)
+    portrait.position = Vector2(0,2)
     portrait.size = Vector2(88,88)
     portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
     profile_button.add_child(portrait)
-    profile_name = _text(profile_button, player_name, Vector2(90,4), Vector2(230,32), 24)
-    _text(profile_button, "Perfil local", Vector2(90,40), Vector2(220,23), 16, GOLD)
-    _text(profile_button, "Ligas e histórico em preparação", Vector2(90,65), Vector2(255,20), 14, MUTED)
+    var words = _stack(profile_button, Vector2(94,0), Vector2(266,106), Vector4.ZERO, 2)
+    profile_name = _label(words, player_name, 20)
+    _label(words, "Perfil local", 14, GOLD)
+    _label(words, "Ligas e histórico em preparação", 12, MUTED)
     profile_button.pressed.connect(func(): show_page("profile"))
     profile_button.mouse_entered.connect(func(): profile_name.modulate = GOLD)
     profile_button.mouse_exited.connect(func(): profile_name.modulate = Color.WHITE)
-    var quote = _text(canvas, "“O xadrez é a ginástica da inteligência.”\n— Blaise Pascal", Vector2(1278,145), Vector2(345,45), 15)
+    var quote = _label(profile, "“O xadrez é a ginástica da inteligência.”\n— Blaise Pascal", 13)
     quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
-func _new_page(id: String, title: String, eyebrow: String) -> Control:
+func _new_page(id: String, title: String, eyebrow: String) -> VBoxContainer:
     var panel = Control.new()
     panel.name = id.capitalize() + "Page"
     panel.position = Vector2(611,341)
     panel.size = Vector2(450,505)
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
     canvas.add_child(panel)
-    # The environmental art already supplies the ornate outer frame.
-    _text(panel, eyebrow, Vector2(27,20), Vector2(396,24), 13, GOLD)
-    _text(panel, title, Vector2(27,55), Vector2(400,40), 26)
-    _button(panel, 6, "VOLTAR À HOME", "ESC também volta", Vector2(0,439), func(): show_page("main"))
+    var scroll = ScrollContainer.new()
+    scroll.name = "PageScroll"
+    scroll.position = Vector2(24,16)
+    scroll.size = Vector2(402,411)
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+    scroll.follow_focus = true
+    panel.add_child(scroll)
+    var margin = MarginContainer.new()
+    margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    margin.add_theme_constant_override("margin_right", 8)
+    margin.add_theme_constant_override("margin_bottom", 10)
+    scroll.add_child(margin)
+    var content = VBoxContainer.new()
+    content.name = "PageContent"
+    content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    content.add_theme_constant_override("separation", 13)
+    margin.add_child(content)
+    _label(content, eyebrow, 13, GOLD)
+    _label(content, title, 25)
+    _button(panel, 6, "VOLTAR AOS NÍVEIS" if id == "bot_side" else "VOLTAR À HOME", "ESC também volta", Vector2(0,439), back)
     pages[id] = panel
-    return panel
+    page_scrolls[id] = scroll
+    return content
 
-func _body(parent: Control, value: String, y: float, height: float = 190):
-    var l = _text(parent, value, Vector2(27,y), Vector2(394,height), 19, MUTED)
-    l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    l.add_theme_constant_override("line_spacing", 6)
-    return l
+func _body(parent: Node, value: String, font_size := 18) -> Label:
+    var label = _label(parent, value, font_size, MUTED)
+    label.add_theme_constant_override("line_spacing", 4)
+    return label
+
+func _page_button(parent: Node, row: int, title: String, subtitle: String, callback: Callable) -> TextureButton:
+    return _button(parent, row, title, subtitle, Vector2.ZERO, callback, Vector2(394,68))
 
 func _build_pages():
-    var bot = _new_page("bot", "SEU PRÓXIMO DESAFIO", "JOGAR CONTRA O BOT")
-    _body(bot, "O modo de treino está em preparação.\n\nNesta versão, você já pode jogar com outra pessoa no mesmo computador ou encontrar um amigo online.", 119)
-    _button(bot, 0, "JOGAR LOCAL", "Comece uma partida a dois", Vector2(0,343), func(): play_local_requested.emit())
+    var bot = _new_page("bot", "ESCOLHA A DIFICULDADE", "JOGAR CONTRA O BOT")
+    difficulty_buttons.easy = _page_button(bot, 1, "FÁCIL", "Para começar e praticar", func(): _choose_difficulty("easy"))
+    difficulty_buttons.medium = _page_button(bot, 1, "MÉDIO", "Planeje suas próximas jogadas", func(): _choose_difficulty("medium"))
+    difficulty_buttons.hard = _page_button(bot, 1, "DIFÍCIL", "Em breve", func(): pass)
+    difficulty_buttons.expert = _page_button(bot, 1, "EXPERT", "Em breve", func(): pass)
+    for id in ["hard", "expert"]:
+        difficulty_buttons[id].disabled = true
+        difficulty_buttons[id].focus_mode = Control.FOCUS_NONE
+        difficulty_buttons[id].mouse_default_cursor_shape = Control.CURSOR_ARROW
+        _highlight(difficulty_buttons[id], false)
+    var sides = _new_page("bot_side", "ESCOLHA SEU LADO", "JOGAR CONTRA O BOT")
+    difficulty_label = _label(sides, "Nível: Fácil", 18, GOLD)
+    side_buttons.w = _page_button(sides, 0, "BRANCAS", "Você faz a primeira jogada", func(): play_bot_requested.emit(selected_difficulty, "w"))
+    side_buttons.b = _page_button(sides, 0, "PRETAS", "O bot começa a partida", func(): play_bot_requested.emit(selected_difficulty, "b"))
+    side_buttons.random = _page_button(sides, 2, "ALEATÓRIO", "Deixe a escolha para o sorteio", func(): play_bot_requested.emit(selected_difficulty, "random"))
     var ranking = _new_page("ranking", "CADA JOGADA CONTA", "LIGAS E RANKING")
-    _body(ranking, "As ligas e o ranking chegarão em uma próxima etapa.\n\nEsta build não calcula elo, vitórias ou posições competitivas. Aproveite as partidas casuais e conheça a nova Home.", 119, 235)
+    _body(ranking, "As ligas e o ranking chegarão em uma próxima etapa.\n\nEsta build não calcula elo, vitórias ou posições competitivas. Aproveite as partidas casuais e conheça a nova Home.")
     var about = _new_page("about", "FRAIHA XADREZ", "ESTRATÉGIA PARA IR MAIS LONGE")
-    _body(about, "Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo em pixel art. Planeje, aprenda e compartilhe boas partidas.\n\nFeito por jogadores, para jogadores.\nMaringá · Paraná · Brasil", 116, 285)
+    _body(about, "Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo em pixel art. Planeje, aprenda e compartilhe boas partidas.\n\nFeito por jogadores, para jogadores.\nMaringá · Paraná · Brasil")
     var profile = _new_page("profile", "SEU LUGAR NO TABULEIRO", "PERFIL DO JOGADOR")
-    _body(profile, "Escolha como quer aparecer nesta Home. O nome fica salvo neste computador. Contas e estatísticas online virão depois.", 114, 135)
+    _body(profile, "Escolha como quer aparecer nesta Home. O nome fica salvo neste computador. Contas e estatísticas online virão depois.")
     var name_input = LineEdit.new()
     name_input.name = "PlayerName"
-    name_input.position = Vector2(27,268)
-    name_input.size = Vector2(396,48)
+    name_input.custom_minimum_size.y = 46
     name_input.max_length = 20
     name_input.text = player_name
     name_input.placeholder_text = "Seu nome"
@@ -235,13 +307,12 @@ func _build_pages():
         profile_name.text = player_name
         _save_preferences()
     )
-    _text(profile, "O perfil desta build é independente do jogo atual.", Vector2(27,338), Vector2(396,52), 16, GOLD).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _label(profile, "O perfil desta build é independente do jogo atual.", 16, GOLD)
     var settings = _new_page("settings", "DO SEU JEITO", "CONFIGURAÇÕES")
-    volume_label = _text(settings, "", Vector2(27,122), Vector2(396,28),20,GOLD)
+    volume_label = _label(settings, "", 19, GOLD)
     var slider = HSlider.new()
     slider.name = "MasterVolume"
-    slider.position = Vector2(27,169)
-    slider.size = Vector2(394,35)
+    slider.custom_minimum_size.y = 35
     slider.min_value = 0
     slider.max_value = 100
     slider.step = 1
@@ -249,14 +320,26 @@ func _build_pages():
     settings.add_child(slider)
     slider.value_changed.connect(_set_volume)
     _set_volume(slider.value, false)
-    _button(settings, 1, "TELA CHEIA", "Alternar janela / tela cheia", Vector2(0,244), _toggle_fullscreen)
-    display_label = _text(settings, "", Vector2(27,329), Vector2(396,30),17,MUTED)
-    _text(settings, "As preferências são salvas automaticamente.\nAlt + Enter também alterna a tela.", Vector2(27,373), Vector2(396,52),16,MUTED)
+    _page_button(settings, 1, "TELA CHEIA", "Alternar janela / tela cheia", _toggle_fullscreen)
+    display_label = _label(settings, "", 17, MUTED)
+    _body(settings, "As preferências são salvas automaticamente.\nAlt + Enter também alterna a tela.", 16)
     _refresh_display_label()
+
+func _choose_difficulty(id: String):
+    if id not in ["easy", "medium"]: return
+    selected_difficulty = id
+    difficulty_label.text = "Nível: " + ("Fácil" if id == "easy" else "Médio")
+    show_page("bot_side")
 
 func _layout():
     var dimensions = get_viewport().get_visible_rect().size
-    var factor = minf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y)
+    var factor = maxf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y)
+    # All elements share this transform. If cover would cut a control, preserve
+    # the complete composition over one solid deep-green surround instead.
+    var origin = (dimensions - DESIGN * factor) / 2.0
+    var safe = Rect2(origin + Vector2(6,4) * factor, Vector2(1644,925) * factor)
+    if not Rect2(Vector2.ZERO, dimensions).encloses(safe):
+        factor = minf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y)
     canvas.scale = Vector2.ONE * factor
     canvas.position = (dimensions - DESIGN*factor) / 2.0
 
@@ -265,7 +348,11 @@ func show_page(id: String):
     page = id
     for key in pages:
         pages[key].visible = key == id
+    if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
     if is_instance_valid(display_label): _refresh_display_label()
+
+func back():
+    show_page("bot" if page == "bot_side" else "main")
 
 func open_home():
     root.show()
