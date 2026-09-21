@@ -33,12 +33,12 @@ func label(text:String,size:int,color:=Color.WHITE)->Label:
 func button(parent:Control,title:String,sub:String,cb:Callable,disabled:=false):
     var b=Button.new()
     b.text=title+("\n"+sub if not sub.is_empty() else "")
-    b.custom_minimum_size=Vector2(430,62)
-    b.add_theme_font_size_override("font_size",17)
+    b.custom_minimum_size=Vector2(450,66)
+    b.add_theme_font_size_override("font_size",18)
     b.add_theme_color_override("font_color",cream)
     b.add_theme_color_override("font_hover_color",Color("#ffe3a0"))
-    b.add_theme_stylebox_override("normal",style(Color("#10281df2"),Color("#947541"),7,1))
-    b.add_theme_stylebox_override("hover",style(Color("#1c3b29fa"),gold,7,2))
+    b.add_theme_stylebox_override("normal",style(Color("#10281df7"),Color("#a88748"),7,2))
+    b.add_theme_stylebox_override("hover",style(Color("#234a31ff"),Color("#f0ca72"),7,3))
     b.add_theme_stylebox_override("pressed",style(Color("#091a12fa"),Color("#f0cc79"),7,2))
     b.disabled=disabled; parent.add_child(b); b.pressed.connect(cb)
 
@@ -51,29 +51,29 @@ func card(parent:Control,min_size:Vector2)->VBoxContainer:
 
 func _build():
     root=Control.new(); root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(root)
-    var shade=ColorRect.new(); shade.color=Color(0.005,0.018,0.01,0.34)
+    var shade=ColorRect.new(); shade.color=Color(0.004,0.014,0.008,0.18)
     shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); shade.mouse_filter=Control.MOUSE_FILTER_IGNORE; root.add_child(shade)
 
     var header=VBoxContainer.new()
     header.set_anchors_preset(Control.PRESET_CENTER_TOP)
-    header.position=Vector2(-340,34); header.custom_minimum_size=Vector2(680,170)
+    header.position=Vector2(-390,22); header.custom_minimum_size=Vector2(780,172)
     root.add_child(header)
     var crown=label("♛",42,gold); crown.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; header.add_child(crown)
-    var title=label("FRAIHA",54,Color("#e4b65a")); title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; header.add_child(title)
-    var chess=label("X A D R E Z",25,cream); chess.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; header.add_child(chess)
+    var title=label("F R A I H A",58,Color("#f0c76b")); title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; header.add_child(title)
+    var chess=label("X  A  D  R  E  Z",27,cream); chess.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; header.add_child(chess)
     var motto=label("ESTRATÉGIA PARA IR MAIS LONGE",13,Color("#d8c69c")); motto.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; header.add_child(motto)
 
-    var left=VBoxContainer.new(); left.position=Vector2(32,190); left.custom_minimum_size=Vector2(280,0); root.add_child(left)
-    var lv=card(left,Vector2(280,230))
-    var lt=label("DISCIPLINA\n\nFOCO\n\nESTRATÉGIA\n\nEVOLUÇÃO",18,gold); lt.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; lv.add_child(lt)
-    var tip=card(left,Vector2(280,150)); tip.add_child(label("CADERNO DO ESTRATEGISTA",15,gold))
+    var left=VBoxContainer.new(); left.position=Vector2(34,210); left.custom_minimum_size=Vector2(300,0); root.add_child(left)
+    var lv=card(left,Vector2(300,245))
+    var lt=label("◆  DISCIPLINA  ◆\n\n◆  FOCO  ◆\n\n◆  ESTRATÉGIA  ◆\n\n◆  EVOLUÇÃO  ◆",18,gold); lt.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; lv.add_child(lt)
+    var tip=card(left,Vector2(300,165)); tip.add_child(label("CADERNO DO ESTRATEGISTA",15,gold))
     tip.add_child(label("Planejamento\nTática\nEvolução",15,cream))
 
-    var right=VBoxContainer.new(); right.set_anchors_preset(Control.PRESET_TOP_RIGHT); right.position=Vector2(-322,28); right.custom_minimum_size=Vector2(290,0); root.add_child(right)
-    var profile=card(right,Vector2(290,150)); profile.add_child(label("♟  JOGADOR",14,gold)); profile.add_child(label("Gabriel",21,cream)); profile.add_child(label("Liga: Madeira  •  0 / 100 PL",13,Color("#cfc3a5"))); profile.add_child(label("Vitórias: 0  |  Derrotas: 0",13,Color("#cfc3a5")))
-    var quote=card(right,Vector2(290,110)); var q=label("“O xadrez é a ginástica\nda inteligência.”\n— Blaise Pascal",13,cream); q.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; quote.add_child(q)
+    var right=VBoxContainer.new(); right.set_anchors_preset(Control.PRESET_TOP_RIGHT); right.position=Vector2(-334,210); right.custom_minimum_size=Vector2(300,0); root.add_child(right)
+    var profile=card(right,Vector2(300,175)); profile.add_child(label("♟  PERFIL DO JOGADOR",14,gold)); profile.add_child(label("Gabriel",21,cream)); profile.add_child(label("Liga: Madeira  •  0 / 100 PL",13,Color("#cfc3a5"))); profile.add_child(label("Vitórias: 0  |  Derrotas: 0",13,Color("#cfc3a5")))
+    var quote=card(right,Vector2(300,135)); var q=label("“O xadrez é a ginástica\nda inteligência.”\n— Blaise Pascal",13,cream); q.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; quote.add_child(q)
 
-    var center=VBoxContainer.new(); center.set_anchors_preset(Control.PRESET_CENTER); center.position=Vector2(-235,-180); center.custom_minimum_size=Vector2(470,570); root.add_child(center)
+    var center=VBoxContainer.new(); center.set_anchors_preset(Control.PRESET_CENTER); center.position=Vector2(-245,-175); center.custom_minimum_size=Vector2(490,610); root.add_child(center)
     var main=PanelContainer.new(); main.add_theme_stylebox_override("panel",style(Color("#07150ff0"),gold,10,2)); center.add_child(main)
     var menu=VBoxContainer.new(); menu.add_theme_constant_override("separation",9); main.add_child(menu)
     pages["main"]=menu
@@ -104,10 +104,10 @@ func _build():
     tx.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; tx.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; tx.custom_minimum_size=Vector2(420,260); about.add_child(tx)
     button(about,"← VOLTAR","",func(): _show_page("main"))
 
-    var footer=PanelContainer.new(); footer.set_anchors_preset(Control.PRESET_BOTTOM_WIDE); footer.offset_top=-64; footer.add_theme_stylebox_override("panel",style(Color("#07100ce8"),Color("#6e5832"),0,1)); root.add_child(footer)
+    var footer=PanelContainer.new(); footer.set_anchors_preset(Control.PRESET_BOTTOM_WIDE); footer.offset_top=-58; footer.add_theme_stylebox_override("panel",style(Color("#07100ce8"),Color("#6e5832"),0,1)); root.add_child(footer)
     var fh=HBoxContainer.new(); footer.add_child(fh)
     var brand=label("♛  FRAIHA XADREZ  •  V0.22",14,cream); brand.size_flags_horizontal=Control.SIZE_EXPAND_FILL; fh.add_child(brand)
-    fh.add_child(label("MARINGÁ • PR • BRASIL",13,Color("#c9b98d")))
+    fh.add_child(label("ESC = MENU INICIAL     •     MARINGÁ • PR • BRASIL",13,Color("#c9b98d")))
     _show_page("main")
 
 func _new_page(parent:Control,title:String)->VBoxContainer:
