@@ -9,6 +9,7 @@ const BOARD := TILE * 8
 const ORIGIN := Vector2(210,186)
 var arena_bg: Texture2D
 var piece_textures := {}
+var visual_theme := "wood"
 
 var pieces := {}
 var selected := Vector2i(-1,-1)
@@ -116,6 +117,12 @@ func _process(delta):
     particles = alive
     flash = max(0.0, flash-delta*3.5)
     # cenário vivo: redesenha continuamente para água, fogo e vegetação
+    queue_redraw()
+
+func set_visual_theme(theme_id: String):
+    visual_theme = theme_id
+    var environment = get_node_or_null("ForestEnvironment")
+    if environment != null: environment.visible = theme_id != "iron"
     queue_redraw()
 
 func _inside(p:Vector2i)->bool:
@@ -358,11 +365,21 @@ func _draw_ui():
         draw_string(font,panel.position+Vector2(16,125),"Alt+Enter • alternar",HORIZONTAL_ALIGNMENT_LEFT,-1,11,Color("#d5ccb9"))
 
 func _draw():
+    if visual_theme == "iron":
+        var edge = Rect2(ORIGIN-Vector2(10,10),Vector2(BOARD+20,BOARD+20))
+        draw_rect(edge,Color("161e25"))
+        draw_rect(edge,Color("929a9c"),false,3)
     for y in range(8):
         for x in range(8):
             var c=Vector2i(x,y)
             var r=Rect2(ORIGIN+Vector2(x,y)*TILE,Vector2(TILE,TILE))
             var sq=Color("#cbb273") if (x+y)%2==0 else Color("#557a3e")
+            if visual_theme == "iron":
+                # Cosmetic steel tiles share the exact existing input grid.
+                draw_rect(r,Color("a8aca5") if (x+y)%2==0 else Color("364955"))
+                draw_line(r.position,r.position+Vector2(TILE,0),Color(1,1,1,0.13),2)
+                draw_line(r.position,r.position+Vector2(0,TILE),Color(1,1,1,0.09),2)
+                draw_line(r.end-Vector2(TILE,1),r.end-Vector2(0,1),Color(0,0,0,0.21),2)
             # The playable surface belongs to the dedicated forest artwork.
             if c==last_from or c==last_to:
                 draw_rect(r.grow(-3),Color(1.0,0.78,0.20,0.26))
