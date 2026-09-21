@@ -39,6 +39,7 @@ func _ready():
     if session.load("user://online_session.cfg")==OK:
         saved={"room":session.get_value("session","room",""),"token":session.get_value("session","token","")}
     build_ui()
+    menu.hide()
 
 func panel_style()->StyleBoxFlat:
     var style=StyleBoxFlat.new()
