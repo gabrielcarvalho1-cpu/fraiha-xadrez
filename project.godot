@@ -10,9 +10,9 @@ config_version=5
 
 [application]
 
-config/name="FRAIHA Xadrez V0.22 - Home Teste"
+config/name="FRAIHA Xadrez V0.23 - Home e Bot Teste"
 config/use_custom_user_dir=true
-config/custom_user_dir_name="FRAIHA Xadrez Home V022 Teste"
+config/custom_user_dir_name="FRAIHA Xadrez Home Bot V023 Teste"
 run/main_scene="res://presentation_v019/stage.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 

@@ -30,6 +30,8 @@ var room_input: LineEdit
 var reconnect_button: Button
 var restart_button: Button
 var exit_dialog: ConfirmationDialog
+var menu_box: VBoxContainer
+var hud_box: VBoxContainer
 
 func _ready():
     game=get_parent().get_node("World")
@@ -42,6 +44,8 @@ func _ready():
     if session.load("user://online_session.cfg")==OK:
         saved={"room":session.get_value("session","room",""),"token":session.get_value("session","token","")}
     build_ui()
+    get_viewport().size_changed.connect(layout_ui)
+    layout_ui()
     menu.hide()
 
 func panel_style()->StyleBoxFlat:
@@ -58,6 +62,7 @@ func button(parent:Control,caption:String,callback:Callable)->Button:
     var b=Button.new()
     b.text=caption
     b.custom_minimum_size=Vector2(0,44)
+    b.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     b.add_theme_font_size_override("font_size",18)
     parent.add_child(b)
     b.pressed.connect(callback)
@@ -75,11 +80,13 @@ func build_ui():
     menu.offset_top=-210; menu.offset_bottom=210
     menu.add_theme_stylebox_override("panel",panel_style())
     var box=VBoxContainer.new()
+    menu_box=box
     box.add_theme_constant_override("separation",10)
     menu.add_child(box)
     var title=Label.new()
     title.text="FRAIHA XADREZ  •  ONLINE"
     title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+    title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     title.add_theme_font_size_override("font_size",27)
     box.add_child(title)
     button(box,"Criar Sala",func(): connect_room({"type":"create"}))
@@ -94,19 +101,19 @@ func build_ui():
     reconnect_button.visible=not saved.is_empty()
     menu_info=Label.new()
     menu_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-    menu_info.custom_minimum_size.x=440
+    menu_info.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     menu_info.text="Jogue localmente ou compartilhe uma sala com um amigo."
     if endpoint.is_empty(): menu_info.text="Jogo local disponível. As salas online aguardam a publicação do servidor."
     box.add_child(menu_info)
     button(box,"← VOLTAR À TELA INICIAL",return_to_main_hub)
     hud=PanelContainer.new()
     hud.position=Vector2(18,18)
-    hud.custom_minimum_size=Vector2(385,0)
     hud.add_theme_stylebox_override("panel",panel_style())
     control.add_child(hud)
     var hbox=VBoxContainer.new(); hud.add_child(hbox)
+    hud_box=hbox
     hud_info=Label.new()
-    hud_info.custom_minimum_size.x=345
+    hud_info.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     hud_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     hbox.add_child(hud_info)
     var buttons=HBoxContainer.new(); hbox.add_child(buttons)
@@ -118,6 +125,24 @@ func build_ui():
     exit_dialog.dialog_text="Sair da sala encerra sua participação nesta partida. Continuar?"
     exit_dialog.confirmed.connect(leave_room)
     add_child(exit_dialog)
+    menu.minimum_size_changed.connect(func(): layout_ui.call_deferred())
+    hud.minimum_size_changed.connect(func(): layout_ui.call_deferred())
+
+func layout_ui():
+    var screen=get_viewport().get_visible_rect().size
+    var menu_width=minf(500.0,maxf(280.0,screen.x-40.0))
+    var hud_width=minf(385.0,maxf(260.0,screen.x-36.0))
+    menu_box.custom_minimum_size.x=menu_width-44.0
+    hud_box.custom_minimum_size.x=hud_width-44.0
+    menu.custom_minimum_size.x=menu_width
+    var menu_height=maxf(420.0,menu.get_combined_minimum_size().y)
+    menu.size=Vector2(menu_width,menu_height)
+    menu.offset_left=-menu_width/2.0
+    menu.offset_right=menu_width/2.0
+    menu.offset_top=-menu_height/2.0
+    menu.offset_bottom=menu_height/2.0
+    hud.custom_minimum_size.x=hud_width
+    hud.size=Vector2(hud_width,hud.get_combined_minimum_size().y)
 
 func start_local():
     game.online=null
