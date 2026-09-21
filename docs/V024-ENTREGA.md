@@ -26,6 +26,7 @@ Nenhuma alteração na main, no servidor Node, protocolo WebSocket ou implantaç
 - `tests/v024_test.gd`: 44 verificações passaram (11 ligas/emblemas, persistência, limites, conjuntos/alpha, captura legal e mate de Difícil/Expert, orçamento, worker ativo com animação, Home/Local/diálogo e prévias sem progresso).
 - `tests/bot_search_test.gd`: 26 verificações passaram para Fácil/Médio após a extensão do arquivo de busca.
 - Capturas reais do viewport em 1920×1080: Ligas, Home Ferro, tabuleiros Ferro e Madeira.
+- Executável Windows exportado: 13 verificações passaram, saída 0. Home, Ligas em 1920×1080/1600×900/1366×768, imagens/12 peças de ambos os temas, recorte dos peões, Local, menu Online/retorno e preservação do perfil.
 - O motor `chess/rules.gd` e os arquivos Online/servidor não mudaram. As verificações extensivas V023 não foram repetidas, conforme orientação de economia. A validação Online pela internet da V023 permanece como último teste completo de sincronização/reconexão/revanche; não afirmar novo teste internet V024.
 - O ambiente isolado pode emitir aviso sobre certificados do Windows e um recurso em uso ao encerrar o Godot, também observados na versão anterior. Não houve falhas de script nos testes executados.
 
