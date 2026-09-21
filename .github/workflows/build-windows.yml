@@ -1,11 +1,14 @@
-name: Build Windows
+name: Build Windows V0.22 Test
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [dev/v022-main-hub]
     paths:
-      - 'online.cfg'
+      - 'ui_v022/**'
+      - 'rank/**'
+      - 'presentation_v019/**'
       - 'online_v020/**'
+      - 'online.cfg'
       - 'world.gd'
       - 'project.godot'
       - 'export_presets.cfg'
@@ -24,14 +27,16 @@ jobs:
           wget -q https://github.com/godotengine/godot-builds/releases/download/4.7-stable/Godot_v4.7-stable_export_templates.tpz
           unzip -q Godot_v4.7-stable_export_templates.tpz
           mv templates/* ~/.local/share/godot/export_templates/4.7.stable/
-      - name: Export Windows
+      - name: Import and validate project
+        run: |
+          godot --headless --editor --path . --import --quit
+      - name: Export Windows test build
         run: |
           mkdir -p build
-          godot --headless --editor --path . --import --quit
-          godot --headless --path . --export-release "Windows Desktop" build/FRAIHA-Xadrez-Online.exe
+          godot --headless --path . --export-release "Windows Desktop" build/FRAIHA-Xadrez-V022-TESTE.exe
           cp online.cfg build/online.cfg
       - uses: actions/upload-artifact@v4
         with:
-          name: FRAIHA-Xadrez-Online-Windows
+          name: FRAIHA-Xadrez-V022-TESTE-Windows
           path: build/
           if-no-files-found: error
