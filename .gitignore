@@ -1,0 +1,9 @@
+.godot/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.exe
+*.pck
+*.zip

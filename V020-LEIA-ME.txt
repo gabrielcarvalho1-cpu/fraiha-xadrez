@@ -1,0 +1,25 @@
+FRAIHA XADREZ V0.20
+
+Abra FRAIHA-XADREZ.exe com o .pck e online.cfg na mesma pasta.
+Jogo local: duas pessoas no mesmo computador. Clique/clique ou arrastar/soltar.
+Alt+Enter: tela cheia. Engrenagem: configurações. R: reinício. M: ambiente.
+A versão anterior não tinha adversário por computador; não foi acrescentado nesta alteração.
+
+Áudio: somente forest_ambient.wav, com entrada gradual e volume menor.
+Nenhum som de movimento, clique, captura ou promoção é carregado/tocado.
+Tochas: suporte imóvel; os deslocamentos amplos foram removidos. Movimento
+subpixel restrito à chama e iluminação estável, com variação orgânica discreta.
+Cenário, peças, proporções 16:9 e regras existentes preservados.
+
+ONLINE: IMPLEMENTADO, PUBLICAÇÃO PENDENTE
+Há Criar Sala, Entrar na Sala, código compartilhável, cores automáticas,
+servidor autoritativo reutilizando as regras do jogo, reconexão, estado sincronizado,
+desistência e revanche que exige aceite dos dois jogadores.
+O online foi verificado entre dois clientes e um servidor locais.
+Não há servidor público ativo, porque ainda não foi criada uma conta de hospedagem.
+Sem URL no online.cfg, o menu explica isso e o modo local permanece disponível.
+Nenhum serviço foi contratado. Veja V020-PUBLICAR-ONLINE.md para a publicação gratuita.
+
+O projeto completo contém o servidor, Dockerfile, render.yaml e instruções.
+As salas ficam em memória: reiniciar o servidor apaga as salas. Uma desconexão
+normal permite reconectar enquanto o servidor mantiver a sala ativa.
