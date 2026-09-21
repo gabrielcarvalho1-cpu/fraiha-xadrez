@@ -1,4 +1,7 @@
 extends CanvasLayer
+signal room_joined
+signal room_left
+signal connection_failed
 var game
 var socket: WebSocketPeer
 var endpoint=""
@@ -39,6 +42,7 @@ func _ready():
     if session.load("user://online_session.cfg")==OK:
         saved={"room":session.get_value("session","room",""),"token":session.get_value("session","token","")}
     build_ui()
+    menu.hide()
 
 func panel_style()->StyleBoxFlat:
     var style=StyleBoxFlat.new()
@@ -74,11 +78,10 @@ func build_ui():
     box.add_theme_constant_override("separation",10)
     menu.add_child(box)
     var title=Label.new()
-    title.text="FRAIHA • XADREZ"
+    title.text="FRAIHA XADREZ  •  ONLINE"
     title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size",27)
     box.add_child(title)
-    button(box,"Jogar local • duas pessoas",start_local)
     button(box,"Criar Sala",func(): connect_room({"type":"create"}))
     var row=HBoxContainer.new(); box.add_child(row)
     room_input=LineEdit.new()
@@ -95,6 +98,7 @@ func build_ui():
     menu_info.text="Jogue localmente ou compartilhe uma sala com um amigo."
     if endpoint.is_empty(): menu_info.text="Jogo local disponível. As salas online aguardam a publicação do servidor."
     box.add_child(menu_info)
+    button(box,"← VOLTAR À TELA INICIAL",return_to_main_hub)
     hud=PanelContainer.new()
     hud.position=Vector2(18,18)
     hud.custom_minimum_size=Vector2(385,0)
@@ -108,7 +112,7 @@ func build_ui():
     var buttons=HBoxContainer.new(); hbox.add_child(buttons)
     button(buttons,"Copiar código",func(): DisplayServer.clipboard_set(room))
     restart_button=button(buttons,"Revanche",func(): send_action("restart"))
-    button(hbox,"Desistir / voltar ao menu",func(): exit_dialog.popup_centered())
+    button(hbox,"Desistir / voltar à tela inicial",return_to_main_hub)
     hud.hide()
     exit_dialog=ConfirmationDialog.new()
     exit_dialog.dialog_text="Sair da sala encerra sua participação nesta partida. Continuar?"
@@ -203,6 +207,7 @@ func receive(msg:Dictionary):
         joined=true
         menu.hide(); hud.show()
         game.game_started=true
+        room_joined.emit()
     elif type=="state":
         pending=false
         revision=int(msg.revision)
@@ -241,6 +246,7 @@ func receive(msg:Dictionary):
             game._new_game()
             if socket: socket.close()
             menu.show(); hud.hide()
+            connection_failed.emit()
 
 func cell(value)->Vector2i:
     return Vector2i(int(value[0]),int(value[1]))
@@ -292,6 +298,35 @@ func finish_leave():
     room=""; token=""; saved={}
     var config=ConfigFile.new(); config.save("user://online_session.cfg")
     reconnect_button.hide()
-    hud.hide(); menu.show()
+    hud.hide(); menu.hide()
     menu_info.text="Escolha como jogar."
     game.queue_redraw()
+    room_left.emit()
+
+func open_online_menu():
+    menu.show()
+    hud.hide()
+    game.game_started=false
+    menu_info.text="Crie uma sala ou entre com o código de um amigo."
+
+func return_to_main_hub():
+    var stage=get_parent()
+    if stage.has_method("return_to_home"):
+        stage.return_to_home()
+    elif joined:
+        exit_dialog.popup_centered()
+    else:
+        cancel_connection()
+
+func cancel_connection():
+    # Cancelling before welcome must stop both the socket and retry timer.
+    if socket: socket.close()
+    socket=null
+    online_mode=false; connected=false; joined=false; both_connected=false
+    pending=false; leaving=false; retry_after=0.0; elapsed=0.0
+    room=""; token=""; color=""; revision=0; started=false; ping_at=0.0
+    greeting={}
+    game.online=null
+    game.game_started=false
+    game.cancel_drag()
+    menu.hide(); hud.hide()

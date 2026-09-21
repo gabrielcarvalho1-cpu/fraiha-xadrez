@@ -10,9 +10,11 @@ config_version=5
 
 [application]
 
-config/name="FRAIHA Xadrez V0.20 Rooms"
+config/name="FRAIHA Xadrez V0.22 - Home Teste"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="FRAIHA Xadrez Home V022 Teste"
 run/main_scene="res://presentation_v019/stage.tscn"
-config/features=PackedStringArray("4.7")
+config/features=PackedStringArray("4.5", "GL Compatibility")
 
 [display]
 
