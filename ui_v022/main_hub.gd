@@ -3,6 +3,8 @@ extends CanvasLayer
 signal play_local_requested
 signal play_online_requested
 signal play_bot_requested(difficulty: String, side: String)
+signal theme_preview_requested(theme_id: String)
+signal piece_set_requested(theme_id: String)
 signal quit_requested
 
 const DESIGN = Vector2(1672, 941)
@@ -14,6 +16,20 @@ const GOLD = Color("f4ce7f")
 const CREAM = Color("f4edda")
 const MUTED = Color("c4cbbd")
 const PREFS = "user://home_preferences.cfg"
+const LeagueCatalog = preload("res://league/catalog.gd")
+const LocalProfile = preload("res://league/local_profile.gd")
+const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
+var league_profile = LocalProfile.new()
+var selected_league := "madeira"
+var league_buttons := {}
+var league_details: Label
+var league_detail_title: Label
+var league_detail_badge: TextureRect
+var league_scene_preview: TextureRect
+var league_preview_pieces: Array[TextureRect] = []
+var league_preview_button: TextureButton
+var preview_caption: Label
+var piece_choice_buttons := {}
 var root: Control
 var canvas: Control
 var pages := {}
@@ -35,6 +51,7 @@ var display_label: Label
 func _ready():
     layer = 30
     _load_preferences()
+    league_profile.load_profile()
     _build()
     get_viewport().size_changed.connect(_layout)
     _layout()
@@ -161,6 +178,8 @@ func _build():
     var art = TextureRect.new()
     art.name = "ForestArtwork"
     art.texture = FOREST
+    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    art.stretch_mode = TextureRect.STRETCH_SCALE
     art.size = DESIGN
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(art)
@@ -181,7 +200,7 @@ func _build():
     version_bg.size = Vector2(266,30)
     version_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(version_bg)
-    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.23 · TESTE", 16)
+    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.24 · TESTE", 16)
     var footer = ColorRect.new()
     footer.color = Color("06100ce6")
     footer.position = Vector2(0,867)
@@ -199,7 +218,7 @@ func _build():
     var footer_text = _stack(canvas, Vector2(82,877), Vector2(291,55))
     _label(footer_text, "FRAIHA XADREZ", 18)
     _label(footer_text, "Feito por jogadores, para jogadores.", 14, MUTED)
-    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.23 · Home e Bot de teste\nMaringá · PR · Brasil", 15)
+    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.24 · Ligas e temas\nMaringá · PR · Brasil", 15)
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     signature.add_theme_constant_override("outline_size", 4)
     signature.add_theme_color_override("font_outline_color", Color("09110dee"))
@@ -223,8 +242,10 @@ func _build_profile():
     profile_button.add_child(portrait)
     var words = _stack(profile_button, Vector2(94,0), Vector2(266,106), Vector4.ZERO, 2)
     profile_name = _label(words, player_name, 20)
-    _label(words, "Perfil local", 14, GOLD)
-    _label(words, "Ligas e histórico em preparação", 12, MUTED)
+    var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
+    _label(words, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 14, GOLD)
+    _progress(words,league_profile.data.lp,8)
+    _label(words, "Perfil local · progressão em preparação", 11, MUTED)
     profile_button.pressed.connect(func(): show_page("profile"))
     profile_button.mouse_entered.connect(func(): profile_name.modulate = GOLD)
     profile_button.mouse_exited.connect(func(): profile_name.modulate = Color.WHITE)
@@ -275,20 +296,14 @@ func _build_pages():
     var bot = _new_page("bot", "ESCOLHA A DIFICULDADE", "JOGAR CONTRA O BOT")
     difficulty_buttons.easy = _page_button(bot, 1, "FÁCIL", "Para começar e praticar", func(): _choose_difficulty("easy"))
     difficulty_buttons.medium = _page_button(bot, 1, "MÉDIO", "Planeje suas próximas jogadas", func(): _choose_difficulty("medium"))
-    difficulty_buttons.hard = _page_button(bot, 1, "DIFÍCIL", "Em breve", func(): pass)
-    difficulty_buttons.expert = _page_button(bot, 1, "EXPERT", "Em breve", func(): pass)
-    for id in ["hard", "expert"]:
-        difficulty_buttons[id].disabled = true
-        difficulty_buttons[id].focus_mode = Control.FOCUS_NONE
-        difficulty_buttons[id].mouse_default_cursor_shape = Control.CURSOR_ARROW
-        _highlight(difficulty_buttons[id], false)
+    difficulty_buttons.hard = _page_button(bot, 1, "DIFÍCIL", "Um desafio mais profundo", func(): _choose_difficulty("hard"))
+    difficulty_buttons.expert = _page_button(bot, 1, "EXPERT", "Seu desafio mais exigente", func(): _choose_difficulty("expert"))
     var sides = _new_page("bot_side", "ESCOLHA SEU LADO", "JOGAR CONTRA O BOT")
     difficulty_label = _label(sides, "Nível: Fácil", 18, GOLD)
     side_buttons.w = _page_button(sides, 0, "BRANCAS", "Você faz a primeira jogada", func(): play_bot_requested.emit(selected_difficulty, "w"))
     side_buttons.b = _page_button(sides, 0, "PRETAS", "O bot começa a partida", func(): play_bot_requested.emit(selected_difficulty, "b"))
     side_buttons.random = _page_button(sides, 2, "ALEATÓRIO", "Deixe a escolha para o sorteio", func(): play_bot_requested.emit(selected_difficulty, "random"))
-    var ranking = _new_page("ranking", "CADA JOGADA CONTA", "LIGAS E RANKING")
-    _body(ranking, "As ligas e o ranking chegarão em uma próxima etapa.\n\nEsta build não calcula elo, vitórias ou posições competitivas. Aproveite as partidas casuais e conheça a nova Home.")
+    _build_ranking()
     var about = _new_page("about", "FRAIHA XADREZ", "ESTRATÉGIA PARA IR MAIS LONGE")
     _body(about, "Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo em pixel art. Planeje, aprenda e compartilhe boas partidas.\n\nFeito por jogadores, para jogadores.\nMaringá · Paraná · Brasil")
     var profile = _new_page("profile", "SEU LUGAR NO TABULEIRO", "PERFIL DO JOGADOR")
@@ -326,10 +341,138 @@ func _build_pages():
     _refresh_display_label()
 
 func _choose_difficulty(id: String):
-    if id not in ["easy", "medium"]: return
+    if id not in ["easy", "medium", "hard", "expert"]: return
     selected_difficulty = id
-    difficulty_label.text = "Nível: " + ("Fácil" if id == "easy" else "Médio")
+    difficulty_label.text = "Nível: " + {"easy":"Fácil","medium":"Médio","hard":"Difícil","expert":"Expert"}[id]
     show_page("bot_side")
+
+func _progress(parent: Node, value: int, height: int = 14):
+    var bar = ProgressBar.new()
+    bar.max_value = 100
+    bar.value = value
+    bar.show_percentage = false
+    bar.custom_minimum_size.y = height
+    var fill = StyleBoxFlat.new()
+    fill.bg_color = GOLD
+    var background = StyleBoxFlat.new()
+    background.bg_color = Color("223b33")
+    background.border_color = Color("708577")
+    background.set_border_width_all(1)
+    bar.add_theme_stylebox_override("fill",fill)
+    bar.add_theme_stylebox_override("background",background)
+    parent.add_child(bar)
+
+func _badge(parent: Node, league_id: String, dimensions: Vector2) -> TextureRect:
+    var icon = TextureRect.new()
+    icon.texture = ThemeCatalog.badge_texture(league_id)
+    icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    icon.custom_minimum_size = dimensions
+    icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(icon)
+    return icon
+
+func _build_ranking():
+    var panel = Control.new()
+    panel.name = "RankingPage"
+    panel.position = Vector2(110,260)
+    panel.size = Vector2(1452,640)
+    panel.mouse_filter = Control.MOUSE_FILTER_STOP
+    canvas.add_child(panel)
+    _frame(panel,Vector2.ZERO,panel.size)
+    pages.ranking = panel
+    var header = _stack(panel,Vector2(35,24),Vector2(1380,76),Vector4.ZERO,5)
+    var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
+    _label(header,"SISTEMA DE LIGAS  ·  %s — %s  ·  %d / 100 PL" % [player_name,current.display_name,league_profile.data.lp],26,GOLD)
+    _progress(header,league_profile.data.lp,12)
+    _label(header,"Sua jornada começa na Madeira. Cada liga possui sua própria faixa de 0 a 100 PL.",16)
+    var journey = HBoxContainer.new()
+    journey.position = Vector2(36,119)
+    journey.size = Vector2(1380,151)
+    journey.add_theme_constant_override("separation",10)
+    panel.add_child(journey)
+    for entry in LeagueCatalog.entries(league_profile.data):
+        var id: String = entry.league_id
+        var button = Button.new()
+        button.name = "League_"+id
+        button.custom_minimum_size = Vector2(115,160)
+        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        button.tooltip_text = entry.display_name + " · 0–100 PL"
+        var base = StyleBoxFlat.new()
+        base.bg_color = Color("10251f")
+        base.border_color = Color("786b40")
+        base.set_border_width_all(1)
+        var focus = base.duplicate()
+        focus.border_color = GOLD
+        focus.set_border_width_all(2)
+        button.add_theme_stylebox_override("normal",base)
+        for state in ["hover","pressed","focus"]: button.add_theme_stylebox_override(state,focus)
+        journey.add_child(button)
+        var content = _stack(button,Vector2(5,5),Vector2(105,140),Vector4.ZERO,2)
+        _badge(content,id,Vector2(103,96))
+        var title = _label(content,entry.display_name.to_upper(),13,GOLD)
+        title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        var status = _label(content,"DISPONÍVEL" if entry.unlocked else "BLOQUEADA",10,MUTED)
+        status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        button.pressed.connect(func(): _select_league(id))
+        league_buttons[id] = button
+    var details = _stack(panel,Vector2(190,293),Vector2(635,229),Vector4.ZERO,12)
+    league_detail_title = _label(details,"",25,GOLD)
+    league_details = _body(details,"",18)
+    league_detail_badge = _badge(panel,"madeira",Vector2(140,170))
+    league_detail_badge.position = Vector2(37,296)
+    league_detail_badge.size = Vector2(140,170)
+    var preview = _stack(panel,Vector2(870,292),Vector2(540,204),Vector4.ZERO,12)
+    preview_caption = _label(preview,"PRÉVIA DAS PEÇAS",18,GOLD)
+    var row = HBoxContainer.new()
+    row.add_theme_constant_override("separation",8)
+    preview.add_child(row)
+    league_scene_preview = TextureRect.new()
+    league_scene_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    league_scene_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    league_scene_preview.custom_minimum_size = Vector2(226,132)
+    row.add_child(league_scene_preview)
+    var pieces_grid = GridContainer.new()
+    pieces_grid.columns = 3
+    pieces_grid.add_theme_constant_override("h_separation",12)
+    row.add_child(pieces_grid)
+    for i in range(6):
+        var piece = TextureRect.new()
+        piece.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        piece.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        piece.custom_minimum_size = Vector2(76,64)
+        pieces_grid.add_child(piece)
+        league_preview_pieces.append(piece)
+    league_preview_button = _button(panel,2,"TESTAR UNIVERSO","Prévia de desenvolvimento · sem alterar PL",Vector2(872,488),_preview_league,Vector2(530,67))
+    _button(panel,6,"VOLTAR À HOME","ESC também volta",Vector2(35,548),back,Vector2(410,64))
+    _button(panel,0,"PEÇAS CLÁSSICAS","Usar o conjunto original",Vector2(483,548),func(): piece_set_requested.emit("classic"),Vector2(390,64))
+    var note = _label(panel,"Prévia local. Sem partidas ranqueadas, ganho de PL ou desbloqueios automáticos nesta build.",14,MUTED)
+    note.position = Vector2(895,568)
+    note.size = Vector2(510,44)
+
+func _select_league(id: String):
+    selected_league = id
+    var entry = LeagueCatalog.entry(id,league_profile.data)
+    league_detail_title.text = "LIGA " + entry.display_name.to_upper() + "  ·  0–100 PL"
+    league_detail_badge.texture = ThemeCatalog.badge_texture(id)
+    var theme: String = entry.environment_theme
+    var available = id in ["madeira","ferro"]
+    var description = "Floresta, equilíbrio e o começo da sua jornada.\nRecompensas: cenário natural, tabuleiro e peças de madeira." if id == "madeira" else "Fortaleza, montanhas e forjas.\nRecompensas: arena de pedra, tabuleiro de aço e peças de ferro."
+    if not available: description = "Recompensas visuais em desenvolvimento.\nSeu emblema já faz parte da jornada."
+    league_details.text = ("Disponível" if entry.unlocked else "Bloqueada")+"\n"+description+"\n\nPL e progressão competitiva ainda não são atribuídos."
+    var textures = ThemeCatalog.piece_textures(theme) if available else {}
+    league_scene_preview.texture = ThemeCatalog.texture(ThemeCatalog.get_theme(theme).arena_path) if available else null
+    for i in range(league_preview_pieces.size()):
+        league_preview_pieces[i].texture = textures.get("w"+ThemeCatalog.PIECE_ORDER[i])
+    preview_caption.text = "CENÁRIO E PEÇAS · "+entry.display_name.to_upper() if available else "VISUAIS EM DESENVOLVIMENTO"
+    league_preview_button.visible = available
+    for key in league_buttons:
+        league_buttons[key].modulate = Color.WHITE if key == id else Color(0.78,0.82,0.79)
+
+func _preview_league():
+    if selected_league not in ["madeira","ferro"]: return
+    theme_preview_requested.emit(LeagueCatalog.theme_for(selected_league))
+    open_home()
 
 func _layout():
     var dimensions = get_viewport().get_visible_rect().size
@@ -350,6 +493,11 @@ func show_page(id: String):
         pages[key].visible = key == id
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
     if is_instance_valid(display_label): _refresh_display_label()
+    if id == "ranking": _select_league(selected_league)
+
+func apply_theme(texture: Texture2D):
+    if texture != null:
+        canvas.get_node("ForestArtwork").texture = texture
 
 func back():
     show_page("bot" if page == "bot_side" else "main")

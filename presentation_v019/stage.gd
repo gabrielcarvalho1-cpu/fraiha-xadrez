@@ -14,6 +14,7 @@ var home_button: Button
 var navigation_dialog: ConfirmationDialog
 var bot_controller: Node
 var bot_info: Label
+var theme_manager: Node
 
 func _ready():
     get_tree().auto_accept_quit = false
@@ -29,6 +30,14 @@ func _ready():
     online.room_joined.connect(_room_joined)
     online.room_left.connect(_room_left)
     online.connection_failed.connect(_connection_failed)
+    theme_manager = preload("res://cosmetics/theme_manager.gd").new()
+    theme_manager.name = "ThemeManager"
+    add_child(theme_manager)
+    theme_manager.setup(self)
+    if hub.has_signal("theme_preview_requested"):
+        hub.theme_preview_requested.connect(theme_manager.apply_theme)
+    if hub.has_signal("piece_set_requested"):
+        hub.piece_set_requested.connect(theme_manager.apply_piece_set)
     _layout()
     open_home()
 
@@ -102,7 +111,8 @@ func _start_bot(difficulty: String, side: String):
     mode = "bot"
     game.show()
     bot_controller.start(game,difficulty,side)
-    bot_info.text = "BOT %s  ·  VOCÊ: %s" % ["MÉDIO" if difficulty == "medium" else "FÁCIL", "BRANCAS" if bot_controller.human_color == "w" else "PRETAS"]
+    var level_name = {"easy":"FÁCIL","medium":"MÉDIO","hard":"DIFÍCIL","expert":"EXPERT"}.get(difficulty,"FÁCIL")
+    bot_info.text = "BOT %s  ·  VOCÊ: %s" % [level_name, "BRANCAS" if bot_controller.human_color == "w" else "PRETAS"]
     _clear_selection()
     _refresh_input()
 
@@ -235,6 +245,7 @@ func _layout():
     forest.scale = Vector2.ONE * cover
     forest.position = size/2.0 + (texture_size/2.0-art_center)*cover
     game.update_presentation(Rect2(-game.position / factor, size / factor))
+    if is_instance_valid(theme_manager): theme_manager.layout()
 
 func toggle_fullscreen():
     var window = get_window()

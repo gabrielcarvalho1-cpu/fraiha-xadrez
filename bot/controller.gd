@@ -22,7 +22,7 @@ var last_search_metrics := {}
 func start(world: Node, level: String, side: String):
     stop()
     game = world
-    difficulty = "medium" if level == "medium" else "easy"
+    difficulty = Search.normalize_difficulty(level)
     human_color = ("w" if randi()%2 == 0 else "b") if side == "random" else side
     if human_color not in ["w","b"]: human_color = "w"
     game.online = null
@@ -143,7 +143,7 @@ func _sync_view():
             "fifty_moves": game.status = "EMPATE — REGRA DOS 50 LANCES"
             "repetition": game.status = "EMPATE — REPETIÇÃO"
     elif thinking:
-        game.status = "BOT %s PENSANDO…" % ("MÉDIO" if difficulty == "medium" else "FÁCIL")
+        game.status = "BOT %s PENSANDO…" % Search.difficulty_label(difficulty)
     else:
         game.status = ("XEQUE! " if rules.in_check(human_color) else "") + "SUA VEZ · " + ("BRANCAS" if human_color == "w" else "PRETAS")
     game.queue_redraw()
@@ -173,7 +173,8 @@ func _process(delta: float):
     search = Search.new()
     worker = Thread.new()
     var snapshot = rules.copy_position()
-    var err = worker.start(search.choose.bind(snapshot,difficulty,650,3))
+    var settings := Search.profile(difficulty)
+    var err = worker.start(search.choose.bind(snapshot,difficulty,int(settings.budget_ms),int(settings.max_depth)))
     if err != OK:
         worker = null
         # Easy selection is a legal fallback if the operating system cannot
