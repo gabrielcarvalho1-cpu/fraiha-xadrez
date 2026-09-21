@@ -295,3 +295,13 @@ func finish_leave():
     hud.hide(); menu.show()
     menu_info.text="Escolha como jogar."
     game.queue_redraw()
+
+func open_online_menu():
+    menu.show()
+    hud.hide()
+    menu_info.text="Crie uma sala ou entre com o código de um amigo."
+
+func return_to_main_hub():
+    menu.hide()
+    var hub=get_parent().get_node_or_null("MainHub")
+    if hub: hub.open_home()
