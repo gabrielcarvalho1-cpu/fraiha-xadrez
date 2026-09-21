@@ -79,7 +79,6 @@ func build_ui():
     title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size",27)
     box.add_child(title)
-    button(box,"Jogar local • duas pessoas",start_local)
     button(box,"Criar Sala",func(): connect_room({"type":"create"}))
     var row=HBoxContainer.new(); box.add_child(row)
     room_input=LineEdit.new()
@@ -96,6 +95,7 @@ func build_ui():
     menu_info.text="Jogue localmente ou compartilhe uma sala com um amigo."
     if endpoint.is_empty(): menu_info.text="Jogo local disponível. As salas online aguardam a publicação do servidor."
     box.add_child(menu_info)
+    button(box,"← VOLTAR À TELA INICIAL",return_to_main_hub)
     hud=PanelContainer.new()
     hud.position=Vector2(18,18)
     hud.custom_minimum_size=Vector2(385,0)
@@ -293,8 +293,10 @@ func finish_leave():
     room=""; token=""; saved={}
     var config=ConfigFile.new(); config.save("user://online_session.cfg")
     reconnect_button.hide()
-    hud.hide(); menu.show()
+    hud.hide(); menu.hide()
     menu_info.text="Escolha como jogar."
+    var hub=get_parent().get_node_or_null("MainHub")
+    if hub: hub.open_home()
     game.queue_redraw()
 
 func open_online_menu():
