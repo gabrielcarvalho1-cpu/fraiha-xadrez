@@ -102,6 +102,8 @@ func _clear_selection():
     game.queue_redraw()
 
 func _refresh_input():
+    var audio = get_node_or_null("GameAudio")
+    if audio != null: audio.refresh_music()
     var playing = mode in ["local", "online", "bot"]
     bot_controller.set_paused(not pending_navigation.is_empty())
     bot_info.visible = mode == "bot"

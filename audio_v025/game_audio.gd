@@ -2,7 +2,9 @@ extends Node
 ## Presentation observer only; never sends moves or changes a game result.
 var stage
 var players: Array[AudioStreamPlayer] = []
-var ambient: AudioStreamPlayer
+var music: AudioStreamPlayer
+var music_path := ""
+var music_starts := 0
 var streams := {}
 var previous_count := -1
 var previous_captures := 0
@@ -15,19 +17,19 @@ var slot := 0
 
 func _ready():
     stage = get_parent()
-    for id in ["wood","metal","capture","check","mate","win","loss","promotion","ui","castle"]:
+    for id in ["wood","metal","capture","check","mate","win","loss","promotion","ui"]:
         streams[id] = load("res://audio_v025/"+id+".wav")
     for i in range(4):
         var player = AudioStreamPlayer.new()
         player.volume_db = -14
+        player.bus = "Effects"
         add_child(player)
         players.append(player)
-    ambient = AudioStreamPlayer.new()
-    ambient.stream = streams.castle
-    ambient.stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-    ambient.stream.loop_end = ambient.stream.data.size()/2
-    ambient.volume_db = -26
-    add_child(ambient)
+    music = AudioStreamPlayer.new()
+    music.name = "LeagueMusic"
+    music.bus = "Music"
+    add_child(music)
+    refresh_music()
 
 func play_cue(id: String):
     if not streams.has(id) or players.is_empty(): return
@@ -37,18 +39,29 @@ func play_cue(id: String):
     player.stream = streams[id]
     player.play()
 
-func toggle_ambience():
-    if is_instance_valid(ambient): ambient.stream_paused = not ambient.stream_paused
+func toggle_music():
+    var index = AudioServer.get_bus_index("Music")
+    AudioServer.set_bus_mute(index,not AudioServer.is_bus_mute(index))
+
+func refresh_music():
+    # Home and its internal pages always use Madeira, regardless of preview art.
+    var theme: String = stage.game.visual_theme if stage.mode in ["local","bot","online"] else "wood"
+    var path: String = preload("res://cosmetics/theme_catalog.gd").get_theme(theme).music_path
+    if path == music_path: return
+    var track = load(path) as AudioStreamMP3
+    if track == null: return
+    track.loop = true
+    track.loop_offset = 0.0
+    music.stop()
+    music.stream = track
+    music_path = path
+    music.play()
+    music_starts += 1
 
 func _process(_delta):
     var game = stage.game
     var theme: String = game.visual_theme
-    if theme != previous_theme:
-        previous_theme = theme
-        game.sound_ambient.stream_paused = theme != "wood"
-        if theme == "wood": ambient.stop()
-        else: ambient.play()
-    if theme != "wood" and not ambient.playing: ambient.play()
+    refresh_music()
     if not game.game_started:
         previous_count = -1
         previous_end = false
@@ -82,6 +95,6 @@ func _exit_tree():
     for player in players:
         player.stop()
         player.stream = null
-    if is_instance_valid(ambient):
-        ambient.stop()
-        ambient.stream = null
+    if is_instance_valid(music):
+        music.stop()
+        music.stream = null

@@ -10,9 +10,9 @@ config_version=5
 
 [application]
 
-config/name="FRAIHA Xadrez V0.25 - Bronze Prata Ouro Teste"
+config/name="FRAIHA Xadrez V0.28 - Ranked Teste"
 config/use_custom_user_dir=true
-config/custom_user_dir_name="FRAIHA Xadrez Bronze Prata Ouro V025 Teste"
+config/custom_user_dir_name="FRAIHA Xadrez Musicas V026 Teste"
 run/main_scene="res://presentation_v019/stage.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 
@@ -22,6 +22,7 @@ window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/size/window_width_override=1280
 window/size/window_height_override=720
+window/size/mode=3
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 

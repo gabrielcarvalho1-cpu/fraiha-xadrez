@@ -19,6 +19,10 @@ const PREFS = "user://home_preferences.cfg"
 const LeagueCatalog = preload("res://league/catalog.gd")
 const LocalProfile = preload("res://league/local_profile.gd")
 const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
+const Ranked = preload("res://ranked/progression.gd")
+var ranked = Ranked.new()
+var ranked_details: Label
+var home_signature: Array[CanvasItem] = []
 var league_profile = LocalProfile.new()
 var selected_league := "madeira"
 var league_buttons := {}
@@ -49,22 +53,28 @@ var avatar_choices := {}
 var about_title: Label
 var about_body: Label
 var volume := 0.8
-var fullscreen := false
+var music_volume := 0.65
+var fullscreen := true
 var volume_label: Label
+var music_volume_label: Label
 var display_label: Label
 
 func _ready():
     layer = 30
     _load_preferences()
+    for bus_name in ["Music","Effects"]:
+        if AudioServer.get_bus_index(bus_name) < 0:
+            AudioServer.add_bus()
+            AudioServer.set_bus_name(AudioServer.bus_count-1,bus_name)
+    AudioServer.set_bus_volume_db(0,0)
+    AudioServer.set_bus_mute(0,false)
     league_profile.load_profile()
+    ranked.load_local()
     _build()
     get_viewport().size_changed.connect(_layout)
     _layout()
     show_page("main")
-    AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volume, 0.0001)))
-    AudioServer.set_bus_mute(0, volume <= 0.0)
-    if fullscreen:
-        get_window().set_deferred("mode", Window.MODE_FULLSCREEN)
+    # Fullscreen is set by project.godot before the first window is created.
 
 func _slice(texture: Texture2D, region: Rect2) -> AtlasTexture:
     var t = AtlasTexture.new()
@@ -137,8 +147,8 @@ func _button(parent: Node, row: int, title: String, subtitle: String, pos: Vecto
     margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     margin.add_theme_constant_override("margin_left", int(dimensions.x * 0.232))
     margin.add_theme_constant_override("margin_right", int(dimensions.x * 0.094))
-    margin.add_theme_constant_override("margin_top", 7)
-    margin.add_theme_constant_override("margin_bottom", 7)
+    margin.add_theme_constant_override("margin_top", 3 if dimensions.y < 60 else 7)
+    margin.add_theme_constant_override("margin_bottom", 3 if dimensions.y < 60 else 7)
     margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
     button.add_child(margin)
     var labels = VBoxContainer.new()
@@ -197,11 +207,21 @@ func _build():
     main.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(main)
     pages["main"] = main
-    var titles = ["JOGAR LOCAL", "JOGAR CONTRA O BOT", "JOGAR ONLINE", "LIGAS E RANKING", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
-    var subtitles = ["Duas pessoas no mesmo computador", "Treine e evolua seu jogo", "Crie ou entre em uma sala", "Acompanhe seu progresso", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
-    var actions = [func(): play_local_requested.emit(), func(): show_page("bot"), func(): play_online_requested.emit(), func(): show_page("ranking"), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
-    for i in range(7):
-        menu_buttons.append(_button(main, i, titles[i], subtitles[i], Vector2(611,341+i*73), actions[i]))
+    var titles = ["JOGAR LOCAL", "JOGAR CONTRA O BOT", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
+    var subtitles = ["Duas pessoas no mesmo computador", "Treine e evolua seu jogo", "Crie ou entre em uma sala", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
+    var actions = [func(): play_local_requested.emit(), func(): show_page("bot"), func(): play_online_requested.emit(), func(): show_page("ranked"), func(): show_page("ranking"), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
+    var icons = [0,1,2,3,3,4,5,6]
+    for i in range(8):
+        var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(611,341+i*63), actions[i], Vector2(450,57))
+        item.name = "MainAction" + str(i)
+        menu_buttons.append(item)
+        if i == 3:
+            var gold = ShaderMaterial.new()
+            gold.shader = preload("res://ranked/gold_button.gdshader")
+            item.material = gold
+            for label in item.find_children("*","Label",true,false):
+                label.add_theme_color_override("font_color",Color("241703"))
+                label.add_theme_color_override("font_shadow_color",Color.TRANSPARENT)
     _build_profile()
     _build_pages()
     var version_bg = ColorRect.new()
@@ -209,7 +229,7 @@ func _build():
     version_bg.size = Vector2(266,30)
     version_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(version_bg)
-    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.25 · TESTE", 16)
+    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.28 · TESTE", 16)
     var footer = ColorRect.new()
     footer.color = Color("06100ce6")
     footer.position = Vector2(0,867)
@@ -227,7 +247,8 @@ func _build():
     var footer_text = _stack(canvas, Vector2(82,877), Vector2(291,55))
     _label(footer_text, "FRAIHA XADREZ", 18)
     _label(footer_text, "Feito por jogadores, para jogadores.", 14, MUTED)
-    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.25 · Bronze, Prata e Ouro\nMaringá · PR · Brasil", 15)
+    home_signature = [footer,crown,footer_text]
+    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.28 · Ranked\nMaringá · PR · Brasil", 15)
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     signature.add_theme_constant_override("outline_size", 4)
     signature.add_theme_color_override("font_outline_color", Color("09110dee"))
@@ -313,6 +334,7 @@ func _build_pages():
     side_buttons.w = _page_button(sides, 0, "BRANCAS", "Você faz a primeira jogada", func(): play_bot_requested.emit(selected_difficulty, "w"))
     side_buttons.b = _page_button(sides, 0, "PRETAS", "O bot começa a partida", func(): play_bot_requested.emit(selected_difficulty, "b"))
     side_buttons.random = _page_button(sides, 2, "ALEATÓRIO", "Deixe a escolha para o sorteio", func(): play_bot_requested.emit(selected_difficulty, "random"))
+    _build_ranked()
     _build_ranking()
     _build_about_page()
     var profile_panel = _wide_page("profile","PERFIL DO JOGADOR")
@@ -336,7 +358,7 @@ func _build_pages():
     var hint = _label(profile_panel,"ESCOLHA SEU AVATAR\nSeu retrato acompanha você na Home e nas partidas deste computador.",21)
     hint.position = Vector2(45,382)
     hint.size = Vector2(610,110)
-    var profile = _stack(profile_panel,Vector2(745,115),Vector2(640,380),Vector4.ZERO,16)
+    var profile = _stack(profile_panel,Vector2(745,115),Vector2(640,480),Vector4.ZERO,10)
     _label(profile,"COMO VOCÊ QUER SER CONHECIDO?",20,GOLD)
     var name_input = LineEdit.new()
     name_input.name = "PlayerName"
@@ -352,15 +374,23 @@ func _build_pages():
         profile_name.text = player_name
         _save_preferences()
     )
-    var data = league_profile.data
-    _body(profile,"Liga atual: %s · %d / 100 PL\nVitórias: %d   ·   Derrotas: %d\nPartidas: %d\nMaior liga: %s" % [LeagueCatalog.entry(data.current_league).display_name,data.lp,data.wins,data.losses,data.games_played,LeagueCatalog.entry(data.highest_league).display_name],20)
-    _progress(profile,data.lp,16)
-    _body(profile,"Perfil local. Estatísticas competitivas e compartilhamento do avatar aguardam a etapa online de perfis.",16)
+    for mode in Ranked.MODES:
+        _body(profile,ranked.summary(mode),16)
     _refresh_avatars()
     var settings = _new_page("settings", "DO SEU JEITO", "CONFIGURAÇÕES")
+    music_volume_label = _label(settings, "", 19, GOLD)
+    var music_slider = HSlider.new()
+    music_slider.name = "MusicVolume"
+    music_slider.custom_minimum_size.y = 35
+    music_slider.max_value = 100
+    music_slider.step = 1
+    music_slider.value = round(music_volume*100)
+    settings.add_child(music_slider)
+    music_slider.value_changed.connect(_set_music_volume)
+    _set_music_volume(music_slider.value,false)
     volume_label = _label(settings, "", 19, GOLD)
     var slider = HSlider.new()
-    slider.name = "MasterVolume"
+    slider.name = "EffectsVolume"
     slider.custom_minimum_size.y = 35
     slider.min_value = 0
     slider.max_value = 100
@@ -576,6 +606,7 @@ func _layout():
 func show_page(id: String):
     if not pages.has(id): return
     page = id
+    for element in home_signature: element.visible = id == "main"
     for key in pages:
         pages[key].visible = key == id
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
@@ -601,9 +632,18 @@ func is_home_visible() -> bool:
 
 func _set_volume(value: float, save := true):
     volume = value / 100.0
-    AudioServer.set_bus_volume_db(0,linear_to_db(maxf(volume,0.0001)))
-    AudioServer.set_bus_mute(0, volume <= 0.0)
-    volume_label.text = "VOLUME GERAL  ·  %d%%" % round(value)
+    var bus = AudioServer.get_bus_index("Effects")
+    AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(volume,0.0001)))
+    AudioServer.set_bus_mute(bus, volume <= 0.0)
+    volume_label.text = "EFEITOS SONOROS  ·  %d%%" % round(value)
+    if save: _save_preferences()
+
+func _set_music_volume(value: float, save := true):
+    music_volume = value/100.0
+    var bus = AudioServer.get_bus_index("Music")
+    AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(music_volume,0.0001)))
+    AudioServer.set_bus_mute(bus,music_volume <= 0.0)
+    music_volume_label.text = "MÚSICA  ·  %d%%" % round(value)
     if save: _save_preferences()
 
 func _toggle_fullscreen():
@@ -622,12 +662,26 @@ func _load_preferences():
     avatar_id = String(config.get_value("profile","avatar","warrior"))
     if avatar_id not in ["warrior","archer","mage"]: avatar_id = "warrior"
     volume = clampf(float(config.get_value("audio","volume",0.8)),0,1)
-    fullscreen = bool(config.get_value("video","fullscreen",false))
+    music_volume = clampf(float(config.get_value("audio","music_volume",0.65)),0,1)
+    fullscreen = true
 
 func _save_preferences():
     var config = ConfigFile.new()
     config.set_value("profile","name",player_name)
     config.set_value("profile","avatar",avatar_id)
     config.set_value("audio","volume",volume)
+    config.set_value("audio","music_volume",music_volume)
     config.set_value("video","fullscreen",fullscreen)
     config.save(PREFS)
+
+func _build_ranked():
+    var content = _new_page("ranked", "ESCOLHA SEU RITMO", "JOGAR RANQUEADO")
+    _body(content,"Cada ritmo possui liga e estatísticas próprias. Fundação local; partidas ranqueadas online estarão disponíveis em uma próxima fase.",16)
+    for mode in Ranked.MODES:
+        var id: String = mode
+        _page_button(content,3,Ranked.MODES[id].name.to_upper(),"%d minutos por jogador" % Ranked.MODES[id].minutes,func(): ranked_details.text = ranked.summary(id))
+    ranked_details = _body(content,ranked.summary("blitz"),17)
+    _body(content,"Promoção a cada 100 PL, com excedente. Sem rebaixamento nesta fase. Empates: 0 PL. Bot e Online Casual não alteram estas classificações.",15)
+    var play = _page_button(content,2,"BUSCAR PARTIDA — EM BREVE","Matchmaking disponível em uma próxima fase",func(): pass)
+    play.disabled = true
+    _highlight(play,false)
