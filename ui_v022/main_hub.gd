@@ -147,8 +147,8 @@ func _button(parent: Node, row: int, title: String, subtitle: String, pos: Vecto
     margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     margin.add_theme_constant_override("margin_left", int(dimensions.x * 0.232))
     margin.add_theme_constant_override("margin_right", int(dimensions.x * 0.094))
-    margin.add_theme_constant_override("margin_top", 7)
-    margin.add_theme_constant_override("margin_bottom", 7)
+    margin.add_theme_constant_override("margin_top", 3 if dimensions.y < 60 else 7)
+    margin.add_theme_constant_override("margin_bottom", 3 if dimensions.y < 60 else 7)
     margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
     button.add_child(margin)
     var labels = VBoxContainer.new()
