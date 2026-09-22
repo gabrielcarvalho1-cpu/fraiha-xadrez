@@ -22,7 +22,6 @@ const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
 const Ranked = preload("res://ranked/progression.gd")
 var ranked = Ranked.new()
 var ranked_details: Label
-var home_signature: Array[CanvasItem] = []
 var league_profile = LocalProfile.new()
 var selected_league := "madeira"
 var league_buttons := {}
@@ -216,12 +215,8 @@ func _build():
         item.name = "MainAction" + str(i)
         menu_buttons.append(item)
         if i == 3:
-            var gold = ShaderMaterial.new()
-            gold.shader = preload("res://ranked/gold_button.gdshader")
-            item.material = gold
-            for label in item.find_children("*","Label",true,false):
-                label.add_theme_color_override("font_color",Color("241703"))
-                label.add_theme_color_override("font_shadow_color",Color.TRANSPARENT)
+            var labels = item.find_children("*","Label",true,false)
+            if not labels.is_empty(): labels[0].add_theme_color_override("font_color",GOLD)
     _build_profile()
     _build_pages()
     var version_bg = ColorRect.new()
@@ -229,26 +224,8 @@ func _build():
     version_bg.size = Vector2(266,30)
     version_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(version_bg)
-    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.28 · TESTE", 16)
-    var footer = ColorRect.new()
-    footer.color = Color("06100ce6")
-    footer.position = Vector2(0,867)
-    footer.size = Vector2(385,74)
-    footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    canvas.add_child(footer)
-    var crown = TextureRect.new()
-    crown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    crown.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    crown.texture = _slice(FOREST, Rect2(748,7,153,89))
-    crown.position = Vector2(19,882)
-    crown.size = Vector2(43,45)
-    crown.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    canvas.add_child(crown)
-    var footer_text = _stack(canvas, Vector2(82,877), Vector2(291,55))
-    _label(footer_text, "FRAIHA XADREZ", 18)
-    _label(footer_text, "Feito por jogadores, para jogadores.", 14, MUTED)
-    home_signature = [footer,crown,footer_text]
-    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.28 · Ranked\nMaringá · PR · Brasil", 15)
+    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.28.1 · TESTE", 16)
+    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.28.1 · Ranked\nMaringá · PR · Brasil", 15)
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     signature.add_theme_constant_override("outline_size", 4)
     signature.add_theme_color_override("font_outline_color", Color("09110dee"))
@@ -606,7 +583,6 @@ func _layout():
 func show_page(id: String):
     if not pages.has(id): return
     page = id
-    for element in home_signature: element.visible = id == "main"
     for key in pages:
         pages[key].visible = key == id
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
