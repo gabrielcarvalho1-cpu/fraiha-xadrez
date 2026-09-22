@@ -17,12 +17,12 @@ func run():
     for i in range(8):
         var button = hub.menu_buttons[i]
         check(button.position == Vector2(611,341+i*63) and button.size == Vector2(450,57),"equal geometry %d" % i)
-    check(hub.menu_buttons[3].material is ShaderMaterial,"gold Ranked")
+    check(hub.menu_buttons[3].material == null,"Ranked uses original green artwork")
     hub.menu_buttons[3].pressed.emit()
     check(hub.page == "ranked","Ranked button navigation")
     for id in ["about","profile","ranked","bot","settings"]:
         hub.show_page(id)
-        check(not hub.home_signature[0].visible and not hub.home_signature[1].visible and not hub.home_signature[2].visible,"no signature " + id)
+        check(not "Feito por jogadores, para jogadores." in hub.canvas.find_children("*","Label",true,false).map(func(label): return label.text),"no signature " + id)
     for id in ["main","about"]:
         hub.show_page(id)
         for i in range(4): await process_frame
