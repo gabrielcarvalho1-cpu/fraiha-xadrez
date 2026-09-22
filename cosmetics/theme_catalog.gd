@@ -15,7 +15,9 @@ static func themes() -> Array:
     return [get_theme("wood"),get_theme("iron"),get_theme("bronze"),get_theme("silver"),get_theme("gold")]
 
 static func get_theme(id: String) -> Dictionary:
-    return THEME_DATA.get(id, THEME_DATA.wood).duplicate(true)
+    var data = THEME_DATA.get(id, THEME_DATA.wood).duplicate(true)
+    data.music_path = "res://music_v026/"+data.id+".mp3"
+    return data
 
 static func texture(path: String) -> Texture2D:
     return load(path) as Texture2D if ResourceLoader.exists(path) else null

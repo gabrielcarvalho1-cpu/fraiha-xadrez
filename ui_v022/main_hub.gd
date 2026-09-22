@@ -49,22 +49,27 @@ var avatar_choices := {}
 var about_title: Label
 var about_body: Label
 var volume := 0.8
-var fullscreen := false
+var music_volume := 0.65
+var fullscreen := true
 var volume_label: Label
+var music_volume_label: Label
 var display_label: Label
 
 func _ready():
     layer = 30
     _load_preferences()
+    for bus_name in ["Music","Effects"]:
+        if AudioServer.get_bus_index(bus_name) < 0:
+            AudioServer.add_bus()
+            AudioServer.set_bus_name(AudioServer.bus_count-1,bus_name)
+    AudioServer.set_bus_volume_db(0,0)
+    AudioServer.set_bus_mute(0,false)
     league_profile.load_profile()
     _build()
     get_viewport().size_changed.connect(_layout)
     _layout()
     show_page("main")
-    AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volume, 0.0001)))
-    AudioServer.set_bus_mute(0, volume <= 0.0)
-    if fullscreen:
-        get_window().set_deferred("mode", Window.MODE_FULLSCREEN)
+    # Fullscreen is set by project.godot before the first window is created.
 
 func _slice(texture: Texture2D, region: Rect2) -> AtlasTexture:
     var t = AtlasTexture.new()
@@ -209,7 +214,7 @@ func _build():
     version_bg.size = Vector2(266,30)
     version_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(version_bg)
-    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.25 · TESTE", 16)
+    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.26 · TESTE", 16)
     var footer = ColorRect.new()
     footer.color = Color("06100ce6")
     footer.position = Vector2(0,867)
@@ -227,7 +232,7 @@ func _build():
     var footer_text = _stack(canvas, Vector2(82,877), Vector2(291,55))
     _label(footer_text, "FRAIHA XADREZ", 18)
     _label(footer_text, "Feito por jogadores, para jogadores.", 14, MUTED)
-    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.25 · Bronze, Prata e Ouro\nMaringá · PR · Brasil", 15)
+    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.26 · Música por liga\nMaringá · PR · Brasil", 15)
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     signature.add_theme_constant_override("outline_size", 4)
     signature.add_theme_color_override("font_outline_color", Color("09110dee"))
@@ -358,9 +363,19 @@ func _build_pages():
     _body(profile,"Perfil local. Estatísticas competitivas e compartilhamento do avatar aguardam a etapa online de perfis.",16)
     _refresh_avatars()
     var settings = _new_page("settings", "DO SEU JEITO", "CONFIGURAÇÕES")
+    music_volume_label = _label(settings, "", 19, GOLD)
+    var music_slider = HSlider.new()
+    music_slider.name = "MusicVolume"
+    music_slider.custom_minimum_size.y = 35
+    music_slider.max_value = 100
+    music_slider.step = 1
+    music_slider.value = round(music_volume*100)
+    settings.add_child(music_slider)
+    music_slider.value_changed.connect(_set_music_volume)
+    _set_music_volume(music_slider.value,false)
     volume_label = _label(settings, "", 19, GOLD)
     var slider = HSlider.new()
-    slider.name = "MasterVolume"
+    slider.name = "EffectsVolume"
     slider.custom_minimum_size.y = 35
     slider.min_value = 0
     slider.max_value = 100
@@ -601,9 +616,18 @@ func is_home_visible() -> bool:
 
 func _set_volume(value: float, save := true):
     volume = value / 100.0
-    AudioServer.set_bus_volume_db(0,linear_to_db(maxf(volume,0.0001)))
-    AudioServer.set_bus_mute(0, volume <= 0.0)
-    volume_label.text = "VOLUME GERAL  ·  %d%%" % round(value)
+    var bus = AudioServer.get_bus_index("Effects")
+    AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(volume,0.0001)))
+    AudioServer.set_bus_mute(bus, volume <= 0.0)
+    volume_label.text = "EFEITOS SONOROS  ·  %d%%" % round(value)
+    if save: _save_preferences()
+
+func _set_music_volume(value: float, save := true):
+    music_volume = value/100.0
+    var bus = AudioServer.get_bus_index("Music")
+    AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(music_volume,0.0001)))
+    AudioServer.set_bus_mute(bus,music_volume <= 0.0)
+    music_volume_label.text = "MÚSICA  ·  %d%%" % round(value)
     if save: _save_preferences()
 
 func _toggle_fullscreen():
@@ -622,12 +646,14 @@ func _load_preferences():
     avatar_id = String(config.get_value("profile","avatar","warrior"))
     if avatar_id not in ["warrior","archer","mage"]: avatar_id = "warrior"
     volume = clampf(float(config.get_value("audio","volume",0.8)),0,1)
-    fullscreen = bool(config.get_value("video","fullscreen",false))
+    music_volume = clampf(float(config.get_value("audio","music_volume",0.65)),0,1)
+    fullscreen = true
 
 func _save_preferences():
     var config = ConfigFile.new()
     config.set_value("profile","name",player_name)
     config.set_value("profile","avatar",avatar_id)
     config.set_value("audio","volume",volume)
+    config.set_value("audio","music_volume",music_volume)
     config.set_value("video","fullscreen",fullscreen)
     config.save(PREFS)

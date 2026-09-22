@@ -80,15 +80,7 @@ func _ready():
     move_child(environment, 0)
     for code in ["wP","wR","wN","wB","wQ","wK","bP","bR","bN","bB","bQ","bK"]:
         piece_textures[code] = load("res://visual_v018/pieces/" + code + ".tres")
-    sound_ambient = AudioStreamPlayer.new()
-    add_child(sound_ambient)
-    sound_ambient.stream = load("res://audio/forest_ambient.wav")
-    sound_ambient.stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-    sound_ambient.stream.loop_begin = 0
-    sound_ambient.stream.loop_end = int(sound_ambient.stream.get_length()*sound_ambient.stream.mix_rate)
-    sound_ambient.volume_db = -70.0
-    sound_ambient.play()
-    create_tween().tween_property(sound_ambient,"volume_db",-28.0,2.5)
+    # Environmental audio is disabled. Music and chess cues are owned by GameAudio.
     _new_game()
     set_process(true)
 
@@ -376,7 +368,7 @@ func _draw_ui():
         draw_rect(panel,Color(0.07,0.06,0.05,0.92))
         draw_rect(panel,Color("#9e8150"),false,1)
         draw_string(font,panel.position+Vector2(16,27),"CONFIGURAÇÕES",HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("#e8d6a8"))
-        draw_string(font,panel.position+Vector2(16,53),"M • ativar / silenciar ambiente",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("#d5ccb9"))
+        draw_string(font,panel.position+Vector2(16,53),"M • ativar / silenciar música",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("#d5ccb9"))
         draw_style_box(_panel_style(), fullscreen_button)
         var fullscreen_on = get_window().mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]
         var caption = "Tela Cheia: " + ("Sim" if fullscreen_on else "Não")
@@ -388,6 +380,15 @@ func _draw():
         var edge = Rect2(ORIGIN-Vector2(10,10),Vector2(BOARD+20,BOARD+20))
         draw_rect(edge,Color("161e25"))
         draw_rect(edge,Color("929a9c"),false,3)
+        if visual_theme == "bronze":
+            # A square rim in the same coordinate system as all 64 cells.
+            var bronze_edge = Rect2(ORIGIN-Vector2(20,20),Vector2(BOARD+40,BOARD+40))
+            draw_rect(bronze_edge,Color("34251a"))
+            draw_rect(bronze_edge,Color("b77a39"),false,7)
+            draw_rect(bronze_edge.grow(-8),Color("e4b775"),false,2)
+            for corner in [bronze_edge.position,Vector2(bronze_edge.end.x,bronze_edge.position.y),bronze_edge.end,Vector2(bronze_edge.position.x,bronze_edge.end.y)]:
+                draw_rect(Rect2(corner-Vector2(7,7),Vector2(14,14)),Color("e4b775"))
+                draw_rect(Rect2(corner-Vector2(3,3),Vector2(6,6)),Color("6c421d"))
     for y in range(8):
         for x in range(8):
             var c=Vector2i(x,y)
@@ -502,9 +503,8 @@ func _handle_game_input(event):
         if event is InputEventKey and event.pressed and event.keycode==KEY_R: _new_game()
         return
     if event is InputEventKey and event.pressed and event.keycode == KEY_M:
-        sound_ambient.stream_paused = not sound_ambient.stream_paused
         var audio = get_parent().get_node_or_null("GameAudio")
-        if audio != null: audio.toggle_ambience()
+        if audio != null: audio.toggle_music()
         return
     if event is InputEventKey and event.pressed:
         if event.keycode==KEY_R and not promotion_pending:

@@ -38,7 +38,7 @@ func apply_theme(theme_id: String) -> bool:
     iron_arena.texture = arena_texture if theme_id != "wood" else null
     iron_arena.visible = theme_id != "wood"
     apply_piece_set(theme_id)
-    layout()
+    stage._layout()
     theme_changed.emit(active_theme,active_piece_set)
     return true
 
@@ -66,5 +66,12 @@ func layout():
     var center: Vector2 = centers.get(active_theme,art_size/2.0)
     var cover = maxf(maxf(size.x/2.0/center.x,size.x/2.0/(art_size.x-center.x)),maxf(size.y/2.0/center.y,size.y/2.0/(art_size.y-center.y)))
     var factor = maxf(game.scale.x * game.BOARD / spans.get(active_theme,548.0),cover)
+    if active_theme == "bronze":
+        # Cover the old perspective rim with the square playable surface. Both
+        # axes share one factor; the surrounding illustration stays proportional.
+        factor = cover
+        game.scale = Vector2.ONE * (620.0*factor/game.BOARD)
+        game.position = size/2.0-(game.ORIGIN+Vector2.ONE*game.BOARD/2.0)*game.scale.x
+        game.update_presentation(Rect2(-game.position/game.scale.x,size/game.scale.x))
     iron_arena.scale = Vector2.ONE*factor
     iron_arena.position = size/2.0 + (art_size/2.0-center)*factor
