@@ -43,6 +43,11 @@ var side_buttons := {}
 var profile_button: TextureButton
 var profile_name: Label
 var player_name := "Jogador"
+var avatar_id := "warrior"
+var profile_portrait: TextureRect
+var avatar_choices := {}
+var about_title: Label
+var about_body: Label
 var volume := 0.8
 var fullscreen := false
 var volume_label: Label
@@ -144,6 +149,10 @@ func _button(parent: Node, row: int, title: String, subtitle: String, pos: Vecto
     _label(labels, title, 18)
     _label(labels, subtitle, 14, MUTED)
     button.pressed.connect(callback)
+    button.pressed.connect(func():
+        var audio = get_parent().get_node_or_null("GameAudio")
+        if audio != null: audio.play_cue("ui")
+    )
     button.mouse_entered.connect(func(): _highlight(button, true))
     button.mouse_exited.connect(func(): _highlight(button, button.has_focus()))
     button.focus_entered.connect(func(): _highlight(button, true))
@@ -200,7 +209,7 @@ func _build():
     version_bg.size = Vector2(266,30)
     version_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(version_bg)
-    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.24 · TESTE", 16)
+    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.25 · TESTE", 16)
     var footer = ColorRect.new()
     footer.color = Color("06100ce6")
     footer.position = Vector2(0,867)
@@ -218,7 +227,7 @@ func _build():
     var footer_text = _stack(canvas, Vector2(82,877), Vector2(291,55))
     _label(footer_text, "FRAIHA XADREZ", 18)
     _label(footer_text, "Feito por jogadores, para jogadores.", 14, MUTED)
-    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.24 · Ligas e temas\nMaringá · PR · Brasil", 15)
+    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.25 · Bronze, Prata e Ouro\nMaringá · PR · Brasil", 15)
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     signature.add_theme_constant_override("outline_size", 4)
     signature.add_theme_color_override("font_outline_color", Color("09110dee"))
@@ -233,9 +242,10 @@ func _build_profile():
     profile_button.focus_mode = Control.FOCUS_ALL
     profile.add_child(profile_button)
     var portrait = TextureRect.new()
+    profile_portrait = portrait
     portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    portrait.texture = AVATAR
+    portrait.texture = avatar_texture()
     portrait.position = Vector2(0,2)
     portrait.size = Vector2(88,88)
     portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -304,10 +314,30 @@ func _build_pages():
     side_buttons.b = _page_button(sides, 0, "PRETAS", "O bot começa a partida", func(): play_bot_requested.emit(selected_difficulty, "b"))
     side_buttons.random = _page_button(sides, 2, "ALEATÓRIO", "Deixe a escolha para o sorteio", func(): play_bot_requested.emit(selected_difficulty, "random"))
     _build_ranking()
-    var about = _new_page("about", "FRAIHA XADREZ", "ESTRATÉGIA PARA IR MAIS LONGE")
-    _body(about, "Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo em pixel art. Planeje, aprenda e compartilhe boas partidas.\n\nFeito por jogadores, para jogadores.\nMaringá · Paraná · Brasil")
-    var profile = _new_page("profile", "SEU LUGAR NO TABULEIRO", "PERFIL DO JOGADOR")
-    _body(profile, "Escolha como quer aparecer nesta Home. O nome fica salvo neste computador. Contas e estatísticas online virão depois.")
+    _build_about_page()
+    var profile_panel = _wide_page("profile","PERFIL DO JOGADOR")
+    var portraits = HBoxContainer.new()
+    portraits.position = Vector2(45,125)
+    portraits.add_theme_constant_override("separation",22)
+    profile_panel.add_child(portraits)
+    for id in ["warrior","archer","mage"]:
+        var option = VBoxContainer.new()
+        portraits.add_child(option)
+        var portrait_button = TextureButton.new()
+        portrait_button.custom_minimum_size = Vector2(190,190)
+        portrait_button.ignore_texture_size = true
+        portrait_button.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+        portrait_button.texture_normal = avatar_texture(id)
+        portrait_button.pressed.connect(func(): choose_avatar(id))
+        option.add_child(portrait_button)
+        var caption = _label(option,{"warrior":"GUERREIRO","archer":"ARQUEIRA","mage":"MAGO"}[id],18,GOLD)
+        caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        avatar_choices[id] = portrait_button
+    var hint = _label(profile_panel,"ESCOLHA SEU AVATAR\nSeu retrato acompanha você na Home e nas partidas deste computador.",21)
+    hint.position = Vector2(45,382)
+    hint.size = Vector2(610,110)
+    var profile = _stack(profile_panel,Vector2(745,115),Vector2(640,380),Vector4.ZERO,16)
+    _label(profile,"COMO VOCÊ QUER SER CONHECIDO?",20,GOLD)
     var name_input = LineEdit.new()
     name_input.name = "PlayerName"
     name_input.custom_minimum_size.y = 46
@@ -322,7 +352,11 @@ func _build_pages():
         profile_name.text = player_name
         _save_preferences()
     )
-    _label(profile, "O perfil desta build é independente do jogo atual.", 16, GOLD)
+    var data = league_profile.data
+    _body(profile,"Liga atual: %s · %d / 100 PL\nVitórias: %d   ·   Derrotas: %d\nPartidas: %d\nMaior liga: %s" % [LeagueCatalog.entry(data.current_league).display_name,data.lp,data.wins,data.losses,data.games_played,LeagueCatalog.entry(data.highest_league).display_name],20)
+    _progress(profile,data.lp,16)
+    _body(profile,"Perfil local. Estatísticas competitivas e compartilhamento do avatar aguardam a etapa online de perfis.",16)
+    _refresh_avatars()
     var settings = _new_page("settings", "DO SEU JEITO", "CONFIGURAÇÕES")
     volume_label = _label(settings, "", 19, GOLD)
     var slider = HSlider.new()
@@ -345,6 +379,56 @@ func _choose_difficulty(id: String):
     selected_difficulty = id
     difficulty_label.text = "Nível: " + {"easy":"Fácil","medium":"Médio","hard":"Difícil","expert":"Expert"}[id]
     show_page("bot_side")
+
+func _wide_page(id: String, title: String) -> Control:
+    var panel = Control.new()
+    panel.position = Vector2(110,260)
+    panel.size = Vector2(1452,640)
+    panel.mouse_filter = Control.MOUSE_FILTER_STOP
+    canvas.add_child(panel)
+    _frame(panel,Vector2.ZERO,panel.size)
+    var heading = _label(panel,title,29,GOLD)
+    heading.position = Vector2(40,28)
+    heading.size = Vector2(1370,55)
+    _button(panel,6,"VOLTAR À HOME","ESC também volta",Vector2(40,546),back,Vector2(410,64))
+    pages[id] = panel
+    return panel
+
+func avatar_texture(id: String = "") -> Texture2D:
+    if id.is_empty(): id = avatar_id
+    if id == "warrior": return AVATAR
+    var atlas = ThemeCatalog.texture("res://cosmetics/v025/avatars.png")
+    if atlas == null: return AVATAR
+    var half = atlas.get_width()/2.0
+    return _slice(atlas,Rect2(0 if id == "archer" else half,0,half,atlas.get_height()))
+
+func choose_avatar(id: String):
+    if id not in ["warrior","archer","mage"]: return
+    avatar_id = id
+    _refresh_avatars()
+    _save_preferences()
+
+func _refresh_avatars():
+    if is_instance_valid(profile_portrait): profile_portrait.texture = avatar_texture()
+    for id in avatar_choices:
+        avatar_choices[id].self_modulate = Color.WHITE if id == avatar_id else Color(0.60,0.65,0.63)
+    if get_parent().has_method("refresh_player_card"): get_parent().refresh_player_card()
+
+func _build_about_page():
+    var panel = _wide_page("about","CONHEÇA O FRAIHA  ·  MUITO MAIS QUE UM XADREZ")
+    var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. Alt+Enter alterna tela cheia. Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nCada liga usa 0–100 PL. A progressão competitiva será definida depois. Nesta build, experimente os cinco primeiros universos na página Ligas."],["MODOS DE JOGO","Local: duas pessoas no mesmo computador.\nBot: quatro dificuldades, escolha entre brancas, pretas ou aleatório.\nOnline: crie uma sala, compartilhe seu código de seis caracteres e jogue com um amigo."],["PERSONALIZAÇÃO","Escolha Guerreiro, Arqueira ou Mago no Perfil.\n\nNa página Ligas, selecione Madeira, Ferro, Bronze, Prata ou Ouro e use TESTAR UNIVERSO. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
+    var navigation = _stack(panel,Vector2(38,108),Vector2(390,418),Vector4.ZERO,4)
+    var details = _stack(panel,Vector2(482,117),Vector2(870,392),Vector4.ZERO,22)
+    about_title = _label(details,"",27,GOLD)
+    about_body = _body(details,"",23)
+    for i in range(topics.size()):
+        var topic: Array = topics[i]
+        _button(navigation,i,topic[0],"",Vector2.ZERO,func():
+            about_title.text = topic[0]
+            about_body.text = topic[1]
+        ,Vector2(380,65))
+    about_title.text = topics[0][0]
+    about_body.text = topics[0][1]
 
 func _progress(parent: Node, value: int, height: int = 14):
     var bar = ProgressBar.new()
@@ -456,8 +540,11 @@ func _select_league(id: String):
     league_detail_title.text = "LIGA " + entry.display_name.to_upper() + "  ·  0–100 PL"
     league_detail_badge.texture = ThemeCatalog.badge_texture(id)
     var theme: String = entry.environment_theme
-    var available = id in ["madeira","ferro"]
+    var available = ThemeCatalog.THEME_DATA.has(theme)
     var description = "Floresta, equilíbrio e o começo da sua jornada.\nRecompensas: cenário natural, tabuleiro e peças de madeira." if id == "madeira" else "Fortaleza, montanhas e forjas.\nRecompensas: arena de pedra, tabuleiro de aço e peças de ferro."
+    if id == "bronze": description = "Conquista, prestígio e novos horizontes.\nRecompensas: cidadela ao pôr do sol, tabuleiro e peças de bronze."
+    elif id == "prata": description = "Elegância, conhecimento e novos desafios.\nRecompensas: palácio de mármore, tabuleiro e peças de prata."
+    elif id == "ouro": description = "Maestria, poder e grandes vitórias.\nRecompensas: reino dourado, tabuleiro real e peças de ouro."
     if not available: description = "Recompensas visuais em desenvolvimento.\nSeu emblema já faz parte da jornada."
     league_details.text = ("Disponível" if entry.unlocked else "Bloqueada")+"\n"+description+"\n\nPL e progressão competitiva ainda não são atribuídos."
     var textures = ThemeCatalog.piece_textures(theme) if available else {}
@@ -470,7 +557,7 @@ func _select_league(id: String):
         league_buttons[key].modulate = Color.WHITE if key == id else Color(0.78,0.82,0.79)
 
 func _preview_league():
-    if selected_league not in ["madeira","ferro"]: return
+    if not ThemeCatalog.THEME_DATA.has(LeagueCatalog.theme_for(selected_league)): return
     theme_preview_requested.emit(LeagueCatalog.theme_for(selected_league))
     open_home()
 
@@ -532,12 +619,15 @@ func _load_preferences():
     var config = ConfigFile.new()
     if config.load(PREFS) != OK: return
     player_name = String(config.get_value("profile","name","Jogador")).left(20)
+    avatar_id = String(config.get_value("profile","avatar","warrior"))
+    if avatar_id not in ["warrior","archer","mage"]: avatar_id = "warrior"
     volume = clampf(float(config.get_value("audio","volume",0.8)),0,1)
     fullscreen = bool(config.get_value("video","fullscreen",false))
 
 func _save_preferences():
     var config = ConfigFile.new()
     config.set_value("profile","name",player_name)
+    config.set_value("profile","avatar",avatar_id)
     config.set_value("audio","volume",volume)
     config.set_value("video","fullscreen",fullscreen)
     config.save(PREFS)

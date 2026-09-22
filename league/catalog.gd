@@ -9,6 +9,8 @@ static func index_of(id: String) -> int:
 static func theme_for(id: String) -> String:
     if id == "madeira": return "wood"
     if id == "ferro": return "iron"
+    if id == "prata": return "silver"
+    if id == "ouro": return "gold"
     return id
 
 static func entries(profile: Dictionary = {}) -> Array[Dictionary]:

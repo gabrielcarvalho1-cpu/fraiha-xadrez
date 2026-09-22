@@ -115,7 +115,7 @@ func _apply(move: Dictionary) -> bool:
         if code[0] != moving_color and rules.piece(square) != code:
             if code[0] == "w": game.captured_white.append(code)
             else: game.captured_black.append(code)
-            game._spawn_capture(game.ORIGIN + (Vector2(square)+Vector2(0.5,0.5))*game.TILE, code)
+            game._spawn_capture(game.square_center(square), code)
     game.last_from = move.from
     game.last_to = move.to
     thinking = rules.turn != human_color

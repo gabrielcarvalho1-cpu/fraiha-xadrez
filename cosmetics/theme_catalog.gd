@@ -5,11 +5,14 @@ const BADGE_ORDER = ["madeira", "ferro", "bronze", "prata", "ouro", "platina", "
 static var piece_cache := {}
 const THEME_DATA = {
     "wood": {"id":"wood", "name":"Madeira", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://presentation_v019/forest_wide.png", "pieces_path":"res://cosmetics/assets/wood_pieces.png", "unlock_league":"wood"},
-    "iron": {"id":"iron", "name":"Ferro", "home_path":"res://cosmetics/assets/iron_home.png", "arena_path":"res://cosmetics/assets/iron_arena.png", "pieces_path":"res://cosmetics/assets/iron_pieces.png", "unlock_league":"iron"}
+    "iron": {"id":"iron", "name":"Ferro", "home_path":"res://cosmetics/assets/iron_home.png", "arena_path":"res://cosmetics/assets/iron_arena.png", "pieces_path":"res://cosmetics/assets/iron_pieces.png", "unlock_league":"ferro"},
+    "bronze": {"id":"bronze", "name":"Bronze", "home_path":"res://cosmetics/v025/bronze_home.png", "arena_path":"res://cosmetics/v025/bronze_arena.png", "pieces_path":"res://cosmetics/v025/bronze_pieces.png", "unlock_league":"bronze", "board_palette":[Color("d9b580"),Color("704532")]},
+    "silver": {"id":"silver", "name":"Prata", "home_path":"res://cosmetics/v025/silver_home.png", "arena_path":"res://cosmetics/v025/silver_arena.png", "pieces_path":"res://cosmetics/v025/silver_pieces.png", "unlock_league":"prata", "board_palette":[Color("dce1e2"),Color("52637d")]},
+    "gold": {"id":"gold", "name":"Ouro", "home_path":"res://cosmetics/v025/gold_home.png", "arena_path":"res://cosmetics/v025/gold_arena.png", "pieces_path":"res://cosmetics/v025/gold_pieces.png", "unlock_league":"ouro", "board_palette":[Color("efcd75"),Color("45403a")]}
 }
 
 static func themes() -> Array:
-    return [get_theme("wood"), get_theme("iron")]
+    return [get_theme("wood"),get_theme("iron"),get_theme("bronze"),get_theme("silver"),get_theme("gold")]
 
 static func get_theme(id: String) -> Dictionary:
     return THEME_DATA.get(id, THEME_DATA.wood).duplicate(true)
@@ -38,7 +41,7 @@ static func piece_textures(id: String) -> Dictionary:
             var bounds = Rect2i(Vector2i(Vector2(column,row)*cell),Vector2i(cell))
             # Upper-row bases slightly cross the nominal atlas midpoint. The
             # lower king starts higher; its cell is already clean and stays full.
-            if row == 1 and column < 5:
+            if id in ["wood","iron"] and row == 1 and column < 5:
                 bounds.position.y += 24
                 bounds.size.y -= 24
             # Ignore almost-transparent generation dust when sizing a figurine.

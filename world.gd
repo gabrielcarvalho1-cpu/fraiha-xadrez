@@ -10,6 +10,24 @@ const ORIGIN := Vector2(210,186)
 var arena_bg: Texture2D
 var piece_textures := {}
 var visual_theme := "wood"
+var board_palette := [Color("a8aca5"),Color("364955")]
+
+func board_flipped() -> bool:
+    if bot != null: return bot.human_color == "b"
+    if online != null: return online.color == "b"
+    return false
+
+func display_cell(cell: Vector2i) -> Vector2i:
+    return Vector2i(7,7)-cell if board_flipped() else cell
+
+func square_center(cell: Vector2i) -> Vector2:
+    return ORIGIN+(Vector2(display_cell(cell))+Vector2(0.5,0.5))*TILE
+
+func cell_at(point: Vector2) -> Vector2i:
+    var local = point-ORIGIN
+    if local.x < 0 or local.y < 0 or local.x >= BOARD or local.y >= BOARD:
+        return Vector2i(-1,-1)
+    return display_cell(Vector2i(floori(local.x/TILE),floori(local.y/TILE)))
 
 var pieces := {}
 var selected := Vector2i(-1,-1)
@@ -121,8 +139,9 @@ func _process(delta):
 
 func set_visual_theme(theme_id: String):
     visual_theme = theme_id
+    board_palette = preload("res://cosmetics/theme_catalog.gd").get_theme(theme_id).get("board_palette",[Color("a8aca5"),Color("364955")])
     var environment = get_node_or_null("ForestEnvironment")
-    if environment != null: environment.visible = theme_id != "iron"
+    if environment != null: environment.visible = theme_id == "wood"
     queue_redraw()
 
 func _inside(p:Vector2i)->bool:
@@ -308,7 +327,7 @@ func _piece(center:Vector2, code:String):
         var height: float = heights[code.substr(1,1)]
         var size := Vector2(39.0 if code.ends_with("P") else 47.0, height)
         # Uma única sombra neutra; sem glow/outline artificial.
-        draw_ellipse_shadow(center + Vector2(0,22), Vector2(18,5), Color(0.02,0.025,0.015,0.18))
+        draw_ellipse_shadow(center + Vector2(0,26), Vector2(size.x*0.42,3), Color(0.02,0.025,0.015,0.28))
         draw_texture_rect(tex, Rect2(Vector2(center.x-size.x/2.0, center.y+27.0-size.y), size), false)
         return
 
@@ -365,18 +384,18 @@ func _draw_ui():
         draw_string(font,panel.position+Vector2(16,125),"Alt+Enter • alternar",HORIZONTAL_ALIGNMENT_LEFT,-1,11,Color("#d5ccb9"))
 
 func _draw():
-    if visual_theme == "iron":
+    if visual_theme != "wood":
         var edge = Rect2(ORIGIN-Vector2(10,10),Vector2(BOARD+20,BOARD+20))
         draw_rect(edge,Color("161e25"))
         draw_rect(edge,Color("929a9c"),false,3)
     for y in range(8):
         for x in range(8):
             var c=Vector2i(x,y)
-            var r=Rect2(ORIGIN+Vector2(x,y)*TILE,Vector2(TILE,TILE))
+            var r=Rect2(ORIGIN+Vector2(display_cell(c))*TILE,Vector2(TILE,TILE))
             var sq=Color("#cbb273") if (x+y)%2==0 else Color("#557a3e")
-            if visual_theme == "iron":
+            if visual_theme != "wood":
                 # Cosmetic steel tiles share the exact existing input grid.
-                draw_rect(r,Color("a8aca5") if (x+y)%2==0 else Color("364955"))
+                draw_rect(r,board_palette[(x+y)%2])
                 draw_line(r.position,r.position+Vector2(TILE,0),Color(1,1,1,0.13),2)
                 draw_line(r.position,r.position+Vector2(0,TILE),Color(1,1,1,0.09),2)
                 draw_line(r.end-Vector2(TILE,1),r.end-Vector2(0,1),Color(0,0,0,0.21),2)
@@ -396,7 +415,7 @@ func _draw():
     for pos in pieces:
         if dragging and pos == drag_origin:
             continue
-        _piece(ORIGIN+Vector2(pos.x*TILE+TILE/2.0,pos.y*TILE+TILE/2.0),pieces[pos])
+        _piece(square_center(pos),pieces[pos])
 
     if dragging and pieces.has(drag_origin):
         _piece(drag_position, pieces[drag_origin])
@@ -484,6 +503,8 @@ func _handle_game_input(event):
         return
     if event is InputEventKey and event.pressed and event.keycode == KEY_M:
         sound_ambient.stream_paused = not sound_ambient.stream_paused
+        var audio = get_parent().get_node_or_null("GameAudio")
+        if audio != null: audio.toggle_ambience()
         return
     if event is InputEventKey and event.pressed:
         if event.keycode==KEY_R and not promotion_pending:
@@ -506,7 +527,7 @@ func _handle_game_input(event):
             return
         var local=event.position-ORIGIN
         if local.x<0 or local.y<0 or local.x>=BOARD or local.y>=BOARD: return
-        var cell=Vector2i(int(local.x/TILE),int(local.y/TILE))
+        var cell=cell_at(event.position)
         if selected==Vector2i(-1,-1):
             _select(cell)
         elif cell==selected:
@@ -524,7 +545,7 @@ func _handle_game_input(event):
                 var victim:String=pieces[cell]
                 if victim.substr(0,1)=="w": captured_white.append(victim)
                 else: captured_black.append(victim)
-                _spawn_capture(ORIGIN+Vector2(cell.x*TILE+TILE/2.0,cell.y*TILE+TILE/2.0),victim)
+                _spawn_capture(square_center(cell),victim)
                 did_capture=true
             pieces.erase(selected)
             pieces[cell]=moving
@@ -576,7 +597,7 @@ func _drag_input(event: InputEvent) -> bool:
             cancel_drag()
             if not game_started or game_over or promotion_pending or settings_open or (online != null and not online.can_interact()) or (bot != null and not bot.can_interact()):
                 return false
-            var cell = Vector2i(floor((event.position.x-ORIGIN.x)/TILE), floor((event.position.y-ORIGIN.y)/TILE))
+            var cell = cell_at(event.position)
             if _inside(cell) and pieces.has(cell) and _color_at(cell) == turn:
                 drag_origin = cell
                 drag_start = event.position
@@ -584,7 +605,7 @@ func _drag_input(event: InputEvent) -> bool:
             return false
         if drag_origin != Vector2i(-1, -1):
             if dragging:
-                var cell = Vector2i(floor((event.position.x-ORIGIN.x)/TILE), floor((event.position.y-ORIGIN.y)/TILE))
+                var cell = cell_at(event.position)
                 if cell in legal_moves:
                     var drop = InputEventMouseButton.new()
                     drop.button_index = MOUSE_BUTTON_LEFT
