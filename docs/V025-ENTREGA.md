@@ -19,6 +19,8 @@ Branch `dev/v025-bronze-silver-gold`, baseada na V024 remota `fd66a5aa24af091d74
 
 Capturas reais em 1920×1080: três novas arenas, Perfil, Conheça o FRAIHA, Online e Ligas. Inspeção visual dos principais layouts, sem nova rodada de geração de arte.
 
+Executável Windows exportado: 18 verificações passaram, saída 0. Home, três novos temas, novo avatar, páginas Perfil/Conheça/Ligas contidas no viewport em 1920×1080, 1600×900 e 1366×768; menu Online/retorno, orientação das pretas e dez sons incluídos. Total da rodada: 68 verificações direcionadas, sem repetir as baterias extensivas anteriores.
+
 Motor `chess/rules.gd` e busca dos bots `bot/search.gd` não alterados. As baterias extensivas dessas áreas não foram repetidas, conforme solicitação de economia. Não foi repetido o teste completo de multiplayer pela internet nesta rodada. A correção de coordenadas foi testada com o mesmo caminho de entrada e payload de rede, usando um destinatário de teste. Última validação completa pública de reconexão/revanche: V023.
 
 O ambiente isolado emite aviso de certificados Windows e, em testes automatizados, recursos em uso ao encerrar. Nenhum erro de script nos testes concluídos.
