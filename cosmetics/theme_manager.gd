@@ -29,21 +29,21 @@ func apply_theme(theme_id: String) -> bool:
     var home_texture = Catalog.texture(data.home_path)
     var arena_texture = Catalog.texture(data.arena_path)
     # A partial asset import must never replace the working scene with a blank.
-    if theme_id == "iron" and (home_texture == null or arena_texture == null): return false
+    if theme_id != "wood" and (home_texture == null or arena_texture == null): return false
     active_theme = theme_id
     if hub.has_method("apply_theme") and home_texture != null:
         hub.apply_theme(home_texture)
     game.set_visual_theme(theme_id)
     stage.forest.visible = theme_id == "wood"
-    iron_arena.texture = arena_texture if theme_id == "iron" else null
-    iron_arena.visible = theme_id == "iron"
+    iron_arena.texture = arena_texture if theme_id != "wood" else null
+    iron_arena.visible = theme_id != "wood"
     apply_piece_set(theme_id)
     layout()
     theme_changed.emit(active_theme,active_piece_set)
     return true
 
 func apply_piece_set(piece_set_id: String) -> bool:
-    if piece_set_id not in ["classic","wood","iron"]: return false
+    if piece_set_id != "classic" and not Catalog.THEME_DATA.has(piece_set_id): return false
     var textures = classic_pieces if piece_set_id == "classic" else Catalog.piece_textures(piece_set_id)
     if textures.size() != 12:
         if piece_set_id == active_theme:
@@ -61,8 +61,10 @@ func layout():
     var size: Vector2 = stage.get_viewport_rect().size
     var art_size = iron_arena.texture.get_size()
     # Match the painted stone rim to the existing 600-unit playable grid.
-    var center = Vector2(836,491)
+    var centers = {"iron":Vector2(836,491),"bronze":Vector2(836,477),"silver":Vector2(837,463),"gold":Vector2(836,500)}
+    var spans = {"iron":548.0,"bronze":440.0,"silver":461.0,"gold":458.0}
+    var center: Vector2 = centers.get(active_theme,art_size/2.0)
     var cover = maxf(maxf(size.x/2.0/center.x,size.x/2.0/(art_size.x-center.x)),maxf(size.y/2.0/center.y,size.y/2.0/(art_size.y-center.y)))
-    var factor = maxf(game.scale.x * game.BOARD / 548.0,cover)
+    var factor = maxf(game.scale.x * game.BOARD / spans.get(active_theme,548.0),cover)
     iron_arena.scale = Vector2.ONE*factor
-    iron_arena.position = size/2.0 + (art_size/2.0-Vector2(836,491))*factor
+    iron_arena.position = size/2.0 + (art_size/2.0-center)*factor

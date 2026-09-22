@@ -32,6 +32,9 @@ var restart_button: Button
 var exit_dialog: ConfirmationDialog
 var menu_box: VBoxContainer
 var hud_box: VBoxContainer
+var menu_art: TextureRect
+var join_tab: VBoxContainer
+var create_tab: VBoxContainer
 
 func _ready():
     game=get_parent().get_node("World")
@@ -64,8 +67,26 @@ func button(parent:Control,caption:String,callback:Callable)->Button:
     b.custom_minimum_size=Vector2(0,44)
     b.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     b.add_theme_font_size_override("font_size",18)
+    var normal = StyleBoxFlat.new()
+    normal.bg_color = Color("10271feF")
+    normal.border_color = Color("b69a52")
+    normal.set_border_width_all(1)
+    normal.set_corner_radius_all(3)
+    normal.content_margin_left = 16
+    normal.content_margin_right = 16
+    var hover = normal.duplicate()
+    hover.bg_color = Color("294636")
+    hover.border_color = Color("f0d38b")
+    b.add_theme_stylebox_override("normal",normal)
+    b.add_theme_stylebox_override("hover",hover)
+    b.add_theme_stylebox_override("pressed",hover)
+    b.add_theme_color_override("font_color",Color("f4e8c8"))
     parent.add_child(b)
     b.pressed.connect(callback)
+    b.pressed.connect(func():
+        var audio = get_parent().get_node_or_null("GameAudio")
+        if audio != null: audio.play_cue("ui")
+    )
     return b
 
 func build_ui():
@@ -73,6 +94,13 @@ func build_ui():
     control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     control.mouse_filter=Control.MOUSE_FILTER_IGNORE
     add_child(control)
+    menu_art = TextureRect.new()
+    menu_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    menu_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    menu_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    menu_art.modulate = Color(0.45,0.45,0.45)
+    menu_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    control.add_child(menu_art)
     menu=PanelContainer.new()
     control.add_child(menu)
     menu.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -84,19 +112,45 @@ func build_ui():
     box.add_theme_constant_override("separation",10)
     menu.add_child(box)
     var title=Label.new()
-    title.text="FRAIHA XADREZ  •  ONLINE"
+    title.text="JOGO ONLINE"
     title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
     title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     title.add_theme_font_size_override("font_size",27)
     box.add_child(title)
-    button(box,"Criar Sala",func(): connect_room({"type":"create"}))
-    var row=HBoxContainer.new(); box.add_child(row)
+    title.add_theme_color_override("font_color",Color("f4ce7f"))
+    var tabs = HBoxContainer.new()
+    tabs.add_theme_constant_override("separation",16)
+    box.add_child(tabs)
+    button(tabs,"ENTRAR NA SALA",func(): join_tab.show(); create_tab.hide())
+    button(tabs,"CRIAR SALA",func(): join_tab.hide(); create_tab.show())
+    join_tab = VBoxContainer.new()
+    join_tab.add_theme_constant_override("separation",12)
+    box.add_child(join_tab)
+    var hint = Label.new()
+    hint.text = "UM CONVITE. UM TABULEIRO. UMA BOA PARTIDA.\nRecebeu um código? Digite abaixo para encontrar seu amigo."
+    hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    hint.add_theme_color_override("font_color",Color("d4dccf"))
+    hint.add_theme_font_size_override("font_size",18)
+    join_tab.add_child(hint)
+    var row=HBoxContainer.new(); join_tab.add_child(row)
     room_input=LineEdit.new()
     room_input.placeholder_text="Código da sala"
     room_input.max_length=6
+    room_input.custom_minimum_size.y = 50
+    room_input.add_theme_font_size_override("font_size",22)
     room_input.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     row.add_child(room_input)
     button(row,"Entrar na Sala",func(): connect_room({"type":"join","room":room_input.text.strip_edges().to_upper()}))
+    create_tab = VBoxContainer.new()
+    create_tab.add_theme_constant_override("separation",15)
+    box.add_child(create_tab)
+    var instructions = Label.new()
+    instructions.text = "SEU PRÓXIMO DESAFIO COMEÇA AQUI\nCrie uma sala privada e compartilhe o código de seis caracteres com seu amigo. A partida começa quando ambos estiverem conectados."
+    instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    instructions.add_theme_font_size_override("font_size",18)
+    create_tab.add_child(instructions)
+    button(create_tab,"CRIAR MINHA SALA",func(): connect_room({"type":"create"}))
+    create_tab.hide()
     reconnect_button=button(box,"Reconectar à última sala",resume_room)
     reconnect_button.visible=not saved.is_empty()
     menu_info=Label.new()
@@ -105,6 +159,12 @@ func build_ui():
     menu_info.text="Jogue localmente ou compartilhe uma sala com um amigo."
     if endpoint.is_empty(): menu_info.text="Jogo local disponível. As salas online aguardam a publicação do servidor."
     box.add_child(menu_info)
+    var privacy = Label.new()
+    privacy.text = "SALAS POR CONVITE\nNesta versão, entre com o código. A descoberta de salas públicas será adicionada futuramente."
+    privacy.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    privacy.add_theme_color_override("font_color",Color("baa778"))
+    privacy.add_theme_font_size_override("font_size",16)
+    box.add_child(privacy)
     button(box,"← VOLTAR À TELA INICIAL",return_to_main_hub)
     hud=PanelContainer.new()
     hud.position=Vector2(18,18)
@@ -130,12 +190,12 @@ func build_ui():
 
 func layout_ui():
     var screen=get_viewport().get_visible_rect().size
-    var menu_width=minf(500.0,maxf(280.0,screen.x-40.0))
+    var menu_width=minf(850.0,maxf(280.0,screen.x-48.0))
     var hud_width=minf(385.0,maxf(260.0,screen.x-36.0))
     menu_box.custom_minimum_size.x=menu_width-44.0
     hud_box.custom_minimum_size.x=hud_width-44.0
     menu.custom_minimum_size.x=menu_width
-    var menu_height=maxf(420.0,menu.get_combined_minimum_size().y)
+    var menu_height=maxf(460.0,menu.get_combined_minimum_size().y)
     menu.size=Vector2(menu_width,menu_height)
     menu.offset_left=-menu_width/2.0
     menu.offset_right=menu_width/2.0
@@ -180,6 +240,7 @@ func resume_room():
     connect_room({"type":"resume","room":room,"token":token})
 
 func _process(delta):
+    menu_art.visible = menu.visible
     if not online_mode:
         if game.game_started: menu.hide()
         return
@@ -329,6 +390,7 @@ func finish_leave():
     room_left.emit()
 
 func open_online_menu():
+    menu_art.texture = get_parent().hub.canvas.get_node("ForestArtwork").texture
     menu.show()
     hud.hide()
     game.game_started=false

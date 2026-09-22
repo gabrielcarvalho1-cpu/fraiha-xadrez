@@ -15,6 +15,9 @@ var navigation_dialog: ConfirmationDialog
 var bot_controller: Node
 var bot_info: Label
 var theme_manager: Node
+var player_card: HBoxContainer
+var player_portrait: TextureRect
+var player_caption: Label
 
 func _ready():
     get_tree().auto_accept_quit = false
@@ -34,6 +37,9 @@ func _ready():
     theme_manager.name = "ThemeManager"
     add_child(theme_manager)
     theme_manager.setup(self)
+    var audio = preload("res://audio_v025/game_audio.gd").new()
+    audio.name = "GameAudio"
+    add_child(audio)
     if hub.has_signal("theme_preview_requested"):
         hub.theme_preview_requested.connect(theme_manager.apply_theme)
     if hub.has_signal("piece_set_requested"):
@@ -62,6 +68,24 @@ func _build_navigation():
     bot_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     bot_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
     overlay.add_child(bot_info)
+    player_card = HBoxContainer.new()
+    player_card.add_theme_constant_override("separation",9)
+    player_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    overlay.add_child(player_card)
+    player_portrait = TextureRect.new()
+    player_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    player_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    player_portrait.custom_minimum_size = Vector2(58,58)
+    player_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    player_card.add_child(player_portrait)
+    player_caption = Label.new()
+    player_caption.add_theme_font_size_override("font_size",17)
+    player_caption.add_theme_constant_override("outline_size",5)
+    player_caption.add_theme_color_override("font_outline_color",Color("101510"))
+    player_caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    player_caption.custom_minimum_size.x = 142
+    player_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    player_card.add_child(player_caption)
     navigation_dialog = ConfirmationDialog.new()
     navigation_dialog.name = "LeaveConfirmation"
     navigation_dialog.title = "FRAIHA XADREZ"
@@ -84,6 +108,14 @@ func _refresh_input():
     game.set_process_unhandled_input(playing and pending_navigation.is_empty())
     home_button.visible = mode != "home"
     home_button.disabled = not pending_navigation.is_empty()
+    refresh_player_card()
+
+func refresh_player_card():
+    if not is_instance_valid(player_card): return
+    player_card.visible = mode in ["local","online","bot"]
+    player_portrait.texture = hub.avatar_texture()
+    player_caption.text = hub.player_name + "\n" + ("Pretas" if game.board_flipped() else "Brancas")
+    if mode == "local": player_caption.text = hub.player_name + "\nPartida local"
 
 func _start_local():
     bot_controller.stop()
@@ -234,6 +266,7 @@ func _layout():
     if is_instance_valid(bot_info):
         bot_info.position = Vector2(size.x/2.0-250,16)
         bot_info.size = Vector2(500,38)
+    if is_instance_valid(player_card): player_card.position = Vector2(size.x-230,80)
     var factor = min(size.y / 1024.0, size.x / 1024.0)
     game.scale = Vector2.ONE * factor
     var board_center = game.ORIGIN + Vector2.ONE * game.BOARD / 2.0

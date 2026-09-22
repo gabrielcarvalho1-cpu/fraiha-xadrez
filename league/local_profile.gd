@@ -31,7 +31,7 @@ static func validated(value: Dictionary) -> Dictionary:
     if cosmetics is Array:
         for cosmetic in cosmetics:
             if not cosmetic is String: continue
-            var allowed = cosmetic in ["classic","wood","iron"] or Catalog.IDS.has(cosmetic)
+            var allowed = cosmetic in ["classic","wood","iron","bronze","silver","gold"] or Catalog.IDS.has(cosmetic)
             if allowed and not cosmetic in clean.unlocked_cosmetics:
                 clean.unlocked_cosmetics.append(cosmetic)
     return clean
