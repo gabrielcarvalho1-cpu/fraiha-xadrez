@@ -22,6 +22,7 @@ const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
 const Ranked = preload("res://ranked/progression.gd")
 var ranked = Ranked.new()
 var ranked_details: Label
+var home_signature: Array[CanvasItem] = []
 var league_profile = LocalProfile.new()
 var selected_league := "madeira"
 var league_buttons := {}
@@ -206,12 +207,21 @@ func _build():
     main.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(main)
     pages["main"] = main
-    var titles = ["JOGAR LOCAL", "JOGAR CONTRA O BOT", "JOGAR ONLINE", "LIGAS E RANKING", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
-    var subtitles = ["Duas pessoas no mesmo computador", "Treine e evolua seu jogo", "Crie ou entre em uma sala", "Acompanhe seu progresso", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
-    var actions = [func(): play_local_requested.emit(), func(): show_page("bot"), func(): play_online_requested.emit(), func(): show_page("ranking"), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
-    for i in range(7):
-        menu_buttons.append(_button(main, i, titles[i], subtitles[i], Vector2(611,341+i*73), actions[i]))
-    _button(main, 3, "JOGAR RANQUEADO", "Quatro ritmos · classificações independentes", Vector2(90,750), func(): show_page("ranked"))
+    var titles = ["JOGAR LOCAL", "JOGAR CONTRA O BOT", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
+    var subtitles = ["Duas pessoas no mesmo computador", "Treine e evolua seu jogo", "Crie ou entre em uma sala", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
+    var actions = [func(): play_local_requested.emit(), func(): show_page("bot"), func(): play_online_requested.emit(), func(): show_page("ranked"), func(): show_page("ranking"), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
+    var icons = [0,1,2,3,3,4,5,6]
+    for i in range(8):
+        var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(611,341+i*63), actions[i], Vector2(450,57))
+        item.name = "MainAction" + str(i)
+        menu_buttons.append(item)
+        if i == 3:
+            var gold = ShaderMaterial.new()
+            gold.shader = preload("res://ranked/gold_button.gdshader")
+            item.material = gold
+            for label in item.find_children("*","Label",true,false):
+                label.add_theme_color_override("font_color",Color("241703"))
+                label.add_theme_color_override("font_shadow_color",Color.TRANSPARENT)
     _build_profile()
     _build_pages()
     var version_bg = ColorRect.new()
@@ -219,7 +229,7 @@ func _build():
     version_bg.size = Vector2(266,30)
     version_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(version_bg)
-    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.27 · TESTE", 16)
+    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.28 · TESTE", 16)
     var footer = ColorRect.new()
     footer.color = Color("06100ce6")
     footer.position = Vector2(0,867)
@@ -237,7 +247,8 @@ func _build():
     var footer_text = _stack(canvas, Vector2(82,877), Vector2(291,55))
     _label(footer_text, "FRAIHA XADREZ", 18)
     _label(footer_text, "Feito por jogadores, para jogadores.", 14, MUTED)
-    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.27 · Fundação Ranked\nMaringá · PR · Brasil", 15)
+    home_signature = [footer,crown,footer_text]
+    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.28 · Ranked\nMaringá · PR · Brasil", 15)
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     signature.add_theme_constant_override("outline_size", 4)
     signature.add_theme_color_override("font_outline_color", Color("09110dee"))
@@ -595,6 +606,7 @@ func _layout():
 func show_page(id: String):
     if not pages.has(id): return
     page = id
+    for element in home_signature: element.visible = id == "main"
     for key in pages:
         pages[key].visible = key == id
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
