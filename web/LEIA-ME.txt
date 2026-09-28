@@ -1,0 +1,9 @@
+FRAIHA WEB ALPHA 0
+1. Extraia o ZIP inteiro.
+2. Execute INICIAR.cmd e mantenha a janela aberta. Usa Node.js instalado ou o runtime do Codex neste computador.
+3. Abra http://127.0.0.1:8129 no Chrome/Edge desktop atualizado.
+4. Clique no jogo para liberar audio. Tela cheia depende de uma acao do usuario; use Configuracoes > Tela cheia ou Alt+Enter.
+Nao abra index.html diretamente. Para parar o servidor local, Ctrl+C na janela.
+
+Build experimental WebGL2/WebAssembly com threads: precisa dos cabecalhos COOP/COEP presentes no servidor local incluido. Windows permanece com seu preset original e fullscreen inicial. Web inicia em janela do navegador.
+Online usa WebSocketPeer e endpoint WSS empacotado; arquitetura compativel, sem teste multiplayer nesta fase e sem mudanca/deploy do servidor.
