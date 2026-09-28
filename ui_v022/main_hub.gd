@@ -37,6 +37,7 @@ var piece_choice_buttons := {}
 var root: Control
 var canvas: Control
 var presentation_frame: Control
+var mobile_ui: Control
 var pages := {}
 var page_scrolls := {}
 var page := "main"
@@ -234,6 +235,10 @@ func _build():
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     signature.add_theme_constant_override("outline_size", 4)
     signature.add_theme_color_override("font_outline_color", Color("09110dee"))
+    if preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):
+        mobile_ui = preload("res://ui_v022/mobile_hub.gd").new()
+        root.add_child(mobile_ui)
+        mobile_ui.setup(self)
 
 func _build_profile():
     _frame(canvas, Vector2(1254,24), Vector2(396,178))
@@ -583,6 +588,11 @@ func _preview_league():
     open_home()
 
 func _layout():
+    if is_instance_valid(mobile_ui):
+        canvas.hide()
+        presentation_frame.hide()
+        mobile_ui.layout()
+        return
     var dimensions = get_viewport().get_visible_rect().size
     # Fit the intact composition and its frame together, using all available space.
     var framed_size = DESIGN + Vector2.ONE * FRAME_MARGIN * 2.0
@@ -631,6 +641,7 @@ func show_page(id: String):
     if is_instance_valid(display_label): _refresh_display_label()
     if id == "ranking": _select_league(selected_league)
     if id == "profile": _refresh_avatars()
+    if is_instance_valid(mobile_ui): mobile_ui.show_page(id)
 
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
     if texture != null:

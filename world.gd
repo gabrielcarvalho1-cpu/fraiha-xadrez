@@ -64,6 +64,7 @@ var drag_start := Vector2.ZERO
 var drag_position := Vector2.ZERO
 var dragging := false
 var settings_open := false
+var mobile_presentation := false
 var presentation_rect := Rect2(0, 0, 1024, 1024)
 var settings_panel := Rect2(776, 60, 232, 136)
 var fullscreen_button := Rect2(788, 134, 208, 38)
@@ -280,6 +281,7 @@ func _spawn_capture(center:Vector2, victim:String):
         particles.append({"pos":center,"vel":Vector2(cos(a),sin(a))*speed,"life":0.45+float(i%5)*0.05,"col":col})
 
 func _draw_promotion_overlay():
+    if mobile_presentation: return
     if not promotion_pending: return
     if online != null and promotion_color != online.color: return
     var font=ThemeDB.fallback_font
@@ -338,6 +340,7 @@ func _draw_pixel_ellipse(c:Vector2,r:Vector2,col:Color):
     draw_colored_polygon(pts,col)
 
 func _draw_ui():
+    if mobile_presentation: return
     var font=ThemeDB.fallback_font
     # Engrenagem discreta no canto superior direito.
     draw_rect(gear_button, Color(0.08,0.07,0.05,0.72))
@@ -477,7 +480,7 @@ func _unhandled_input(event):
 
 func _handle_game_input(event):
     if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
-        if gear_button.has_point(event.position):
+        if not mobile_presentation and gear_button.has_point(event.position):
             settings_open = not settings_open
             cancel_drag()
             selected = Vector2i(-1,-1)
@@ -492,7 +495,7 @@ func _handle_game_input(event):
                 _new_game()
                 queue_redraw()
             return
-        if restart_button.has_point(event.position):
+        if not mobile_presentation and restart_button.has_point(event.position):
             _new_game()
             queue_redraw()
             return
@@ -521,6 +524,7 @@ func _handle_game_input(event):
             return
     if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
         if promotion_pending:
+            if mobile_presentation: return
             var opts=["Q","R","B","N"]
             for i in range(4):
                 var rr=Rect2(269+i*130,473,105,95)

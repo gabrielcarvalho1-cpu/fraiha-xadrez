@@ -74,7 +74,7 @@ func layout():
     var factor = maxf(game.scale.x * game.BOARD / spans.get(active_theme,548.0),cover)
     if Catalog.get_theme(active_theme).get("free_arena",false):
         factor = cover
-    if active_theme == "bronze":
+    if active_theme == "bronze" and not game.mobile_presentation:
         # Cover the old perspective rim with the square playable surface. Both
         # axes share one factor; the surrounding illustration stays proportional.
         factor = cover
@@ -82,4 +82,5 @@ func layout():
         game.position = size/2.0-(game.ORIGIN+Vector2.ONE*game.BOARD/2.0)*game.scale.x
         game.update_presentation(Rect2(-game.position/game.scale.x,size/game.scale.x))
     iron_arena.scale = Vector2.ONE*factor
-    iron_arena.position = size/2.0 + (art_size/2.0-center)*factor
+    var board_center = game.position + (game.ORIGIN+Vector2.ONE*game.BOARD/2.0)*game.scale.x
+    iron_arena.position = board_center + (art_size/2.0-center)*factor if game.mobile_presentation else size/2.0 + (art_size/2.0-center)*factor

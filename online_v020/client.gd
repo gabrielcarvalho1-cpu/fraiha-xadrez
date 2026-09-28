@@ -1,4 +1,5 @@
 extends CanvasLayer
+const MobileLayout = preload("res://ui_v022/mobile_layout.gd")
 signal room_joined
 signal room_left
 signal connection_failed
@@ -35,6 +36,11 @@ var hud_box: VBoxContainer
 var menu_art: TextureRect
 var join_tab: VBoxContainer
 var create_tab: VBoxContainer
+var menu_scroll: ScrollContainer
+var hud_scroll: ScrollContainer
+var hud_buttons: BoxContainer
+var exit_button: Button
+var mobile_ui := false
 
 func _ready():
     game=get_parent().get_node("World")
@@ -110,7 +116,12 @@ func build_ui():
     var box=VBoxContainer.new()
     menu_box=box
     box.add_theme_constant_override("separation",10)
-    menu.add_child(box)
+    menu_scroll=ScrollContainer.new()
+    menu_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    menu_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    menu.add_child(menu_scroll)
+    box.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+    menu_scroll.add_child(box)
     var title=Label.new()
     title.text="JOGO ONLINE"
     title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -170,16 +181,22 @@ func build_ui():
     hud.position=Vector2(18,18)
     hud.add_theme_stylebox_override("panel",panel_style())
     control.add_child(hud)
-    var hbox=VBoxContainer.new(); hud.add_child(hbox)
+    hud_scroll=ScrollContainer.new()
+    hud_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    hud_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+    hud.add_child(hud_scroll)
+    var hbox=VBoxContainer.new(); hud_scroll.add_child(hbox)
+    hbox.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     hud_box=hbox
     hud_info=Label.new()
     hud_info.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     hud_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
     hbox.add_child(hud_info)
-    var buttons=HBoxContainer.new(); hbox.add_child(buttons)
+    var buttons=BoxContainer.new(); hbox.add_child(buttons)
+    hud_buttons=buttons
     button(buttons,"Copiar código",func(): DisplayServer.clipboard_set(room))
     restart_button=button(buttons,"Revanche",func(): send_action("restart"))
-    button(hbox,"Desistir / voltar à tela inicial",return_to_main_hub)
+    exit_button=button(hbox,"Desistir / voltar à tela inicial",return_to_main_hub)
     hud.hide()
     exit_dialog=ConfirmationDialog.new()
     exit_dialog.dialog_text="Sair da sala encerra sua participação nesta partida. Continuar?"
@@ -189,6 +206,38 @@ func build_ui():
     hud.minimum_size_changed.connect(func(): layout_ui.call_deferred())
 
 func layout_ui():
+    var is_mobile=MobileLayout.active(get_viewport())
+    if is_mobile != mobile_ui:
+        mobile_ui=is_mobile
+        var style=panel_style()
+        if mobile_ui:
+            style.content_margin_left=10; style.content_margin_right=10
+            style.content_margin_top=10; style.content_margin_bottom=10
+        menu.add_theme_stylebox_override("panel",style)
+        hud.add_theme_stylebox_override("panel",style.duplicate())
+        menu_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO if mobile_ui else ScrollContainer.SCROLL_MODE_DISABLED
+        hud_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_AUTO if mobile_ui else ScrollContainer.SCROLL_MODE_DISABLED
+        hud_buttons.vertical=mobile_ui
+        hud_buttons.add_theme_constant_override("separation",6 if mobile_ui else 4)
+        hud_box.add_theme_constant_override("separation",8 if mobile_ui else 4)
+        hud_info.add_theme_font_size_override("font_size",16)
+        menu_info.add_theme_font_size_override("font_size",16)
+        exit_button.text="Sair da partida" if mobile_ui else "Desistir / voltar à tela inicial"
+        menu.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT if mobile_ui else Control.PRESET_CENTER)
+    if mobile_ui:
+        var safe=MobileLayout.safe_rect(get_viewport())
+        var menu_width=maxf(280.0,safe.size.x-16.0)
+        menu.custom_minimum_size=Vector2.ZERO
+        menu_box.custom_minimum_size.x=menu_width-36.0
+        menu.position=safe.position+Vector2(8,8)
+        menu.size=Vector2(menu_width,maxf(80.0,safe.size.y-16.0))
+        # The stage centers a square board; use its left side for touch controls.
+        var hud_width=maxf(170.0,(safe.size.x-(safe.size.y-44.0))/2.0-16.0)
+        hud.custom_minimum_size=Vector2.ZERO
+        hud_box.custom_minimum_size.x=hud_width-36.0
+        hud.position=safe.position+Vector2(8,8)
+        hud.size=Vector2(hud_width,maxf(80.0,safe.size.y-16.0))
+        return
     var screen=get_viewport().get_visible_rect().size
     var menu_width=minf(850.0,maxf(280.0,screen.x-48.0))
     var hud_width=minf(385.0,maxf(260.0,screen.x-36.0))
@@ -202,6 +251,7 @@ func layout_ui():
     menu.offset_top=-menu_height/2.0
     menu.offset_bottom=menu_height/2.0
     hud.custom_minimum_size.x=hud_width
+    hud.position=Vector2(18,18)
     hud.size=Vector2(hud_width,hud.get_combined_minimum_size().y)
 
 func start_local():

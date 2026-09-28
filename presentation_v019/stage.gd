@@ -1,4 +1,5 @@
 extends Node2D
+const MobileLayout = preload("res://ui_v022/mobile_layout.gd")
 # Only this presentation root handles the screen dimensions. Game coordinates stay intact.
 @onready var game: Node2D = $World
 @onready var forest: Sprite2D = $ForestExtensions
@@ -18,6 +19,12 @@ var theme_manager: Node
 var player_card: HBoxContainer
 var player_portrait: TextureRect
 var player_caption: Label
+var mobile_actions: VBoxContainer
+var mobile_status: Label
+var mobile_promotion: PanelContainer
+
+func _enter_tree():
+    MobileLayout.configure_window(get_window())
 
 func _ready():
     get_tree().auto_accept_quit = false
@@ -94,6 +101,72 @@ func _build_navigation():
     navigation_dialog.confirmed.connect(_confirm_navigation)
     navigation_dialog.canceled.connect(_cancel_navigation)
     overlay.add_child(navigation_dialog)
+    _build_mobile_controls(overlay)
+
+func _build_mobile_controls(overlay: CanvasLayer):
+    mobile_actions = VBoxContainer.new()
+    mobile_actions.add_theme_constant_override("separation", 8)
+    overlay.add_child(mobile_actions)
+    for caption in ["Reiniciar", "Música", "Tela cheia"]:
+        var button = Button.new()
+        button.text = caption
+        button.custom_minimum_size.y = 44
+        button.add_theme_font_size_override("font_size", 17)
+        mobile_actions.add_child(button)
+        if caption == "Reiniciar":
+            button.pressed.connect(func():
+                game._new_game()
+                game.queue_redraw())
+        elif caption == "Música":
+            button.pressed.connect(func(): get_node("GameAudio").toggle_music())
+        else:
+            button.pressed.connect(toggle_fullscreen)
+    mobile_status = Label.new()
+    mobile_status.add_theme_font_size_override("font_size", 20)
+    mobile_status.add_theme_color_override("font_color", Color("efcf83"))
+    mobile_status.add_theme_color_override("font_outline_color", Color("102018"))
+    mobile_status.add_theme_constant_override("outline_size", 5)
+    mobile_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    mobile_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    overlay.add_child(mobile_status)
+    mobile_promotion = PanelContainer.new()
+    mobile_promotion.z_index = 100
+    mobile_promotion.hide()
+    overlay.add_child(mobile_promotion)
+    var margin = MarginContainer.new()
+    for side in ["left", "right", "top", "bottom"]:
+        margin.add_theme_constant_override("margin_" + side, 12)
+    mobile_promotion.add_child(margin)
+    var column = VBoxContainer.new()
+    column.add_theme_constant_override("separation", 12)
+    margin.add_child(column)
+    var title = Label.new()
+    title.text = "PROMOÇÃO DO PEÃO"
+    title.add_theme_font_size_override("font_size", 18)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    column.add_child(title)
+    var choices = HBoxContainer.new()
+    choices.add_theme_constant_override("separation", 6)
+    column.add_child(choices)
+    var kinds = ["Q", "R", "B", "N"]
+    var captions = ["Dama", "Torre", "Bispo", "Cavalo"]
+    for index in range(4):
+        var choice = Button.new()
+        choice.text = captions[index]
+        choice.custom_minimum_size = Vector2(70, 64)
+        choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        choice.add_theme_font_size_override("font_size", 16)
+        choice.pressed.connect(game._finish_promotion.bind(kinds[index]))
+        choices.add_child(choice)
+
+func _process(_delta):
+    if not is_instance_valid(mobile_status): return
+    var mobile = MobileLayout.active(get_viewport())
+    var playing = mode in ["local", "online", "bot"]
+    mobile_actions.visible = mobile and playing
+    mobile_status.visible = mobile and mode in ["local", "bot"]
+    mobile_status.text = game.status
+    mobile_promotion.visible = mobile and playing and game.promotion_pending and (game.online == null or game.promotion_color == game.online.color)
 
 func _clear_selection():
     game.cancel_drag()
@@ -223,7 +296,10 @@ func _request_navigation(destination: String):
         navigation_dialog.dialog_text = "Sair do FRAIHA Xadrez?"
     navigation_dialog.cancel_button_text = "Continuar jogando" if mode in ["local", "online"] else "Cancelar"
     if mode == "bot": navigation_dialog.cancel_button_text = "Continuar partida"
-    navigation_dialog.popup_centered(Vector2i(480, 160))
+    var dialog_size = Vector2i(480, 160)
+    if MobileLayout.active(get_viewport()):
+        dialog_size = Vector2i(minf(480, MobileLayout.safe_rect(get_viewport()).size.x-32), 200)
+    navigation_dialog.popup_centered(dialog_size)
 
 func _cancel_navigation():
     navigation_dialog.hide()
@@ -265,16 +341,58 @@ func _notification(what):
 
 func _layout():
     var size = get_viewport_rect().size
+    var mobile = MobileLayout.active(get_viewport())
+    game.mobile_presentation = mobile
     if is_instance_valid(home_button):
+        home_button.text = "← TELA INICIAL  ·  ESC"
+        home_button.size = Vector2(248, 46)
         home_button.position = Vector2(20, size.y - 66)
     if is_instance_valid(bot_info):
         bot_info.position = Vector2(size.x/2.0-250,16)
         bot_info.size = Vector2(500,38)
-    if is_instance_valid(player_card): player_card.position = Vector2(size.x-230,80)
+    if is_instance_valid(player_card):
+        player_card.position = Vector2(size.x-230,80)
+        player_portrait.custom_minimum_size = Vector2(58,58)
+        player_caption.custom_minimum_size.x = 142
     var factor = min(size.y / 1024.0, size.x / 1024.0)
     game.scale = Vector2.ONE * factor
     var board_center = game.ORIGIN + Vector2.ONE * game.BOARD / 2.0
     game.position = size / 2.0 - board_center * factor
+    if mobile:
+        var safe = MobileLayout.safe_rect(get_viewport())
+        var board_pixels = maxf(160.0, minf(safe.size.y - 44.0, safe.size.x - 360.0))
+        factor = board_pixels / game.BOARD
+        game.scale = Vector2.ONE * factor
+        game.position = safe.get_center() - board_center * factor
+        var side_width = (safe.size.x-board_pixels)/2.0-24.0
+        var right_x = safe.get_center().x+board_pixels/2.0+16.0
+        home_button.text = "← Início"
+        home_button.position = Vector2(right_x, safe.end.y-52)
+        home_button.size = Vector2(side_width, 44)
+        player_card.position = Vector2(right_x, safe.position.y+16)
+        player_card.size = Vector2(side_width, 52)
+        player_portrait.custom_minimum_size = Vector2(44,44)
+        player_caption.custom_minimum_size.x = maxf(90, side_width-53)
+        player_caption.add_theme_font_size_override("font_size", 16)
+        mobile_actions.position = Vector2(right_x, safe.position.y+88)
+        mobile_actions.size = Vector2(side_width, 148)
+        mobile_status.position = safe.position+Vector2(12, 112)
+        mobile_status.size = Vector2(side_width, 144)
+        bot_info.position = safe.position+Vector2(12, 16)
+        bot_info.size = Vector2(side_width, 76)
+        bot_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        bot_info.add_theme_font_size_override("font_size", 17)
+        mobile_promotion.size = Vector2(maxf(326, board_pixels), 132)
+        mobile_promotion.position = safe.get_center()-mobile_promotion.size/2.0
+        navigation_dialog.get_label().autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        navigation_dialog.get_label().add_theme_font_size_override("font_size", 18)
+        for button in [navigation_dialog.get_ok_button(), navigation_dialog.get_cancel_button()]:
+            button.custom_minimum_size.y = 44
+            button.add_theme_font_size_override("font_size", 17)
+    else:
+        player_caption.add_theme_font_size_override("font_size", 17)
+        bot_info.autowrap_mode = TextServer.AUTOWRAP_OFF
+        bot_info.add_theme_font_size_override("font_size", 20)
     # The outpaint has its own board center; align its terrain while covering every edge.
     var texture_size = forest.texture.get_size()
     var art_center = texture_size * Vector2(802.0/1672.0, 445.5/941.0)
