@@ -286,6 +286,9 @@ func _layout():
 
 func toggle_fullscreen():
     var window = get_window()
+    if OS.has_feature("web"):
+        window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
+        return
     if window.mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]:
         window.mode = Window.MODE_WINDOWED
         window.size = windowed_size

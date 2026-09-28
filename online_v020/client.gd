@@ -41,7 +41,7 @@ func _ready():
     layer=20
     var config=ConfigFile.new()
     if config.load("res://online.cfg")==OK: endpoint=String(config.get_value("online","server_url",""))
-    if config.load(OS.get_executable_path().get_base_dir()+"/online.cfg")==OK: endpoint=String(config.get_value("online","server_url",endpoint))
+    if not OS.has_feature("web") and config.load(OS.get_executable_path().get_base_dir()+"/online.cfg")==OK: endpoint=String(config.get_value("online","server_url",endpoint))
     if OS.has_environment("FRAIHA_SERVER_URL"): endpoint=OS.get_environment("FRAIHA_SERVER_URL")
     var session=ConfigFile.new()
     if session.load("user://online_session.cfg")==OK:
