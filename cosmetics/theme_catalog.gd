@@ -34,6 +34,7 @@ static func piece_textures(id: String) -> Dictionary:
     if piece_cache.has(id): return piece_cache[id]
     var result := {}
     if id == "classic":
+        piece_cache.clear()
         for color in ["w","b"]:
             for kind in PIECE_ORDER:
                 result[color+kind] = texture("res://visual_v018/pieces/"+color+kind+".tres")
@@ -70,6 +71,9 @@ static func piece_textures(id: String) -> Dictionary:
             sprite.region = Rect2(bounds.position+used.position,used.size)
             sprite.filter_clip = true
             result[("w" if row == 0 else "b")+PIECE_ORDER[column]] = sprite
+    # Keep only the latest set cached. Visible boards/previews own their atlas
+    # references, so replacing the cache does not invalidate active textures.
+    piece_cache.clear()
     piece_cache[id] = result
     return result
 

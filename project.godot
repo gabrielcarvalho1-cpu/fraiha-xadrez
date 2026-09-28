@@ -35,4 +35,4 @@ renderer/rendering_method.mobile="gl_compatibility"
 
 [audio]
 
-general/default_playback_type.web=1
+general/default_playback_type.web=0

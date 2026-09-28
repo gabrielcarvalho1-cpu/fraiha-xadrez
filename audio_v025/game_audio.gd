@@ -28,6 +28,9 @@ func _ready():
     music = AudioStreamPlayer.new()
     music.name = "LeagueMusic"
     music.bus = "Music"
+    # Long MP3s must not become full-length PCM WebAudio samples on iOS.
+    if OS.has_feature("web"):
+        music.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
     add_child(music)
     refresh_music()
 

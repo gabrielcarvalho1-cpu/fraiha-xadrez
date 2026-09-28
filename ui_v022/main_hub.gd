@@ -38,6 +38,7 @@ var root: Control
 var canvas: Control
 var presentation_frame: Control
 var mobile_ui: Control
+var pages_pending := false
 var pages := {}
 var page_scrolls := {}
 var page := "main"
@@ -224,7 +225,8 @@ func _build():
             var labels = item.find_children("*","Label",true,false)
             if not labels.is_empty(): labels[0].add_theme_color_override("font_color",GOLD)
     _build_profile()
-    _build_pages()
+    pages_pending = preload("res://ui_v022/mobile_layout.gd").active(get_viewport())
+    if not pages_pending: _build_pages()
     var version_bg = ColorRect.new()
     version_bg.color = Color("09110de0")
     version_bg.size = Vector2(266,30)
@@ -633,6 +635,9 @@ func _draw_presentation_frame():
         ]), metal)
 
 func show_page(id: String):
+    if pages_pending and id != "main":
+        pages_pending = false
+        _build_pages()
     if not pages.has(id): return
     page = id
     for key in pages:
@@ -647,10 +652,11 @@ func apply_theme(texture: Texture2D, theme_id: String = "wood"):
     if texture != null:
         canvas.get_node("ForestArtwork").texture = texture
         var logo = canvas.get_node_or_null("ThemeLogo")
-        if logo == null:
+        var needs_logo = ThemeCatalog.get_theme(theme_id).get("free_arena",false)
+        if logo == null and needs_logo:
             logo = TextureRect.new()
             logo.name = "ThemeLogo"
-            logo.texture = preload("res://ui_v022/assets/theme_logo.png")
+            logo.texture = load("res://ui_v022/assets/theme_logo.png")
             logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
             logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
             logo.position = Vector2(450,0)
@@ -658,8 +664,8 @@ func apply_theme(texture: Texture2D, theme_id: String = "wood"):
             logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
             canvas.add_child(logo)
             canvas.move_child(logo,1)
-        logo.visible = ThemeCatalog.get_theme(theme_id).get("free_arena",false)
-        pages.main.get_node("ThemeMenuFrame").visible = logo.visible
+        if logo != null: logo.visible = needs_logo
+        pages.main.get_node("ThemeMenuFrame").visible = needs_logo
         selected_league = ThemeCatalog.get_theme(theme_id).get("unlock_league","madeira")
         if selected_league == "wood": selected_league = "madeira"
 
