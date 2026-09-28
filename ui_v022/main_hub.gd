@@ -206,6 +206,9 @@ func _build():
     main.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(main)
     pages["main"] = main
+    var theme_frame = _frame(main,Vector2(596,318),Vector2(482,550))
+    theme_frame.name = "ThemeMenuFrame"
+    theme_frame.hide()
     var titles = ["JOGAR LOCAL", "JOGAR CONTRA O BOT", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
     var subtitles = ["Duas pessoas no mesmo computador", "Treine e evolua seu jogo", "Crie ou entre em uma sala", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
     var actions = [func(): play_local_requested.emit(), func(): show_page("bot"), func(): play_online_requested.emit(), func(): show_page("ranked"), func(): show_page("ranking"), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
@@ -422,7 +425,9 @@ func choose_avatar(id: String):
 
 func _refresh_avatars():
     if is_instance_valid(profile_portrait): profile_portrait.texture = avatar_texture()
+    if is_instance_valid(profile_portrait): attach_league_frame(profile_portrait)
     for id in avatar_choices:
+        attach_league_frame(avatar_choices[id])
         avatar_choices[id].self_modulate = Color.WHITE if id == avatar_id else Color(0.60,0.65,0.63)
     if get_parent().has_method("refresh_player_card"): get_parent().refresh_player_card()
 
@@ -595,6 +600,7 @@ func show_page(id: String):
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
     if is_instance_valid(display_label): _refresh_display_label()
     if id == "ranking": _select_league(selected_league)
+    if id == "profile": _refresh_avatars()
 
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
     if texture != null:
@@ -603,13 +609,16 @@ func apply_theme(texture: Texture2D, theme_id: String = "wood"):
         if logo == null:
             logo = TextureRect.new()
             logo.name = "ThemeLogo"
-            logo.texture = _slice(FOREST,Rect2(450,0,790,318))
+            logo.texture = preload("res://ui_v022/assets/theme_logo.png")
+            logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+            logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
             logo.position = Vector2(450,0)
             logo.size = Vector2(790,318)
             logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
             canvas.add_child(logo)
             canvas.move_child(logo,1)
         logo.visible = ThemeCatalog.get_theme(theme_id).get("free_arena",false)
+        pages.main.get_node("ThemeMenuFrame").visible = logo.visible
         selected_league = ThemeCatalog.get_theme(theme_id).get("unlock_league","madeira")
         if selected_league == "wood": selected_league = "madeira"
 
