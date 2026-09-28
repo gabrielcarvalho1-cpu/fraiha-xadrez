@@ -7,3 +7,7 @@ Nao abra index.html diretamente. Para parar o servidor local, Ctrl+C na janela.
 
 Build experimental WebGL2/WebAssembly com threads: precisa dos cabecalhos COOP/COEP presentes no servidor local incluido. Windows permanece com seu preset original e fullscreen inicial. Web inicia em janela do navegador.
 Online usa WebSocketPeer e endpoint WSS empacotado; arquitetura compativel, sem teste multiplayer nesta fase e sem mudanca/deploy do servidor.
+
+VALIDACAO WEB ALPHA 0:
+Confirmado em navegador Chromium integrado: inicializacao, Home, entrada no Local, e2-e4 por mouse, atualizacao do turno, menu de configuracoes e Tela Cheia Sim/Nao. Home verificada em viewport estreito e 1280x720. Sem erros no console capturado durante esse fluxo.
+Audio configurado para Stream na Web e desbloqueio apos interacao; saida sonora nao foi confirmada auditivamente. Validar musica e efeitos no seu navegador. Multiplayer WSS nao testado; endpoint/protocolo preservados.
