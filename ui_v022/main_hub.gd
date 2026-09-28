@@ -583,12 +583,6 @@ func _preview_league():
 func _layout():
     var dimensions = get_viewport().get_visible_rect().size
     var factor = maxf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y)
-    # All elements share this transform. If cover would cut a control, preserve
-    # the complete composition over one solid deep-green surround instead.
-    var origin = (dimensions - DESIGN * factor) / 2.0
-    var safe = Rect2(origin + Vector2(6,4) * factor, Vector2(1644,925) * factor)
-    if not Rect2(Vector2.ZERO, dimensions).encloses(safe):
-        factor = minf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y)
     canvas.scale = Vector2.ONE * factor
     canvas.position = (dimensions - DESIGN*factor) / 2.0
 
