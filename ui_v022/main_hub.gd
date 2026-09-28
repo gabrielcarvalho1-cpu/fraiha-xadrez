@@ -8,6 +8,7 @@ signal piece_set_requested(theme_id: String)
 signal quit_requested
 
 const DESIGN = Vector2(1672, 941)
+const FRAME_MARGIN = 12.0
 const FOREST = preload("res://ui_v022/assets/home_forest.png")
 const BUTTON_ATLAS = preload("res://ui_v022/assets/menu_atlas.png")
 const AVATAR = preload("res://ui_v022/assets/profile_avatar.png")
@@ -583,8 +584,9 @@ func _preview_league():
 
 func _layout():
     var dimensions = get_viewport().get_visible_rect().size
-    # 97% per axis leaves about 94% of the fitted area for the intact artwork.
-    var factor = minf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y) * 0.97
+    # Fit the intact composition and its frame together, using all available space.
+    var framed_size = DESIGN + Vector2.ONE * FRAME_MARGIN * 2.0
+    var factor = minf(dimensions.x / framed_size.x, dimensions.y / framed_size.y)
     canvas.scale = Vector2.ONE * factor
     canvas.position = (dimensions - DESIGN*factor) / 2.0
     presentation_frame.queue_redraw()
@@ -593,11 +595,14 @@ func _draw_presentation_frame():
     # All ornament stays outside the composition; no duplicated scenery or input layer.
     var artwork = Rect2(canvas.position, DESIGN * canvas.scale)
     var unit = canvas.scale.x
-    presentation_frame.draw_rect(Rect2(Vector2.ZERO, presentation_frame.size), Color("040a08"))
-    presentation_frame.draw_rect(artwork.grow(11 * unit), Color("0c1512"))
-    presentation_frame.draw_rect(artwork.grow(10 * unit), Color("514128"), false, unit)
-    presentation_frame.draw_rect(artwork.grow(9 * unit), Color("aa8850"), false, unit)
-    presentation_frame.draw_rect(artwork.grow(8 * unit), Color("29281e"), false, unit)
+    presentation_frame.draw_rect(Rect2(Vector2.ZERO, presentation_frame.size), Color("08090b"))
+    # A faint brushed finish stays neutral for every league; it contains no artwork.
+    for row in range(0, ceili(presentation_frame.size.y), 4):
+        presentation_frame.draw_line(Vector2(0, row), Vector2(presentation_frame.size.x, row), Color(1,1,1,0.008))
+    presentation_frame.draw_rect(artwork.grow(11 * unit), Color("131416"))
+    presentation_frame.draw_rect(artwork.grow(10 * unit), Color("383a3d"), false, unit)
+    presentation_frame.draw_rect(artwork.grow(9 * unit), Color("81858a"), false, unit)
+    presentation_frame.draw_rect(artwork.grow(8 * unit), Color("222427"), false, unit)
     # Recessed inner lip, softly shaded toward the artwork without covering any pixels.
     for step in range(1, 7):
         presentation_frame.draw_rect(artwork.grow(step * unit), Color(0, 0, 0, (7-step) * 0.1), false, unit)
@@ -606,16 +611,16 @@ func _draw_presentation_frame():
         var point = artwork.position + artwork.size * corner - direction * 9 * unit
         var horizontal = Vector2(direction.x, 0)
         var vertical = Vector2(0, direction.y)
-        var gold = Color("c2a266")
+        var metal = Color("a0a3a7")
         presentation_frame.draw_polyline(PackedVector2Array([
             point + horizontal * 30 * unit, point + horizontal * 7 * unit,
             point + vertical * 7 * unit, point + vertical * 30 * unit
-        ]), gold, unit, true)
+        ]), metal, unit, true)
         var gem = 2 * unit
         presentation_frame.draw_colored_polygon(PackedVector2Array([
             point + Vector2(0,-gem), point + Vector2(gem,0),
             point + Vector2(0,gem), point + Vector2(-gem,0)
-        ]), gold)
+        ]), metal)
 
 func show_page(id: String):
     if not pages.has(id): return
