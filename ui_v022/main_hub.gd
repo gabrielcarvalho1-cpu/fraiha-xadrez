@@ -182,9 +182,12 @@ func _build():
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(root)
-    var backdrop = ColorRect.new()
-    backdrop.name = "DeepForestBackdrop"
-    backdrop.color = Color("061b15")
+    var backdrop = TextureRect.new()
+    backdrop.name = "ThemeBackdrop"
+    backdrop.texture = FOREST
+    backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    backdrop.self_modulate = Color(0.72,0.72,0.72,1)
     backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root.add_child(backdrop)
@@ -582,7 +585,7 @@ func _preview_league():
 
 func _layout():
     var dimensions = get_viewport().get_visible_rect().size
-    var factor = maxf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y)
+    var factor = minf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y)
     canvas.scale = Vector2.ONE * factor
     canvas.position = (dimensions - DESIGN*factor) / 2.0
 
@@ -599,6 +602,7 @@ func show_page(id: String):
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
     if texture != null:
         canvas.get_node("ForestArtwork").texture = texture
+        root.get_node("ThemeBackdrop").texture = texture
         var logo = canvas.get_node_or_null("ThemeLogo")
         if logo == null:
             logo = TextureRect.new()
