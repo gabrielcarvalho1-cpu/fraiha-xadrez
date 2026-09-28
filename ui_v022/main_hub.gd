@@ -35,6 +35,7 @@ var preview_caption: Label
 var piece_choice_buttons := {}
 var root: Control
 var canvas: Control
+var presentation_frame: Control
 var pages := {}
 var page_scrolls := {}
 var page := "main"
@@ -182,15 +183,12 @@ func _build():
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(root)
-    var backdrop = TextureRect.new()
-    backdrop.name = "ThemeBackdrop"
-    backdrop.texture = FOREST
-    backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    backdrop.self_modulate = Color(0.72,0.72,0.72,1)
-    backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    root.add_child(backdrop)
+    presentation_frame = Control.new()
+    presentation_frame.name = "PresentationFrame"
+    presentation_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    presentation_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    presentation_frame.draw.connect(_draw_presentation_frame)
+    root.add_child(presentation_frame)
     canvas = Control.new()
     canvas.name = "ReferenceComposition"
     canvas.size = DESIGN
@@ -585,9 +583,39 @@ func _preview_league():
 
 func _layout():
     var dimensions = get_viewport().get_visible_rect().size
-    var factor = minf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y)
+    # 97% per axis leaves about 94% of the fitted area for the intact artwork.
+    var factor = minf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y) * 0.97
     canvas.scale = Vector2.ONE * factor
     canvas.position = (dimensions - DESIGN*factor) / 2.0
+    presentation_frame.queue_redraw()
+
+func _draw_presentation_frame():
+    # All ornament stays outside the composition; no duplicated scenery or input layer.
+    var artwork = Rect2(canvas.position, DESIGN * canvas.scale)
+    var unit = canvas.scale.x
+    presentation_frame.draw_rect(Rect2(Vector2.ZERO, presentation_frame.size), Color("040a08"))
+    presentation_frame.draw_rect(artwork.grow(11 * unit), Color("0c1512"))
+    presentation_frame.draw_rect(artwork.grow(10 * unit), Color("514128"), false, unit)
+    presentation_frame.draw_rect(artwork.grow(9 * unit), Color("aa8850"), false, unit)
+    presentation_frame.draw_rect(artwork.grow(8 * unit), Color("29281e"), false, unit)
+    # Recessed inner lip, softly shaded toward the artwork without covering any pixels.
+    for step in range(1, 7):
+        presentation_frame.draw_rect(artwork.grow(step * unit), Color(0, 0, 0, (7-step) * 0.1), false, unit)
+    for corner in [Vector2.ZERO, Vector2(1,0), Vector2(0,1), Vector2.ONE]:
+        var direction = Vector2.ONE - corner * 2
+        var point = artwork.position + artwork.size * corner - direction * 9 * unit
+        var horizontal = Vector2(direction.x, 0)
+        var vertical = Vector2(0, direction.y)
+        var gold = Color("c2a266")
+        presentation_frame.draw_polyline(PackedVector2Array([
+            point + horizontal * 30 * unit, point + horizontal * 7 * unit,
+            point + vertical * 7 * unit, point + vertical * 30 * unit
+        ]), gold, unit, true)
+        var gem = 2 * unit
+        presentation_frame.draw_colored_polygon(PackedVector2Array([
+            point + Vector2(0,-gem), point + Vector2(gem,0),
+            point + Vector2(0,gem), point + Vector2(-gem,0)
+        ]), gold)
 
 func show_page(id: String):
     if not pages.has(id): return
@@ -602,7 +630,6 @@ func show_page(id: String):
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
     if texture != null:
         canvas.get_node("ForestArtwork").texture = texture
-        root.get_node("ThemeBackdrop").texture = texture
         var logo = canvas.get_node_or_null("ThemeLogo")
         if logo == null:
             logo = TextureRect.new()
