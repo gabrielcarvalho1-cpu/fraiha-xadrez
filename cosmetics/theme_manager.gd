@@ -66,6 +66,8 @@ func layout():
     var center: Vector2 = centers.get(active_theme,art_size/2.0)
     var cover = maxf(maxf(size.x/2.0/center.x,size.x/2.0/(art_size.x-center.x)),maxf(size.y/2.0/center.y,size.y/2.0/(art_size.y-center.y)))
     var factor = maxf(game.scale.x * game.BOARD / spans.get(active_theme,548.0),cover)
+    if Catalog.get_theme(active_theme).get("free_arena",false):
+        factor = cover
     if active_theme == "bronze":
         # Cover the old perspective rim with the square playable surface. Both
         # axes share one factor; the surrounding illustration stays proportional.

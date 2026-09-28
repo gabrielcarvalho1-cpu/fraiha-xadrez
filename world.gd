@@ -389,6 +389,9 @@ func _draw():
             for corner in [bronze_edge.position,Vector2(bronze_edge.end.x,bronze_edge.position.y),bronze_edge.end,Vector2(bronze_edge.position.x,bronze_edge.end.y)]:
                 draw_rect(Rect2(corner-Vector2(7,7),Vector2(14,14)),Color("e4b775"))
                 draw_rect(Rect2(corner-Vector2(3,3),Vector2(6,6)),Color("6c421d"))
+    var cosmetic = preload("res://cosmetics/theme_catalog.gd").get_theme(visual_theme)
+    if cosmetic.get("free_arena",false):
+        preload("res://cosmetics/league_board.gd").draw_frame(self,ORIGIN,BOARD,visual_theme,cosmetic.rim)
     for y in range(8):
         for x in range(8):
             var c=Vector2i(x,y)

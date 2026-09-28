@@ -8,15 +8,23 @@ const THEME_DATA = {
     "iron": {"id":"iron", "name":"Ferro", "home_path":"res://cosmetics/assets/iron_home.png", "arena_path":"res://cosmetics/assets/iron_arena.png", "pieces_path":"res://cosmetics/assets/iron_pieces.png", "unlock_league":"ferro"},
     "bronze": {"id":"bronze", "name":"Bronze", "home_path":"res://cosmetics/v025/bronze_home.png", "arena_path":"res://cosmetics/v025/bronze_arena.png", "pieces_path":"res://cosmetics/v025/bronze_pieces.png", "unlock_league":"bronze", "board_palette":[Color("d9b580"),Color("704532")]},
     "silver": {"id":"silver", "name":"Prata", "home_path":"res://cosmetics/v025/silver_home.png", "arena_path":"res://cosmetics/v025/silver_arena.png", "pieces_path":"res://cosmetics/v025/silver_pieces.png", "unlock_league":"prata", "board_palette":[Color("dce1e2"),Color("52637d")]},
-    "gold": {"id":"gold", "name":"Ouro", "home_path":"res://cosmetics/v025/gold_home.png", "arena_path":"res://cosmetics/v025/gold_arena.png", "pieces_path":"res://cosmetics/v025/gold_pieces.png", "unlock_league":"ouro", "board_palette":[Color("efcd75"),Color("45403a")]}
+    "gold": {"id":"gold", "name":"Ouro", "home_path":"res://cosmetics/v025/gold_home.png", "arena_path":"res://cosmetics/v025/gold_arena.png", "pieces_path":"res://cosmetics/v025/gold_pieces.png", "unlock_league":"ouro", "board_palette":[Color("efcd75"),Color("45403a")]},
+    "platina": {"id":"platina", "name":"Platina", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/platina_arena.png", "pieces_path":"res://cosmetics/v029/platina_pieces.png", "unlock_league":"platina", "board_palette":[Color("d4e4e8"),Color("465d70")], "rim":Color("a5dbe7"), "music_path":"res://music_v026/silver.mp3", "description":"Palácio de metal nobre, arcos refinados e jardins frios.", "free_arena":true},
+    "esmeralda": {"id":"esmeralda", "name":"Esmeralda", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/esmeralda_arena.png", "pieces_path":"res://cosmetics/v029/esmeralda_pieces.png", "unlock_league":"esmeralda", "board_palette":[Color("d0dfb1"),Color("234b3b")], "rim":Color("70dba6"), "music_path":"res://music_v026/wood.mp3", "description":"Reino ancestral, árvores monumentais e cristais verdes.", "free_arena":true},
+    "diamante": {"id":"diamante", "name":"Diamante", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/diamante_arena.png", "pieces_path":"res://cosmetics/v029/diamante_pieces.png", "unlock_league":"diamante", "board_palette":[Color("e4edfa"),Color("426185")], "rim":Color("9fe7ff"), "music_path":"res://music_v026/silver.mp3", "description":"Cidadela cristalina suspensa entre nuvens e cascatas.", "free_arena":true},
+    "mestre": {"id":"mestre", "name":"Mestre", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/mestre_arena.png", "pieces_path":"res://cosmetics/v029/mestre_pieces.png", "unlock_league":"mestre", "board_palette":[Color("dccbaa"),Color("51435f")], "rim":Color("cdaae8"), "music_path":"res://music_v026/iron.mp3", "description":"Academia do xadrez, bibliotecas e tradição dos mestres.", "free_arena":true},
+    "grande_mestre": {"id":"grande_mestre", "name":"Grão-Mestre", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/grande_mestre_arena.png", "pieces_path":"res://cosmetics/v029/grande_mestre_pieces.png", "unlock_league":"grande_mestre", "board_palette":[Color("e3c99b"),Color("542b37")], "rim":Color("efbd67"), "music_path":"res://music_v026/gold.mp3", "description":"Salão imperial, mármore e insígnias da elite máxima.", "free_arena":true},
+    "challenger": {"id":"challenger", "name":"Challenger", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/challenger_arena.png", "pieces_path":"res://cosmetics/v029/challenger_pieces.png", "unlock_league":"challenger", "board_palette":[Color("d8eafa"),Color("243751")], "rim":Color("ffd476"), "music_path":"res://music_v026/gold.mp3", "description":"Santuário mítico, ilhas celestes e relíquias lendárias.", "free_arena":true}
 }
 
 static func themes() -> Array:
-    return [get_theme("wood"),get_theme("iron"),get_theme("bronze"),get_theme("silver"),get_theme("gold")]
+    var result := []
+    for id in THEME_DATA: result.append(get_theme(id))
+    return result
 
 static func get_theme(id: String) -> Dictionary:
     var data = THEME_DATA.get(id, THEME_DATA.wood).duplicate(true)
-    data.music_path = "res://music_v026/"+data.id+".mp3"
+    data.music_path = data.get("music_path","res://music_v026/"+data.id+".mp3")
     return data
 
 static func texture(path: String) -> Texture2D:
