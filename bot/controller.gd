@@ -6,6 +6,7 @@ const Search = preload("res://bot/search.gd")
 var game
 var rules = Rules.new()
 var active := false
+var local_mode := false
 var paused := false
 var difficulty := "easy"
 var human_color := "w"
@@ -22,6 +23,7 @@ var last_search_metrics := {}
 func start(world: Node, level: String, side: String):
     stop()
     game = world
+    local_mode = false
     difficulty = Search.normalize_difficulty(level)
     human_color = ("w" if randi()%2 == 0 else "b") if side == "random" else side
     if human_color not in ["w","b"]: human_color = "w"
@@ -29,6 +31,12 @@ func start(world: Node, level: String, side: String):
     game.bot = self
     active = true
     restart()
+
+func start_local(world: Node):
+    start(world,"easy","w")
+    local_mode = true
+    thinking = false
+    _sync_view()
 
 func restart():
     if not active: return
@@ -45,7 +53,7 @@ func restart():
     game.settings_open = false
     game.game_started = true
     paused = false
-    thinking = rules.turn != human_color
+    thinking = not local_mode and rules.turn != human_color
     think_delay = 0.25
     _sync_view()
 
@@ -68,7 +76,7 @@ func set_paused(value: bool):
     if value and is_instance_valid(game): game.cancel_drag()
 
 func can_interact() -> bool:
-    return active and not paused and not thinking and not game.settings_open and not game.game_over and rules.turn == human_color
+    return active and not paused and not thinking and not game.settings_open and not game.game_over and (local_mode or rules.turn == human_color)
 
 func legal_from(cell: Vector2i) -> Array[Vector2i]:
     var moves: Array[Vector2i] = []
@@ -86,7 +94,7 @@ func request_move(from: Vector2i, to: Vector2i) -> bool:
     if candidates.size() > 1:
         promotion_choices = candidates
         game.promotion_pending = true
-        game.promotion_color = human_color
+        game.promotion_color = rules.turn
         game.promotion_cell = to
         game.selected = Vector2i(-1,-1)
         game.legal_moves.clear()
@@ -118,7 +126,7 @@ func _apply(move: Dictionary) -> bool:
             game._spawn_capture(game.square_center(square), code)
     game.last_from = move.from
     game.last_to = move.to
-    thinking = rules.turn != human_color
+    thinking = not local_mode and rules.turn != human_color
     think_delay = 0.25
     _sync_view()
     return true
@@ -142,6 +150,8 @@ func _sync_view():
             "material": game.status = "EMPATE — MATERIAL INSUFICIENTE"
             "fifty_moves": game.status = "EMPATE — REGRA DOS 50 LANCES"
             "repetition": game.status = "EMPATE — REPETIÇÃO"
+    elif local_mode:
+        game.status = ("XEQUE! " if rules.in_check(rules.turn) else "") + ("BRANCAS JOGAM" if rules.turn == "w" else "PRETAS JOGAM")
     elif thinking:
         game.status = "BOT %s PENSANDO…" % Search.difficulty_label(difficulty)
     else:
@@ -156,7 +166,7 @@ func _process(delta: float):
             completed = result
             last_search_metrics = search.last_metrics.duplicate()
         search = null
-    if not active or paused or game.settings_open or game.game_over: return
+    if not active or local_mode or paused or game.settings_open or game.game_over: return
     if rules.turn == human_color: return
     think_delay = maxf(0.0, think_delay-delta)
     if think_delay > 0: return

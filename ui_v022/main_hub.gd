@@ -224,8 +224,8 @@ func _build():
     version_bg.size = Vector2(266,30)
     version_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(version_bg)
-    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.29 · TESTE", 16)
-    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.29 · Ligas\nMaringá · PR · Brasil", 15)
+    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.30 · TESTE", 16)
+    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.30 · Ligas\nMaringá · PR · Brasil", 15)
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     signature.add_theme_constant_override("outline_size", 4)
     signature.add_theme_color_override("font_outline_color", Color("09110dee"))
@@ -248,6 +248,7 @@ func _build_profile():
     portrait.size = Vector2(88,88)
     portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
     profile_button.add_child(portrait)
+    attach_league_frame(portrait)
     var words = _stack(profile_button, Vector2(94,0), Vector2(266,106), Vector4.ZERO, 2)
     profile_name = _label(words, player_name, 20)
     var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
@@ -315,26 +316,29 @@ func _build_pages():
     _build_ranking()
     _build_about_page()
     var profile_panel = _wide_page("profile","PERFIL DO JOGADOR")
-    var portraits = HBoxContainer.new()
-    portraits.position = Vector2(45,125)
-    portraits.add_theme_constant_override("separation",22)
+    var portraits = GridContainer.new()
+    portraits.columns = 2
+    portraits.position = Vector2(85,95)
+    portraits.add_theme_constant_override("h_separation",50)
+    portraits.add_theme_constant_override("v_separation",20)
     profile_panel.add_child(portraits)
-    for id in ["warrior","archer","mage"]:
+    for id in ["warrior","archer","mage","paladin"]:
         var option = VBoxContainer.new()
         portraits.add_child(option)
         var portrait_button = TextureButton.new()
-        portrait_button.custom_minimum_size = Vector2(190,190)
+        portrait_button.custom_minimum_size = Vector2(155,155)
         portrait_button.ignore_texture_size = true
         portrait_button.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
         portrait_button.texture_normal = avatar_texture(id)
         portrait_button.pressed.connect(func(): choose_avatar(id))
         option.add_child(portrait_button)
-        var caption = _label(option,{"warrior":"GUERREIRO","archer":"ARQUEIRA","mage":"MAGO"}[id],18,GOLD)
+        attach_league_frame(portrait_button)
+        var caption = _label(option,{"warrior":"GUERREIRO","archer":"ARQUEIRA","mage":"MAGO","paladin":"PALADINO"}[id],18,GOLD)
         caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         avatar_choices[id] = portrait_button
-    var hint = _label(profile_panel,"ESCOLHA SEU AVATAR\nSeu retrato acompanha você na Home e nas partidas deste computador.",21)
-    hint.position = Vector2(45,382)
-    hint.size = Vector2(610,110)
+    var hint = _label(profile_panel,"Escolha seu avatar. A moldura representa a liga do perfil.",17)
+    hint.position = Vector2(45,500)
+    hint.size = Vector2(610,45)
     var profile = _stack(profile_panel,Vector2(745,115),Vector2(640,480),Vector4.ZERO,10)
     _label(profile,"COMO VOCÊ QUER SER CONHECIDO?",20,GOLD)
     var name_input = LineEdit.new()
@@ -403,6 +407,7 @@ func _wide_page(id: String, title: String) -> Control:
 
 func avatar_texture(id: String = "") -> Texture2D:
     if id.is_empty(): id = avatar_id
+    if id == "paladin": return ThemeCatalog.texture("res://profile/paladin.png")
     if id == "warrior": return AVATAR
     var atlas = ThemeCatalog.texture("res://cosmetics/v025/avatars.png")
     if atlas == null: return AVATAR
@@ -410,7 +415,7 @@ func avatar_texture(id: String = "") -> Texture2D:
     return _slice(atlas,Rect2(0 if id == "archer" else half,0,half,atlas.get_height()))
 
 func choose_avatar(id: String):
-    if id not in ["warrior","archer","mage"]: return
+    if id not in ["warrior","archer","mage","paladin"]: return
     avatar_id = id
     _refresh_avatars()
     _save_preferences()
@@ -543,6 +548,7 @@ func _build_ranking():
 
 func _select_league(id: String):
     selected_league = id
+    theme_preview_requested.emit(LeagueCatalog.theme_for(id))
     var entry = LeagueCatalog.entry(id,league_profile.data)
     league_detail_title.text = "LIGA " + entry.display_name.to_upper() + "  ·  0–100 PL"
     league_detail_badge.texture = ThemeCatalog.badge_texture(id)
@@ -590,9 +596,22 @@ func show_page(id: String):
     if is_instance_valid(display_label): _refresh_display_label()
     if id == "ranking": _select_league(selected_league)
 
-func apply_theme(texture: Texture2D):
+func apply_theme(texture: Texture2D, theme_id: String = "wood"):
     if texture != null:
         canvas.get_node("ForestArtwork").texture = texture
+        var logo = canvas.get_node_or_null("ThemeLogo")
+        if logo == null:
+            logo = TextureRect.new()
+            logo.name = "ThemeLogo"
+            logo.texture = _slice(FOREST,Rect2(450,0,790,318))
+            logo.position = Vector2(450,0)
+            logo.size = Vector2(790,318)
+            logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            canvas.add_child(logo)
+            canvas.move_child(logo,1)
+        logo.visible = ThemeCatalog.get_theme(theme_id).get("free_arena",false)
+        selected_league = ThemeCatalog.get_theme(theme_id).get("unlock_league","madeira")
+        if selected_league == "wood": selected_league = "madeira"
 
 func back():
     show_page("bot" if page == "bot_side" else "main")
@@ -637,7 +656,7 @@ func _load_preferences():
     if config.load(PREFS) != OK: return
     player_name = String(config.get_value("profile","name","Jogador")).left(20)
     avatar_id = String(config.get_value("profile","avatar","warrior"))
-    if avatar_id not in ["warrior","archer","mage"]: avatar_id = "warrior"
+    if avatar_id not in ["warrior","archer","mage","paladin"]: avatar_id = "warrior"
     volume = clampf(float(config.get_value("audio","volume",0.8)),0,1)
     music_volume = clampf(float(config.get_value("audio","music_volume",0.65)),0,1)
     fullscreen = true
@@ -662,3 +681,11 @@ func _build_ranked():
     var play = _page_button(content,2,"BUSCAR PARTIDA — EM BREVE","Matchmaking disponível em uma próxima fase",func(): pass)
     play.disabled = true
     _highlight(play,false)
+func attach_league_frame(portrait: Control):
+    var border = portrait.get_node_or_null("LeagueFrame")
+    if border == null:
+        border = preload("res://profile/league_frame.gd").new()
+        border.name = "LeagueFrame"
+        portrait.add_child(border)
+    border.league_id = league_profile.data.current_league
+    border.queue_redraw()

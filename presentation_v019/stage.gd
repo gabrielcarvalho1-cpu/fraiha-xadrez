@@ -116,6 +116,7 @@ func refresh_player_card():
     if not is_instance_valid(player_card): return
     player_card.visible = mode in ["local","online","bot"]
     player_portrait.texture = hub.avatar_texture()
+    hub.attach_league_frame(player_portrait)
     player_caption.text = hub.player_name + "\n" + ("Pretas" if game.board_flipped() else "Brancas")
     if mode == "local": player_caption.text = hub.player_name + "\nPartida local"
 
@@ -124,6 +125,7 @@ func _start_local():
     hub.hide_hub()
     online.cancel_connection()
     online.start_local()
+    bot_controller.start_local(game)
     mode = "local"
     game.show()
     _clear_selection()

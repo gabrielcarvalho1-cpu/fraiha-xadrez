@@ -21,18 +21,24 @@ func setup(presentation: Node):
     iron_arena.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     iron_arena.hide()
     stage.add_child(iron_arena)
-    apply_theme("wood")
+    var config = ConfigFile.new()
+    config.load("user://visual_theme.cfg")
+    var initial = String(config.get_value("visual","theme",preload("res://league/catalog.gd").theme_for(hub.league_profile.data.current_league)))
+    apply_theme(initial if Catalog.THEME_DATA.has(initial) else "wood")
 
 func apply_theme(theme_id: String) -> bool:
     if not Catalog.THEME_DATA.has(theme_id): return false
     var data = Catalog.get_theme(theme_id)
-    var home_texture = Catalog.texture(data.home_path)
+    var home_texture = Catalog.texture(data.arena_path if data.get("free_arena",false) else data.home_path)
     var arena_texture = Catalog.texture(data.arena_path)
     # A partial asset import must never replace the working scene with a blank.
     if theme_id != "wood" and (home_texture == null or arena_texture == null): return false
     active_theme = theme_id
+    var config = ConfigFile.new()
+    config.set_value("visual","theme",theme_id)
+    config.save("user://visual_theme.cfg")
     if hub.has_method("apply_theme") and home_texture != null:
-        hub.apply_theme(home_texture)
+        hub.apply_theme(home_texture,theme_id)
     game.set_visual_theme(theme_id)
     stage.forest.visible = theme_id == "wood"
     iron_arena.texture = arena_texture if theme_id != "wood" else null
