@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { SupabaseAuth, DevAuth } = require('./accounts/auth');
 const { MemoryStore, SupabaseStore, validateNickname } = require('./accounts/store');
 const { ChatHub } = require('./chat');
+const { Social } = require('./social/service');
 
 const GUEST_TTL_MS = 24 * 3600e3;
 
@@ -28,6 +29,8 @@ class Backend {
     this.casual = null; // conectado em attachCasual()
     this.guests = new Map(); // token -> { id, nickname, seen }
     this.chat = new ChatHub({ send: (ws, o) => this.send(ws, o) });
+    this.online = new Map(); // uid -> Set(ws) (contas e convidados identificados)
+    this.social = new Social({ send: (ws, o) => this.send(ws, o), backend: this });
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
   attachRanked(ranked) { this.ranked = ranked; ranked.backend = this; }
@@ -41,10 +44,30 @@ class Backend {
   }
   inMatch(uid) { return this.games().some(g => !!g.activeMatchOf(uid)); }
   presenceChanged(_uid) { /* conectado pelo serviço de presença */ }
+  socketsOf(uid) { return [...(this.online.get(uid) || [])].filter(ws => ws.readyState === undefined || ws.readyState === 1); }
+  // Presença pública: só o estado, nunca dados de conexão.
+  presenceOf(uid) {
+    if (!(this.online.get(uid) || new Set()).size) return 'offline';
+    return this.inMatch(uid) ? 'in_match' : 'online';
+  }
   setIdentity(ws, identity) {
     const old = ws.identity;
-    if (old && (!identity || old.id !== identity.id)) for (const g of this.games()) g.onClose(ws);
+    if (old && (!identity || old.id !== identity.id)) {
+      for (const g of this.games()) g.onClose(ws);
+      this.unlink(ws, old.id);
+    }
     ws.identity = identity;
+    if (identity && (!old || old.id !== identity.id)) {
+      if (!this.online.has(identity.id)) this.online.set(identity.id, new Set());
+      const set = this.online.get(identity.id), was = set.size;
+      set.add(ws);
+      if (!was) this.presenceChanged(identity.id);
+    }
+  }
+  unlink(ws, uid) {
+    const set = this.online.get(uid);
+    if (!set || !set.delete(ws)) return;
+    if (!set.size) { this.online.delete(uid); this.presenceChanged(uid); }
   }
   async state(ws) {
     const u = ws.user;
@@ -98,6 +121,15 @@ class Backend {
         return this.ranked ? this.ranked.handle(ws, m) : this.fail(ws, 'Ranked indisponível.');
       }
       if (this.kind === 'disabled') return this.fail(ws, 'Contas ainda não configuradas no servidor.', { code: 'accounts_disabled' });
+      if (a.startsWith('social_')) {
+        if (!ws.user || !ws.profile) return this.send(ws, { type: 'social_error', message: 'Entre ou crie uma conta para usar Amigos.', code: 'auth_required' });
+        try { return await this.social.handle(ws, m); }
+        catch (e) {
+          if (e && /42P01|PGRST205|does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message))) return this.send(ws, { type: 'social_error', message: 'Amigos ainda não configurado no servidor (migração 0002 pendente).', code: 'not_configured' });
+          console.error('social', a, e && e.message);
+          return this.send(ws, { type: 'social_error', message: 'Erro temporário no servidor. Tente novamente.', code: 'server_error' });
+        }
+      }
       if (a === 'acct_auth') {
         const user = await this.auth.verify(m.access_token);
         if (!user) { ws.user = null; ws.profile = null; return this.fail(ws, 'Sessão inválida ou expirada. Entre novamente.', { code: 'invalid_token' }); }
@@ -129,7 +161,10 @@ class Backend {
       return this.fail(ws, 'Erro temporário no servidor. Tente novamente.', { code: 'server_error' });
     }
   }
-  onClose(ws) { for (const g of this.games()) g.onClose(ws); }
+  onClose(ws) {
+    for (const g of this.games()) g.onClose(ws);
+    if (ws.identity) this.unlink(ws, ws.identity.id);
+  }
 }
 
 module.exports = { Backend, createBackend };

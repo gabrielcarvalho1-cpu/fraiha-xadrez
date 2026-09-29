@@ -14,10 +14,12 @@ function validateNickname(value) {
   return { nickname: nick };
 }
 const emptyStats = () => ({ league: 0, pl: 0, matches: 0, wins: 0, losses: 0, draws: 0, highest_league: 0 });
+const pub = p => ({ user_id: p.user_id, nickname: p.nickname, avatar_id: p.avatar_id });
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fullStats = rows => { const out = {}; for (const m of MODES) out[m] = { ...emptyStats(), ...(rows[m] || {}) }; return out; };
 
 class MemoryStore {
-  constructor() { this.profiles = new Map(); this.stats = new Map(); this.matches = []; this.persistent = false; }
+  constructor() { this.profiles = new Map(); this.stats = new Map(); this.matches = []; this.persistent = false; this.social = { requests: new Set(), friends: new Set(), blocks: new Set() }; }
   async getProfile(userId) { return this.profiles.get(userId) || null; }
   async createProfile(userId, nickname, avatarId) {
     if (this.profiles.has(userId)) return { error: 'Este perfil já existe.' };
@@ -44,6 +46,27 @@ class MemoryStore {
     this.matches.push({ ...r });
     return r.match_id;
   }
+
+  // ---------- Amigos (0002_fraiha_social) ----------
+  async searchProfiles(query, limit = 20) {
+    const q = query.toLowerCase(), out = [];
+    for (const p of this.profiles.values()) if (p.nickname.toLowerCase().includes(q)) out.push(pub(p));
+    return out.sort((a, b) => a.nickname.localeCompare(b.nickname)).slice(0, limit);
+  }
+  async getProfilesByIds(ids) { return ids.map(id => this.profiles.get(id)).filter(Boolean).map(pub); }
+  async getRelations(uid) {
+    const s = this.social, r = { friends: [], sent: [], received: [], blocked: [], blockedBy: [] };
+    for (const k of s.requests) { const [f, t] = k.split('|'); if (f === uid) r.sent.push(t); if (t === uid) r.received.push(f); }
+    for (const k of s.friends) { const [a, b] = k.split('|'); if (a === uid) r.friends.push(b); if (b === uid) r.friends.push(a); }
+    for (const k of s.blocks) { const [a, b] = k.split('|'); if (a === uid) r.blocked.push(b); if (b === uid) r.blockedBy.push(a); }
+    return r;
+  }
+  async addRequest(from, to) { this.social.requests.add(from + '|' + to); }
+  async removeRequest(from, to) { this.social.requests.delete(from + '|' + to); }
+  async addFriendship(a, b) { const [x, y] = [a, b].sort(); this.social.friends.add(x + '|' + y); }
+  async removeFriendship(a, b) { const [x, y] = [a, b].sort(); this.social.friends.delete(x + '|' + y); }
+  async addBlock(a, b) { this.social.blocks.add(a + '|' + b); }
+  async removeBlock(a, b) { this.social.blocks.delete(a + '|' + b); }
 }
 
 class SupabaseStore {
@@ -86,6 +109,39 @@ class SupabaseStore {
   async recordRankedMatch(r) {
     return this.req('/rpc/fraiha_record_ranked_match', { method: 'POST', body: JSON.stringify({ p: r }) });
   }
+  // ---------- Amigos (0002_fraiha_social). Todos os ids já validados como UUID pelo serviço. ----------
+  async searchProfiles(query, limit = 20) {
+    return this.req('/profiles?nickname=ilike.' + encodeURIComponent('*' + query + '*') + '&select=user_id,nickname,avatar_id&order=nickname.asc&limit=' + limit);
+  }
+  async getProfilesByIds(ids) {
+    const ok = ids.filter(id => UUID_RE.test(id));
+    if (!ok.length) return [];
+    return this.req('/profiles?user_id=in.(' + ok.join(',') + ')&select=user_id,nickname,avatar_id');
+  }
+  async getRelations(uid) {
+    const u = encodeURIComponent(uid), r = { friends: [], sent: [], received: [], blocked: [], blockedBy: [] };
+    const [reqs, fr, bl] = await Promise.all([
+      this.req(`/friend_requests?or=(from_user.eq.${u},to_user.eq.${u})&select=from_user,to_user`),
+      this.req(`/friendships?or=(user_a.eq.${u},user_b.eq.${u})&select=user_a,user_b`),
+      this.req(`/blocks?or=(blocker.eq.${u},blocked.eq.${u})&select=blocker,blocked`)]);
+    for (const x of reqs) { if (x.from_user === uid) r.sent.push(x.to_user); else r.received.push(x.from_user); }
+    for (const x of fr) r.friends.push(x.user_a === uid ? x.user_b : x.user_a);
+    for (const x of bl) { if (x.blocker === uid) r.blocked.push(x.blocked); else r.blockedBy.push(x.blocker); }
+    return r;
+  }
+  async _insert(table, row) {
+    await this.req('/' + table, { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify(row) });
+  }
+  async _delete(table, filters) {
+    const q = Object.entries(filters).map(([k, v]) => k + '=eq.' + encodeURIComponent(v)).join('&');
+    await this.req('/' + table + '?' + q, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+  }
+  async addRequest(from, to) { return this._insert('friend_requests', { from_user: from, to_user: to }); }
+  async removeRequest(from, to) { return this._delete('friend_requests', { from_user: from, to_user: to }); }
+  async addFriendship(a, b) { const [x, y] = [a, b].sort(); return this._insert('friendships', { user_a: x, user_b: y }); }
+  async removeFriendship(a, b) { const [x, y] = [a, b].sort(); return this._delete('friendships', { user_a: x, user_b: y }); }
+  async addBlock(a, b) { return this._insert('blocks', { blocker: a, blocked: b }); }
+  async removeBlock(a, b) { return this._delete('blocks', { blocker: a, blocked: b }); }
 }
 
-module.exports = { MemoryStore, SupabaseStore, validateNickname, MODES, AVATARS, emptyStats };
+module.exports = { MemoryStore, SupabaseStore, validateNickname, MODES, AVATARS, emptyStats, UUID_RE };

@@ -33,6 +33,7 @@ var ranked_ui
 var casual
 var casual_ui
 var match_chat
+var social_ui
 
 func _enter_tree():
     MobileLayout.configure_window(get_window())
@@ -164,6 +165,11 @@ func _setup_account():
     hub.ranked_requested.connect(_open_ranked)
     hub.account_requested.connect(func(): account_ui.open())
     hub.friends_requested.connect(_open_friends)
+    social_ui = preload("res://social/social_ui.gd").new()
+    social_ui.name = "SocialUI"
+    add_child(social_ui)
+    social_ui.setup(account, hub.avatar_texture)
+    account.changed.connect(func(): if social_ui.is_open() and not account.has_profile(): social_ui.hide_ui())
     account_chip = Button.new()
     account_chip.name = "AccountChip"
     account_chip.add_theme_font_size_override("font_size", 20)
@@ -228,11 +234,11 @@ func _open_ranked():
     account_ui.open("", "Crie uma conta ou entre para jogar partidas ranqueadas.", true)
 
 func _open_friends():
-    # Área de Amigos (conectada na etapa social). Convidado precisa entrar/criar conta.
+    # Área de Amigos: só para contas. Convidado é convidado a entrar/criar conta.
     if not account.has_profile():
         account_ui.open("", "Entre ou crie uma conta para usar Amigos.")
         return
-    account_ui.open("account", "AMIGOS: disponível em breve.")
+    social_ui.open()
 
 func _open_casual():
     bot_controller.stop()
@@ -515,6 +521,7 @@ func open_home():
         ranked_ui.close_panel()
         ranked_ui.hud.hide()
     if match_chat != null: match_chat.unbind()
+    if social_ui != null and social_ui.is_open(): social_ui.hide_ui()
     if casual != null:
         if casual.searching: casual.cancel_queue()
         casual.detach()
