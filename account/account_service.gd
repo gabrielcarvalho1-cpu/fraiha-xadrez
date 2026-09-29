@@ -38,6 +38,7 @@ var guest_wanted := false
 var guest_ready := false
 var guest_token := ""
 var guest_nickname := ""
+var auth_retried := false # invalid_token: renova a sessão só uma vez (evita loop)
 
 func _ready():
     var config = ConfigFile.new()
@@ -46,7 +47,14 @@ func _ready():
         public_key = String(config.get_value("accounts", "supabase_publishable_key", ""))
         site_url = String(config.get_value("accounts", "site_url", ""))
         server_url = String(config.get_value("online", "server_url", ""))
+    # Só no editor (F5): online.local.cfg (fora do Git) pode apontar para staging. Builds exportadas ignoram.
+    if OS.has_feature("editor"):
+        var dev = ConfigFile.new()
+        if dev.load("res://online.local.cfg") == OK:
+            server_url = String(dev.get_value("online", "server_url", server_url))
+    # Prioridade máxima: variável de ambiente explícita.
     if OS.has_environment("FRAIHA_SERVER_URL"): server_url = OS.get_environment("FRAIHA_SERVER_URL")
+    _log("servidor: " + server_url)
     if OS.has_environment("FRAIHA_SUPABASE_URL"): supabase_url = OS.get_environment("FRAIHA_SUPABASE_URL")
     if OS.has_environment("FRAIHA_SUPABASE_KEY"): public_key = OS.get_environment("FRAIHA_SUPABASE_KEY")
     if OS.has_feature("web") and site_url.is_empty():
@@ -74,6 +82,14 @@ func signed_in() -> bool:
 
 func has_profile() -> bool:
     return signed_in() and server_ready and not profile.is_empty()
+
+## Conta existe (ou está sendo restaurada), mas o servidor FRAIHA ainda não confirmou o perfil.
+func account_pending() -> bool:
+    return not has_profile() and (signed_in() or not refresh_token.is_empty() or redirect_pending)
+
+func _log(text: String):
+    # Diagnóstico no Output do editor; nunca registra tokens.
+    if OS.is_debug_build(): print("[conta] ", text)
 
 func nickname() -> String:
     return String(profile.get("nickname", ""))
@@ -277,7 +293,9 @@ func _server_auth():
     if server_url.is_empty(): 
         notice.emit("Servidor FRAIHA não configurado.", true)
         return
-    if socket_open: _send({"type": "acct_auth", "access_token": access_token})
+    if socket_open:
+        _log("acct_auth enviado")
+        _send({"type": "acct_auth", "access_token": access_token})
     elif socket == null: _connect()
 
 func _connect():
@@ -324,7 +342,9 @@ func _process(delta):
     if state == WebSocketPeer.STATE_OPEN:
         if not socket_open:
             socket_open = true
-            if signed_in(): _send({"type": "acct_auth", "access_token": access_token})
+            if signed_in():
+                _log("acct_auth enviado")
+                _send({"type": "acct_auth", "access_token": access_token})
             elif guest_wanted: _send_guest_auth()
         while socket.get_available_packet_count() > 0:
             var msg = JSON.parse_string(socket.get_packet().get_string_from_utf8())
@@ -346,6 +366,8 @@ func _receive(msg: Dictionary):
     var type = String(msg.get("type", ""))
     if type == "acct_state":
         server_ready = true
+        auth_retried = false
+        _log("acct_state recebido (perfil: %s, persistente: %s)" % [msg.get("profile") is Dictionary, bool(msg.get("persistent", false))])
         profile = msg.profile if msg.get("profile") is Dictionary else {}
         ranked = msg.ranked if msg.get("ranked") is Dictionary else {}
         needs_nickname = bool(msg.get("needs_nickname", false))
@@ -357,7 +379,10 @@ func _receive(msg: Dictionary):
         changed.emit()
     elif type == "acct_error":
         var code = String(msg.get("code", ""))
-        if code == "invalid_token" and not refresh_token.is_empty(): _refresh_session()
+        _log("acct_error: " + code)
+        if code == "invalid_token" and not refresh_token.is_empty() and not auth_retried:
+            auth_retried = true
+            _refresh_session()
         else: notice.emit(String(msg.get("message", "Erro de conta.")), true)
         if code.begins_with("nickname") or code == "profile_error": changed.emit()
         if code == "auth_required": server_message.emit(msg)

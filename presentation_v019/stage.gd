@@ -169,7 +169,7 @@ func _setup_account():
     social_ui.name = "SocialUI"
     add_child(social_ui)
     social_ui.setup(account, hub.avatar_texture)
-    account.changed.connect(func(): if social_ui.is_open() and not account.has_profile(): social_ui.hide_ui())
+    account.changed.connect(func(): if social_ui.is_open() and not account.has_profile() and not account.account_pending(): social_ui.hide_ui())
     account_chip = Button.new()
     account_chip.name = "AccountChip"
     account_chip.add_theme_font_size_override("font_size", 20)
@@ -234,11 +234,14 @@ func _open_ranked():
     account_ui.open("", "Crie uma conta ou entre para jogar partidas ranqueadas.", true)
 
 func _open_friends():
-    # Área de Amigos: só para contas. Convidado é convidado a entrar/criar conta.
-    if not account.has_profile():
-        account_ui.open("", "Entre ou crie uma conta para usar Amigos.")
+    # Área de Amigos: só para contas. Conta ainda conectando abre em "Conectando…" (não pede login).
+    if account.has_profile() or (account.account_pending() and not (account.server_ready and account.needs_nickname)):
+        social_ui.open()
         return
-    social_ui.open()
+    if account.signed_in() and account.needs_nickname:
+        account_ui.open("nickname", "Escolha seu nome de jogador para usar Amigos.")
+        return
+    account_ui.open("", "Entre ou crie uma conta para usar Amigos.")
 
 func _open_casual():
     bot_controller.stop()

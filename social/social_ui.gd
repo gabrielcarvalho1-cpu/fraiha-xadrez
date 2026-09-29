@@ -74,6 +74,8 @@ func setup(service, avatar_callable: Callable = Callable()):
     add_child(toast)
     toast.hide()
     account.server_message.connect(_on_message)
+    # Conta ainda conectando: mostra aqui o motivo se o servidor recusar a sessão.
+    account.notice.connect(func(text, is_error): if is_open() and is_error and not account.has_profile(): notice_text(text))
     account.changed.connect(func(): if is_open() and screen == "list" and not has_list: _request_list())
     get_viewport().size_changed.connect(_layout)
     hide_ui()
@@ -112,10 +114,10 @@ func _back():
 func _request_list():
     refresh_left = REFRESH_S
     if not _send({"type": "social_list"}) and screen == "list":
-        notice_text("Conectando ao servidor…", GOLD)
+        notice_text("Conectando sua conta ao servidor...", GOLD)
 
 func _send(msg: Dictionary) -> bool:
-    if not account.server_ready: return false
+    if not account.has_profile(): return false
     return account.send_server(msg)
 
 func _act(action: String, uid: String):
@@ -364,7 +366,7 @@ func _show(which: String):
 
 func _build_list(_narrow_layout: bool):
     if not has_list:
-        _label(box, "Carregando amigos…" if account.server_ready else "Conectando ao servidor…", 15, GOLD, true)
+        _label(box, "Carregando amigos…" if account.has_profile() else "Conectando sua conta ao servidor...", 15, GOLD, true)
         return
     var friends: Array = data["friends"]
     var groups = {"online": [], "in_match": [], "offline": []}

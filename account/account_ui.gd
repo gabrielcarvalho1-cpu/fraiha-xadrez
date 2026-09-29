@@ -66,6 +66,7 @@ func close():
 func _natural_page() -> String:
     if not account.configured(): return "unavailable"
     if not account.signed_in(): return "login"
+    if not account.server_ready: return "waiting"
     if account.needs_nickname: return "nickname"
     return "account"
 

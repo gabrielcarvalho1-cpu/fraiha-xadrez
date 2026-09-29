@@ -14,6 +14,7 @@ async function login(port, name) {
 // Respeita o limite de ações do servidor (20 a cada 10 s): se limitado, espera e tenta de novo.
 async function paced(c, msg, pred) {
   for (let i = 0; i < 15; i++) {
+    await sleep(60); // o servidor fecha sockets com mais de 20 mensagens por segundo
     c.send(msg);
     const m = await c.next(x => pred(x) || x.type === 'social_error', 5000);
     if (m.type === 'social_error' && m.code === 'rate_limited') { await sleep(1000); continue; }
