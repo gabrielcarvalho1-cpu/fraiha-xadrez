@@ -31,6 +31,7 @@ var league_buttons := {}
 var league_status_labels := {}
 var ranked_unlock_index := 0 # maior liga alcançada no Ranked (definida pela stage)
 const LOCKED_TEXT = "Bloqueada · alcance esta liga no Ranked"
+const DEV_PREVIEW_BUTTON := false # "TESTAR UNIVERSO": ferramenta interna, fora da interface do jogador
 var league_details: Label
 var league_detail_title: Label
 var league_detail_badge: TextureRect
@@ -561,6 +562,7 @@ func _build_ranking():
         pieces_grid.add_child(piece)
         league_preview_pieces.append(piece)
     league_preview_button = _button(panel,2,"TESTAR UNIVERSO","Prévia de desenvolvimento · sem alterar PL",Vector2(872,488),_preview_league,Vector2(530,67))
+    league_preview_button.visible = DEV_PREVIEW_BUTTON
     _button(panel,6,"VOLTAR À HOME","ESC também volta",Vector2(35,548),back,Vector2(410,64))
     _button(panel,0,"PEÇAS CLÁSSICAS","Usar o conjunto original",Vector2(483,548),func(): piece_set_requested.emit("classic"),Vector2(390,64))
     var note = _label(panel,"Prévia local. Sem partidas ranqueadas, ganho de PL ou desbloqueios automáticos nesta build.",14,MUTED)
@@ -597,7 +599,7 @@ func _select_league(id: String):
     for i in range(league_preview_pieces.size()):
         league_preview_pieces[i].texture = textures.get("w"+ThemeCatalog.PIECE_ORDER[i])
     preview_caption.text = "CENÁRIO E PEÇAS · "+entry.display_name.to_upper() if available else "VISUAIS EM DESENVOLVIMENTO"
-    league_preview_button.visible = available and unlocked
+    league_preview_button.visible = DEV_PREVIEW_BUTTON and available and unlocked
     for key in league_buttons:
         league_buttons[key].modulate = Color.WHITE if key == id else Color(0.78,0.82,0.79)
 

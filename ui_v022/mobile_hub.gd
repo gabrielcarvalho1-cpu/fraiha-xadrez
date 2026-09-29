@@ -203,7 +203,7 @@ func _ranking(content: VBoxContainer):
     preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     preview.custom_minimum_size.y = 160
     content.add_child(preview)
-    _button(content,"TESTAR UNIVERSO",hub._preview_league)
+    if hub.DEV_PREVIEW_BUTTON: _button(content,"TESTAR UNIVERSO",hub._preview_league)
     _button(content,"PEÇAS CLÁSSICAS",func(): hub.piece_set_requested.emit("classic"))
 
 func _about(content: VBoxContainer):

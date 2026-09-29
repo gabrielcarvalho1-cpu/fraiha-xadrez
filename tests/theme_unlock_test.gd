@@ -30,6 +30,7 @@ func run():
     # 4. Madeira e peças clássicas sempre disponíveis
     stage.hub._select_league("madeira")
     check(tm.active_theme == "wood", "Madeira selecionável")
+    check(not stage.hub.league_preview_button.visible, "TESTAR UNIVERSO oculto na Madeira")
     check(tm.apply_piece_set("classic"), "peças clássicas disponíveis")
     # 2. conta nova (0 PL, highest 0)
     acc.access_token = "t"; acc.user_id = "u"; acc.server_ready = true
