@@ -273,7 +273,7 @@ func _build_profile():
     var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
     _label(words, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 14, GOLD)
     _progress(words,league_profile.data.lp,8)
-    _label(words, "Perfil local · progressão em preparação", 11, MUTED)
+    _label(words, "Ligas conquistadas no Ranked", 11, MUTED)
     profile_button.pressed.connect(func(): show_page("profile"))
     profile_button.mouse_entered.connect(func(): profile_name.modulate = GOLD)
     profile_button.mouse_exited.connect(func(): profile_name.modulate = Color.WHITE)
@@ -449,7 +449,7 @@ func _refresh_avatars():
 
 func _build_about_page():
     var panel = _wide_page("about","CONHEÇA O FRAIHA  ·  MUITO MAIS QUE UM XADREZ")
-    var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. Alt+Enter alterna tela cheia. Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nCada liga usa 0–100 PL. A progressão competitiva será definida depois. Cada liga alcançada no Ranked libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Local: duas pessoas no mesmo computador.\nBot: quatro dificuldades, escolha entre brancas, pretas ou aleatório.\nOnline: crie uma sala, compartilhe seu código de seis caracteres e jogue com um amigo."],["PERSONALIZAÇÃO","Escolha Guerreiro, Arqueira ou Mago no Perfil.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
+    var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. Alt+Enter alterna tela cheia. Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Local: duas pessoas no mesmo computador.\nBot: quatro dificuldades, escolha entre brancas, pretas ou aleatório.\nOnline: crie uma sala, compartilhe seu código de seis caracteres e jogue com um amigo.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha Guerreiro, Arqueira ou Mago no Perfil.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
     var navigation = _stack(panel,Vector2(38,108),Vector2(390,418),Vector4.ZERO,4)
     var details = _stack(panel,Vector2(482,117),Vector2(870,392),Vector4.ZERO,22)
     about_title = _label(details,"",27,GOLD)
@@ -565,7 +565,7 @@ func _build_ranking():
     league_preview_button.visible = DEV_PREVIEW_BUTTON
     _button(panel,6,"VOLTAR À HOME","ESC também volta",Vector2(35,548),back,Vector2(410,64))
     _button(panel,0,"PEÇAS CLÁSSICAS","Usar o conjunto original",Vector2(483,548),func(): piece_set_requested.emit("classic"),Vector2(390,64))
-    var note = _label(panel,"Prévia local. Sem partidas ranqueadas, ganho de PL ou desbloqueios automáticos nesta build.",14,MUTED)
+    var note = _label(panel,"Ligas conquistadas no Ranked. Cada ritmo tem PL próprio; a maior liga alcançada libera cenário e peças.",14,MUTED)
     note.position = Vector2(895,568)
     note.size = Vector2(510,44)
 
@@ -593,7 +593,7 @@ func _select_league(id: String):
     elif id == "ouro": description = "Maestria, poder e grandes vitórias.\nRecompensas: reino dourado, tabuleiro real e peças de ouro."
     if available and ThemeCatalog.get_theme(theme).has("description"): description = ThemeCatalog.get_theme(theme).description + "\nRecompensas: cenário, tabuleiro e conjunto de peças próprios."
     if not available: description = "Recompensas visuais em desenvolvimento.\nSeu emblema já faz parte da jornada."
-    league_details.text = ("Disponível" if unlocked else LOCKED_TEXT)+"\n"+description+"\n\nPL e progressão competitiva ainda não são atribuídos."
+    league_details.text = ("Disponível" if unlocked else LOCKED_TEXT)+"\n"+description+"\n\nConquiste esta liga no Ranked: cada ritmo tem PL próprio e a promoção acontece a cada 100 PL."
     var textures = ThemeCatalog.piece_textures(theme) if available else {}
     league_scene_preview.texture = ThemeCatalog.texture(ThemeCatalog.get_theme(theme).arena_path) if available else null
     for i in range(league_preview_pieces.size()):
@@ -748,13 +748,13 @@ func _save_preferences():
 
 func _build_ranked():
     var content = _new_page("ranked", "ESCOLHA SEU RITMO", "JOGAR RANQUEADO")
-    _body(content,"Cada ritmo possui liga e estatísticas próprias. Fundação local; partidas ranqueadas online estarão disponíveis em uma próxima fase.",16)
+    _body(content,"Cada ritmo possui liga, PL e estatísticas próprios. Entre na sua conta para jogar partidas ranqueadas online.",16)
     for mode in Ranked.MODES:
         var id: String = mode
         _page_button(content,3,Ranked.MODES[id].name.to_upper(),"%d minutos por jogador" % Ranked.MODES[id].minutes,func(): ranked_details.text = ranked.summary(id))
     ranked_details = _body(content,ranked.summary("blitz"),17)
-    _body(content,"Promoção a cada 100 PL, com excedente. Sem rebaixamento nesta fase. Empates: 0 PL. Bot e Online Casual não alteram estas classificações.",15)
-    var play = _page_button(content,2,"BUSCAR PARTIDA — EM BREVE","Matchmaking disponível em uma próxima fase",func(): pass)
+    _body(content,"Vitórias e derrotas valem PL conforme o nível do adversário. Promoção a cada 100 PL, com excedente. Sem rebaixamento; o PL não fica abaixo de 0. Empates: 0 PL. Bot e Online Casual não alteram estas classificações.",15)
+    var play = _page_button(content,2,"BUSCAR PARTIDA","Use JOGAR RANQUEADO na Home",func(): pass)
     play.disabled = true
     _highlight(play,false)
 func attach_league_frame(portrait: Control):
