@@ -125,6 +125,8 @@ func show_page(id: String):
         scroll.add_child(content)
         match id:
             "main":
+                if hub.has_signal("account_requested"):
+                    _button(content,hub.account_caption,func(): hub.account_requested.emit()).custom_minimum_size.y = 50
                 var grid = _grid(content,2)
                 menu_grid = grid
                 for original in hub.menu_buttons:

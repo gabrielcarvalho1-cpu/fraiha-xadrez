@@ -6,6 +6,8 @@ signal play_bot_requested(difficulty: String, side: String)
 signal theme_preview_requested(theme_id: String)
 signal piece_set_requested(theme_id: String)
 signal quit_requested
+signal ranked_requested
+signal account_requested
 
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 12.0
@@ -61,6 +63,7 @@ var fullscreen := true
 var volume_label: Label
 var music_volume_label: Label
 var display_label: Label
+var account_caption := "ENTRAR / CRIAR CONTA"
 
 func _ready():
     layer = 30
@@ -215,7 +218,7 @@ func _build():
     theme_frame.hide()
     var titles = ["JOGAR LOCAL", "JOGAR CONTRA O BOT", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
     var subtitles = ["Duas pessoas no mesmo computador", "Treine e evolua seu jogo", "Crie ou entre em uma sala", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
-    var actions = [func(): play_local_requested.emit(), func(): show_page("bot"), func(): play_online_requested.emit(), func(): show_page("ranked"), func(): show_page("ranking"), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
+    var actions = [func(): play_local_requested.emit(), func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
     var icons = [0,1,2,3,3,4,5,6]
     for i in range(8):
         var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(611,341+i*63), actions[i], Vector2(450,57))

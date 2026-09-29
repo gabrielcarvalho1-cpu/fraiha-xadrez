@@ -25,6 +25,9 @@ var bot_level_name := "FÁCIL"
 var bot_side_name := "BRANCAS"
 var mobile_status: Label
 var mobile_promotion: PanelContainer
+var account
+var account_ui
+var account_chip: Button
 
 func _enter_tree():
     MobileLayout.configure_window(get_window())
@@ -54,6 +57,7 @@ func _ready():
         hub.theme_preview_requested.connect(theme_manager.apply_theme)
     if hub.has_signal("piece_set_requested"):
         hub.piece_set_requested.connect(theme_manager.apply_piece_set)
+    _setup_account()
     _layout()
     open_home()
 
@@ -105,6 +109,54 @@ func _build_navigation():
     navigation_dialog.canceled.connect(_cancel_navigation)
     overlay.add_child(navigation_dialog)
     _build_mobile_controls(overlay)
+
+func _setup_account():
+    account = preload("res://account/account_service.gd").new()
+    account.name = "Account"
+    add_child(account)
+    account_ui = preload("res://account/account_ui.gd").new()
+    account_ui.name = "AccountUI"
+    add_child(account_ui)
+    account_ui.setup(account)
+    account_ui.ready_for_ranked.connect(_open_ranked)
+    account_ui.closed.connect(_refresh_account_chip)
+    account.changed.connect(_refresh_account_chip)
+    hub.ranked_requested.connect(_open_ranked)
+    hub.account_requested.connect(func(): account_ui.open())
+    account_chip = Button.new()
+    account_chip.name = "AccountChip"
+    account_chip.add_theme_font_size_override("font_size", 20)
+    account_chip.size = Vector2(420, 46)
+    account_chip.pressed.connect(func(): account_ui.open())
+    get_node("Navigation").add_child(account_chip)
+    _refresh_account_chip()
+    # Tela inicial sem sessão: oferece entrar/criar conta (convidado continua possível).
+    if account.configured() and not account.signed_in() and account.refresh_token.is_empty():
+        account_ui.open("login")
+
+func _refresh_account_chip():
+    if not is_instance_valid(account_chip): return
+    var caption = "CONVIDADO · ENTRAR / CRIAR CONTA"
+    if account.has_profile():
+        if account.after_login == "ranked":
+            account.after_login = ""
+            _open_ranked.call_deferred()
+        caption = "CONTA: " + account.nickname()
+        hub.player_name = account.nickname()
+        if is_instance_valid(hub.profile_name): hub.profile_name.text = account.nickname()
+    elif account.signed_in():
+        caption = "CONTA: conectando…" if not account.needs_nickname else "CONTA: escolher nome"
+    hub.account_caption = caption
+    account_chip.text = caption
+    account_chip.visible = mode == "home" and not MobileLayout.active(get_viewport())
+    if is_instance_valid(hub.mobile_ui) and hub.mobile_ui.current_page == "main" and hub.is_home_visible():
+        hub.mobile_ui.show_page("main")
+
+func _open_ranked():
+    if account.has_profile():
+        hub.show_page("ranked")
+        return
+    account_ui.open("", "Crie uma conta ou entre para jogar partidas ranqueadas.", true)
 
 func _build_mobile_controls(overlay: CanvasLayer):
     mobile_actions = BoxContainer.new()
@@ -231,6 +283,7 @@ func _refresh_input():
     game.set_process_unhandled_input(playing and pending_navigation.is_empty())
     # On mobile the online menu has its own full-width back button.
     home_button.visible = mode != "home" and not (mode == "online_menu" and MobileLayout.active(get_viewport()))
+    _refresh_account_chip()
     home_button.disabled = not pending_navigation.is_empty()
     refresh_player_card()
 
@@ -402,6 +455,8 @@ func _layout():
         home_button.text = "← TELA INICIAL  ·  ESC"
         home_button.size = Vector2(248, 46)
         home_button.position = Vector2(20, size.y - 66)
+    if is_instance_valid(account_chip):
+        account_chip.position = Vector2(20, size.y - 62)
     if is_instance_valid(bot_info):
         bot_info.position = Vector2(size.x/2.0-250,16)
         bot_info.size = Vector2(500,38)
