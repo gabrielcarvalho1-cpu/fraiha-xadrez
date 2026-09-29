@@ -136,6 +136,7 @@ func _setup_account():
     account.changed.connect(_refresh_account_chip)
     hub.ranked_requested.connect(_open_ranked)
     hub.account_requested.connect(func(): account_ui.open())
+    hub.friends_requested.connect(_open_friends)
     account_chip = Button.new()
     account_chip.name = "AccountChip"
     account_chip.add_theme_font_size_override("font_size", 20)
@@ -198,6 +199,13 @@ func _open_ranked():
         _refresh_input()
         return
     account_ui.open("", "Crie uma conta ou entre para jogar partidas ranqueadas.", true)
+
+func _open_friends():
+    # Área de Amigos (conectada na etapa social). Convidado precisa entrar/criar conta.
+    if not account.has_profile():
+        account_ui.open("", "Entre ou crie uma conta para usar Amigos.")
+        return
+    account_ui.open("account", "AMIGOS: disponível em breve.")
 
 func _ranked_found(_msg: Dictionary):
     bot_controller.stop()

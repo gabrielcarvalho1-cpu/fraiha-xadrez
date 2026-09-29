@@ -8,6 +8,7 @@ signal piece_set_requested(theme_id: String)
 signal quit_requested
 signal ranked_requested
 signal account_requested
+signal friends_requested
 
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 12.0
@@ -220,15 +221,16 @@ func _build():
     var theme_frame = _frame(main,Vector2(596,318),Vector2(482,550))
     theme_frame.name = "ThemeMenuFrame"
     theme_frame.hide()
-    var titles = ["JOGAR LOCAL", "JOGAR CONTRA O BOT", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
-    var subtitles = ["Duas pessoas no mesmo computador", "Treine e evolua seu jogo", "Crie ou entre em uma sala", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
-    var actions = [func(): play_local_requested.emit(), func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
-    var icons = [0,1,2,3,3,4,5,6]
+    # JOGAR LOCAL saiu da Home pública; o modo continua disponível internamente (play_local_requested).
+    var titles = ["JOGAR CONTRA O BOT", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "AMIGOS", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
+    var subtitles = ["Treine e evolua seu jogo", "Crie ou entre em uma sala", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Amigos, mensagens e convites", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
+    var actions = [func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), func(): friends_requested.emit(), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
+    var icons = [1,2,3,3,0,4,5,6]
     for i in range(8):
         var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(611,341+i*63), actions[i], Vector2(450,57))
         item.name = "MainAction" + str(i)
         menu_buttons.append(item)
-        if i == 3:
+        if titles[i] == "JOGAR RANQUEADO":
             var labels = item.find_children("*","Label",true,false)
             if not labels.is_empty(): labels[0].add_theme_color_override("font_color",GOLD)
     _build_profile()
@@ -449,7 +451,7 @@ func _refresh_avatars():
 
 func _build_about_page():
     var panel = _wide_page("about","CONHEÇA O FRAIHA  ·  MUITO MAIS QUE UM XADREZ")
-    var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. Alt+Enter alterna tela cheia. Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Local: duas pessoas no mesmo computador.\nBot: quatro dificuldades, escolha entre brancas, pretas ou aleatório.\nOnline: crie uma sala, compartilhe seu código de seis caracteres e jogue com um amigo.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha Guerreiro, Arqueira ou Mago no Perfil.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
+    var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. Alt+Enter alterna tela cheia. Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Bot: quatro dificuldades, escolha entre brancas, pretas ou aleatório.\nOnline: crie uma sala, compartilhe seu código de seis caracteres e jogue com um amigo.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha Guerreiro, Arqueira ou Mago no Perfil.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
     var navigation = _stack(panel,Vector2(38,108),Vector2(390,418),Vector4.ZERO,4)
     var details = _stack(panel,Vector2(482,117),Vector2(870,392),Vector4.ZERO,22)
     about_title = _label(details,"",27,GOLD)
