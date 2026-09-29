@@ -28,6 +28,9 @@ var ranked_details: Label
 var league_profile = LocalProfile.new()
 var selected_league := "madeira"
 var league_buttons := {}
+var league_status_labels := {}
+var ranked_unlock_index := 0 # maior liga alcançada no Ranked (definida pela stage)
+const LOCKED_TEXT = "Bloqueada · alcance esta liga no Ranked"
 var league_details: Label
 var league_detail_title: Label
 var league_detail_badge: TextureRect
@@ -525,8 +528,9 @@ func _build_ranking():
         _badge(content,id,Vector2(103,96))
         var title = _label(content,entry.display_name.to_upper(),13,GOLD)
         title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        var status = _label(content,"DISPONÍVEL" if entry.unlocked else "BLOQUEADA",10,MUTED)
+        var status = _label(content,"DISPONÍVEL" if league_unlocked(id) else "BLOQUEADA",10,MUTED)
         status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        league_status_labels[id] = status
         button.pressed.connect(func(): _select_league(id))
         league_buttons[id] = button
     var details = _stack(panel,Vector2(190,293),Vector2(635,229),Vector4.ZERO,12)
@@ -563,9 +567,19 @@ func _build_ranking():
     note.position = Vector2(895,568)
     note.size = Vector2(510,44)
 
+func league_unlocked(id: String) -> bool:
+    return LeagueCatalog.index_of(id) <= ranked_unlock_index
+
+func set_ranked_unlock(index: int):
+    ranked_unlock_index = index
+    for key in league_status_labels:
+        if is_instance_valid(league_status_labels[key]):
+            league_status_labels[key].text = "DISPONÍVEL" if league_unlocked(key) else "BLOQUEADA"
+
 func _select_league(id: String):
     selected_league = id
-    theme_preview_requested.emit(LeagueCatalog.theme_for(id))
+    var unlocked = league_unlocked(id)
+    if unlocked: theme_preview_requested.emit(LeagueCatalog.theme_for(id))
     var entry = LeagueCatalog.entry(id,league_profile.data)
     league_detail_title.text = "LIGA " + entry.display_name.to_upper() + "  ·  0–100 PL"
     league_detail_badge.texture = ThemeCatalog.badge_texture(id)
@@ -577,18 +591,19 @@ func _select_league(id: String):
     elif id == "ouro": description = "Maestria, poder e grandes vitórias.\nRecompensas: reino dourado, tabuleiro real e peças de ouro."
     if available and ThemeCatalog.get_theme(theme).has("description"): description = ThemeCatalog.get_theme(theme).description + "\nRecompensas: cenário, tabuleiro e conjunto de peças próprios."
     if not available: description = "Recompensas visuais em desenvolvimento.\nSeu emblema já faz parte da jornada."
-    league_details.text = ("Disponível" if entry.unlocked else "Bloqueada")+"\n"+description+"\n\nPL e progressão competitiva ainda não são atribuídos."
+    league_details.text = ("Disponível" if unlocked else LOCKED_TEXT)+"\n"+description+"\n\nPL e progressão competitiva ainda não são atribuídos."
     var textures = ThemeCatalog.piece_textures(theme) if available else {}
     league_scene_preview.texture = ThemeCatalog.texture(ThemeCatalog.get_theme(theme).arena_path) if available else null
     for i in range(league_preview_pieces.size()):
         league_preview_pieces[i].texture = textures.get("w"+ThemeCatalog.PIECE_ORDER[i])
     preview_caption.text = "CENÁRIO E PEÇAS · "+entry.display_name.to_upper() if available else "VISUAIS EM DESENVOLVIMENTO"
-    league_preview_button.visible = available
+    league_preview_button.visible = available and unlocked
     for key in league_buttons:
         league_buttons[key].modulate = Color.WHITE if key == id else Color(0.78,0.82,0.79)
 
 func _preview_league():
     if not ThemeCatalog.THEME_DATA.has(LeagueCatalog.theme_for(selected_league)): return
+    if not league_unlocked(selected_league): return
     theme_preview_requested.emit(LeagueCatalog.theme_for(selected_league))
     open_home()
 

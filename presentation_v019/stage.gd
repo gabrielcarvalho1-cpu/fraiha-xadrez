@@ -149,6 +149,7 @@ func _setup_account():
 
 func _refresh_account_chip():
     if not is_instance_valid(account_chip): return
+    _sync_theme_unlocks()
     var caption = "CONVIDADO · ENTRAR / CRIAR CONTA"
     if account.has_profile():
         if account.after_login == "ranked":
@@ -167,6 +168,23 @@ func _refresh_account_chip():
     account_chip.visible = mode == "home" and not MobileLayout.active(get_viewport())
     if is_instance_valid(hub.mobile_ui) and hub.mobile_ui.current_page == "main" and hub.is_home_visible():
         hub.mobile_ui.show_page("main")
+
+## Temas/peças: libera até a maior liga já alcançada (highest_league) entre os 4 modos Ranked.
+func _sync_theme_unlocks():
+    var index := 0
+    var confirmed := false
+    if account.has_profile():
+        confirmed = true
+        if account.ranked is Dictionary:
+            for m in account.ranked:
+                var s = account.ranked[m]
+                if s is Dictionary: index = maxi(index, int(s.get("highest_league", 0)))
+    elif account.signed_in():
+        confirmed = account.server_ready and account.needs_nickname # conta nova
+    else:
+        confirmed = account.refresh_token.is_empty() and not account.redirect_pending # convidado
+    hub.set_ranked_unlock(index)
+    if is_instance_valid(theme_manager): theme_manager.sync_unlocks(index, confirmed)
 
 func _open_ranked():
     if account.has_profile():

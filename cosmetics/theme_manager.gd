@@ -2,6 +2,7 @@ extends Node
 ## Session-only development previews. This never grants a league or writes PL.
 signal theme_changed(theme_id: String, piece_set_id: String)
 const Catalog = preload("res://cosmetics/theme_catalog.gd")
+const LeagueCatalog = preload("res://league/catalog.gd")
 var stage
 var game
 var hub
@@ -9,6 +10,9 @@ var active_theme := "wood"
 var active_piece_set := "classic"
 var classic_pieces := {}
 var iron_arena: Sprite2D
+# Desbloqueio visual: maior liga já alcançada no Ranked (0 = Madeira). Convidado = 0.
+var unlock_index := 0
+var saved_theme := "wood"
 
 func setup(presentation: Node):
     stage = presentation
@@ -23,20 +27,43 @@ func setup(presentation: Node):
     stage.add_child(iron_arena)
     var config = ConfigFile.new()
     config.load("user://visual_theme.cfg")
-    var initial = String(config.get_value("visual","theme",preload("res://league/catalog.gd").theme_for(hub.league_profile.data.current_league)))
-    apply_theme(initial if Catalog.THEME_DATA.has(initial) else "wood")
+    var initial = String(config.get_value("visual","theme","wood"))
+    saved_theme = initial if Catalog.THEME_DATA.has(initial) else "wood"
+    # Até a conta confirmar os desbloqueios, abre sempre em Madeira (sem apagar a escolha salva).
+    apply_theme(saved_theme if is_unlocked(saved_theme) else "wood", false)
 
-func apply_theme(theme_id: String) -> bool:
+static func league_index_for_theme(theme_id: String) -> int:
+    for i in range(LeagueCatalog.IDS.size()):
+        if LeagueCatalog.theme_for(LeagueCatalog.IDS[i]) == theme_id: return i
+    return LeagueCatalog.IDS.size()
+
+func is_unlocked(theme_id: String) -> bool:
+    if theme_id == "wood" or theme_id == "classic": return true
+    return league_index_for_theme(theme_id) <= unlock_index
+
+## index = maior highest_league entre os 4 modos Ranked; confirmed = estado da conta já conhecido.
+func sync_unlocks(index: int, confirmed: bool):
+    unlock_index = clampi(index, 0, LeagueCatalog.IDS.size() - 1)
+    if is_unlocked(saved_theme):
+        if saved_theme != active_theme: apply_theme(saved_theme)
+    elif confirmed or not is_unlocked(active_theme):
+        apply_theme("wood")
+    if not is_unlocked(active_piece_set): apply_piece_set(active_theme)
+
+func apply_theme(theme_id: String, persist := true) -> bool:
     if not Catalog.THEME_DATA.has(theme_id): return false
+    if not is_unlocked(theme_id): return false
     var data = Catalog.get_theme(theme_id)
     var home_texture = Catalog.texture(data.arena_path if data.get("free_arena",false) else data.home_path)
     var arena_texture = Catalog.texture(data.arena_path)
     # A partial asset import must never replace the working scene with a blank.
     if theme_id != "wood" and (home_texture == null or arena_texture == null): return false
     active_theme = theme_id
-    var config = ConfigFile.new()
-    config.set_value("visual","theme",theme_id)
-    config.save("user://visual_theme.cfg")
+    if persist:
+        saved_theme = theme_id
+        var config = ConfigFile.new()
+        config.set_value("visual","theme",theme_id)
+        config.save("user://visual_theme.cfg")
     if hub.has_method("apply_theme") and home_texture != null:
         hub.apply_theme(home_texture,theme_id)
     game.set_visual_theme(theme_id)
@@ -50,6 +77,7 @@ func apply_theme(theme_id: String) -> bool:
 
 func apply_piece_set(piece_set_id: String) -> bool:
     if piece_set_id != "classic" and not Catalog.THEME_DATA.has(piece_set_id): return false
+    if not is_unlocked(piece_set_id): return false
     var textures = classic_pieces if piece_set_id == "classic" else Catalog.piece_textures(piece_set_id)
     if textures.size() != 12:
         if piece_set_id == active_theme:
