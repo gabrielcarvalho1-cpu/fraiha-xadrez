@@ -28,13 +28,26 @@
 - Auth: e-mail/senha ativo, "Confirm email" ativo, senha mínima 8.
 - Site URL `https://jogar.fraihaxadrez.com`; Redirect URLs: jogo + `127.0.0.1:8129` + `localhost:8129`.
 
+## Staging (29/09/2026)
+- Render `fraiha-xadrez-staging` (Free, branch `dev/web-alpha`): `wss://fraiha-xadrez-staging.onrender.com`.
+  Env: `SUPABASE_URL`, `SUPABASE_ANON_KEY` (publishable), `SUPABASE_SECRET_KEY` (sb_secret_, inserida pelo dono).
+  Atenção: publishable no lugar da secret = "permission denied for table profiles" (papel anon).
+- Validado com e-mail: login, nickname, profiles + 4 ranked_stats, Ranked 3min e 5min, desistência, matches e PL.
+- Cliente nativo contra staging: `_entrega_staging/ABRIR-CLIENTE-STAGING.cmd` (FRAIHA_SERVER_URL, sem mudar arquivos).
+
+## Google Auth (auditoria 29/09/2026): código pronto, sem alteração
+- Botão: `account/account_ui.gd` (CONTINUAR COM GOOGLE) → `account_service.sign_in_google()`.
+- Redirect: `/auth/v1/authorize?provider=google&redirect_to=<site_url>`; `site_url` vazio no online.cfg → na Web usa
+  `location.origin + pathname` (ex.: `http://127.0.0.1:8129/`, coberto pela allowlist).
+- Retorno: `_adopt_redirect_session()` lê `#access_token/refresh_token` (fluxo implícito), limpa a URL, busca
+  `/auth/v1/user`, salva o refresh token (user://) e autentica no servidor (`acct_auth`).
+- Sem profile → servidor responde `needs_nickname` → tela de nome → `acct_create_profile` (mesmo caminho do e-mail).
+- Já cadastrado → `acct_state` com profile → entra direto. `fraiha_after_login` volta para a Ranked.
+- Nativo: mensagem "disponível na versão Web".
+- Para testar: build Web com `server_url` do staging SÓ no pacote de teste, servido em `127.0.0.1:8129`.
+
 ## Pendente
-1. Google OAuth: CONFIGURADO. Projeto Google Cloud `fraiha-xadrez`; tela de consentimento Externa ("FRAIHA Xadrez",
-   status Testando); domínios `fraihaxadrez.com` e `xbdkrrbppbhpufplnsbw.supabase.co` (o Google não aceita `supabase.co`);
-   escopos openid/email/profile; cliente Web "FRAIHA Web (Supabase)" com origens do jogo e localhost:8129 e a callback
-   do Supabase; provedor Google ativo no Supabase. Falta: adicionar Test users (Google Auth Platform > Público) ou
-   publicar o app; teste completo de login pelo jogo (depende do servidor de staging).
-2. Secret key: copiar SOMENTE para o Render de staging (`SUPABASE_URL`, `SUPABASE_SECRET_KEY`).
-3. Staging no Render (precisa de `package.json` + branch no GitHub — aguardando autorização).
-4. SMTP próprio antes do lançamento público.
-5. Remover as Redirect URLs locais antes do lançamento.
+1. Teste real do Google na Web (build de staging local em 127.0.0.1:8129). Test user já cadastrado no Google.
+2. SMTP próprio antes do lançamento público.
+3. Remover as Redirect URLs locais antes do lançamento; publicar o app Google (sair de "Testando").
+4. Produção: só apontar para o backend novo depois de validar o staging.
