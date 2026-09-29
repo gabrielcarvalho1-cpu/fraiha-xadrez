@@ -7,7 +7,7 @@ function fresh(){return{board:initial(),turn:'w',status:'BRANCAS JOGAM',game_ove
 function pseudo(g,x,y){const out=[],p=g.board[key(x,y)];if(!p)return out;const c=p[0],t=p[1],ray=(dx,dy)=>{let a=x+dx,b=y+dy;while(inside(a,b)){const q=g.board[key(a,b)];if(!q)out.push([a,b]);else{if(q[0]!=c)out.push([a,b]);break}a+=dx;b+=dy}};
 if(t==='P'){const dy=c==='w'?-1:1,sy=c==='w'?6:1;if(inside(x,y+dy)&&!g.board[key(x,y+dy)]){out.push([x,y+dy]);if(y===sy&&!g.board[key(x,y+2*dy)])out.push([x,y+2*dy])}for(const dx of[-1,1]){const q=g.board[key(x+dx,y+dy)];if(q&&q[0]!==c)out.push([x+dx,y+dy])}}
 else if(t==='N')for(const[d,e]of[[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]]){const a=x+d,b=y+e,q=g.board[key(a,b)];if(inside(a,b)&&(!q||q[0]!==c))out.push([a,b])}
-else if(t==='K')for(let d=-1;d<=1;d++)for(let e=-1;e<=1;e++)if(d||e){const a=x+d,b=y+e,q=g.board[key(a,b)];if(inside(a,b)&&(!q||q[0]!==c))out.push([a,b])}
+else if(t==='K'){for(let d=-1;d<=1;d++)for(let e=-1;e<=1;e++)if(d||e){const a=x+d,b=y+e,q=g.board[key(a,b)];if(inside(a,b)&&(!q||q[0]!==c))out.push([a,b])}}
 else{let ds=[];if('RQ'.includes(t))ds.push([1,0],[-1,0],[0,1],[0,-1]);if('BQ'.includes(t))ds.push([1,1],[1,-1],[-1,1],[-1,-1]);for(const d of ds)ray(...d)}return out}
 function attacked(g,x,y,by){for(const k in g.board){const [a,b]=k.split(',').map(Number),p=g.board[k];if(p[0]!==by)continue;if(p[1]==='P'){const dy=by==='w'?-1:1;if(b+dy===y&&Math.abs(a-x)===1)return true}else if(p[1]==='K'){if(Math.max(Math.abs(a-x),Math.abs(b-y))===1)return true}else if(pseudo(g,a,b).some(v=>v[0]===x&&v[1]===y))return true}return false}
 function check(g,c){for(const k in g.board)if(g.board[k]===c+'K'){const[x,y]=k.split(',').map(Number);return attacked(g,x,y,c==='w'?'b':'w')}return true}
