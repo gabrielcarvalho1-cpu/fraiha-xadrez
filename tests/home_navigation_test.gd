@@ -68,6 +68,11 @@ func run():
     verify(stage.mode == "home" and world.move_count == 0 and not world.visible, "Home button confirmation clears match and returns Home")
 
     hub.play_online_requested.emit()
+    verify(stage.mode == "casual_lobby" and stage.casual_ui.panel_open() and not world.is_processing_unhandled_input(), "JOGAR ONLINE opens the Casual queue screen")
+    escape()
+    verify(stage.mode == "home" and not stage.casual_ui.panel_open(), "ESC leaves the Casual queue screen")
+    # Internal legacy room flow (not in the public Home) keeps working.
+    stage._open_online()
     verify(stage.mode == "online_menu" and online.menu.visible and not world.is_processing_unhandled_input(), "online action opens create/join menu without board input")
     online.endpoint = "ws://127.0.0.1:1"
     online.connect_room({"type": "create"})
@@ -75,7 +80,7 @@ func run():
     escape()
     verify(stage.mode == "home" and online.socket == null and not online.online_mode and online.retry_after == 0.0, "ESC cancels pending socket and reconnect timer")
 
-    hub.play_online_requested.emit()
+    stage._open_online()
     online.online_mode = true
     online.receive({"type": "error", "message": "Sala inexistente."})
     verify(stage.mode == "online_menu" and online.menu.visible and not world.visible and not world.is_processing_unhandled_input(), "failed join keeps menu usable without exposing board input")
@@ -94,7 +99,7 @@ func run():
     stage.navigation_dialog.confirmed.emit()
     verify(stage.mode == "home" and not online.joined and not online.hud.visible and not world.visible, "confirmed disconnected-room exit returns cleanly to Home")
 
-    hub.play_online_requested.emit()
+    stage._open_online()
     online.online_mode = true
     online.receive({"type": "welcome", "room": "NAV456", "color": "b", "token": "navigation-fixture"})
     online.joined = false

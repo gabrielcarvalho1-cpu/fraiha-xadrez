@@ -48,7 +48,7 @@ func toggle_music():
 
 func refresh_music():
     # Home and its internal pages always use Madeira, regardless of preview art.
-    var theme: String = stage.game.visual_theme if stage.mode in ["local","bot","online"] else "wood"
+    var theme: String = stage.game.visual_theme if stage.mode in ["local","bot","online","casual"] else "wood"
     var path: String = preload("res://cosmetics/theme_catalog.gd").get_theme(theme).music_path
     if path == music_path: return
     var track = load(path) as AudioStreamMP3

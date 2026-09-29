@@ -159,7 +159,7 @@ func run():
     stage.navigation_dialog.confirmed.emit()
     verify(stage.mode == "home" and not bot.active and world.bot == null and not world.visible, "Bot confirmation returns cleanly to Home")
     hub.play_online_requested.emit()
-    verify(stage.mode == "online_menu" and world.bot == null and not bot.active, "Online menu remains available after Bot session")
+    verify(stage.mode == "casual_lobby" and world.bot == null and not bot.active, "Online Casual remains available after Bot session")
     stage.queue_free()
     await process_frame
     print("BOT_INTEGRATION_CHECKS=",checks," FAILURES=",failures)

@@ -1,6 +1,7 @@
 extends Node
-## Adaptador do World para Ranked: mesma interface do controlador do Bot.
-## O cliente só PEDE jogadas; posição, relógio e resultado vêm do servidor.
+## Adaptador do World para partidas online autoritativas (Ranked e Casual):
+## mesma interface do controlador do Bot. O cliente só PEDE jogadas;
+## posição, relógio e resultado vêm do servidor. kind = "ranked" | "casual".
 signal queued(msg: Dictionary)
 signal cancelled
 signal found(msg: Dictionary)
@@ -29,6 +30,7 @@ var state_at := 0
 var promotion_choices: Array = []
 var last_result: Dictionary = {}
 var opponent: Dictionary = {}
+var kind := "ranked"
 
 func setup(service, world):
     account = service
@@ -38,16 +40,16 @@ func setup(service, world):
 func queue(which: String):
     if searching or in_match(): return
     last_result = {}
-    if not account.send_server({"type": "ranked_queue", "mode": which}):
+    if not account.send_server({"type": kind + "_queue", "mode": which}):
         problem.emit("Sem conexão com o servidor. Tente novamente.")
 
 func cancel_queue():
-    account.send_server({"type": "ranked_cancel"})
+    account.send_server({"type": kind + "_cancel"})
     searching = false
     cancelled.emit()
 
 func resign():
-    if in_match(): account.send_server({"type": "ranked_resign", "match_id": match_id})
+    if in_match(): account.send_server({"type": kind + "_resign", "match_id": match_id})
 
 func in_match() -> bool:
     return not match_id.is_empty() and status != "finished"
@@ -112,19 +114,21 @@ func _send_move(move: Dictionary) -> bool:
     pending = true
     game.selected = Vector2i(-1, -1)
     game.legal_moves.clear()
-    return account.send_server({"type": "ranked_move", "match_id": match_id, "from": [move.from.x, move.from.y],
+    return account.send_server({"type": kind + "_move", "match_id": match_id, "from": [move.from.x, move.from.y],
         "to": [move.to.x, move.to.y], "promotion": move.promotion})
 
 # ----- Mensagens do servidor -----
 func _on_message(msg: Dictionary):
     var type = String(msg.get("type", ""))
+    var prefix = kind + "_"
+    if type.begins_with(prefix): type = "match_" + type.substr(prefix.length())
     match type:
-        "ranked_queued":
+        "match_queued":
             searching = true
             queued.emit(msg)
-        "ranked_cancelled":
+        "match_cancelled":
             searching = false
-        "ranked_found":
+        "match_found":
             searching = false
             match_id = String(msg.match_id)
             mode = String(msg.mode)
@@ -133,9 +137,9 @@ func _on_message(msg: Dictionary):
             opponent = msg.get("opponent", {}) if msg.get("opponent") is Dictionary else {}
             status = "starting"
             found.emit(msg)
-        "ranked_state":
+        "match_state":
             if String(msg.get("match_id", "")) == match_id: _apply_state(msg)
-        "ranked_result":
+        "match_result":
             if String(msg.get("match_id", "")) == match_id:
                 status = "finished"
                 last_result = msg
@@ -143,7 +147,7 @@ func _on_message(msg: Dictionary):
                 game.status = {"win": "VITÓRIA", "loss": "DERROTA", "draw": "EMPATE"}.get(String(msg.get("outcome", "")), "FIM DE JOGO")
                 game.queue_redraw()
                 finished.emit(msg)
-        "ranked_error":
+        "match_error":
             pending = false
             if String(msg.get("code", "")) != "move_rejected": problem.emit(String(msg.get("message", "")))
         "link_lost":
@@ -151,7 +155,7 @@ func _on_message(msg: Dictionary):
             if in_match(): problem.emit("Conexão perdida. Reconectando — o relógio oficial continua no servidor.")
             searching = false
         "acct_error":
-            if String(msg.get("code", "")) == "auth_required": problem.emit(String(msg.get("message", "")))
+            if kind == "ranked" and String(msg.get("code", "")) == "auth_required": problem.emit(String(msg.get("message", "")))
 
 func _apply_state(msg: Dictionary):
     pending = false

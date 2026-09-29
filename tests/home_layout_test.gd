@@ -91,7 +91,7 @@ func run():
     hub.back()
     hub.back()
     verify(hub.page == "main", "back from difficulty returns Home")
-    hub.play_online_requested.emit()
+    stage._open_online() # sala por código interna (fora da Home pública)
     var online = stage.get_node("Online")
     online.menu_info.text = "Conectando ao servidor… A hospedagem gratuita pode levar um momento. Aguarde enquanto preparamos uma sala para você e seu amigo."
     for dimensions in [Vector2i(1920,1080),Vector2i(1600,900),Vector2i(1366,768)]:

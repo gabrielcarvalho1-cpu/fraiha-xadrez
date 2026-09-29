@@ -2,16 +2,17 @@
 const crypto = require('crypto');
 const { Position } = require('../chess_rules');
 const { ChessClock } = require('./clock');
-const { MODES, CONFIG } = require('./config');
+const { ALL_MODES, CONFIG } = require('./config');
 const { applyResult } = require('./progression');
 
 const REASONS = { checkmate: 'Xeque-mate', timeout: 'Tempo esgotado', timeout_draw: 'Tempo esgotado sem material para mate',
   resign: 'Desistência', abandon: 'Abandono', stalemate: 'Afogamento', insufficient_material: 'Material insuficiente',
   fifty_moves: 'Regra dos 50 lances', repetition: 'Repetição tripla' };
 
+// Partida autoritativa (Ranked e Casual). rated=false: sem PL, sem liga, sem gravação.
 class RankedMatch {
-  constructor({ mode, white, black, now, cfg = CONFIG }) {
-    this.id = crypto.randomUUID(); this.mode = mode; this.cfg = cfg;
+  constructor({ mode, white, black, now, cfg = CONFIG, rated = true, prefix = 'ranked' }) {
+    this.id = crypto.randomUUID(); this.mode = mode; this.cfg = cfg; this.rated = rated; this.prefix = prefix;
     this.players = { w: white, b: black };               // {userId,nickname,avatar,stats,ws,connected,leftAt}
     this.pos = new Position(); this.clock = new ChessClock(cfg.baseMs(mode));
     this.createdAt = now; this.startsAt = now + cfg.startDelayMs; this.startedAt = null;
@@ -53,6 +54,7 @@ class RankedMatch {
   finish(winner, reason, now) {
     if (this.status === 'finished') return;
     this.clock.stop(now); this.status = 'finished'; this.revision++;
+    if (!this.rated) { this.result = { winner, reason, finishedAt: now }; return; }
     const outcome = c => (winner === 'draw' ? 'draw' : winner === c ? 'win' : 'loss');
     const w = applyResult(this.players.w.stats, this.players.b.stats, outcome('w'));
     const b = applyResult(this.players.b.stats, this.players.w.stats, outcome('b'));
@@ -68,9 +70,13 @@ class RankedMatch {
       white_league_before: W.stats.league, black_league_before: B.stats.league,
       white_league_after: r.w.stats.league, black_league_after: r.b.stats.league, moves: this.pos.history.join(' ') };
   }
-  publicPlayer(c) { const p = this.players[c]; return { nickname: p.nickname, avatar_id: p.avatar, league: p.stats.league, pl: p.stats.pl, connected: p.connected }; }
+  publicPlayer(c) {
+    const p = this.players[c], out = { nickname: p.nickname, avatar_id: p.avatar, connected: p.connected };
+    if (this.rated) { out.league = p.stats.league; out.pl = p.stats.pl; }
+    return out;
+  }
   state(forColor, now) {
-    return { type: 'ranked_state', match_id: this.id, mode: this.mode, mode_name: MODES[this.mode].name, you: forColor,
+    return { type: this.prefix + '_state', match_id: this.id, mode: this.mode, mode_name: ALL_MODES[this.mode].name, you: forColor,
       status: this.status, revision: this.revision, starts_in_ms: Math.max(0, this.startsAt - now),
       white: this.publicPlayer('w'), black: this.publicPlayer('b'), position: this.pos.snapshot(),
       in_check: this.status === 'playing' && this.pos.inCheck(this.pos.turn),
@@ -78,8 +84,14 @@ class RankedMatch {
       clock: this.clock.snapshot(now) };
   }
   resultFor(c, saved) {
-    const r = this.result, mine = r[c], before = this.players[c].stats;
-    return { type: 'ranked_result', match_id: this.id, mode: this.mode, mode_name: MODES[this.mode].name, you: c,
+    const r = this.result;
+    if (!this.rated) {
+      return { type: this.prefix + '_result', match_id: this.id, mode: this.mode, mode_name: ALL_MODES[this.mode].name, you: c,
+        outcome: r.winner === 'draw' ? 'draw' : r.winner === c ? 'win' : 'loss', reason: r.reason, reason_text: REASONS[r.reason] || r.reason,
+        rated: false, pl_change: 0 };
+    }
+    const mine = r[c], before = this.players[c].stats;
+    return { type: 'ranked_result', match_id: this.id, mode: this.mode, mode_name: ALL_MODES[this.mode].name, you: c,
       outcome: r.winner === 'draw' ? 'draw' : r.winner === c ? 'win' : 'loss', reason: r.reason, reason_text: REASONS[r.reason] || r.reason,
       pl_change: mine.applied, league_before: before.league, pl_before: before.pl, league_after: mine.stats.league, pl_after: mine.stats.pl,
       promoted: mine.promoted, stats: mine.stats, saved };

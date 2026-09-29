@@ -8,6 +8,7 @@ signal recovery_started
 signal server_message(msg: Dictionary)
 
 const SESSION_FILE = "user://account_session.cfg"
+const GUEST_FILE = "user://guest_session.cfg"
 var supabase_url := ""
 var public_key := ""
 var site_url := ""
@@ -32,6 +33,11 @@ var socket_open := false
 var retry_in := 0.0
 var ping_in := 12.0
 var refresh_in := -1.0
+# Convidado (Online Casual sem conta): identidade só no servidor, recuperável pelo token.
+var guest_wanted := false
+var guest_ready := false
+var guest_token := ""
+var guest_nickname := ""
 
 func _ready():
     var config = ConfigFile.new()
@@ -45,7 +51,11 @@ func _ready():
     if OS.has_environment("FRAIHA_SUPABASE_KEY"): public_key = OS.get_environment("FRAIHA_SUPABASE_KEY")
     if OS.has_feature("web") and site_url.is_empty():
         site_url = str(JavaScriptBridge.eval("window.location.origin + window.location.pathname"))
-    if not configured(): return
+    var guest = ConfigFile.new()
+    if guest.load(GUEST_FILE) == OK: guest_token = String(guest.get_value("guest", "token", ""))
+    if not configured():
+        if not guest_token.is_empty(): ensure_online.call_deferred()
+        return
     if OS.has_feature("web"):
         after_login = str(JavaScriptBridge.eval("(() => { const v = sessionStorage.getItem('fraiha_after_login') || ''; sessionStorage.removeItem('fraiha_after_login'); return v; })()"))
     if not _adopt_redirect_session():
@@ -53,6 +63,8 @@ func _ready():
         if saved.load(SESSION_FILE) == OK:
             refresh_token = String(saved.get_value("session", "refresh_token", ""))
             if not refresh_token.is_empty(): _refresh_session()
+    # Convidado com partida Casual em andamento: reconecta para retomá-la.
+    if refresh_token.is_empty() and not redirect_pending and not guest_token.is_empty(): ensure_online.call_deferred()
 
 func configured() -> bool:
     return not supabase_url.is_empty() and not public_key.is_empty()
@@ -65,6 +77,28 @@ func has_profile() -> bool:
 
 func nickname() -> String:
     return String(profile.get("nickname", ""))
+
+## Identidade pronta para jogar online (conta com perfil ou convidado confirmado pelo servidor).
+func online_ready() -> bool:
+    return has_profile() or (guest_ready and not signed_in())
+
+func display_name() -> String:
+    return nickname() if has_profile() else guest_nickname
+
+## Garante conexão com o servidor. Sem conta, entra como convidado (apenas Online Casual).
+func ensure_online():
+    if server_url.is_empty():
+        notice.emit("Servidor FRAIHA não configurado.", true)
+        return
+    if signed_in():
+        if socket == null: _connect()
+        return
+    guest_wanted = true
+    if socket_open: _send_guest_auth()
+    elif socket == null: _connect()
+
+func _send_guest_auth():
+    _send({"type": "guest_auth", "token": guest_token})
 
 # ---------- Supabase Auth (REST) ----------
 func _auth_request(method: int, path: String, body: Dictionary, done: Callable, bearer := ""):
@@ -214,6 +248,8 @@ func _clear_session():
     var saved = ConfigFile.new()
     saved.set_value("session", "refresh_token", "")
     saved.save(SESSION_FILE)
+    guest_ready = false
+    if guest_wanted and socket_open: _send_guest_auth.call_deferred()
     changed.emit()
 
 func _adopt_redirect_session() -> bool:
@@ -280,7 +316,7 @@ func _process(delta):
         if refresh_in <= 0.0: _refresh_session()
     if retry_in > 0.0:
         retry_in -= delta
-        if retry_in <= 0.0 and signed_in() and socket == null: _connect()
+        if retry_in <= 0.0 and (signed_in() or guest_wanted) and socket == null: _connect()
         return
     if socket == null: return
     socket.poll()
@@ -289,6 +325,7 @@ func _process(delta):
         if not socket_open:
             socket_open = true
             if signed_in(): _send({"type": "acct_auth", "access_token": access_token})
+            elif guest_wanted: _send_guest_auth()
         while socket.get_available_packet_count() > 0:
             var msg = JSON.parse_string(socket.get_packet().get_string_from_utf8())
             if msg is Dictionary: _receive(msg)
@@ -300,6 +337,7 @@ func _process(delta):
         socket = null
         socket_open = false
         server_ready = false
+        guest_ready = false
         retry_in = 3.0
         server_message.emit({"type": "link_lost"})
         changed.emit()
@@ -325,5 +363,16 @@ func _receive(msg: Dictionary):
         if code == "auth_required": server_message.emit(msg)
     elif type == "acct_logged_out":
         pass
+    elif type == "guest_state":
+        if not bool(msg.get("account", false)):
+            guest_ready = true
+            guest_nickname = String(msg.get("nickname", "Convidado"))
+            var tok = String(msg.get("token", ""))
+            if tok != guest_token:
+                guest_token = tok
+                var file = ConfigFile.new()
+                file.set_value("guest", "token", guest_token)
+                file.save(GUEST_FILE)
+        changed.emit()
     elif type != "pong":
         server_message.emit(msg)

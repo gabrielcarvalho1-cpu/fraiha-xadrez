@@ -1,6 +1,7 @@
 extends CanvasLayer
-## Telas Ranked: modalidades, busca, adversário encontrado, HUD com relógios e resultado.
-## Só exibe o que o servidor informa; não calcula PL nem resultado.
+## Telas de partida online (Ranked e Casual): modalidades, busca, adversário encontrado,
+## HUD com relógios e resultado. Só exibe o que o servidor informa; não calcula PL nem resultado.
+## kind = "ranked" (PL, conta) | "casual" (sem PL, aceita convidado).
 signal back_requested
 signal play_requested
 const Mobile = preload("res://ui_v022/mobile_layout.gd")
@@ -8,6 +9,7 @@ const ClockView = preload("res://ranked/clock_view.gd")
 const Catalog = preload("res://league/catalog.gd")
 const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
 const MODES = [["ranked_3min", "RELÂMPAGO", 3], ["ranked_5min", "RÁPIDA", 5], ["ranked_10min", "NORMAL", 10], ["ranked_20min", "CONVENCIONAL", 20]]
+const CASUAL_MODES = [["casual_3min", "RELÂMPAGO", 3], ["casual_5min", "RÁPIDA", 5], ["casual_10min", "NORMAL", 10], ["casual_20min", "CONVENCIONAL", 20]]
 const LEAGUES = ["Madeira","Ferro","Bronze","Prata","Ouro","Platina","Esmeralda","Diamante","Mestre","Grande Mestre","Challenger"]
 const GOLD = Color("f4ce7f")
 var account
@@ -30,6 +32,13 @@ var bar_target := 0.0
 var last_mode := ""
 var hud_font := 18
 var two_line := false
+var kind := "ranked"
+
+func rated() -> bool:
+    return kind == "ranked"
+
+func mode_list() -> Array:
+    return MODES if rated() else CASUAL_MODES
 
 func setup(service, ranked_controller):
     account = service
@@ -175,17 +184,28 @@ func _show(which: String):
     notice = null
     match which:
         "modes":
-            _label("JOGAR RANQUEADO", 22, GOLD, true)
-            _label("Cada ritmo tem liga, PL e estatísticas próprios. Cores sorteadas pelo servidor.", 15, Color("c4cbbd"), true)
-            if not account.persistent_backend:
-                _label("Servidor em modo de teste: resultados NÃO ficam salvos.", 14, Color("ff9d86"), true)
+            if rated():
+                _label("JOGAR RANQUEADO", 22, GOLD, true)
+                _label("Cada ritmo tem liga, PL e estatísticas próprios. Cores sorteadas pelo servidor.", 15, Color("c4cbbd"), true)
+                if not account.persistent_backend:
+                    _label("Servidor em modo de teste: resultados NÃO ficam salvos.", 14, Color("ff9d86"), true)
+            else:
+                _label("JOGAR ONLINE", 22, GOLD, true)
+                _label("Partida casual contra outro jogador: escolha o ritmo e entre na fila. Não vale PL e não altera o Ranked.", 15, Color("c4cbbd"), true)
+                if account.online_ready():
+                    var who = account.display_name()
+                    _label(("Jogando como %s. Entre na sua conta para usar seu nome." % who) if not account.has_profile() else "Jogando como %s." % who, 14, Color("a9b2a4"), true)
+                else:
+                    _label("Conectando ao servidor…", 15, GOLD, true)
             var grid = GridContainer.new()
             grid.columns = 1 if _narrow() else 2
             grid.add_theme_constant_override("h_separation", 10)
             grid.add_theme_constant_override("v_separation", 10)
             grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
             box.add_child(grid)
-            for item in MODES: _mode_card(grid, item)
+            for item in mode_list():
+                if rated(): _mode_card(grid, item)
+                else: _casual_card(grid, item)
             notice = _label("", 15, Color("ff9d86"), true)
             _button(box, "VOLTAR", func():
                 close_panel()
@@ -193,6 +213,7 @@ func _show(which: String):
         "searching":
             var m = _mode_info(controller_mode_or_last())
             _label("BUSCANDO ADVERSÁRIO…", 22, GOLD, true)
+            if not rated(): _label("CASUAL · SEM PL", 14, Color("a9b2a4"), true)
             _label("%s · %d min" % [m[1], m[2]], 17, Color("efe3c4"), true)
             search_started = Time.get_ticks_msec()
             search_label = _label("0:00", 18, Color("c4cbbd"), true)
@@ -203,14 +224,14 @@ func _show(which: String):
             var opp: Dictionary = controller.opponent
             _label("ADVERSÁRIO ENCONTRADO", 22, GOLD, true)
             _label(String(opp.get("nickname", "")), 24, Color("f4edda"), true)
-            _label(league_line(int(opp.get("league", 0)), int(opp.get("pl", 0))), 16, Color("c4cbbd"), true)
-            _label("%s · Você joga de %s" % [controller.mode_name, "BRANCAS" if controller.human_color == "w" else "PRETAS"], 16, Color("efe3c4"), true)
+            if rated(): _label(league_line(int(opp.get("league", 0)), int(opp.get("pl", 0))), 16, Color("c4cbbd"), true)
+            _label("%s%s · Você joga de %s" % ["" if rated() else "Casual · ", controller.mode_name, "BRANCAS" if controller.human_color == "w" else "PRETAS"], 16, Color("efe3c4"), true)
             found_label = _label("", 16, GOLD, true)
         "result":
             _result(controller.last_result)
         "confirm_resign":
             _label("DESISTIR?", 22, GOLD, true)
-            _label("A desistência conta como DERROTA nesta modalidade e o relógio continua correndo enquanto você decide.", 16, Color("efe3c4"), true)
+            _label("A desistência conta como DERROTA nesta modalidade e o relógio continua correndo enquanto você decide." if rated() else "A desistência encerra a partida como DERROTA (Casual: não altera PL). O relógio continua correndo enquanto você decide.", 16, Color("efe3c4"), true)
             _button(box, "CONTINUAR JOGANDO", close_panel, true)
             _button(box, "DESISTIR", func():
                 close_panel()
@@ -220,12 +241,12 @@ func _show(which: String):
     _layout_panel.call_deferred()
 
 func controller_mode_or_last() -> String:
-    return last_mode if not last_mode.is_empty() else "ranked_5min"
+    return last_mode if not last_mode.is_empty() else mode_list()[1][0]
 
 func _mode_info(id: String) -> Array:
-    for item in MODES:
+    for item in mode_list():
         if item[0] == id: return item
-    return MODES[1]
+    return mode_list()[1]
 
 func _mode_card(grid: GridContainer, item: Array):
     var id: String = item[0]
@@ -281,12 +302,53 @@ func _mode_card(grid: GridContainer, item: Array):
         last_mode = id
         controller.queue(id), true)
 
+func _casual_card(grid: GridContainer, item: Array):
+    var id: String = item[0]
+    var card = PanelContainer.new()
+    card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    var style = StyleBoxFlat.new()
+    style.bg_color = Color("0f1a15")
+    style.border_color = Color("84754b")
+    style.set_border_width_all(1)
+    style.set_corner_radius_all(6)
+    for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 10)
+    card.add_theme_stylebox_override("panel", style)
+    grid.add_child(card)
+    var col = VBoxContainer.new()
+    col.add_theme_constant_override("separation", 6)
+    card.add_child(col)
+    var t = Label.new()
+    t.text = item[1]
+    t.add_theme_font_size_override("font_size", 18)
+    t.add_theme_color_override("font_color", GOLD)
+    col.add_child(t)
+    var mins = Label.new()
+    mins.text = "%d min por jogador · sem PL" % item[2]
+    mins.add_theme_font_size_override("font_size", 14)
+    mins.add_theme_color_override("font_color", Color("c4cbbd"))
+    col.add_child(mins)
+    var b = _button(col, "ENTRAR NA FILA", func():
+        last_mode = id
+        controller.queue(id), true)
+    b.name = "Queue_" + id
+    b.disabled = not account.online_ready()
+
 func _result(r: Dictionary):
     var outcome = String(r.get("outcome", "draw"))
     var title = {"win": "VITÓRIA", "loss": "DERROTA", "draw": "EMPATE"}[outcome]
     var color = {"win": GOLD, "loss": Color("ff9d86"), "draw": Color("dfe6d6")}[outcome]
     _label(title, 30, color, true)
     _label("%s · %s" % [String(r.get("mode_name", "")).to_upper(), String(r.get("reason_text", ""))], 16, Color("efe3c4"), true)
+    if not rated():
+        _label("Partida casual · sem alteração de PL", 16, Color("c4cbbd"), true)
+        _button(box, "JOGAR NOVAMENTE", func():
+            close_panel()
+            play_requested.emit()
+            controller.queue(String(r.mode)), true)
+        _button(box, "VOLTAR", func():
+            play_requested.emit()
+            _show("modes"))
+        return
     var change = int(r.get("pl_change", 0))
     _label(("%+d PL" % change) if change != 0 else "0 PL", 26, color, true)
     var after_league = int(r.get("league_after", 0))
@@ -353,7 +415,8 @@ func _refresh_strips():
         var info = controller.player(pair[1])
         var who = "Você" if pair[1] == me else String(info.get("nickname", "Adversário"))
         if pair[1] != me and not bool(info.get("connected", true)): who += " (reconectando…)"
-        strip.name.text = ("%s\n%s %d" if two_line else "%s · %s %d") % [who, LEAGUES[clampi(int(info.get("league", 0)), 0, 10)], int(info.get("pl", 0))]
+        if rated(): strip.name.text = ("%s\n%s %d" if two_line else "%s · %s %d") % [who, LEAGUES[clampi(int(info.get("league", 0)), 0, 10)], int(info.get("pl", 0))]
+        else: strip.name.text = ("%s\nCasual" if two_line else "%s") % who
         var running = controller.status == "playing" and controller.clock.active == pair[1]
         strip.clock.show_time(controller.clock.remaining_ms(pair[1]), running)
         strip.style.border_color = Color("e5c37c") if running else Color("5d6b58")
