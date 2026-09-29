@@ -817,5 +817,6 @@ func toggle_fullscreen():
         windowed_size = window.size
         windowed_position = window.position
         windowed_mode = window.mode
-        window.mode = Window.MODE_FULLSCREEN
+        # Desktop: tela cheia EXCLUSIVA. A não exclusiva do Windows deixa uma linha de 1 px (cor de fundo) tremendo no topo.
+        window.mode = Window.MODE_EXCLUSIVE_FULLSCREEN
     game.queue_redraw()
