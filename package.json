@@ -1,0 +1,10 @@
+{
+  "name": "fraiha-xadrez-server",
+  "version": "0.31.0",
+  "private": true,
+  "description": "FRAIHA Xadrez WebSocket server (Online Casual + contas + Ranked)",
+  "main": "online_v021/server.js",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node online_v021/server.js" },
+  "dependencies": { "ws": "^8.18.0" }
+}
