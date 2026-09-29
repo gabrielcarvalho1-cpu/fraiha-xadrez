@@ -35,6 +35,12 @@
 - Validado com e-mail: login, nickname, profiles + 4 ranked_stats, Ranked 3min e 5min, desistência, matches e PL.
 - Cliente nativo contra staging: `_entrega_staging/ABRIR-CLIENTE-STAGING.cmd` (FRAIHA_SERVER_URL, sem mudar arquivos).
 
+## Reconexão Ranked (29/09/2026): APROVADA
+- Nativo + Web (3 min): aba Web fechada e reaberta < 60 s voltou à mesma partida (confirmado na tela pelo dono).
+- Banco: 2 partidas ranked_3min novas (06:16 e 06:18), sem sobreposição/duplicata; lances contínuos gravados
+  (`d2d4 e7e6 e2e3 d7d5 c2c3` e `d2d4 e7e6 f2f3 c7c6`); ambas encerradas por `abandon` (desconexão > 60 s ao final).
+- Logs do Render sem erros.
+
 ## Google Auth (auditoria 29/09/2026): código pronto, sem alteração
 - Botão: `account/account_ui.gd` (CONTINUAR COM GOOGLE) → `account_service.sign_in_google()`.
 - Redirect: `/auth/v1/authorize?provider=google&redirect_to=<site_url>`; `site_url` vazio no online.cfg → na Web usa
@@ -49,7 +55,6 @@
   conta existente reconhecida, conta Google nova com nickname, profile + 4 ranked_stats criados.
 
 ## Pendente
-1. Teste de reconexão da Ranked (ainda não feito).
-2. SMTP próprio antes do lançamento público.
-3. Remover as Redirect URLs locais antes do lançamento; publicar o app Google (sair de "Testando").
-4. Produção: só apontar para o backend novo depois de validar o staging.
+1. SMTP próprio antes do lançamento público.
+2. Remover as Redirect URLs locais antes do lançamento; publicar o app Google (sair de "Testando").
+3. Produção: só apontar para o backend novo depois de validar o staging.
