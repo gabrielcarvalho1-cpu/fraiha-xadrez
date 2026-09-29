@@ -32,6 +32,7 @@ var ranked
 var ranked_ui
 var casual
 var casual_ui
+var match_chat
 
 func _enter_tree():
     MobileLayout.configure_window(get_window())
@@ -148,6 +149,16 @@ func _setup_account():
     casual_ui.back_requested.connect(open_home)
     casual_ui.play_requested.connect(_back_to_casual_lobby)
     casual.found.connect(_casual_found)
+    match_chat = preload("res://social/match_chat.gd").new()
+    match_chat.name = "MatchChat"
+    add_child(match_chat)
+    match_chat.setup(account)
+    match_chat.layout_needed.connect(_layout)
+    var toggle: Button = match_chat.toggle_button
+    toggle.custom_minimum_size.y = 44
+    toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    toggle.add_theme_font_size_override("font_size", 15)
+    mobile_actions.add_child(toggle)
     account_ui.closed.connect(_refresh_account_chip)
     account.changed.connect(_refresh_account_chip)
     hub.ranked_requested.connect(_open_ranked)
@@ -244,10 +255,12 @@ func _casual_found(_msg: Dictionary):
     game.show()
     _clear_selection()
     casual_ui.hud.show()
+    match_chat.bind(casual)
     _refresh_input()
     _layout()
 
 func _back_to_casual_lobby():
+    match_chat.unbind()
     casual.detach()
     casual_ui.hud.hide()
     game.hide()
@@ -263,10 +276,12 @@ func _ranked_found(_msg: Dictionary):
     game.show()
     _clear_selection()
     ranked_ui.hud.show()
+    match_chat.bind(ranked)
     _refresh_input()
     _layout()
 
 func _back_to_ranked_lobby():
+    match_chat.unbind()
     ranked.detach()
     ranked_ui.hud.hide()
     game.hide()
@@ -297,8 +312,12 @@ func _build_mobile_controls(overlay: CanvasLayer):
                 game._new_game()
                 game.queue_redraw())
         elif caption == "Música":
+            button.set_meta("full_text", caption)
+            button.set_meta("short_text", "Som")
             button.pressed.connect(func(): get_node("GameAudio").toggle_music())
         else:
+            button.set_meta("full_text", caption)
+            button.set_meta("short_text", "Tela")
             button.pressed.connect(toggle_fullscreen)
     mobile_status = Label.new()
     mobile_status.add_theme_font_size_override("font_size", 20)
@@ -346,6 +365,11 @@ func _process(_delta):
     # Online has its own server-side rematch; a local reset would desync the room.
     mobile_restart.visible = mode != "online" and not (mode == "ranked" and not ranked.in_match()) and not (mode == "casual" and not casual.in_match())
     mobile_restart.text = "Desistir" if mode in ["ranked", "casual"] else "Reiniciar"
+    if match_chat != null:
+        var want_chat = mobile and mode in ["ranked", "casual"] and match_chat.active()
+        if match_chat.toggle_button.visible != want_chat:
+            match_chat.toggle_button.visible = want_chat
+            _layout.call_deferred()
     mobile_status.visible = mobile and mode in ["local", "bot"]
     var short_status = _mobile_status_text()
     if mobile_status.text != short_status: mobile_status.text = short_status
@@ -490,6 +514,7 @@ func open_home():
         ranked.detach()
         ranked_ui.close_panel()
         ranked_ui.hud.hide()
+    if match_chat != null: match_chat.unbind()
     if casual != null:
         if casual.searching: casual.cancel_queue()
         casual.detach()
@@ -640,6 +665,7 @@ func _layout():
         var board_rect = Rect2(game.position + game.ORIGIN * game.scale.x, Vector2.ONE * game.BOARD * game.scale.x)
         for ui in [ranked_ui, casual_ui]:
             if ui != null: ui.layout_hud(board_rect, false, false, get_viewport_rect(), Rect2(), Rect2())
+        if match_chat != null: match_chat.layout(board_rect, false, get_viewport_rect())
 
 # Painted wood board: 600 grid units span ~522 texture pixels (calibrated at 1920x1080).
 const WOOD_ART_BOARD_RATIO := (540.0/445.5) / (1080.0/1024.0)
@@ -730,14 +756,34 @@ func _layout_mobile(board_center: Vector2):
         mobile_actions.vertical = true
         mobile_actions.add_theme_constant_override("separation", 6)
         mobile_actions.position = Vector2(right_x, safe.position.y + 54)
-        mobile_actions.size = Vector2(side_width, 138)
+        var shown = mobile_actions.get_children().filter(func(b): return b.visible).size()
+        mobile_actions.size = Vector2(side_width, maxf(138.0, shown * 46.0))
         home_button.position = Vector2(right_x, safe.end.y - 44)
         home_button.size = Vector2(side_width, 44)
         var left_x = safe.position.x
         for ui in [ranked_ui, casual_ui]:
             if ui != null: ui.layout_hud(Rect2(), true, false, safe, Rect2(left_x, safe.position.y, side_width, 50), Rect2(left_x, safe.end.y - 50, side_width, 50))
+    var crowded = portrait and mobile_actions.get_children().filter(func(b): return b.visible).size() > 3
     for button in mobile_actions.get_children():
         button.custom_minimum_size.y = 44 if portrait else 40
+        # Linha única no retrato: com o botão Chat, todos encolhem por igual sem sair da tela.
+        button.clip_text = crowded
+        button.custom_minimum_size.x = 0
+        button.add_theme_font_size_override("font_size", 13 if crowded else 15)
+        for state in ["normal", "pressed", "hover", "focus"]:
+            var box = button.get_theme_stylebox(state)
+            if box is StyleBoxFlat and button.has_theme_stylebox_override(state):
+                box.content_margin_left = 4 if crowded else 10
+                box.content_margin_right = 4 if crowded else 10
+        if button.has_meta("short_text"): button.text = button.get_meta("short_text") if crowded else button.get_meta("full_text")
+    if portrait:
+        if crowded:
+            home_button.size.x = 76.0
+            mobile_actions.position.x = safe.position.x + 82.0
+        # O tamanho do container foi limitado ao mínimo antigo; reaplica depois de encolher os botões.
+        mobile_actions.reset_size()
+        mobile_actions.size = Vector2(safe.end.x - mobile_actions.position.x, 44.0)
+    if match_chat != null: match_chat.layout(Rect2(), true, safe)
     mobile_promotion.size = Vector2(minf(safe.size.x, maxf(326.0, board_pixels)), 132)
     mobile_promotion.position = game.position + board_center*game.scale.x - mobile_promotion.size/2.0
     navigation_dialog.get_label().autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

@@ -29,6 +29,23 @@ func run():
     check(await wait_until(func(): return stage.casual.status == "playing", 8.0), "partida começou")
     check(stage.casual_ui.hud.visible and not stage.ranked_ui.hud.visible, "HUD Casual visível (e não o do Ranked)")
     var c = stage.casual
+    var chat = stage.match_chat
+    check(chat.active() and chat.panel.visible, "chat da partida visível no desktop")
+    var board = Rect2(stage.game.position + stage.game.ORIGIN * stage.game.scale.x, Vector2.ONE * stage.game.BOARD * stage.game.scale.x)
+    check(not chat.panel.get_global_rect().intersects(board), "chat não cobre o tabuleiro")
+    chat.input.text = "Olá, boa sorte!"
+    chat.input.text_submitted.emit(chat.input.text)
+    check(chat.input.text.is_empty(), "Enter envia e limpa o campo")
+    var lines = func(): return chat.list.get_children().map(func(l): return l.text)
+    check(await wait_until(func(): return lines.call().any(func(t): return t == "Você: Olá, boa sorte!"), 5.0), "minha mensagem aparece no chat")
+    check(await wait_until(func(): return lines.call().any(func(t): return "eco: Olá, boa sorte!" in t), 5.0), "resposta do adversário chega em tempo real")
+    chat.mute_button.pressed.emit()
+    check(not lines.call().any(func(t): return "eco:" in t) and lines.call().any(func(t): return "silenciado" in t), "SILENCIAR esconde as mensagens do adversário")
+    chat.mute_button.pressed.emit()
+    check(lines.call().any(func(t): return "eco:" in t), "REATIVAR mostra de novo")
+    chat.input.text = "x".repeat(250)
+    check(chat.input.text.length() == 200, "campo limita a 200 caracteres")
+    chat.input.text = ""
     check(c.clock.remaining_ms("w") <= 180000 and c.clock.remaining_ms("w") > 170000, "relógio de 3 min")
     var mine = [[Vector2i(4,6),Vector2i(4,4)],[Vector2i(6,7),Vector2i(5,5)]] if c.human_color == "w" else [[Vector2i(4,1),Vector2i(4,3)],[Vector2i(6,0),Vector2i(5,2)]]
     for pair in mine:
@@ -44,6 +61,6 @@ func run():
     check(texts.any(func(t): return "sem alteração de PL" in t), "resultado informa que não altera PL")
     check(not stage.account.guest_token.is_empty(), "token de convidado salvo para reconexão")
     stage.open_home()
-    check(stage.mode == "home" and not stage.casual_ui.hud.visible, "volta à Home")
+    check(stage.mode == "home" and not stage.casual_ui.hud.visible and not stage.match_chat.panel.visible, "volta à Home (chat fechado)")
     print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
     quit(failures)

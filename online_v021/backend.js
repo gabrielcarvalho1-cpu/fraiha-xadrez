@@ -4,6 +4,7 @@
 const crypto = require('crypto');
 const { SupabaseAuth, DevAuth } = require('./accounts/auth');
 const { MemoryStore, SupabaseStore, validateNickname } = require('./accounts/store');
+const { ChatHub } = require('./chat');
 
 const GUEST_TTL_MS = 24 * 3600e3;
 
@@ -26,6 +27,7 @@ class Backend {
     this.ranked = null; // conectado em attachRanked()
     this.casual = null; // conectado em attachCasual()
     this.guests = new Map(); // token -> { id, nickname, seen }
+    this.chat = new ChatHub({ send: (ws, o) => this.send(ws, o) });
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
   attachRanked(ranked) { this.ranked = ranked; ranked.backend = this; }
@@ -84,6 +86,12 @@ class Backend {
         if (!ws.identity) return this.send(ws, { type: 'casual_error', message: 'Conectando ao servidor… tente novamente.', code: 'identity_required' });
         if (ws.guest) ws.guest.seen = Date.now();
         return this.casual ? this.casual.handle(ws, m) : this.send(ws, { type: 'casual_error', message: 'Casual indisponível.' });
+      }
+      if (a.startsWith('chat_')) {
+        const uid = ws.identity && ws.identity.id;
+        if (!uid) return this.send(ws, { type: 'chat_error', message: 'Conectando ao servidor…', code: 'identity_required' });
+        const g = this.games().find(x => x.activeMatchOf(uid)) || this.games().find(x => x.matchOf(uid));
+        return this.chat.handle(ws, m, uid, g ? g.matchOf(uid) : null, g);
       }
       if (a.startsWith('ranked_')) {
         if (!ws.user || !ws.profile) return this.fail(ws, 'Crie uma conta ou entre para jogar partidas ranqueadas.', { code: 'auth_required' });

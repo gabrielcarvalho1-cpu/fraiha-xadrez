@@ -112,6 +112,7 @@ class Ranked {
     const now = this.now();
     this.send(ws, { type: this.p + 'found', match_id: match.id, mode: match.mode, mode_name: ALL_MODES[match.mode].name, you: c, opponent: match.publicPlayer(c === 'w' ? 'b' : 'w'), resumed: true });
     this.pushState(match, now);
+    if (this.backend && this.backend.chat) this.send(ws, this.backend.chat.history(match));
     if (match.status === 'finished' && match.saved !== undefined) this.send(ws, match.resultFor(c, match.saved));
   }
   onClose(ws) {
