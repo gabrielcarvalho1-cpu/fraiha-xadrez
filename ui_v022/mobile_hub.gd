@@ -9,6 +9,8 @@ var scroll: ScrollContainer
 var borrowed: Control
 var borrowed_parent: Node
 var current_page := "main"
+var menu_grid: GridContainer
+var backdrop: ColorRect
 
 func setup(owner_hub):
     hub = owner_hub
@@ -19,10 +21,11 @@ func setup(owner_hub):
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     background.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(background)
+    backdrop = background
     heading = _text(self,"FRAIHA XADREZ",22)
     heading.add_theme_color_override("font_color",Color("efcf83"))
     profile = _button(self,hub.player_name + " · PERFIL",func(): hub.show_page("profile"))
-    back_button = _button(self,"← VOLTAR",hub.back)
+    back_button = _button(self,"VOLTAR",hub.back)
     scroll = ScrollContainer.new()
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     scroll.follow_focus = true
@@ -32,6 +35,22 @@ func layout():
     var area = Mobile.safe_rect(get_viewport())
     position = area.position
     size = area.size
+    # Cover the notch/rounded-corner margins too; only the controls respect the safe area.
+    backdrop.set_anchors_preset(Control.PRESET_TOP_LEFT)
+    backdrop.position = -area.position
+    backdrop.size = get_viewport().get_visible_rect().size
+    var portrait = size.x < 560.0
+    if is_instance_valid(menu_grid): menu_grid.columns = 1 if portrait else 2
+    if portrait:
+        # Title on its own row; profile/back as a full-width touch bar below it.
+        heading.position = Vector2(8,4)
+        heading.size = Vector2(size.x-16,34)
+        for bar in [profile, back_button]:
+            bar.position = Vector2(8,42)
+            bar.size = Vector2(size.x-16,46)
+        scroll.position = Vector2(8,98)
+        scroll.size = Vector2(size.x-16,maxf(60,size.y-102))
+        return
     heading.position = Vector2(8,7)
     heading.size = Vector2(maxf(120,size.x-275),36)
     profile.position = Vector2(size.x-242,0)
@@ -107,6 +126,7 @@ func show_page(id: String):
         match id:
             "main":
                 var grid = _grid(content,2)
+                menu_grid = grid
                 for original in hub.menu_buttons:
                     var source = original
                     var button = _button(grid,source.tooltip_text,func(): source.pressed.emit())

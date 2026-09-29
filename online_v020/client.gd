@@ -231,12 +231,20 @@ func layout_ui():
         menu_box.custom_minimum_size.x=menu_width-36.0
         menu.position=safe.position+Vector2(8,8)
         menu.size=Vector2(menu_width,maxf(80.0,safe.size.y-16.0))
-        # The stage centers a square board; use its left side for touch controls.
-        var hud_width=maxf(170.0,(safe.size.x-(safe.size.y-44.0))/2.0-16.0)
         hud.custom_minimum_size=Vector2.ZERO
-        hud_box.custom_minimum_size.x=hud_width-36.0
-        hud.position=safe.position+Vector2(8,8)
-        hud.size=Vector2(hud_width,maxf(80.0,safe.size.y-16.0))
+        if safe.size.y>safe.size.x:
+            # Portrait: compact strip above the board (the stage reserves 128px).
+            hud_buttons.vertical=false
+            hud_box.custom_minimum_size.x=safe.size.x-24.0
+            hud.position=safe.position
+            hud.size=Vector2(safe.size.x,128.0)
+            return
+        # Landscape: the stage centers a square board; use its left side for touch controls.
+        hud_buttons.vertical=true
+        var hud_width=maxf(170.0,(safe.size.x-safe.size.y*640.0/600.0)/2.0-12.0)
+        hud_box.custom_minimum_size.x=hud_width-24.0
+        hud.position=safe.position
+        hud.size=Vector2(hud_width,safe.size.y)
         return
     var screen=get_viewport().get_visible_rect().size
     var menu_width=minf(850.0,maxf(280.0,screen.x-48.0))

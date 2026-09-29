@@ -19,7 +19,10 @@ var theme_manager: Node
 var player_card: HBoxContainer
 var player_portrait: TextureRect
 var player_caption: Label
-var mobile_actions: VBoxContainer
+var mobile_actions: BoxContainer
+var mobile_restart: Button
+var bot_level_name := "FÁCIL"
+var bot_side_name := "BRANCAS"
 var mobile_status: Label
 var mobile_promotion: PanelContainer
 
@@ -104,16 +107,19 @@ func _build_navigation():
     _build_mobile_controls(overlay)
 
 func _build_mobile_controls(overlay: CanvasLayer):
-    mobile_actions = VBoxContainer.new()
+    mobile_actions = BoxContainer.new()
+    mobile_actions.vertical = true
     mobile_actions.add_theme_constant_override("separation", 8)
     overlay.add_child(mobile_actions)
     for caption in ["Reiniciar", "Música", "Tela cheia"]:
         var button = Button.new()
         button.text = caption
         button.custom_minimum_size.y = 44
-        button.add_theme_font_size_override("font_size", 17)
+        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        button.add_theme_font_size_override("font_size", 15)
         mobile_actions.add_child(button)
         if caption == "Reiniciar":
+            mobile_restart = button
             button.pressed.connect(func():
                 game._new_game()
                 game.queue_redraw())
@@ -164,9 +170,50 @@ func _process(_delta):
     var mobile = MobileLayout.active(get_viewport())
     var playing = mode in ["local", "online", "bot"]
     mobile_actions.visible = mobile and playing
+    # Online has its own server-side rematch; a local reset would desync the room.
+    mobile_restart.visible = mode != "online"
     mobile_status.visible = mobile and mode in ["local", "bot"]
-    mobile_status.text = game.status
+    var short_status = _mobile_status_text()
+    if mobile_status.text != short_status: mobile_status.text = short_status
     mobile_promotion.visible = mobile and playing and game.promotion_pending and (game.online == null or game.promotion_color == game.online.color)
+
+func _mobile_status_text() -> String:
+    var text: String = game.status
+    if text.contains("SUA VEZ"):
+        return ("XEQUE! " if text.begins_with("XEQUE") else "") + "SUA VEZ"
+    if text.contains("PENSANDO"):
+        return "BOT PENSANDO…"
+    return text
+
+func _badge_style(accent: Color) -> StyleBoxFlat:
+    var style = StyleBoxFlat.new()
+    style.bg_color = Color(0.05, 0.08, 0.07, 0.82)
+    style.border_color = accent
+    style.set_border_width_all(1)
+    style.set_corner_radius_all(6)
+    style.content_margin_left = 10
+    style.content_margin_right = 10
+    style.content_margin_top = 4
+    style.content_margin_bottom = 4
+    return style
+
+func _touch_button_style(button: Button):
+    if button.has_meta("touch_style"): return
+    button.set_meta("touch_style", true)
+    var style = _badge_style(Color("84754b"))
+    style.bg_color = Color(0.06, 0.11, 0.09, 0.9)
+    button.add_theme_stylebox_override("normal", style)
+    var active = style.duplicate()
+    active.bg_color = Color("26382b")
+    active.border_color = Color("e5c37c")
+    for state in ["pressed", "hover", "focus"]: button.add_theme_stylebox_override(state, active)
+    button.add_theme_color_override("font_color", Color("efe3c4"))
+
+func _refresh_bot_caption():
+    if MobileLayout.active(get_viewport()):
+        bot_info.text = "BOT · %s" % bot_level_name if mode == "bot" else "PARTIDA LOCAL"
+    else:
+        bot_info.text = "BOT %s  ·  VOCÊ: %s" % [bot_level_name, bot_side_name]
 
 func _clear_selection():
     game.cancel_drag()
@@ -179,9 +226,11 @@ func _refresh_input():
     if audio != null: audio.refresh_music()
     var playing = mode in ["local", "online", "bot"]
     bot_controller.set_paused(not pending_navigation.is_empty())
-    bot_info.visible = mode == "bot"
+    bot_info.visible = mode == "bot" or (mode == "local" and MobileLayout.active(get_viewport()))
+    _refresh_bot_caption()
     game.set_process_unhandled_input(playing and pending_navigation.is_empty())
-    home_button.visible = mode != "home"
+    # On mobile the online menu has its own full-width back button.
+    home_button.visible = mode != "home" and not (mode == "online_menu" and MobileLayout.active(get_viewport()))
     home_button.disabled = not pending_navigation.is_empty()
     refresh_player_card()
 
@@ -190,8 +239,13 @@ func refresh_player_card():
     player_card.visible = mode in ["local","online","bot"]
     player_portrait.texture = hub.avatar_texture()
     hub.attach_league_frame(player_portrait)
-    player_caption.text = hub.player_name + "\n" + ("Pretas" if game.board_flipped() else "Brancas")
-    if mode == "local": player_caption.text = hub.player_name + "\nPartida local"
+    var side = "Pretas" if game.board_flipped() else "Brancas"
+    if MobileLayout.active(get_viewport()):
+        player_caption.text = hub.player_name + "\nVocê: " + side
+        if mode == "local": player_caption.text = hub.player_name + "\nLocal · 2 jogadores"
+    else:
+        player_caption.text = hub.player_name + "\n" + side
+        if mode == "local": player_caption.text = hub.player_name + "\nPartida local"
 
 func _start_local():
     bot_controller.stop()
@@ -220,8 +274,9 @@ func _start_bot(difficulty: String, side: String):
     mode = "bot"
     game.show()
     bot_controller.start(game,difficulty,side)
-    var level_name = {"easy":"FÁCIL","medium":"MÉDIO","hard":"DIFÍCIL","expert":"EXPERT"}.get(difficulty,"FÁCIL")
-    bot_info.text = "BOT %s  ·  VOCÊ: %s" % [level_name, "BRANCAS" if bot_controller.human_color == "w" else "PRETAS"]
+    bot_level_name = {"easy":"FÁCIL","medium":"MÉDIO","hard":"DIFÍCIL","expert":"EXPERT"}.get(difficulty,"FÁCIL")
+    bot_side_name = "BRANCAS" if bot_controller.human_color == "w" else "PRETAS"
+    _refresh_bot_caption()
     _clear_selection()
     _refresh_input()
 
@@ -359,48 +414,125 @@ func _layout():
     var board_center = game.ORIGIN + Vector2.ONE * game.BOARD / 2.0
     game.position = size / 2.0 - board_center * factor
     if mobile:
-        var safe = MobileLayout.safe_rect(get_viewport())
-        var board_pixels = maxf(160.0, minf(safe.size.y - 44.0, safe.size.x - 360.0))
-        factor = board_pixels / game.BOARD
-        game.scale = Vector2.ONE * factor
-        game.position = safe.get_center() - board_center * factor
-        var side_width = (safe.size.x-board_pixels)/2.0-24.0
-        var right_x = safe.get_center().x+board_pixels/2.0+16.0
-        home_button.text = "← Início"
-        home_button.position = Vector2(right_x, safe.end.y-52)
-        home_button.size = Vector2(side_width, 44)
-        player_card.position = Vector2(right_x, safe.position.y+16)
-        player_card.size = Vector2(side_width, 52)
-        player_portrait.custom_minimum_size = Vector2(44,44)
-        player_caption.custom_minimum_size.x = maxf(90, side_width-53)
-        player_caption.add_theme_font_size_override("font_size", 16)
-        mobile_actions.position = Vector2(right_x, safe.position.y+88)
-        mobile_actions.size = Vector2(side_width, 148)
-        mobile_status.position = safe.position+Vector2(12, 112)
-        mobile_status.size = Vector2(side_width, 144)
-        bot_info.position = safe.position+Vector2(12, 16)
-        bot_info.size = Vector2(side_width, 76)
-        bot_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-        bot_info.add_theme_font_size_override("font_size", 17)
-        mobile_promotion.size = Vector2(maxf(326, board_pixels), 132)
-        mobile_promotion.position = safe.get_center()-mobile_promotion.size/2.0
-        navigation_dialog.get_label().autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-        navigation_dialog.get_label().add_theme_font_size_override("font_size", 18)
-        for button in [navigation_dialog.get_ok_button(), navigation_dialog.get_cancel_button()]:
-            button.custom_minimum_size.y = 44
-            button.add_theme_font_size_override("font_size", 17)
+        _layout_mobile(board_center)
+        factor = game.scale.x
     else:
         player_caption.add_theme_font_size_override("font_size", 17)
         bot_info.autowrap_mode = TextServer.AUTOWRAP_OFF
         bot_info.add_theme_font_size_override("font_size", 20)
+        bot_info.remove_theme_stylebox_override("normal")
+        bot_info.vertical_alignment = VERTICAL_ALIGNMENT_TOP
     # The outpaint has its own board center; align its terrain while covering every edge.
     var texture_size = forest.texture.get_size()
     var art_center = texture_size * Vector2(802.0/1672.0, 445.5/941.0)
     var cover = max(max(size.x/2.0/art_center.x, size.x/2.0/(texture_size.x-art_center.x)), max(size.y/2.0/art_center.y, size.y/2.0/(texture_size.y-art_center.y)))
     forest.scale = Vector2.ONE * cover
     forest.position = size/2.0 + (texture_size/2.0-art_center)*cover
+    if mobile:
+        # The wood board is painted in the artwork: keep it glued to the playable grid.
+        var art_scale = maxf(cover, game.scale.x * WOOD_ART_BOARD_RATIO)
+        forest.scale = Vector2.ONE * art_scale
+        forest.position = game.position + board_center*game.scale.x + (texture_size/2.0-art_center)*art_scale
     game.update_presentation(Rect2(-game.position / factor, size / factor))
     if is_instance_valid(theme_manager): theme_manager.layout()
+
+# Painted wood board: 600 grid units span ~522 texture pixels (calibrated at 1920x1080).
+const WOOD_ART_BOARD_RATIO := (540.0/445.5) / (1080.0/1024.0)
+
+func _layout_mobile(board_center: Vector2):
+    var safe = MobileLayout.safe_rect(get_viewport())
+    var portrait = MobileLayout.is_portrait(get_viewport())
+    var online_play = mode == "online"
+    # The playable grid is 600 units; decorative rims extend 20 units per side.
+    var rim = 640.0/600.0
+    var gap = 8.0
+    _refresh_bot_caption()
+    refresh_player_card()
+    for label in [bot_info, mobile_status]:
+        label.autowrap_mode = TextServer.AUTOWRAP_OFF
+        label.clip_text = true
+        label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        label.add_theme_constant_override("outline_size", 3)
+    bot_info.add_theme_font_size_override("font_size", 14)
+    bot_info.add_theme_color_override("font_color", Color("e8dcc0"))
+    bot_info.add_theme_stylebox_override("normal", _badge_style(Color("5d6b58")))
+    mobile_status.add_theme_font_size_override("font_size", 16)
+    mobile_status.add_theme_stylebox_override("normal", _badge_style(Color("e5c37c")))
+    mobile_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    player_portrait.custom_minimum_size = Vector2(40,40)
+    player_caption.add_theme_font_size_override("font_size", 14)
+    player_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
+    player_caption.clip_text = true
+    home_button.text = "INÍCIO"
+    home_button.add_theme_font_size_override("font_size", 15)
+    for button in [home_button] + mobile_actions.get_children():
+        _touch_button_style(button)
+    player_caption.add_theme_stylebox_override("normal", _badge_style(Color("5d6b58")))
+    var board_pixels: float
+    if portrait:
+        # Column: badges, board (full width), player, controls.
+        var top_h = 128.0 if online_play else 34.0
+        var player_h = 48.0
+        var controls_h = 44.0
+        var available = safe.size.y - top_h - player_h - controls_h - gap*4.0
+        var board_total = minf(safe.size.x, available)
+        board_pixels = maxf(160.0, board_total/rim)
+        board_total = board_pixels*rim
+        var column_h = top_h + gap + board_total + gap + player_h
+        var top = safe.position.y + maxf(0.0, (safe.size.y - controls_h - gap - column_h)/2.0)
+        var board_top = top + top_h + gap
+        var board_mid = Vector2(safe.get_center().x, board_top + board_total/2.0)
+        game.scale = Vector2.ONE * (board_pixels/game.BOARD)
+        game.position = board_mid - board_center*game.scale.x
+        var half = (safe.size.x - gap)/2.0
+        bot_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+        bot_info.position = Vector2(safe.position.x, top)
+        bot_info.size = Vector2(half, top_h)
+        mobile_status.position = Vector2(safe.position.x + half + gap, top)
+        mobile_status.size = Vector2(half, top_h)
+        var player_y = board_top + board_total + gap + 4.0
+        player_card.position = Vector2(safe.position.x, player_y)
+        player_card.size = Vector2(safe.size.x, player_h)
+        player_caption.custom_minimum_size.x = maxf(90.0, safe.size.x - 52.0)
+        var controls_y = safe.end.y - controls_h
+        var home_w = maxf(92.0, safe.size.x*0.26)
+        home_button.position = Vector2(safe.position.x, controls_y)
+        home_button.size = Vector2(home_w, controls_h)
+        mobile_actions.vertical = false
+        mobile_actions.add_theme_constant_override("separation", 6)
+        mobile_actions.position = Vector2(safe.position.x + home_w + 6.0, controls_y)
+        mobile_actions.size = Vector2(safe.size.x - home_w - 6.0, controls_h)
+    else:
+        # Row: status column, board (full height), player/controls column.
+        board_pixels = maxf(160.0, minf(safe.size.y, safe.size.x - 300.0)/rim)
+        var board_total = board_pixels*rim
+        game.scale = Vector2.ONE * (board_pixels/game.BOARD)
+        game.position = safe.get_center() - board_center*game.scale.x
+        var side_width = maxf(120.0, (safe.size.x - board_total)/2.0 - 12.0)
+        var right_x = safe.get_center().x + board_total/2.0 + 12.0
+        bot_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        bot_info.position = safe.position
+        bot_info.size = Vector2(side_width, 32)
+        mobile_status.position = safe.position + Vector2(0, 40)
+        mobile_status.size = Vector2(side_width, 36)
+        player_card.position = Vector2(right_x, safe.position.y)
+        player_card.size = Vector2(side_width, 44)
+        player_caption.custom_minimum_size.x = maxf(70.0, side_width - 50.0)
+        mobile_actions.vertical = true
+        mobile_actions.add_theme_constant_override("separation", 6)
+        mobile_actions.position = Vector2(right_x, safe.position.y + 54)
+        mobile_actions.size = Vector2(side_width, 138)
+        home_button.position = Vector2(right_x, safe.end.y - 44)
+        home_button.size = Vector2(side_width, 44)
+    for button in mobile_actions.get_children():
+        button.custom_minimum_size.y = 44 if portrait else 40
+    mobile_promotion.size = Vector2(minf(safe.size.x, maxf(326.0, board_pixels)), 132)
+    mobile_promotion.position = game.position + board_center*game.scale.x - mobile_promotion.size/2.0
+    navigation_dialog.get_label().autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    navigation_dialog.get_label().add_theme_font_size_override("font_size", 17)
+    for button in [navigation_dialog.get_ok_button(), navigation_dialog.get_cancel_button()]:
+        button.custom_minimum_size.y = 44
+        button.add_theme_font_size_override("font_size", 16)
 
 func toggle_fullscreen():
     var window = get_window()

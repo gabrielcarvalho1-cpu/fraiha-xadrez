@@ -1,7 +1,6 @@
 extends CanvasLayer
 ## Mobile coordinates are CSS pixels, so fonts and touch targets retain their size.
 
-var _portrait: ColorRect
 var _window: Window
 var _resize_pending := false
 static var _active_cache := -1
@@ -80,26 +79,15 @@ static func configure_window(window: Window) -> void:
     window.add_child.call_deferred(helper)
 
 func _ready() -> void:
+    # Only keeps the canvas in sync with the browser size. Both orientations are playable.
     process_mode = Node.PROCESS_MODE_ALWAYS
     _window = get_window()
-    _portrait = ColorRect.new()
-    _portrait.color = Color("101b17")
-    _portrait.mouse_filter = Control.MOUSE_FILTER_STOP
-    add_child(_portrait)
-    var instruction = Label.new()
-    instruction.text = "GIRE O CELULAR PARA JOGAR"
-    instruction.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    instruction.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    instruction.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    instruction.add_theme_font_size_override("font_size", 28)
-    instruction.add_theme_color_override("font_color", Color("f4ce7f"))
-    instruction.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    _portrait.add_child(instruction)
-    instruction.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    instruction.offset_left = 24
-    instruction.offset_right = -24
     _window.size_changed.connect(_on_size_changed)
     _on_size_changed()
+
+static func is_portrait(viewport: Viewport) -> bool:
+    var bounds = viewport.get_visible_rect().size
+    return bounds.y > bounds.x
 
 func _on_size_changed() -> void:
     if _window.get_meta("mobile_resize_busy", false):
@@ -116,16 +104,7 @@ func _process(_delta: float) -> void:
     _resize_pending = false
     set_process(false)
     _sync_window(_window)
-    var dimensions = _window.get_visible_rect().size
-    if dimensions.x <= 0 or dimensions.y <= 0:
-        return
-    _portrait.size = dimensions
-    _portrait.visible = dimensions.y > dimensions.x
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_APPLICATION_FOCUS_IN and is_instance_valid(_window):
         _on_size_changed()
-
-func _input(_event: InputEvent) -> void:
-    if is_instance_valid(_portrait) and _portrait.visible:
-        get_viewport().set_input_as_handled()
