@@ -45,9 +45,11 @@
 - Já cadastrado → `acct_state` com profile → entra direto. `fraiha_after_login` volta para a Ranked.
 - Nativo: mensagem "disponível na versão Web".
 - Para testar: build Web com `server_url` do staging SÓ no pacote de teste, servido em `127.0.0.1:8129`.
+- TESTADO E APROVADO (29/09/2026, build local de staging `_entrega_google_web`): login Google na Web, retorno ao jogo,
+  conta existente reconhecida, conta Google nova com nickname, profile + 4 ranked_stats criados.
 
 ## Pendente
-1. Teste real do Google na Web (build de staging local em 127.0.0.1:8129). Test user já cadastrado no Google.
+1. Teste de reconexão da Ranked (ainda não feito).
 2. SMTP próprio antes do lançamento público.
 3. Remover as Redirect URLs locais antes do lançamento; publicar o app Google (sair de "Testando").
 4. Produção: só apontar para o backend novo depois de validar o staging.
