@@ -29,7 +29,11 @@
 - Site URL `https://jogar.fraihaxadrez.com`; Redirect URLs: jogo + `127.0.0.1:8129` + `localhost:8129`.
 
 ## Pendente
-1. Google OAuth: a conta Google precisa de verificação em duas etapas para abrir o Google Cloud.
+1. Google OAuth: CONFIGURADO. Projeto Google Cloud `fraiha-xadrez`; tela de consentimento Externa ("FRAIHA Xadrez",
+   status Testando); domínios `fraihaxadrez.com` e `xbdkrrbppbhpufplnsbw.supabase.co` (o Google não aceita `supabase.co`);
+   escopos openid/email/profile; cliente Web "FRAIHA Web (Supabase)" com origens do jogo e localhost:8129 e a callback
+   do Supabase; provedor Google ativo no Supabase. Falta: adicionar Test users (Google Auth Platform > Público) ou
+   publicar o app; teste completo de login pelo jogo (depende do servidor de staging).
 2. Secret key: copiar SOMENTE para o Render de staging (`SUPABASE_URL`, `SUPABASE_SECRET_KEY`).
 3. Staging no Render (precisa de `package.json` + branch no GitHub — aguardando autorização).
 4. SMTP próprio antes do lançamento público.
