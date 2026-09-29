@@ -61,7 +61,8 @@ class Ranked {
   tick() {
     const now = this.now();
     for (const { mode, a, b } of this.mm.tick(now)) {
-      const flip = Math.random() < 0.5;                     // servidor sorteia as cores
+      // Servidor sorteia as cores. FRAIHA_TEST_FIXED_COLORS=1 (só testes): quem entrou primeiro joga de Brancas.
+      const flip = process.env.FRAIHA_TEST_FIXED_COLORS === '1' ? a.since <= b.since : Math.random() < 0.5;
       const [w, bl] = flip ? [a, b] : [b, a];
       const seat = e => ({ userId: e.userId, nickname: e.nickname, avatar: e.avatar, stats: e.stats, connected: true, leftAt: 0 });
       const match = new RankedMatch({ mode, white: seat(w), black: seat(bl), now, cfg: this.cfg });

@@ -1,7 +1,7 @@
 extends RefCounted
 ## Presentation catalog only. No competitive progression formula lives here.
 const IDS = ["madeira","ferro","bronze","prata","ouro","platina","esmeralda","diamante","mestre","grande_mestre","challenger"]
-const NAMES = ["Madeira","Ferro","Bronze","Prata","Ouro","Platina","Esmeralda","Diamante","Mestre","Grão-Mestre","Challenger"]
+const NAMES = ["Madeira","Ferro","Bronze","Prata","Ouro","Platina","Esmeralda","Diamante","Mestre","Grande Mestre","Challenger"]
 
 static func index_of(id: String) -> int:
     return IDS.find(id)

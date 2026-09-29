@@ -28,6 +28,8 @@ var mobile_promotion: PanelContainer
 var account
 var account_ui
 var account_chip: Button
+var ranked
+var ranked_ui
 
 func _enter_tree():
     MobileLayout.configure_window(get_window())
@@ -119,6 +121,17 @@ func _setup_account():
     add_child(account_ui)
     account_ui.setup(account)
     account_ui.ready_for_ranked.connect(_open_ranked)
+    ranked = preload("res://ranked/ranked_controller.gd").new()
+    ranked.name = "RankedController"
+    add_child(ranked)
+    ranked.setup(account, game)
+    ranked_ui = preload("res://ranked/ranked_ui.gd").new()
+    ranked_ui.name = "RankedUI"
+    add_child(ranked_ui)
+    ranked_ui.setup(account, ranked)
+    ranked_ui.back_requested.connect(open_home)
+    ranked_ui.play_requested.connect(_back_to_ranked_lobby)
+    ranked.found.connect(_ranked_found)
     account_ui.closed.connect(_refresh_account_chip)
     account.changed.connect(_refresh_account_chip)
     hub.ranked_requested.connect(_open_ranked)
@@ -131,7 +144,7 @@ func _setup_account():
     get_node("Navigation").add_child(account_chip)
     _refresh_account_chip()
     # Tela inicial sem sessão: oferece entrar/criar conta (convidado continua possível).
-    if account.configured() and not account.signed_in() and account.refresh_token.is_empty():
+    if account.configured() and not account.signed_in() and account.refresh_token.is_empty() and not account.redirect_pending:
         account_ui.open("login")
 
 func _refresh_account_chip():
@@ -146,6 +159,9 @@ func _refresh_account_chip():
         if is_instance_valid(hub.profile_name): hub.profile_name.text = account.nickname()
     elif account.signed_in():
         caption = "CONTA: conectando…" if not account.needs_nickname else "CONTA: escolher nome"
+        # Primeiro login (inclusive Google): pede o nome público antes de tudo.
+        if account.needs_nickname and account.server_ready and not account_ui.is_open():
+            account_ui.open("nickname")
     hub.account_caption = caption
     account_chip.text = caption
     account_chip.visible = mode == "home" and not MobileLayout.active(get_viewport())
@@ -154,9 +170,34 @@ func _refresh_account_chip():
 
 func _open_ranked():
     if account.has_profile():
-        hub.show_page("ranked")
+        bot_controller.stop()
+        online.cancel_connection()
+        hub.hide_hub()
+        mode = "ranked_lobby"
+        game.hide()
+        _clear_selection()
+        ranked_ui.open_modes()
+        _refresh_input()
         return
     account_ui.open("", "Crie uma conta ou entre para jogar partidas ranqueadas.", true)
+
+func _ranked_found(_msg: Dictionary):
+    bot_controller.stop()
+    hub.hide_hub()
+    mode = "ranked"
+    ranked.attach()
+    game.show()
+    _clear_selection()
+    ranked_ui.hud.show()
+    _refresh_input()
+    _layout()
+
+func _back_to_ranked_lobby():
+    ranked.detach()
+    ranked_ui.hud.hide()
+    game.hide()
+    mode = "ranked_lobby"
+    _refresh_input()
 
 func _build_mobile_controls(overlay: CanvasLayer):
     mobile_actions = BoxContainer.new()
@@ -173,6 +214,9 @@ func _build_mobile_controls(overlay: CanvasLayer):
         if caption == "Reiniciar":
             mobile_restart = button
             button.pressed.connect(func():
+                if mode == "ranked":
+                    ranked_ui._confirm_resign()
+                    return
                 game._new_game()
                 game.queue_redraw())
         elif caption == "Música":
@@ -220,10 +264,11 @@ func _build_mobile_controls(overlay: CanvasLayer):
 func _process(_delta):
     if not is_instance_valid(mobile_status): return
     var mobile = MobileLayout.active(get_viewport())
-    var playing = mode in ["local", "online", "bot"]
+    var playing = mode in ["local", "online", "bot", "ranked"]
     mobile_actions.visible = mobile and playing
     # Online has its own server-side rematch; a local reset would desync the room.
-    mobile_restart.visible = mode != "online"
+    mobile_restart.visible = mode != "online" and not (mode == "ranked" and not ranked.in_match())
+    mobile_restart.text = "Desistir" if mode == "ranked" else "Reiniciar"
     mobile_status.visible = mobile and mode in ["local", "bot"]
     var short_status = _mobile_status_text()
     if mobile_status.text != short_status: mobile_status.text = short_status
@@ -276,8 +321,11 @@ func _clear_selection():
 func _refresh_input():
     var audio = get_node_or_null("GameAudio")
     if audio != null: audio.refresh_music()
-    var playing = mode in ["local", "online", "bot"]
+    var playing = mode in ["local", "online", "bot", "ranked"]
     bot_controller.set_paused(not pending_navigation.is_empty())
+    if ranked != null:
+        ranked.set_paused(not pending_navigation.is_empty())
+        ranked_ui.hud.visible = mode == "ranked"
     bot_info.visible = mode == "bot" or (mode == "local" and MobileLayout.active(get_viewport()))
     _refresh_bot_caption()
     game.set_process_unhandled_input(playing and pending_navigation.is_empty())
@@ -357,6 +405,11 @@ func _connection_failed():
 
 func open_home():
     bot_controller.stop()
+    if ranked != null:
+        if ranked.searching: ranked.cancel_queue()
+        ranked.detach()
+        ranked_ui.close_panel()
+        ranked_ui.hud.hide()
     pending_navigation = ""
     navigation_confirmed = false
     navigation_dialog.hide()
@@ -385,7 +438,7 @@ func request_quit():
 func _request_navigation(destination: String):
     _clear_selection()
     # Returning from an empty board or a pending connection is lossless.
-    var needs_confirmation = destination == "quit" or online.joined or mode in ["online","bot"] or (mode == "local" and game.move_count > 0)
+    var needs_confirmation = destination == "quit" or online.joined or mode in ["online","bot"] or (mode == "local" and game.move_count > 0) or (mode == "ranked" and ranked.in_match())
     pending_navigation = destination
     navigation_confirmed = false
     _refresh_input()
@@ -393,7 +446,10 @@ func _request_navigation(destination: String):
         _confirm_navigation()
         return
     navigation_dialog.ok_button_text = "Confirmar"
-    if mode == "bot":
+    if mode == "ranked" and ranked.in_match():
+        navigation_dialog.dialog_text = "Sair agora conta como DESISTÊNCIA (derrota) nesta modalidade Ranked."
+        navigation_dialog.ok_button_text = "Desistir e sair"
+    elif mode == "bot":
         navigation_dialog.dialog_text = "Deseja abandonar a partida?"
         navigation_dialog.ok_button_text = "Sair para Home" if destination == "home" else "Sair do jogo"
     elif online.joined or mode == "online":
@@ -424,6 +480,7 @@ func _confirm_navigation():
         return
     online.cancel_connection()
     bot_controller.stop()
+    if mode == "ranked" and ranked.in_match(): ranked.resign()
     if pending_navigation == "quit":
         get_tree().quit()
     else:
@@ -490,6 +547,9 @@ func _layout():
         forest.position = game.position + board_center*game.scale.x + (texture_size/2.0-art_center)*art_scale
     game.update_presentation(Rect2(-game.position / factor, size / factor))
     if is_instance_valid(theme_manager): theme_manager.layout()
+    if ranked_ui != null and not mobile:
+        var board_rect = Rect2(game.position + game.ORIGIN * game.scale.x, Vector2.ONE * game.BOARD * game.scale.x)
+        ranked_ui.layout_hud(board_rect, false, false, get_viewport_rect(), Rect2(), Rect2())
 
 # Painted wood board: 600 grid units span ~522 texture pixels (calibrated at 1920x1080).
 const WOOD_ART_BOARD_RATIO := (540.0/445.5) / (1080.0/1024.0)
@@ -526,7 +586,8 @@ func _layout_mobile(board_center: Vector2):
     var board_pixels: float
     if portrait:
         # Column: badges, board (full width), player, controls.
-        var top_h = 128.0 if online_play else 34.0
+        var ranked_play = mode == "ranked"
+        var top_h = 128.0 if online_play else (44.0 if ranked_play else 34.0)
         var player_h = 48.0
         var controls_h = 44.0
         var available = safe.size.y - top_h - player_h - controls_h - gap*4.0
@@ -548,6 +609,9 @@ func _layout_mobile(board_center: Vector2):
         var player_y = board_top + board_total + gap + 4.0
         player_card.position = Vector2(safe.position.x, player_y)
         player_card.size = Vector2(safe.size.x, player_h)
+        if ranked_ui != null:
+            # Adversário acima do tabuleiro, você abaixo (relógios compactos).
+            ranked_ui.layout_hud(Rect2(), true, true, safe, Rect2(safe.position.x, top, safe.size.x, top_h), Rect2(safe.position.x, player_y, safe.size.x, player_h))
         player_caption.custom_minimum_size.x = maxf(90.0, safe.size.x - 52.0)
         var controls_y = safe.end.y - controls_h
         var home_w = maxf(92.0, safe.size.x*0.26)
@@ -579,6 +643,9 @@ func _layout_mobile(board_center: Vector2):
         mobile_actions.size = Vector2(side_width, 138)
         home_button.position = Vector2(right_x, safe.end.y - 44)
         home_button.size = Vector2(side_width, 44)
+        if ranked_ui != null:
+            var left_x = safe.position.x
+            ranked_ui.layout_hud(Rect2(), true, false, safe, Rect2(left_x, safe.position.y, side_width, 50), Rect2(left_x, safe.end.y - 50, side_width, 50))
     for button in mobile_actions.get_children():
         button.custom_minimum_size.y = 44 if portrait else 40
     mobile_promotion.size = Vector2(minf(safe.size.x, maxf(326.0, board_pixels)), 132)

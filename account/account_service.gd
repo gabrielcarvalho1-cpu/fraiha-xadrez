@@ -25,6 +25,7 @@ var persistent_backend := false
 var server_ready := false
 var pending_nickname := ""
 var after_login := ""
+var redirect_pending := false
 var busy := false
 var socket: WebSocketPeer
 var socket_open := false
@@ -229,6 +230,7 @@ func _adopt_redirect_session() -> bool:
     if params.has("error_description"):
         notice.emit.call_deferred("Login não concluído: " + String(params.error_description).replace("+", " "), true)
         return false
+    redirect_pending = true
     _adopt_session.call_deferred({"access_token": params.access_token, "refresh_token": params.get("refresh_token", ""), "expires_in": params.get("expires_in", "3600")})
     if params.get("type", "") == "recovery": recovery_started.emit.call_deferred()
     return true

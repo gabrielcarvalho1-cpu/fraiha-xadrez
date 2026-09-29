@@ -76,6 +76,9 @@ func _on_account_changed():
         hide_ui()
         ready_for_ranked.emit()
         return
+    if account.has_profile() and page in ["login", "signup", "nickname", "waiting"]:
+        close()
+        return
     var natural = _natural_page()
     if page in ["login", "signup", "nickname", "account", "waiting"] and natural != page:
         _show("waiting" if account.signed_in() and not account.server_ready else natural)
@@ -86,6 +89,9 @@ func _on_notice(text: String, is_error: bool):
     if not is_open(): return
     status_label.text = text
     status_label.add_theme_color_override("font_color", Color("ff9d86") if is_error else Color("b9e3a6"))
+
+func _process(_delta):
+    if panel.visible: _layout()
 
 func _layout():
     var mobile = Mobile.active(get_viewport())
@@ -219,4 +225,6 @@ func _show(target: String):
             _button("JOGAR COMO CONVIDADO", close, true)
     status_label = _label("", 15)
     message = ""
+    if not fields.is_empty() and not Mobile.active(get_viewport()):
+        fields.values()[0].grab_focus.call_deferred()
     _layout.call_deferred()

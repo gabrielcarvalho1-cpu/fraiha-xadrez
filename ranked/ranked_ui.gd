@@ -1,0 +1,418 @@
+extends CanvasLayer
+## Telas Ranked: modalidades, busca, adversário encontrado, HUD com relógios e resultado.
+## Só exibe o que o servidor informa; não calcula PL nem resultado.
+signal back_requested
+signal play_requested
+const Mobile = preload("res://ui_v022/mobile_layout.gd")
+const ClockView = preload("res://ranked/clock_view.gd")
+const Catalog = preload("res://league/catalog.gd")
+const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
+const MODES = [["ranked_3min", "RELÂMPAGO", 3], ["ranked_5min", "RÁPIDA", 5], ["ranked_10min", "NORMAL", 10], ["ranked_20min", "CONVENCIONAL", 20]]
+const LEAGUES = ["Madeira","Ferro","Bronze","Prata","Ouro","Platina","Esmeralda","Diamante","Mestre","Grande Mestre","Challenger"]
+const GOLD = Color("f4ce7f")
+var account
+var controller
+var dim: ColorRect
+var panel: PanelContainer
+var box: VBoxContainer
+var scroll: ScrollContainer
+var screen := ""
+var search_started := 0
+var search_label: Label
+var found_label: Label
+var notice: Label
+var hud: Control
+var strips := {}
+var resign_button: Button
+var link_label: Label
+var result_bar: ProgressBar
+var bar_target := 0.0
+var last_mode := ""
+var hud_font := 18
+var two_line := false
+
+func setup(service, ranked_controller):
+    account = service
+    controller = ranked_controller
+    layer = 45
+    hud = Control.new()
+    hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(hud)
+    dim = ColorRect.new()
+    dim.color = Color(0.02, 0.04, 0.03, 0.82)
+    add_child(dim)
+    panel = PanelContainer.new()
+    var style = StyleBoxFlat.new()
+    style.bg_color = Color("#142217f7")
+    style.border_color = Color("#b19758")
+    style.set_border_width_all(2)
+    style.set_corner_radius_all(8)
+    for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 16)
+    panel.add_theme_stylebox_override("panel", style)
+    add_child(panel)
+    scroll = ScrollContainer.new()
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    panel.add_child(scroll)
+    box = VBoxContainer.new()
+    box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    box.add_theme_constant_override("separation", 10)
+    scroll.add_child(box)
+    for side in ["top", "bottom"]: strips[side] = _make_strip()
+    resign_button = Button.new()
+    resign_button.text = "DESISTIR"
+    resign_button.add_theme_font_size_override("font_size", 16)
+    resign_button.pressed.connect(_confirm_resign)
+    hud.add_child(resign_button)
+    link_label = Label.new()
+    link_label.add_theme_font_size_override("font_size", 15)
+    link_label.add_theme_color_override("font_color", Color("ff9d86"))
+    link_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    hud.add_child(link_label)
+    controller.queued.connect(func(_m): _show("searching"))
+    controller.found.connect(func(_m): _show("found"))
+    controller.finished.connect(func(_m): _show("result"))
+    controller.problem.connect(_on_problem)
+    controller.state_changed.connect(func(): if screen == "found" and controller.status == "playing": close_panel())
+    account.changed.connect(func(): if screen == "modes": _show("modes"))
+    get_viewport().size_changed.connect(_layout_panel)
+    close_panel()
+    hud.hide()
+
+func _make_strip() -> Dictionary:
+    var bg = PanelContainer.new()
+    var style = StyleBoxFlat.new()
+    style.bg_color = Color(0.05, 0.08, 0.07, 0.86)
+    style.border_color = Color("5d6b58")
+    style.set_border_width_all(1)
+    style.set_corner_radius_all(6)
+    style.content_margin_left = 8
+    style.content_margin_right = 6
+    bg.add_theme_stylebox_override("panel", style)
+    bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var row = HBoxContainer.new()
+    row.add_theme_constant_override("separation", 8)
+    bg.add_child(row)
+    var name = Label.new()
+    name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    name.clip_text = true
+    name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    name.add_theme_color_override("font_color", Color("efe3c4"))
+    row.add_child(name)
+    var clock = ClockView.new()
+    clock.custom_minimum_size.x = 96
+    row.add_child(clock)
+    hud.add_child(bg)
+    return {"bg": bg, "name": name, "clock": clock, "style": style}
+
+# ---------- Painéis ----------
+func open_modes():
+    _show("modes")
+
+func close_panel():
+    screen = ""
+    dim.hide(); panel.hide()
+
+func panel_open() -> bool:
+    return panel.visible
+
+func _clear():
+    for child in box.get_children():
+        box.remove_child(child)
+        child.queue_free()
+
+func _label(text: String, size := 16, color := Color("e8e0c8"), center := false) -> Label:
+    var l = Label.new()
+    l.text = text
+    l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    l.add_theme_font_size_override("font_size", size)
+    l.add_theme_color_override("font_color", color)
+    if center: l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    box.add_child(l)
+    return l
+
+func _button(parent: Node, text: String, action: Callable, primary := false) -> Button:
+    var b = Button.new()
+    b.text = text
+    b.custom_minimum_size.y = 46
+    b.add_theme_font_size_override("font_size", 16)
+    var style = StyleBoxFlat.new()
+    style.bg_color = Color("2c4a2f") if primary else Color("14221d")
+    style.border_color = GOLD if primary else Color("84754b")
+    style.set_border_width_all(1)
+    style.set_corner_radius_all(6)
+    b.add_theme_stylebox_override("normal", style)
+    var hover = style.duplicate()
+    hover.bg_color = Color("36593a")
+    for state in ["hover", "pressed", "focus"]: b.add_theme_stylebox_override(state, hover)
+    b.add_theme_color_override("font_color", Color("f4edda"))
+    b.pressed.connect(action)
+    parent.add_child(b)
+    return b
+
+func _bar(parent: Node, value: float) -> ProgressBar:
+    var bar = ProgressBar.new()
+    bar.max_value = 100
+    bar.value = value
+    bar.show_percentage = false
+    bar.custom_minimum_size.y = 12
+    var fill = StyleBoxFlat.new()
+    fill.bg_color = GOLD
+    var bg = StyleBoxFlat.new()
+    bg.bg_color = Color("223b33")
+    bg.border_color = Color("708577")
+    bg.set_border_width_all(1)
+    bar.add_theme_stylebox_override("fill", fill)
+    bar.add_theme_stylebox_override("background", bg)
+    parent.add_child(bar)
+    return bar
+
+static func league_line(league: int, pl: int) -> String:
+    return "%s — %d/100 PL" % [LEAGUES[clampi(league, 0, 10)].to_upper(), pl]
+
+func _show(which: String):
+    screen = which
+    _clear()
+    notice = null
+    match which:
+        "modes":
+            _label("JOGAR RANQUEADO", 22, GOLD, true)
+            _label("Cada ritmo tem liga, PL e estatísticas próprios. Cores sorteadas pelo servidor.", 15, Color("c4cbbd"), true)
+            if not account.persistent_backend:
+                _label("Servidor em modo de teste: resultados NÃO ficam salvos.", 14, Color("ff9d86"), true)
+            var grid = GridContainer.new()
+            grid.columns = 1 if _narrow() else 2
+            grid.add_theme_constant_override("h_separation", 10)
+            grid.add_theme_constant_override("v_separation", 10)
+            grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            box.add_child(grid)
+            for item in MODES: _mode_card(grid, item)
+            notice = _label("", 15, Color("ff9d86"), true)
+            _button(box, "VOLTAR", func():
+                close_panel()
+                back_requested.emit())
+        "searching":
+            var m = _mode_info(controller_mode_or_last())
+            _label("BUSCANDO ADVERSÁRIO…", 22, GOLD, true)
+            _label("%s · %d min" % [m[1], m[2]], 17, Color("efe3c4"), true)
+            search_started = Time.get_ticks_msec()
+            search_label = _label("0:00", 18, Color("c4cbbd"), true)
+            _button(box, "CANCELAR", func():
+                controller.cancel_queue()
+                _show("modes"), true)
+        "found":
+            var opp: Dictionary = controller.opponent
+            _label("ADVERSÁRIO ENCONTRADO", 22, GOLD, true)
+            _label(String(opp.get("nickname", "")), 24, Color("f4edda"), true)
+            _label(league_line(int(opp.get("league", 0)), int(opp.get("pl", 0))), 16, Color("c4cbbd"), true)
+            _label("%s · Você joga de %s" % [controller.mode_name, "BRANCAS" if controller.human_color == "w" else "PRETAS"], 16, Color("efe3c4"), true)
+            found_label = _label("", 16, GOLD, true)
+        "result":
+            _result(controller.last_result)
+        "confirm_resign":
+            _label("DESISTIR?", 22, GOLD, true)
+            _label("A desistência conta como DERROTA nesta modalidade e o relógio continua correndo enquanto você decide.", 16, Color("efe3c4"), true)
+            _button(box, "CONTINUAR JOGANDO", close_panel, true)
+            _button(box, "DESISTIR", func():
+                close_panel()
+                controller.resign())
+    dim.show(); panel.show()
+    _layout_panel()
+    _layout_panel.call_deferred()
+
+func controller_mode_or_last() -> String:
+    return last_mode if not last_mode.is_empty() else "ranked_5min"
+
+func _mode_info(id: String) -> Array:
+    for item in MODES:
+        if item[0] == id: return item
+    return MODES[1]
+
+func _mode_card(grid: GridContainer, item: Array):
+    var id: String = item[0]
+    var stats: Dictionary = account.ranked.get(id, {})
+    var card = PanelContainer.new()
+    card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    var style = StyleBoxFlat.new()
+    style.bg_color = Color("0f1a15")
+    style.border_color = Color("84754b")
+    style.set_border_width_all(1)
+    style.set_corner_radius_all(6)
+    for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 10)
+    card.add_theme_stylebox_override("panel", style)
+    grid.add_child(card)
+    var col = VBoxContainer.new()
+    col.add_theme_constant_override("separation", 6)
+    card.add_child(col)
+    var head = HBoxContainer.new()
+    col.add_child(head)
+    var badge = TextureRect.new()
+    badge.texture = ThemeCatalog.badge_texture(Catalog.IDS[clampi(int(stats.get("league", 0)), 0, 10)])
+    badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    badge.custom_minimum_size = Vector2(40, 40)
+    head.add_child(badge)
+    var titles = VBoxContainer.new()
+    titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    head.add_child(titles)
+    var t = Label.new()
+    t.text = item[1]
+    t.add_theme_font_size_override("font_size", 18)
+    t.add_theme_color_override("font_color", GOLD)
+    titles.add_child(t)
+    var mins = Label.new()
+    mins.text = "%d min por jogador" % item[2]
+    mins.add_theme_font_size_override("font_size", 14)
+    mins.add_theme_color_override("font_color", Color("c4cbbd"))
+    titles.add_child(mins)
+    var line = Label.new()
+    line.text = league_line(int(stats.get("league", 0)), int(stats.get("pl", 0)))
+    line.add_theme_font_size_override("font_size", 15)
+    line.add_theme_color_override("font_color", Color("efe3c4"))
+    col.add_child(line)
+    _bar(col, int(stats.get("pl", 0)))
+    var rec = Label.new()
+    var total = int(stats.get("matches", 0))
+    var rate = (100.0 * int(stats.get("wins", 0)) / total) if total > 0 else 0.0
+    rec.text = "%dV · %dD · %dE · %d partidas · %d%%" % [int(stats.get("wins", 0)), int(stats.get("losses", 0)), int(stats.get("draws", 0)), total, roundi(rate)]
+    rec.add_theme_font_size_override("font_size", 13)
+    rec.add_theme_color_override("font_color", Color("a9b2a4"))
+    col.add_child(rec)
+    _button(col, "BUSCAR PARTIDA", func():
+        last_mode = id
+        controller.queue(id), true)
+
+func _result(r: Dictionary):
+    var outcome = String(r.get("outcome", "draw"))
+    var title = {"win": "VITÓRIA", "loss": "DERROTA", "draw": "EMPATE"}[outcome]
+    var color = {"win": GOLD, "loss": Color("ff9d86"), "draw": Color("dfe6d6")}[outcome]
+    _label(title, 30, color, true)
+    _label("%s · %s" % [String(r.get("mode_name", "")).to_upper(), String(r.get("reason_text", ""))], 16, Color("efe3c4"), true)
+    var change = int(r.get("pl_change", 0))
+    _label(("%+d PL" % change) if change != 0 else "0 PL", 26, color, true)
+    var after_league = int(r.get("league_after", 0))
+    var after_pl = int(r.get("pl_after", 0))
+    if bool(r.get("promoted", false)):
+        _label("PROMOVIDO!", 24, GOLD, true)
+        _label("%s\nPROMOVIDO PARA %s" % [String(r.get("mode_name", "")).to_upper(), LEAGUES[after_league].to_upper()], 18, Color("f4edda"), true)
+        _label("de %s para %s" % [LEAGUES[int(r.get("league_before", 0))], LEAGUES[after_league]], 15, Color("c4cbbd"), true)
+        var badge_row = CenterContainer.new()
+        box.add_child(badge_row)
+        var badge = TextureRect.new()
+        badge.texture = ThemeCatalog.badge_texture(Catalog.IDS[after_league])
+        badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        badge.custom_minimum_size = Vector2(88, 88)
+        badge_row.add_child(badge)
+    _label(LEAGUES[after_league].to_upper(), 18, Color("f4edda"), true)
+    _label("%d / 100 PL" % after_pl, 16, Color("c4cbbd"), true)
+    # Barra anima do PL anterior ao atual (reinicia do zero ao promover).
+    var start_value = 0.0 if bool(r.get("promoted", false)) else float(r.get("pl_before", after_pl))
+    result_bar = _bar(box, start_value)
+    bar_target = after_pl
+    if not bool(r.get("saved", true)):
+        _label("Atenção: o servidor não conseguiu salvar este resultado.", 14, Color("ff9d86"), true)
+    if account.ranked is Dictionary and r.has("stats"): account.ranked[String(r.mode)] = r.stats
+    _button(box, "JOGAR NOVAMENTE", func():
+        close_panel()
+        play_requested.emit()
+        controller.queue(String(r.mode)), true)
+    _button(box, "VOLTAR AO RANKED", func():
+        play_requested.emit()
+        _show("modes"))
+
+func _on_problem(text: String):
+    if text.is_empty(): return
+    if controller.in_match(): link_label.text = text
+    elif screen in ["modes", "searching"]:
+        if screen == "searching": _show("modes")
+        if notice != null: notice.text = text
+
+func _confirm_resign():
+    if controller.in_match(): _show("confirm_resign")
+
+func _narrow() -> bool:
+    return get_viewport().get_visible_rect().size.x < 700.0 or (Mobile.active(get_viewport()) and Mobile.is_portrait(get_viewport()))
+
+func _process(_delta):
+    if panel.visible: _layout_panel()
+    if screen == "searching" and is_instance_valid(search_label):
+        var s = (Time.get_ticks_msec() - search_started) / 1000
+        search_label.text = "%d:%02d" % [s / 60, s % 60]
+    if screen == "found" and is_instance_valid(found_label):
+        var left = maxi(0, controller.starts_in_ms - (Time.get_ticks_msec() - controller.state_at))
+        found_label.text = "Começa em %d…" % ceili(left / 1000.0) if left > 0 else ""
+    if is_instance_valid(result_bar) and result_bar.value != bar_target:
+        result_bar.value = move_toward(result_bar.value, bar_target, 40.0 * _delta)
+    if hud.visible: _refresh_strips()
+
+func _refresh_strips():
+    var me = controller.human_color
+    var opp = "b" if me == "w" else "w"
+    for pair in [["top", opp], ["bottom", me]]:
+        var strip = strips[pair[0]]
+        var info = controller.player(pair[1])
+        var who = "Você" if pair[1] == me else String(info.get("nickname", "Adversário"))
+        if pair[1] != me and not bool(info.get("connected", true)): who += " (reconectando…)"
+        strip.name.text = ("%s\n%s %d" if two_line else "%s · %s %d") % [who, LEAGUES[clampi(int(info.get("league", 0)), 0, 10)], int(info.get("pl", 0))]
+        var running = controller.status == "playing" and controller.clock.active == pair[1]
+        strip.clock.show_time(controller.clock.remaining_ms(pair[1]), running)
+        strip.style.border_color = Color("e5c37c") if running else Color("5d6b58")
+    resign_button.visible = controller.in_match() and not Mobile.active(get_viewport())
+    if controller.status == "playing" and account.server_ready: link_label.text = ""
+
+# Posiciona as faixas dos jogadores em volta do tabuleiro (retângulo em pixels de tela).
+func layout_hud(board: Rect2, mobile: bool, portrait: bool, safe: Rect2, top_slot: Rect2, bottom_slot: Rect2):
+    # Desktop usa coordenadas 1920x1080 (escala da janela); mobile usa pixels CSS.
+    two_line = mobile and not portrait
+    hud_font = 16 if mobile else 26
+    for key in strips:
+        strips[key].name.add_theme_font_size_override("font_size", (13 if two_line else hud_font - 2) if mobile else hud_font)
+        strips[key].clock.set_font_size(hud_font + 4 if mobile else 34)
+        strips[key].clock.custom_minimum_size.x = 84 if mobile else 150
+    resign_button.add_theme_font_size_override("font_size", 22)
+    if not resign_button.has_meta("styled"):
+        resign_button.set_meta("styled", true)
+        var st = StyleBoxFlat.new()
+        st.bg_color = Color(0.06, 0.11, 0.09, 0.9)
+        st.border_color = Color("84754b")
+        st.set_border_width_all(1)
+        st.set_corner_radius_all(6)
+        resign_button.add_theme_stylebox_override("normal", st)
+        resign_button.add_theme_color_override("font_color", Color("efe3c4"))
+    if mobile:
+        strips.top.bg.position = top_slot.position
+        strips.top.bg.size = top_slot.size
+        strips.bottom.bg.position = bottom_slot.position
+        strips.bottom.bg.size = bottom_slot.size
+        link_label.position = Vector2(safe.position.x, bottom_slot.end.y + 4)
+        link_label.size = Vector2(safe.size.x, 40)
+        return
+    var width = 460.0
+    var x = board.end.x + 28.0
+    if x + width > safe.end.x - 8.0: x = maxf(safe.position.x + 8.0, board.position.x - width - 28.0)
+    strips.top.bg.position = Vector2(x, board.position.y)
+    strips.top.bg.size = Vector2(width, 66)
+    strips.bottom.bg.position = Vector2(x, board.end.y - 66)
+    strips.bottom.bg.size = Vector2(width, 66)
+    resign_button.position = Vector2(x, board.end.y - 136)
+    resign_button.size = Vector2(220, 56)
+    link_label.position = Vector2(x, board.get_center().y - 30)
+    link_label.size = Vector2(width, 60)
+
+func _layout_panel():
+    if not panel.visible: return
+    var mobile = Mobile.active(get_viewport())
+    var area = Mobile.safe_rect(get_viewport()) if mobile else get_viewport().get_visible_rect()
+    dim.size = get_viewport().get_visible_rect().size
+    var ui_scale = 1.0 if mobile else 1.4
+    panel.scale = Vector2.ONE * ui_scale
+    var max_w = 640.0 if screen == "modes" and not _narrow() else 460.0
+    var width = minf(max_w, (area.size.x - 16.0) / ui_scale)
+    box.custom_minimum_size.x = width - 32.0
+    var wanted = box.get_combined_minimum_size().y + 32.0
+    var height = minf(wanted, (area.size.y - 16.0) / ui_scale)
+    scroll.custom_minimum_size = Vector2(width - 32.0, height - 32.0)
+    panel.custom_minimum_size = Vector2.ZERO
+    panel.reset_size()
+    panel.size = Vector2(width, height)
+    panel.position = area.position + (area.size - panel.size * ui_scale) / 2.0

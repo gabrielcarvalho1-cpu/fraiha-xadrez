@@ -25,7 +25,9 @@ class MemoryStore {
     const now = new Date().toISOString();
     const profile = { user_id: userId, nickname, avatar_id: AVATARS.includes(avatarId) ? avatarId : 'warrior', profile_frame: 'madeira', account_status: 'active', created_at: now, updated_at: now, last_login_at: now };
     this.profiles.set(userId, profile);
-    const s = {}; for (const m of MODES) s[m] = emptyStats(); this.stats.set(userId, s);
+    // FRAIHA_DEV_START_PL: somente testes com armazenamento em memória.
+    const startPl = Number(process.env.FRAIHA_DEV_START_PL || 0);
+    const s = {}; for (const m of MODES) s[m] = { ...emptyStats(), pl: startPl }; this.stats.set(userId, s);
     return { profile };
   }
   async touchLogin(userId) { const p = this.profiles.get(userId); if (p) p.last_login_at = new Date().toISOString(); }
