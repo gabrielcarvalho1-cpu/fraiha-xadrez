@@ -96,8 +96,10 @@ func layout():
     leaves.size = backdrop.size
     var portrait = size.x < 560.0
     var main = current_page == "main"
-    hero.visible = main
-    subtitle.visible = main
+    # Home do celular sem faixa de título: o cartão do jogador e o menu ocupam a tela.
+    hero.visible = false
+    subtitle.visible = false
+    heading.visible = not main
     heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if main else HORIZONTAL_ALIGNMENT_LEFT
     heading.add_theme_font_size_override("font_size", (34 if portrait else 26) if main else 22)
     if main:
@@ -113,8 +115,8 @@ func layout():
         if is_instance_valid(menu_grid): menu_grid.columns = 1 if portrait else 2
         _fit_width(portrait)
         profile.hide()
-        scroll.position = Vector2(8, hero_h + 4)
-        scroll.size = Vector2(size.x - 16, maxf(60, size.y - hero_h - 8))
+        scroll.position = Vector2(8, 4)
+        scroll.size = Vector2(size.x - 16, maxf(60, size.y - 8))
         for row in scroll.find_children("*", "Button", true, false):
             if row is ArtRow or row is ProfileCard: row.fit()
         return
@@ -237,6 +239,9 @@ func show_page(id: String):
         match id:
             "main":
                 # Cartão do jogador recortado da própria arte do PC, com dados vivos por cima.
+                var head_gap = Control.new()
+                head_gap.custom_minimum_size.y = 6
+                content.add_child(head_gap)
                 var card = ProfileCard.new()
                 card.hub = hub
                 card.text = hub.player_name + " · PERFIL"
@@ -260,6 +265,11 @@ func show_page(id: String):
                     row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
                     row.pressed.connect(func(): source.pressed.emit())
                     grid.add_child(row)
+                # Folga no fim para o último botão (SAIR) nunca ficar cortado pela barra do navegador.
+                var tail = Control.new()
+                tail.custom_minimum_size.y = 90
+                tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                content.add_child(tail)
             "profile": _profile(content)
             "ranking": _ranking(content)
             "about": _about(content)
@@ -386,7 +396,7 @@ class ArtRow extends Button:
 
 ## Cartão do jogador (retrato, nome, liga e barra de PL) sobre o painel da arte do PC.
 class ProfileCard extends Button:
-    const REGION := Rect2(1219, 47, 410, 198)
+    const REGION := Rect2(1219, 38, 410, 199)
     var hub
     var art: AtlasTexture
     func _init():
