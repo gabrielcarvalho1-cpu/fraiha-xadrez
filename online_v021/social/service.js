@@ -110,6 +110,7 @@ class Social {
     if (a === 'social_remove') {
       if (relation !== 'friend') return this.fail(ws, 'Vocês não são amigos.', 'not_friends');
       await st.removeFriendship(me, other);
+      if (this.backend.onUnfriended) this.backend.onUnfriended(me, other);
       return done('remove', null);
     }
     if (a === 'social_block') {

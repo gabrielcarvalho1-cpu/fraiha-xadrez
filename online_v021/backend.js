@@ -7,6 +7,7 @@ const { MemoryStore, SupabaseStore, validateNickname } = require('./accounts/sto
 const { ChatHub } = require('./chat');
 const { Social } = require('./social/service');
 const { DirectMessages } = require('./social/dm');
+const { Invites } = require('./social/invites');
 
 const GUEST_TTL_MS = 24 * 3600e3;
 
@@ -33,6 +34,7 @@ class Backend {
     this.online = new Map(); // uid -> Set(ws) (contas e convidados identificados)
     this.social = new Social({ send: (ws, o) => this.send(ws, o), backend: this });
     this.dm = new DirectMessages({ send: (ws, o) => this.send(ws, o), backend: this });
+    this.invites = new Invites({ send: (ws, o) => this.send(ws, o), backend: this });
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
   attachRanked(ranked) { this.ranked = ranked; ranked.backend = this; }
@@ -41,8 +43,20 @@ class Backend {
   fail(ws, message, extra = {}) { this.send(ws, { type: 'acct_error', message, ...extra }); }
   // Usuário já está numa partida ativa ou fila de OUTRO serviço? (nunca duas partidas ao mesmo tempo)
   busyElsewhere(uid, service) {
+    if (this.invites && this.invites.reserved(uid)) return true; // convite sendo aceito: partida prestes a começar
     for (const g of this.games()) if (g !== service && (g.activeMatchOf(uid) || g.mm.has(uid))) return true;
     return false;
+  }
+  // Amizade desfeita/bloqueio (chamados pelo serviço de Amigos): cancela convite pendente entre os dois.
+  onBlocked(a, b) { if (this.invites) this.invites.onRelationChanged(a, b); }
+  onUnfriended(a, b) { if (this.invites) this.invites.onRelationChanged(a, b); }
+  // Entrar em fila (Casual/Ranked) cancela o convite pendente do jogador; durante o aceite, a fila é recusada.
+  beforeQueue(ws, kind) {
+    const uid = ws.identity && ws.identity.id;
+    if (!uid || !this.invites) return true;
+    if (this.invites.reserved(uid)) { this.send(ws, { type: kind + '_error', message: 'Sua partida do convite está começando.', code: 'busy' }); return false; }
+    this.invites.onQueue(uid);
+    return true;
   }
   inMatch(uid) { return this.games().some(g => !!g.activeMatchOf(uid)); }
   presenceChanged(_uid) { /* conectado pelo serviço de presença */ }
@@ -110,6 +124,7 @@ class Backend {
       if (a.startsWith('casual_')) {
         if (!ws.identity) return this.send(ws, { type: 'casual_error', message: 'Conectando ao servidor… tente novamente.', code: 'identity_required' });
         if (ws.guest) ws.guest.seen = Date.now();
+        if (a === 'casual_queue' && !this.beforeQueue(ws, 'casual')) return;
         return this.casual ? this.casual.handle(ws, m) : this.send(ws, { type: 'casual_error', message: 'Casual indisponível.' });
       }
       if (a.startsWith('chat_')) {
@@ -120,9 +135,18 @@ class Backend {
       }
       if (a.startsWith('ranked_')) {
         if (!ws.user || !ws.profile) return this.fail(ws, 'Crie uma conta ou entre para jogar partidas ranqueadas.', { code: 'auth_required' });
+        if (a === 'ranked_queue' && !this.beforeQueue(ws, 'ranked')) return;
         return this.ranked ? this.ranked.handle(ws, m) : this.fail(ws, 'Ranked indisponível.');
       }
       if (this.kind === 'disabled') return this.fail(ws, 'Contas ainda não configuradas no servidor.', { code: 'accounts_disabled' });
+      if (a.startsWith('invite_')) {
+        if (!ws.user || !ws.profile) return this.send(ws, { type: 'invite_error', message: 'Entre ou crie uma conta para convidar amigos.', code: 'auth_required' });
+        try { return await this.invites.handle(ws, m); }
+        catch (e) {
+          console.error('invite', a, e && e.message);
+          return this.send(ws, { type: 'invite_error', message: 'Erro temporário no servidor. Tente novamente.', code: 'server_error' });
+        }
+      }
       if (a.startsWith('dm_')) {
         if (!ws.user || !ws.profile) return this.send(ws, { type: 'dm_error', message: 'Entre ou crie uma conta para conversar com amigos.', code: 'auth_required' });
         try { return await this.dm.handle(ws, m); }
@@ -151,6 +175,7 @@ class Backend {
         if (existing) await this.store.touchLogin(user.id);
         await this.state(ws);
         if (existing) for (const g of this.games()) g.onAuthenticated(ws);
+        if (existing) this.invites.onAuthenticated(ws);
         return;
       }
       if (!ws.user) return this.fail(ws, 'Entre na sua conta primeiro.', { code: 'auth_required' });

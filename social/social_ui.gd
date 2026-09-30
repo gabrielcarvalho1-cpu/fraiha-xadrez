@@ -50,6 +50,10 @@ var dm_scroll: ScrollContainer
 var dm_list: VBoxContainer
 var dm_input: LineEdit
 var dm_to_end := true
+# Convites (Casual entre amigos): escolha do tempo; o cartão do convite fica em invite_ui.gd
+const INVITE_MODES = [["casual_3min", "RELÂMPAGO", 3], ["casual_5min", "RÁPIDA", 5], ["casual_10min", "NORMAL", 10], ["casual_20min", "CONVENCIONAL", 20]]
+var invite_peer: Dictionary = {}
+var invite_sending := false
 
 func setup(service, avatar_callable: Callable = Callable()):
     account = service
@@ -126,6 +130,7 @@ func _back():
         "list": close()
         "confirm": _show(String(confirm.get("return", "profile")))
         "dm": close_dm()
+        "invite_pick": _show("profile")
         "profile": _show("search" if not last_query.is_empty() and profile.get("from_search", false) else "list")
         _: _show("list")
 
@@ -166,6 +171,9 @@ func _on_message(msg: Dictionary):
     var type = String(msg.get("type", ""))
     if type.begins_with("dm_"):
         _on_dm(msg)
+        return
+    if type == "invite_sent" or type == "invite_error":
+        _on_invite(msg)
         return
     if not type.begins_with("social_"): return
     match type:
@@ -385,6 +393,7 @@ func _show(which: String):
         "profile": _build_profile(narrow)
         "confirm": _build_confirm()
         "dm": _build_dm()
+        "invite_pick": _build_invite_pick()
     dim.show(); panel.show()
     _layout()
     _layout.call_deferred()
@@ -494,13 +503,12 @@ func _build_profile(narrow: bool):
             _button(actions, "ACEITAR PEDIDO", func(): _act("accept", uid), true)
             _button(actions, "RECUSAR PEDIDO", func(): _act("decline", uid))
         "friend":
-            # CONVIDAR chega na etapa de convites.
             var peer_info: Dictionary = profile.duplicate()
             var dm = _button(actions, "MENSAGEM", func(): open_dm(uid, peer_info, "profile"), true)
             dm.name = "ProfileMessage"
-            var inv = _button(actions, "CONVIDAR PARA JOGAR (em breve)", func(): pass)
+            var inv_peer: Dictionary = profile.duplicate()
+            var inv = _button(actions, "CONVIDAR PARA JOGAR", func(): open_invite(uid, inv_peer), true)
             inv.name = "ProfileInvite"
-            inv.disabled = true
             _button(actions, "REMOVER AMIGO", func(): _ask("remove", uid, "REMOVER AMIGO?", "%s deixará de ser seu amigo. Vocês podem voltar a se adicionar depois." % nickname))
     if String(profile.get("relation", "")) == "blocked":
         _label(actions, "Você bloqueou este jogador: ele não pode te enviar pedidos.", 14, DIM_TEXT, true)
@@ -765,3 +773,54 @@ func _dm_scroll_end():
     await get_tree().process_frame
     await get_tree().process_frame
     if is_instance_valid(dm_scroll): dm_scroll.scroll_vertical = int(dm_scroll.get_v_scroll_bar().max_value)
+
+# ---------- Convite para partida Casual ----------
+func open_invite(uid: String, peer: Dictionary):
+    invite_peer = {"user_id": uid, "nickname": String(peer.get("nickname", "")), "avatar_id": String(peer.get("avatar_id", "warrior"))}
+    invite_sending = false
+    _show("invite_pick")
+
+func send_invite(mode: String):
+    if invite_sending: return
+    invite_sending = true
+    _show("invite_pick")
+    if not _send({"type": "invite_send", "user_id": String(invite_peer.get("user_id", "")), "mode": mode}):
+        invite_sending = false
+        _show("invite_pick")
+        notice_text("Sem conexão. Tente de novo em instantes.")
+
+func _on_invite(msg: Dictionary):
+    if screen != "invite_pick": return
+    invite_sending = false
+    if String(msg.get("type", "")) == "invite_sent":
+        # O cartão do convite (com CANCELAR e contagem) aparece no topo; volta ao perfil.
+        _show("profile")
+        notice_text("Convite enviado para %s." % String(invite_peer.get("nickname", "")), Color("9fe0a8"))
+    else:
+        _show("invite_pick")
+        notice_text(String(msg.get("message", "Não foi possível convidar.")))
+
+func _build_invite_pick():
+    var head = HBoxContainer.new()
+    head.add_theme_constant_override("separation", 10)
+    box.add_child(head)
+    _avatar(head, String(invite_peer.get("avatar_id", "warrior")), 44)
+    var col = VBoxContainer.new()
+    col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    head.add_child(col)
+    _label(col, "CONVIDAR " + String(invite_peer.get("nickname", "")), 19, Color("f4edda"))
+    _label(col, "Partida Casual · sem PL · o convite vale 60 s", 13, DIM_TEXT)
+    _label(box, "Escolha o tempo:", 15, GOLD)
+    var grid = GridContainer.new()
+    grid.columns = 1 if _narrow() else 2
+    grid.add_theme_constant_override("h_separation", 8)
+    grid.add_theme_constant_override("v_separation", 8)
+    box.add_child(grid)
+    for item in INVITE_MODES:
+        var mode: String = item[0]
+        var b = _button(grid, "%s · %d min" % [item[1], item[2]], func(): send_invite(mode), true)
+        b.name = "Invite_" + mode
+        b.custom_minimum_size.y = 54
+        b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        b.disabled = invite_sending
+    if invite_sending: _label(box, "Enviando convite…", 14, GOLD, true)

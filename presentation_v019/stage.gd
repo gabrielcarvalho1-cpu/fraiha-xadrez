@@ -34,6 +34,7 @@ var casual
 var casual_ui
 var match_chat
 var social_ui
+var invite_ui
 
 func _enter_tree():
     MobileLayout.configure_window(get_window())
@@ -170,6 +171,11 @@ func _setup_account():
     add_child(social_ui)
     social_ui.setup(account, hub.avatar_texture)
     account.changed.connect(func(): if social_ui.is_open() and not account.has_profile() and not account.account_pending(): social_ui.hide_ui())
+    invite_ui = preload("res://social/invite_ui.gd").new()
+    invite_ui.name = "InviteUI"
+    add_child(invite_ui)
+    # Convite nunca aparece por cima de uma partida online em andamento.
+    invite_ui.setup(account, hub.avatar_texture, func(): return mode in ["online", "ranked", "casual"] and ((mode != "ranked" or ranked.in_match()) and (mode != "casual" or casual.in_match())))
     account_chip = Button.new()
     account_chip.name = "AccountChip"
     account_chip.add_theme_font_size_override("font_size", 20)
@@ -255,6 +261,8 @@ func _open_casual():
     _refresh_input()
 
 func _casual_found(_msg: Dictionary):
+    if social_ui != null and social_ui.is_open(): social_ui.hide_ui()   # partida por convite: sai de Amigos
+    if account_ui.is_open(): account_ui.hide_ui()
     bot_controller.stop()
     online.cancel_connection()
     if ranked != null: ranked.detach()
