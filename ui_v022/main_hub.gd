@@ -821,7 +821,12 @@ func _draw_presentation_frame():
         return
     var cover = maxf(full.size.x / DESIGN.x, full.size.y / DESIGN.y) * 1.04
     var cover_rect = Rect2((full.size - DESIGN * cover) / 2.0, DESIGN * cover)
-    presentation_frame.draw_texture_rect(_backdrop_for(tex), cover_rect, false, Color(0.5, 0.52, 0.48))
+    # Sobras da tela (fora da tela cheia): panorama de folhagem em pixel art, levemente escurecido.
+    var foliage: Texture2D = preload("res://ui_v022/assets/home_side_foliage.png")
+    var fs = maxf(full.size.x / foliage.get_width(), full.size.y / foliage.get_height())
+    var fr = Rect2((full.size - foliage.get_size() * fs) / 2.0, foliage.get_size() * fs)
+    presentation_frame.draw_texture_rect(foliage, fr, false, Color(0.62, 0.66, 0.6))
+    if false: presentation_frame.draw_texture_rect(_backdrop_for(tex), cover_rect, false, Color(0.5, 0.52, 0.48))
     # Junto à arte: continuação espelhada e suavizada da própria borda (cores casam na emenda),
     # escurecendo para fora. Sem moldura, sem cinza.
     var soft := _soft_for(tex)
@@ -830,6 +835,7 @@ func _draw_presentation_frame():
     var gaps := [artwork.position.x, full.size.x - artwork.end.x, artwork.position.y, full.size.y - artwork.end.y]
     for side in 4:
         var gap: float = gaps[side]
+        if true: continue   # substituído pelo panorama de folhagem
         if gap < 0.5: continue
         var horizontal := side < 2
         var span := minf(gap, (artwork.size.x if horizontal else artwork.size.y) * 0.35)

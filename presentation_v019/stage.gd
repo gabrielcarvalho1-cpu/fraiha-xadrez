@@ -90,23 +90,14 @@ func _build_backdrop():
     # Onde nada é desenhado aparecia o cinza padrão do Godot. Agora: verde-escuro + folhagem
     # em pixel art recortada da própria arte da floresta, em mosaico espelhado (sem emendas).
     RenderingServer.set_default_clear_color(Color("0b1a10"))
-    var img: Image = preload("res://presentation_v019/forest_wide.png").get_image()
-    if img == null: return
-    if img.is_compressed(): img.decompress()
-    var leaf := img.get_region(Rect2i(1470, 250, 160, 160))
-    var tile := Image.create(320, 320, false, leaf.get_format())
-    for i in 4:
-        var part := leaf.duplicate()
-        if i % 2 == 1: part.flip_x()
-        if i >= 2: part.flip_y()
-        tile.blit_rect(part, Rect2i(0, 0, 160, 160), Vector2i((i % 2) * 160, (i / 2) * 160))
     var layer := CanvasLayer.new()
     layer.name = "LeafBackdrop"
     layer.layer = -5
     add_child(layer)
     var rect := TextureRect.new()
-    rect.texture = ImageTexture.create_from_image(tile)
-    rect.stretch_mode = TextureRect.STRETCH_TILE
+    rect.texture = preload("res://ui_v022/assets/home_side_foliage.png")
+    rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     rect.modulate = Color(0.55, 0.62, 0.55)

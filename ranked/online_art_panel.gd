@@ -4,6 +4,9 @@ extends Control
 ## da ranked_ui (mesmas ações, mesmas regras). Coordenadas em pixels da arte.
 const ART := preload("res://ui_v022/assets/online_panel.png")
 const TITLE_FONT := preload("res://account/fonts/Cinzel-Bold.woff")
+const TAB_ART := preload("res://ui_v022/assets/online_tab.png")
+const ICON_CASUAL := preload("res://ui_v022/assets/online_tab_icon_casual.png")
+const ICON_RANKED := preload("res://ui_v022/assets/online_tab_icon_ranked.png")
 const TAB_L := Rect2(127, 257, 430, 75)
 const TAB_R := Rect2(562, 257, 435, 75)
 const BACK := Rect2(352, 882, 420, 85)
@@ -83,13 +86,25 @@ func _center(font: Font, text: String, cx: float, baseline: float, fs: int, widt
 func _draw():
     var rated: bool = ui.rated()
     draw_texture(ART, Vector2.ZERO)
-    # Aba ativa: a arte já destaca "Casual"; no Ranked, a esquerda escurece e a direita ganha brilho.
-    if rated:
-        draw_rect(TAB_L.grow(-8), Color(0, 0, 0, 0.45))
-        draw_rect(TAB_R.grow(-10), Color(1.0, 0.85, 0.4, 0.13))
-        draw_rect(TAB_R.grow(-10), Color("f1d58a"), false, 2.0)
-    for id in ["tab_l", "tab_r"]:
-        if hover == id and not ((id == "tab_l") != rated): draw_rect((TAB_L if id == "tab_l" else TAB_R).grow(-10), Color(1, 0.9, 0.6, 0.08))
+    # Abas CASUAL e RANQUEADA com o mesmo visual (verde e ouro com louros); hover = mais brilho.
+    var font0 := get_theme_default_font()
+    for pair in [[TAB_L, ICON_CASUAL, "CASUAL", "tab_l"], [TAB_R, ICON_RANKED, "RANQUEADA", "tab_r"]]:
+        var r: Rect2 = pair[0]
+        var slot := Rect2(r.position.x, 255, 433, 79)
+        var lit: bool = hover == pair[3]
+        draw_texture_rect(TAB_ART, slot, false, Color(1.18, 1.14, 1.0) if lit else Color.WHITE)
+        var label: String = pair[2]
+        var fs := 25
+        var lw := font0.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+        var icon: Texture2D = pair[1]
+        var isz := icon.get_size() * 0.82
+        var total := isz.x + 16.0 + lw
+        var x0 := slot.get_center().x - total / 2.0
+        draw_texture_rect(icon, Rect2(Vector2(x0, slot.get_center().y - isz.y / 2.0 - 1), isz), false)
+        var tp := Vector2(x0 + isz.x + 16.0, slot.get_center().y + fs * 0.36)
+        draw_string_outline(font0, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0.1, 0.06, 0.0, 0.8))
+        draw_string(font0, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("ffe6a0") if lit else Color("f6d27a"))
+        draw_string(font0, tp + Vector2(0.7, 0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("ffe6a0") if lit else Color("f6d27a"))
     var font := get_theme_default_font()
     # Título e subtítulo no estandarte.
     var title := "JOGAR RANQUEADO" if rated else "JOGAR ONLINE"

@@ -16,6 +16,8 @@ var hero: TextureRect
 var hero_fade: TextureRect
 var subtitle: Label
 const Art = preload("res://account/login_art.gd")
+const ROW_RECTS = [Rect2(615,338,444,58), Rect2(615,398,444,59), Rect2(568,443,534,103), Rect2(615,534,444,60), Rect2(615,596,444,60), Rect2(615,659,444,61), Rect2(615,723,444,61), Rect2(615,787,444,61)]
+const CARD_ART = preload("res://ui_v022/assets/home_profile_card.png")
 const Widgets = preload("res://account/login_widgets.gd")
 
 func setup(owner_hub):
@@ -256,12 +258,15 @@ func show_page(id: String):
                     var source = hub.menu_buttons[i]
                     var row = ArtRow.new()
                     row.text = hub.title_of(source)
-                    var r = Rect2(source.position, source.size)
-                    if row.text == "JOGAR RANQUEADO": r = Rect2(r.position + Vector2(-14, -9), r.size + Vector2(28, 18))
-                    var atlas = AtlasTexture.new()
-                    atlas.atlas = hub.FOREST
-                    atlas.region = r
-                    row.art = atlas
+                    # Recorte exato de cada botão na arte (bordas douradas inteiras).
+                    var r: Rect2 = ROW_RECTS[i] if i < ROW_RECTS.size() else Rect2(source.position, source.size)
+                    if row.text == "JOGAR RANQUEADO":
+                        row.art = preload("res://ui_v022/assets/home_ranked_row.png")
+                    else:
+                        var atlas = AtlasTexture.new()
+                        atlas.atlas = hub.FOREST
+                        atlas.region = r
+                        row.art = atlas
                     row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
                     row.pressed.connect(func(): source.pressed.emit())
                     grid.add_child(row)
@@ -396,7 +401,7 @@ class ArtRow extends Button:
 
 ## Cartão do jogador (retrato, nome, liga e barra de PL) sobre o painel da arte do PC.
 class ProfileCard extends Button:
-    const REGION := Rect2(1219, 38, 410, 199)
+    const REGION := Rect2(1225, 30, 415, 208)
     var hub
     var art: AtlasTexture
     func _init():
@@ -415,13 +420,10 @@ class ProfileCard extends Button:
         if what == NOTIFICATION_RESIZED: fit.call_deferred()
     func _draw():
         if hub == null: return
-        if art == null:
-            art = AtlasTexture.new()
-            art.atlas = hub.FOREST
-            art.region = REGION
         var k := size.x / REGION.size.x
         var o := REGION.position
-        draw_texture_rect(art, Rect2(Vector2.ZERO, size), false)
+        # Painel recortado com fundo transparente (sem sobras de céu/folhagem nos cantos).
+        draw_texture_rect(CARD_ART, Rect2(Vector2.ZERO, size), false)
         var pr := Rect2((Vector2(1256, 65) - o) * k, Vector2(87, 94) * k)
         var av: Texture2D = hub.avatar_texture()
         if av != null:
