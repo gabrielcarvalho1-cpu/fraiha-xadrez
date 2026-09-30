@@ -83,6 +83,8 @@ func setup(service):
     input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     input.text_submitted.connect(func(_t): send_current())
     row.add_child(input)
+    # Web no celular: campo HTML real sobre o LineEdit para o teclado virtual abrir ao tocar.
+    preload("res://ui_v022/web_text_field.gd").attach(input)
     send_button = _small(row, "ENVIAR", send_current)
     send_button.name = "ChatSend"
     toggle_button = Button.new()
