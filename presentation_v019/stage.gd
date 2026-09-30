@@ -77,6 +77,10 @@ func _ready():
     if hub.has_signal("piece_set_requested"):
         hub.piece_set_requested.connect(theme_manager.apply_piece_set)
     _setup_account()
+    # Vida sutil no cenário (fogo, água, vaga-lumes, pássaros); só apresentação.
+    var ambient = preload("res://presentation_v019/ambient_life.gd").new()
+    ambient.name = "AmbientLife"
+    forest.add_child(ambient)
     _layout()
     open_home()
 
