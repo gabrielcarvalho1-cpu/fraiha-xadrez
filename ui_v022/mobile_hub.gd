@@ -92,6 +92,21 @@ func _button(parent: Node, text: String, action: Callable) -> Button:
     parent.add_child(button)
     return button
 
+## JOGAR RANQUEADO em destaque também no Mobile V2 (moldura dourada e texto dourado).
+func _feature(button: Button):
+    var style: StyleBoxFlat = button.get_theme_stylebox("normal").duplicate()
+    style.bg_color = Color("223a2a")
+    style.border_color = Color("f0cf7a")
+    style.set_border_width_all(2)
+    style.shadow_color = Color(0.96,0.78,0.36,0.3)
+    style.shadow_size = 6
+    button.add_theme_stylebox_override("normal", style)
+    var hi: StyleBoxFlat = style.duplicate()
+    hi.bg_color = Color("2e4a33")
+    for state in ["pressed","hover","focus"]: button.add_theme_stylebox_override(state, hi)
+    button.add_theme_color_override("font_color", Color("ffd98a"))
+    button.add_theme_color_override("font_hover_color", Color("ffe3a3"))
+
 func _grid(parent: Node, columns: int) -> GridContainer:
     var grid = GridContainer.new()
     grid.columns = columns
@@ -133,6 +148,7 @@ func show_page(id: String):
                     var source = original
                     var button = _button(grid,source.tooltip_text,func(): source.pressed.emit())
                     button.custom_minimum_size.y = 54
+                    if source.tooltip_text == "JOGAR RANQUEADO": _feature(button)
             "profile": _profile(content)
             "ranking": _ranking(content)
             "about": _about(content)

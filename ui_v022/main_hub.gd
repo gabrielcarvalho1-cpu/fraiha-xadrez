@@ -12,7 +12,11 @@ signal friends_requested
 
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 12.0
-const FOREST = preload("res://ui_v022/assets/home_forest.png")
+# Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
+const FOREST = preload("res://ui_v022/assets/home_forest_v2.png")
+const FOREST_V2 = FOREST
+# Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
+const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
 const BUTTON_ATLAS = preload("res://ui_v022/assets/menu_atlas.png")
 const AVATAR = preload("res://ui_v022/assets/profile_avatar.png")
 const ROWS = [Rect2(23,53,1116,147), Rect2(23,220,1116,149), Rect2(23,388,1116,153), Rect2(23,560,1116,156), Rect2(23,736,1116,161), Rect2(23,920,1116,165), Rect2(23,1104,1116,161)]
@@ -69,6 +73,10 @@ var volume_label: Label
 var music_volume_label: Label
 var display_label: Label
 var account_caption := "ENTRAR / CRIAR CONTA"
+var account_card: TextureButton
+var account_card_title: Label
+var account_card_subtitle: Label
+var account_card_logged := false
 
 func _ready():
     layer = 30
@@ -125,7 +133,7 @@ func _stack(parent: Node, pos: Vector2, dimensions: Vector2, margins := Vector4(
 
 func _frame(parent: Node, pos: Vector2, dimensions: Vector2) -> NinePatchRect:
     var frame = NinePatchRect.new()
-    frame.texture = _slice(FOREST, Rect2(596, 318, 482, 550))
+    frame.texture = _slice(FOREST_LEGACY, Rect2(596, 318, 482, 550))
     frame.patch_margin_left = 26
     frame.patch_margin_right = 26
     frame.patch_margin_top = 26
@@ -207,7 +215,7 @@ func _build():
     root.add_child(canvas)
     var art = TextureRect.new()
     art.name = "ForestArtwork"
-    art.texture = FOREST
+    art.texture = FOREST_V2
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     art.stretch_mode = TextureRect.STRETCH_SCALE
     art.size = DESIGN
@@ -230,57 +238,219 @@ func _build():
         var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(611,341+i*63), actions[i], Vector2(450,57))
         item.name = "MainAction" + str(i)
         menu_buttons.append(item)
-        if titles[i] == "JOGAR RANQUEADO":
-            var labels = item.find_children("*","Label",true,false)
-            if not labels.is_empty(): labels[0].add_theme_color_override("font_color",GOLD)
+        if titles[i] == "JOGAR RANQUEADO": _feature_ranked(item)
     _build_profile()
     pages_pending = preload("res://ui_v022/mobile_layout.gd").active(get_viewport())
     if not pages_pending: _build_pages()
-    var version_bg = ColorRect.new()
-    version_bg.color = Color("09110de0")
-    version_bg.size = Vector2(266,30)
-    version_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    canvas.add_child(version_bg)
-    _label(_stack(canvas, Vector2(7,4), Vector2(250,24)), "FRAIHA Xadrez V0.30 · TESTE", 16)
-    var signature = _label(_stack(canvas, Vector2(1342,879), Vector2(307,50)), "Versão 0.30 · Ligas\nMaringá · PR · Brasil", 15)
-    signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    signature.add_theme_constant_override("outline_size", 4)
-    signature.add_theme_color_override("font_outline_color", Color("09110dee"))
+    # Versão só no rodapé direito, em moldura discreta (o cabeçalho do topo foi removido).
+    _ornate_panel(canvas, Vector2(1400,864), Vector2(250,62)).name = "VersionPanel"
+    var signature = _label(_stack(canvas, Vector2(1414,872), Vector2(222,46)), "Versão 0.30 · Ligas\nMaringá · PR · Brasil", 14, MUTED)
+    signature.name = "VersionLabel"
+    signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _build_account_card()
+    _build_reference_chrome()
+    _sync_chrome()
     if preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):
         mobile_ui = preload("res://ui_v022/mobile_hub.gd").new()
         root.add_child(mobile_ui)
         mobile_ui.setup(self)
 
 func _build_profile():
-    _frame(canvas, Vector2(1254,24), Vector2(396,178))
-    var profile = _stack(canvas, Vector2(1254,24), Vector2(396,178), Vector4(18,13,18,13), 4)
+    # Moldura própria, desenhada exatamente dentro da borda dourada (sem recorte da arte da floresta).
+    _ornate_panel(canvas, Vector2(1254,24), Vector2(396,178)).name = "ProfilePanel"
+    var profile = _stack(canvas, Vector2(1254,24), Vector2(396,178), Vector4(20,16,20,12), 6)
+    profile.get_parent().name = "ProfileStack"
     profile_button = TextureButton.new()
     profile_button.name = "ProfileButton"
-    profile_button.custom_minimum_size = Vector2(0,106)
+    profile_button.custom_minimum_size = Vector2(0,100)
     profile_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     profile_button.focus_mode = Control.FOCUS_ALL
     profile.add_child(profile_button)
     var portrait = TextureRect.new()
     profile_portrait = portrait
+    portrait.name = "ProfilePortrait"
     portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     portrait.texture = avatar_texture()
-    portrait.position = Vector2(0,2)
-    portrait.size = Vector2(88,88)
+    portrait.position = Vector2(8,8)
+    portrait.size = Vector2(80,80)
     portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
     profile_button.add_child(portrait)
     attach_league_frame(portrait)
-    var words = _stack(profile_button, Vector2(94,0), Vector2(266,106), Vector4.ZERO, 2)
-    profile_name = _label(words, player_name, 20)
+    var words = _stack(profile_button, Vector2(106,4), Vector2(250,92), Vector4.ZERO, 3)
+    profile_name = _label(words, player_name, 21)
+    profile_name.name = "ProfileName"
+    profile_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _single_line(profile_name)
     var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
-    _label(words, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 14, GOLD)
+    _label(words, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 14, GOLD).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _progress(words,league_profile.data.lp,8)
-    _label(words, "Ligas conquistadas no Ranked", 11, MUTED)
+    var caption = _label(words, "Ligas conquistadas no Ranked", 11, MUTED)
+    caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _single_line(caption)
     profile_button.pressed.connect(func(): show_page("profile"))
     profile_button.mouse_entered.connect(func(): profile_name.modulate = GOLD)
     profile_button.mouse_exited.connect(func(): profile_name.modulate = Color.WHITE)
-    var quote = _label(profile, "“O xadrez é a ginástica da inteligência.”\n— Blaise Pascal", 13)
+    var rule = ColorRect.new()
+    rule.color = Color(0.85,0.7,0.37,0.35)
+    rule.custom_minimum_size = Vector2(0,1)
+    rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    profile.add_child(rule)
+    var quote = _label(profile, "“O xadrez é a ginástica da inteligência.” — Blaise Pascal", 12, MUTED)
     quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    desk_profile = {"button": profile_button, "name": profile_name, "portrait": portrait, "stack": profile.get_parent()}
+
+## Moldura ornamental FRAIHA (verde escuro + dourado): borda dupla, cantos e losangos, tudo dentro do retângulo.
+func _ornate_panel(parent: Node, pos: Vector2, dimensions: Vector2, fill := Color(0.043,0.094,0.067,0.95)) -> Control:
+    var panel = Control.new()
+    panel.position = pos
+    panel.size = dimensions
+    panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    panel.draw.connect(func():
+        var r = Rect2(Vector2(4,4), panel.size - Vector2(8,8))
+        panel.draw_rect(r, fill)
+        panel.draw_rect(r, Color("d9b45e"), false, 2.0)
+        panel.draw_rect(r.grow(-5), Color(0.62,0.48,0.22,0.9), false, 1.0)
+        var dia = func(c: Vector2, s: float): panel.draw_colored_polygon(PackedVector2Array([c+Vector2(0,-s),c+Vector2(s,0),c+Vector2(0,s),c+Vector2(-s,0)]), Color("f0cf7a"))
+        for c in [r.position, Vector2(r.end.x,r.position.y), r.end, Vector2(r.position.x,r.end.y)]: dia.call(c, 4.0)
+        dia.call(Vector2(r.get_center().x, r.position.y), 5.0)
+        dia.call(Vector2(r.get_center().x, r.end.y), 5.0)
+    )
+    parent.add_child(panel)
+    return panel
+
+## Cartão da conta (canto inferior esquerdo): convidado ou conta, sempre abre Entrar/Conta.
+func _build_account_card():
+    _ornate_panel(canvas, Vector2(22,856), Vector2(334,70)).name = "AccountPanel"
+    account_card = TextureButton.new()
+    account_card.name = "AccountCard"
+    account_card.ignore_texture_size = true
+    account_card.position = Vector2(26,860)
+    account_card.size = Vector2(326,62)
+    account_card.focus_mode = Control.FOCUS_ALL
+    account_card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    account_card.tooltip_text = "Entrar / criar conta"
+    canvas.add_child(account_card)
+    var icon = Control.new()
+    icon.name = "AccountIcon"
+    icon.position = Vector2(14,9)
+    icon.size = Vector2(44,44)
+    icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    icon.draw.connect(func():
+        var c = icon.size / 2.0
+        icon.draw_circle(c, 21.0, Color("14261c"))
+        if account_card_logged and avatar_texture() != null:
+            icon.draw_texture_rect(avatar_texture(), Rect2(Vector2(3,3), icon.size - Vector2(6,6)), false)
+        else:
+            icon.draw_circle(c + Vector2(0,-6), 7.0, GOLD)
+            icon.draw_colored_polygon(PackedVector2Array([c+Vector2(-12,14),c+Vector2(-9,5),c+Vector2(-4,2),c+Vector2(4,2),c+Vector2(9,5),c+Vector2(12,14)]), GOLD)
+        icon.draw_arc(c, 21.0, 0, TAU, 40, Color("d9b45e"), 2.0)
+    )
+    account_card.add_child(icon)
+    var words = _stack(account_card, Vector2(70,8), Vector2(214,48), Vector4.ZERO, 0)
+    account_card_title = _label(words, "CONVIDADO", 18, GOLD)
+    account_card_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _single_line(account_card_title)
+    account_card_subtitle = _label(words, "ENTRAR / CRIAR CONTA", 13, MUTED)
+    account_card_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    _single_line(account_card_subtitle)
+    var chevron = Control.new()
+    chevron.position = Vector2(292,19)
+    chevron.size = Vector2(20,24)
+    chevron.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    chevron.draw.connect(func(): chevron.draw_polyline(PackedVector2Array([Vector2(5,3),Vector2(15,12),Vector2(5,21)]), GOLD, 3.0))
+    account_card.add_child(chevron)
+    account_card.pressed.connect(func(): account_requested.emit())
+    account_card.mouse_entered.connect(func(): account_card.modulate = Color(1.18,1.18,1.08))
+    account_card.mouse_exited.connect(func(): account_card.modulate = Color.WHITE)
+
+## Chamado pela stage quando a conta muda.
+func set_account_card(title: String, subtitle: String, logged_in: bool):
+    account_card_logged = logged_in
+    if not is_instance_valid(account_card): return
+    account_card_title.text = title
+    account_card_title.add_theme_color_override("font_color", CREAM if logged_in else GOLD)
+    account_card_subtitle.text = subtitle
+    account_card.tooltip_text = "Minha conta" if logged_in else "Entrar / criar conta"
+    account_card.get_node("AccountIcon").queue_redraw()
+    _refresh_ref_account()
+
+## JOGAR RANQUEADO: moldura dourada com brilho, leve tom quente e ramos de louro nas laterais.
+## Mais forte que os demais botões, mas no mesmo sistema visual (verde + dourado).
+func _feature_ranked(button: TextureButton):
+    # Brilho: fica ATRÁS do botão (só aparece em volta); a moldura dourada fica por cima.
+    var glow = Panel.new()
+    glow.name = "RankedGlow"
+    glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var under = StyleBoxFlat.new()
+    under.bg_color = Color("0c1a12")
+    under.set_corner_radius_all(6)
+    under.shadow_color = Color(1.0,0.76,0.28,0.55)
+    under.shadow_size = 16
+    under.set_expand_margin_all(2)
+    glow.add_theme_stylebox_override("panel", under)
+    glow.position = button.position
+    glow.size = button.size
+    button.get_parent().add_child(glow)
+    button.get_parent().move_child(glow, button.get_index())
+    ranked_extras.append(glow)
+    var rim = Panel.new()
+    rim.name = "RankedRim"
+    rim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var st = StyleBoxFlat.new()
+    st.bg_color = Color(1.0,0.82,0.4,0.05)
+    st.border_color = Color("f6d27c")
+    st.set_border_width_all(3)
+    st.set_corner_radius_all(6)
+    st.set_expand_margin_all(3)
+    rim.add_theme_stylebox_override("panel", st)
+    rim.position = button.position
+    rim.size = button.size
+    button.get_parent().add_child(rim)
+    button.get_parent().move_child(rim, button.get_index() + 1)
+    ranked_extras.append(rim)
+    var ornaments = Control.new()
+    ornaments.name = "RankedOrnaments"
+    ornaments.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ornaments.position = button.position - Vector2(26,0)
+    ornaments.size = button.size + Vector2(52,0)
+    ornaments.draw.connect(func():
+        var h = ornaments.size.y / 2.0
+        var gold = Color("f6d27c")
+        var deep = Color("b8903f")
+        for side in [[Vector2(14,h), 1.0], [Vector2(ornaments.size.x-14,h), -1.0]]:
+            var c: Vector2 = side[0]
+            var d: float = side[1]
+            # ramo de louro: caule curvo + folhas, apontando para o botão
+            for k in range(3):
+                var y = 9.0 + k * 7.0
+                for sgn in [-1.0, 1.0]:
+                    var base = c + Vector2(d * (k * 4.0 - 2.0), sgn * y)
+                    var tip = base + Vector2(d * 11.0, sgn * 6.0)
+                    var leaf = gold if k % 2 == 0 else deep
+                    ornaments.draw_colored_polygon(PackedVector2Array([base, tip, base + Vector2(d * 6.0, sgn * -2.5)]), leaf)
+                    ornaments.draw_colored_polygon(PackedVector2Array([base, base + Vector2(d * 4.0, sgn * 5.0), tip]), leaf)
+            ornaments.draw_colored_polygon(PackedVector2Array([c+Vector2(0,-8),c+Vector2(7,0),c+Vector2(0,8),c+Vector2(-7,0)]), gold)
+            ornaments.draw_colored_polygon(PackedVector2Array([c+Vector2(0,-4),c+Vector2(3.5,0),c+Vector2(0,4),c+Vector2(-3.5,0)]), Color("7a5a22"))
+    )
+    button.get_parent().add_child(ornaments)
+    ranked_extras.append(ornaments)
+    var labels = button.find_children("*","Label",true,false)
+    if labels.size() >= 2:
+        labels[0].add_theme_color_override("font_color", Color("ffd98a"))
+        labels[0].add_theme_font_size_override("font_size", 20)
+        labels[0].add_theme_constant_override("outline_size", 3)
+        labels[0].add_theme_color_override("font_outline_color", Color("2a1c06"))
+        labels[1].add_theme_color_override("font_color", Color("efe2b8"))
+
+## Texto de uma linha só: quebra ligada (regra do layout), 1 linha visível e reticências se não couber.
+func _single_line(label: Label):
+    label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    label.max_lines_visible = 1
+    label.clip_text = true
+    label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    # clip_text zera a altura mínima: dentro de containers a linha precisa de altura explícita
+    label.custom_minimum_size.y = ceilf(label.get_theme_font_size("font_size") * 1.6)
 
 func _new_page(id: String, title: String, eyebrow: String) -> VBoxContainer:
     var panel = Control.new()
@@ -444,6 +614,8 @@ func choose_avatar(id: String):
 func _refresh_avatars():
     if is_instance_valid(profile_portrait): profile_portrait.texture = avatar_texture()
     if is_instance_valid(profile_portrait): attach_league_frame(profile_portrait)
+    if ref_mode and not ref_profile.is_empty(): _use_profile(true)
+    _refresh_ref_account()
     for id in avatar_choices:
         attach_league_frame(avatar_choices[id])
         avatar_choices[id].self_modulate = Color.WHITE if id == avatar_id else Color(0.60,0.65,0.63)
@@ -664,6 +836,7 @@ func show_page(id: String):
     page = id
     for key in pages:
         pages[key].visible = key == id
+    _sync_menu_cover()
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
     if is_instance_valid(display_label): _refresh_display_label()
     if id == "ranking": _select_league(selected_league)
@@ -671,8 +844,10 @@ func show_page(id: String):
     if is_instance_valid(mobile_ui): mobile_ui.show_page(id)
 
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
+    if texture == FOREST_LEGACY: texture = FOREST   # temas que usavam a Home da floresta passam a usar a arte oficial
     if texture != null:
         canvas.get_node("ForestArtwork").texture = texture
+        _sync_chrome()
         var logo = canvas.get_node_or_null("ThemeLogo")
         var needs_logo = ThemeCatalog.get_theme(theme_id).get("free_arena",false)
         if logo == null and needs_logo:
@@ -760,6 +935,7 @@ func _build_ranked():
     play.disabled = true
     _highlight(play,false)
 func attach_league_frame(portrait: Control):
+    if portrait.has_meta("no_league_frame"): return   # retrato da Home oficial: a moldura já está na arte
     var border = portrait.get_node_or_null("LeagueFrame")
     if border == null:
         border = preload("res://profile/league_frame.gd").new()
@@ -767,3 +943,214 @@ func attach_league_frame(portrait: Control):
         portrait.add_child(border)
     border.league_id = league_profile.data.current_league
     border.queue_redraw()
+
+# ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
+# Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo
+# (retrato, nickname, liga/PL, barra, insígnia, texto da conta) e as áreas de clique.
+const REF_MENU_RECT = Rect2(614,336,446,516)
+var ref_nodes: Array = []
+var ref_mode := false
+var desk_profile := {}
+var ref_profile := {}
+var ref_account_avatar: TextureRect
+var ref_badge: TextureRect
+var ref_badge_plate: Panel
+var ref_menu_cover: Panel
+var ref_hovers := {}
+var ranked_extras: Array = []
+
+func _is_ref_art(texture: Texture2D) -> bool:
+    return texture == FOREST_V2
+
+func _build_reference_chrome():
+    # Perfil
+    var pbtn = TextureButton.new()
+    pbtn.name = "RefProfileButton"
+    pbtn.ignore_texture_size = true
+    pbtn.position = Vector2(1240,40)
+    pbtn.size = Vector2(390,130)
+    pbtn.focus_mode = Control.FOCUS_ALL
+    pbtn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    pbtn.tooltip_text = "Perfil"
+    canvas.add_child(pbtn)
+    ref_nodes.append(pbtn)
+    var clip = Control.new()
+    clip.name = "RefPortraitClip"
+    clip.clip_contents = true
+    clip.position = Vector2(1253,62) - pbtn.position
+    clip.size = Vector2(93,100)
+    clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pbtn.add_child(clip)
+    var portrait = TextureRect.new()
+    portrait.name = "RefPortrait"
+    portrait.set_meta("no_league_frame", true)
+    portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    portrait.size = clip.size
+    portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    clip.add_child(portrait)
+    var name_label = _label(pbtn, player_name, 22)
+    name_label.name = "RefProfileName"
+    _single_line(name_label)
+    name_label.position = Vector2(1394,56) - pbtn.position
+    name_label.size = Vector2(158,32)
+    var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
+    var league = _label(pbtn, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 16, GOLD)
+    _single_line(league)
+    league.position = Vector2(1362,88) - pbtn.position
+    league.size = Vector2(190,24)
+    var fill = ColorRect.new()
+    fill.color = GOLD
+    fill.position = Vector2(1371,118) - pbtn.position
+    fill.size = Vector2(170.0 * clampf(league_profile.data.lp / 100.0, 0.0, 1.0), 6)
+    fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pbtn.add_child(fill)
+    # Insígnia da liga: a arte já traz a da Madeira; outras ligas cobrem com a insígnia viva.
+    ref_badge_plate = Panel.new()
+    var plate = StyleBoxFlat.new()
+    plate.bg_color = Color(0.0,0.13,0.07)
+    plate.set_corner_radius_all(6)
+    ref_badge_plate.add_theme_stylebox_override("panel", plate)
+    ref_badge_plate.position = Vector2(1552,54) - pbtn.position
+    ref_badge_plate.size = Vector2(58,98)
+    ref_badge_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pbtn.add_child(ref_badge_plate)
+    ref_badge = TextureRect.new()
+    ref_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    ref_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    ref_badge.position = Vector2(1552,62) - pbtn.position
+    ref_badge.size = Vector2(58,80)
+    ref_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pbtn.add_child(ref_badge)
+    pbtn.pressed.connect(func(): show_page("profile"))
+    pbtn.mouse_entered.connect(func(): name_label.modulate = GOLD)
+    pbtn.mouse_exited.connect(func(): name_label.modulate = Color.WHITE)
+    ref_profile = {"button": pbtn, "name": name_label, "portrait": portrait}
+    # Conta: avatar redondo sobre o medalhão quando logado (o ícone de convidado já está na arte)
+    ref_account_avatar = TextureRect.new()
+    ref_account_avatar.name = "RefAccountAvatar"
+    ref_account_avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    ref_account_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    ref_account_avatar.position = Vector2(49,851)
+    ref_account_avatar.size = Vector2(62,62)
+    ref_account_avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var mask = ShaderMaterial.new()
+    mask.shader = Shader.new()
+    mask.shader.code = "shader_type canvas_item;\nvoid fragment(){ vec4 c = texture(TEXTURE, UV); float d = distance(UV, vec2(0.5)); COLOR = vec4(c.rgb, c.a * (1.0 - smoothstep(0.47, 0.5, d))); }"
+    ref_account_avatar.material = mask
+    canvas.add_child(ref_account_avatar)
+    ref_nodes.append(ref_account_avatar)
+    # Páginas internas: cobre os botões desenhados na arte (a moldura dourada continua visível).
+    ref_menu_cover = Panel.new()
+    ref_menu_cover.name = "RefMenuCover"
+    var cover = StyleBoxFlat.new()
+    cover.bg_color = Color(0.03,0.12,0.075)
+    cover.set_corner_radius_all(4)
+    ref_menu_cover.add_theme_stylebox_override("panel", cover)
+    ref_menu_cover.position = REF_MENU_RECT.position
+    ref_menu_cover.size = REF_MENU_RECT.size
+    ref_menu_cover.clip_contents = false
+    ref_menu_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    canvas.add_child(ref_menu_cover)
+    canvas.move_child(ref_menu_cover, canvas.get_node("MainMenu").get_index())
+    ref_nodes.append(ref_menu_cover)
+    # Os louros do Ranqueado ficam sobre a borda da moldura: nas páginas internas, a borda é
+    # recomposta com as mesmas colunas da própria arte, logo abaixo (sem emenda).
+    for x in [596.0, 1060.0]:
+        var patch = TextureRect.new()
+        patch.name = "RefLaurelPatch"
+        patch.texture = _slice(FOREST_V2, Rect2(x, 560, 18, 82))
+        patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        patch.stretch_mode = TextureRect.STRETCH_SCALE
+        patch.position = Vector2(x, 454)
+        patch.size = Vector2(18, 82)
+        patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        ref_menu_cover.add_child(patch)
+        patch.top_level = false
+        patch.position = Vector2(x, 454) - ref_menu_cover.position
+    # Botões do menu: realce dourado ao passar o mouse / foco (o botão desenhado na arte fica visível).
+    for button in menu_buttons:
+        var hover = Panel.new()
+        hover.name = "RefHover"
+        var st = StyleBoxFlat.new()
+        st.bg_color = Color(1.0,0.86,0.5,0.10)
+        st.border_color = Color("ffe08f")
+        st.set_border_width_all(2)
+        st.set_corner_radius_all(5)
+        hover.add_theme_stylebox_override("panel", st)
+        var ranked = button.tooltip_text == "JOGAR RANQUEADO"
+        hover.position = Vector2(6, -8 if ranked else 0)
+        hover.size = button.size + Vector2(-12, 16 if ranked else -1)
+        hover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        hover.hide()
+        button.add_child(hover)
+        ref_hovers[button] = hover
+        button.mouse_entered.connect(func(): if ref_mode: hover.show())
+        button.mouse_exited.connect(func(): if ref_mode and not button.has_focus(): hover.hide())
+        button.focus_entered.connect(func(): if ref_mode: hover.show())
+        button.focus_exited.connect(func(): hover.hide())
+
+func _sync_chrome():
+    var ref = _is_ref_art(canvas.get_node("ForestArtwork").texture)
+    ref_mode = ref
+    for n in ref_nodes: n.visible = ref
+    for name in ["ProfilePanel","AccountPanel","VersionPanel"]:
+        var n = canvas.get_node_or_null(name)
+        if n != null: n.visible = not ref
+    var ver = canvas.find_child("VersionLabel", true, false)
+    if ver != null: ver.get_parent().get_parent().visible = not ref
+    if not desk_profile.is_empty(): desk_profile.stack.visible = not ref
+    for n in ranked_extras: n.visible = not ref
+    # Botões: na arte de referência o botão já está desenhado; o nosso vira área de clique transparente.
+    for button in menu_buttons:
+        if not button.has_meta("atlas_texture"): button.set_meta("atlas_texture", button.texture_normal)
+        var tex = null if ref else button.get_meta("atlas_texture")
+        button.texture_normal = tex
+        button.texture_hover = tex
+        button.texture_pressed = tex
+        button.texture_disabled = tex
+        if button.get_child_count() > 0 and button.get_child(0) is MarginContainer: button.get_child(0).visible = not ref
+        if ref_hovers.has(button) and not ref: ref_hovers[button].hide()
+    # Cartão da conta: arte traz moldura, medalhão e seta; ficam só os textos vivos.
+    if is_instance_valid(account_card):
+        account_card.position = Vector2(38,846) if ref else Vector2(26,860)
+        account_card.size = Vector2(322,72) if ref else Vector2(326,62)
+        account_card.get_node("AccountIcon").visible = not ref
+        var words = account_card_title.get_parent().get_parent()
+        words.position = Vector2(98,11) if ref else Vector2(70,8)
+        words.size = Vector2(172,50) if ref else Vector2(214,48)
+        account_card_title.add_theme_font_size_override("font_size", 20 if ref else 18)
+        account_card_subtitle.add_theme_font_size_override("font_size", 14 if ref else 13)
+        account_card_subtitle.add_theme_color_override("font_color", Color("e8e2d0") if ref else MUTED)
+        for c in account_card.get_children():
+            if c is Control and c.name != "AccountIcon" and c != words and not c is MarginContainer: c.visible = not ref
+    _refresh_ref_account()
+    _use_profile(ref)
+    _sync_menu_cover()
+
+func _use_profile(ref: bool):
+    if desk_profile.is_empty() or ref_profile.is_empty(): return
+    var text = profile_name.text if is_instance_valid(profile_name) else player_name
+    var src = ref_profile if ref else desk_profile
+    profile_button = src.button
+    profile_name = src.name
+    profile_portrait = src.portrait
+    profile_name.text = text
+    profile_portrait.texture = avatar_texture()
+    if ref:
+        # retratos quadrados preenchem a moldura; o medalhão redondo (Guerreiro) fica centralizado
+        profile_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if avatar_id == "warrior" else TextureRect.STRETCH_KEEP_ASPECT_COVERED
+        var league_id = String(league_profile.data.current_league)
+        var madeira = league_id in ["madeira", "wood"]
+        ref_badge.texture = null if madeira else ThemeCatalog.badge_texture(league_id)
+        ref_badge.visible = not madeira
+        ref_badge_plate.visible = not madeira
+    else:
+        attach_league_frame(profile_portrait)
+
+func _refresh_ref_account():
+    if not is_instance_valid(ref_account_avatar): return
+    ref_account_avatar.visible = ref_mode and account_card_logged
+    ref_account_avatar.texture = avatar_texture()
+
+func _sync_menu_cover():
+    if is_instance_valid(ref_menu_cover): ref_menu_cover.visible = ref_mode and page != "main"

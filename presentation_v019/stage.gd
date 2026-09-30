@@ -205,7 +205,11 @@ func _refresh_account_chip():
             account_ui.open("nickname")
     hub.account_caption = caption
     account_chip.text = caption
-    account_chip.visible = mode == "home" and not MobileLayout.active(get_viewport())
+    # Desktop: o cartão ornamentado da Home (canto inferior esquerdo) substitui o botão simples.
+    account_chip.visible = false
+    if account.has_profile(): hub.set_account_card(account.nickname(), "MINHA CONTA", true)
+    elif account.signed_in(): hub.set_account_card("CONTA", "Escolher nome" if account.needs_nickname else "Conectando…", true)
+    else: hub.set_account_card("CONVIDADO", "ENTRAR / CRIAR CONTA", false)
     if is_instance_valid(hub.mobile_ui) and hub.mobile_ui.current_page == "main" and hub.is_home_visible():
         hub.mobile_ui.show_page("main")
 
