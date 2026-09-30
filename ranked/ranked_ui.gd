@@ -512,12 +512,20 @@ func _layout_panel():
     panel.scale = Vector2.ONE * ui_scale
     var max_w = 640.0 if screen == "modes" and not _narrow() else 460.0
     var width = minf(max_w, (area.size.x - 16.0) / ui_scale)
-    box.custom_minimum_size.x = width - 68.0
+    box.custom_minimum_size.x = width - (44.0 if mobile else 68.0)
     var foot = (footer.get_combined_minimum_size().y + 10.0) if footer.visible else 0.0
-    var wanted = box.get_combined_minimum_size().y + foot + 88.0
-    var above = 56.0   # cavalos e brasão acima da moldura
+    # Celular: moldura mais enxuta (mais espaço para a lista, principalmente deitado).
+    var st: StyleBoxEmpty = panel.get_theme_stylebox("panel")
+    st.content_margin_top = 40 if mobile else 64
+    st.content_margin_bottom = 14 if mobile else 24
+    st.content_margin_left = 22 if mobile else 34
+    st.content_margin_right = st.content_margin_left
+    var pad_v = st.content_margin_top + st.content_margin_bottom
+    var pad_h = st.content_margin_left * 2.0
+    var wanted = box.get_combined_minimum_size().y + foot + pad_v
+    var above = 26.0 if mobile else 56.0   # cavalos e brasão acima da moldura
     var height = minf(wanted, (area.size.y - 16.0) / ui_scale - above)
-    scroll.custom_minimum_size = Vector2(width - 68.0, maxf(40.0, height - 88.0 - foot))
+    scroll.custom_minimum_size = Vector2(width - pad_h, maxf(40.0, height - pad_v - foot))
     panel.custom_minimum_size = Vector2.ZERO
     panel.reset_size()
     panel.size = Vector2(width, height)

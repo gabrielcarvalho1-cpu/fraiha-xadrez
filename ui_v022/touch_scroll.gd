@@ -20,6 +20,12 @@ static func attach(target: ScrollContainer) -> Node:
     target.add_child(helper, false, Node.INTERNAL_MODE_BACK)
     return helper
 
+func _ready():
+    # Celular: sem barra de rolagem visível (arrastar com o dedo já basta); a rolagem continua.
+    if preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):
+        if scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_AUTO: scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+        if scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_AUTO: scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+
 func is_dragging() -> bool:
     return _dragging
 
