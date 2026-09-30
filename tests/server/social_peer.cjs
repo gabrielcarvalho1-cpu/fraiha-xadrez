@@ -13,6 +13,8 @@ async function login(name) {
 }
 (async () => {
   const ana = await login('PeerAna'), bia = await login('PeerBia'), cadu = await login('PeerCadu');
+  // PeerAna responde DMs do alvo com "eco: <texto>" depois de 1,5 s (dá tempo de testar não lidas).
+  ana.ws.on('message', raw => { const m = JSON.parse(raw); if (m.type === 'dm_msg' && m.message.sender_id !== ana.id && m.message.body !== 'sem eco') setTimeout(() => ana.send({ type: 'dm_send', user_id: m.user_id, text: 'eco: ' + m.message.body }), 1500); });
   cadu.ws.on('message', raw => { const m = JSON.parse(raw); if (m.type === 'social_event' && m.event === 'request_received') cadu.send({ type: 'social_accept', user_id: m.user.user_id }); });
   let found = null;
   for (let i = 0; i < 200 && !found; i++) {

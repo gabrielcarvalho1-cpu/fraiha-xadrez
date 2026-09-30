@@ -33,6 +33,23 @@ var profile_id := ""
 var confirm: Dictionary = {}
 var refresh_left := REFRESH_S
 var pending_text := ""
+# Mensagens privadas (DM)
+const DM_MAX := 500
+var dm_id := ""
+var dm_peer: Dictionary = {}
+var dm_messages: Array = []
+var dm_has_more := false
+var dm_can_send := false
+var dm_reason := ""
+var dm_loading := false
+var dm_error := ""
+var dm_return := "list"
+var dm_ref := 0
+var dm_pending_ref := ""
+var dm_scroll: ScrollContainer
+var dm_list: VBoxContainer
+var dm_input: LineEdit
+var dm_to_end := true
 
 func setup(service, avatar_callable: Callable = Callable()):
     account = service
@@ -108,6 +125,7 @@ func _back():
     match screen:
         "list": close()
         "confirm": _show(String(confirm.get("return", "profile")))
+        "dm": close_dm()
         "profile": _show("search" if not last_query.is_empty() and profile.get("from_search", false) else "list")
         _: _show("list")
 
@@ -146,6 +164,9 @@ func open_profile(uid: String, from_search := false):
 # ---------- Mensagens do servidor ----------
 func _on_message(msg: Dictionary):
     var type = String(msg.get("type", ""))
+    if type.begins_with("dm_"):
+        _on_dm(msg)
+        return
     if not type.begins_with("social_"): return
     match type:
         "social_list":
@@ -224,6 +245,9 @@ func _clear():
         box.remove_child(child)
         child.queue_free()
     search_input = null
+    dm_scroll = null
+    dm_list = null
+    dm_input = null
 
 func notice_text(text: String, color := ERROR):
     if not is_instance_valid(notice): return
@@ -360,6 +384,7 @@ func _show(which: String):
             else: _build_list(narrow)
         "profile": _build_profile(narrow)
         "confirm": _build_confirm()
+        "dm": _build_dm()
     dim.show(); panel.show()
     _layout()
     _layout.call_deferred()
@@ -382,7 +407,11 @@ func _build_list(_narrow_layout: bool):
         if groups[key].is_empty():
             _label(box, "Ninguém por aqui." if friends.size() else ("Você ainda não tem amigos. Busque pelo nickname acima." if key == "online" else "—"), 13, DIM_TEXT)
         for f in groups[key]:
-            _row(f, PRESENCE[key][0].capitalize() if key != "in_match" else "Em partida", PRESENCE[key][1], [])
+            var fid = String(f.get("user_id", ""))
+            var unread = int(f.get("unread", 0))
+            var finfo: Dictionary = f
+            _row(f, PRESENCE[key][0].capitalize() if key != "in_match" else "Em partida", PRESENCE[key][1],
+                [[("MENSAGEM (%d)" % unread) if unread > 0 else "MENSAGEM", func(): open_dm(fid, finfo, "list"), unread > 0]])
     if data["sent"].size():
         _section("PEDIDOS ENVIADOS", data["sent"].size())
         for p in data["sent"]:
@@ -465,10 +494,10 @@ func _build_profile(narrow: bool):
             _button(actions, "ACEITAR PEDIDO", func(): _act("accept", uid), true)
             _button(actions, "RECUSAR PEDIDO", func(): _act("decline", uid))
         "friend":
-            # MENSAGEM e CONVIDAR chegam nas próximas etapas (DM e convites).
-            var dm = _button(actions, "MENSAGEM (em breve)", func(): pass)
+            # CONVIDAR chega na etapa de convites.
+            var peer_info: Dictionary = profile.duplicate()
+            var dm = _button(actions, "MENSAGEM", func(): open_dm(uid, peer_info, "profile"), true)
             dm.name = "ProfileMessage"
-            dm.disabled = true
             var inv = _button(actions, "CONVIDAR PARA JOGAR (em breve)", func(): pass)
             inv.name = "ProfileInvite"
             inv.disabled = true
@@ -504,6 +533,11 @@ func _layout():
     panel.scale = Vector2.ONE * ui_scale
     var width = minf(560.0, (area.size.x - 16.0) / ui_scale)
     box.custom_minimum_size.x = width - 28.0
+    if screen == "dm" and is_instance_valid(dm_scroll):
+        # A conversa ocupa o espaço que sobra na tela (sem passar do painel).
+        var avail = (area.size.y - 16.0) / ui_scale - 28.0
+        var rest = box.get_combined_minimum_size().y - dm_scroll.custom_minimum_size.y
+        dm_scroll.custom_minimum_size.y = clampf(avail - rest - 4.0, 120.0, 560.0)
     var wanted = box.get_combined_minimum_size().y + 28.0
     var height = minf(maxf(wanted, 0.0), (area.size.y - 16.0) / ui_scale)
     scroll.custom_minimum_size = Vector2(width - 28.0, height - 28.0)
@@ -525,3 +559,209 @@ func _layout_toast():
     toast.reset_size()
     toast.size.x = w
     toast.position = Vector2(area.position.x + (area.size.x - w * s) / 2.0, area.position.y + 12.0)
+
+# ---------- Mensagens privadas (DM) ----------
+## Conversa a dois: "minha" = não enviada pelo amigo (não depende do id local da sessão).
+func _is_mine(m: Dictionary, peer_id: String) -> bool:
+    return String(m.get("sender_id", "")) != peer_id
+
+func open_dm(uid: String, peer: Dictionary = {}, back_to := "list"):
+    dm_id = uid
+    dm_peer = {"user_id": uid, "nickname": String(peer.get("nickname", "")), "avatar_id": String(peer.get("avatar_id", "warrior"))}
+    dm_messages = []
+    dm_has_more = false
+    dm_can_send = false
+    dm_reason = ""
+    dm_error = ""
+    dm_loading = true
+    dm_return = back_to
+    _set_unread(uid, 0, false)
+    _show("dm")
+    if not _send({"type": "dm_open", "user_id": uid}):
+        dm_loading = false
+        dm_error = "Sem conexão. Tente de novo em instantes."
+        _show("dm")
+
+func close_dm():
+    var back = dm_return
+    dm_id = ""
+    if back == "profile" and not profile.is_empty(): _show("profile")
+    else:
+        _show("list")
+        _request_list()
+
+func send_dm():
+    if not is_instance_valid(dm_input) or dm_id.is_empty(): return
+    var text = dm_input.text.strip_edges()
+    if text.is_empty(): return
+    if text.length() > DM_MAX:
+        notice_text("Mensagem longa demais (máx. %d caracteres)." % DM_MAX)
+        return
+    dm_ref += 1
+    dm_pending_ref = "c%d" % dm_ref
+    if not _send({"type": "dm_send", "user_id": dm_id, "text": text, "client_ref": dm_pending_ref}):
+        notice_text("Sem conexão. Tente de novo em instantes.")
+
+func _load_older():
+    if dm_messages.is_empty(): return
+    _send({"type": "dm_open", "user_id": dm_id, "before_id": int(dm_messages[0].get("id", 0))})
+
+func _set_unread(uid: String, count: int, rebuild := true):
+    for f in data["friends"]:
+        if String(f.get("user_id", "")) == uid: f["unread"] = count
+    if rebuild and screen == "list": _show("list")
+
+func _on_dm(msg: Dictionary):
+    var type = String(msg.get("type", ""))
+    var uid = String(msg.get("user_id", ""))
+    match type:
+        "dm_history":
+            if uid != dm_id: return
+            var rows = _arr(msg, "messages")
+            dm_to_end = int(msg.get("before_id", 0)) == 0
+            if not dm_to_end: dm_messages = rows + dm_messages
+            else: dm_messages = rows
+            dm_has_more = bool(msg.get("has_more", false))
+            dm_can_send = bool(msg.get("can_send", false))
+            dm_reason = String(msg.get("reason", ""))
+            var peer = msg.get("peer", {})
+            if peer is Dictionary and not peer.is_empty(): dm_peer = peer
+            dm_loading = false
+            dm_error = ""
+            if screen == "dm":
+                _show("dm")
+                if int(msg.get("before_id", 0)) == 0: _send({"type": "dm_read", "user_id": dm_id})
+        "dm_msg":
+            var m: Dictionary = msg.get("message", {}) if msg.get("message") is Dictionary else {}
+            var mine = _is_mine(m, uid)
+            if screen == "dm" and uid == dm_id and is_open():
+                if dm_messages.any(func(x): return int(x.get("id", -1)) == int(m.get("id", -2))): return
+                dm_messages.append(m)
+                if is_instance_valid(dm_list):
+                    var empty = dm_list.find_child("DmEmpty", false, false)
+                    if empty != null: empty.queue_free()
+                    _dm_line(m)
+                    _dm_scroll_end()
+                if mine and String(msg.get("client_ref", "")) == dm_pending_ref and is_instance_valid(dm_input):
+                    dm_input.clear()
+                    notice_text("")
+                if not mine: _send({"type": "dm_read", "user_id": dm_id})
+            elif not mine:
+                var who: Dictionary = msg.get("from", {}) if msg.get("from") is Dictionary else {}
+                show_toast("Nova mensagem de %s." % String(who.get("nickname", "um amigo")))
+        "dm_unread":
+            var counts: Dictionary = msg.get("counts", {}) if msg.get("counts") is Dictionary else {}
+            for f in data["friends"]:
+                var fid = String(f.get("user_id", ""))
+                f["unread"] = 0 if (screen == "dm" and fid == dm_id) else int(counts.get(fid, 0))
+            if screen == "list": _show("list")
+        "dm_error":
+            if screen == "dm" and (uid.is_empty() or uid == dm_id):
+                if dm_loading:
+                    dm_loading = false
+                    dm_error = String(msg.get("message", "Não foi possível abrir a conversa."))
+                    _show("dm")
+                else:
+                    notice_text(String(msg.get("message", "Não foi possível enviar.")))
+            elif is_open():
+                notice_text(String(msg.get("message", "Não foi possível concluir.")))
+
+func _build_dm():
+    var head = HBoxContainer.new()
+    head.add_theme_constant_override("separation", 10)
+    box.add_child(head)
+    _avatar(head, String(dm_peer.get("avatar_id", "warrior")), 44)
+    var col = VBoxContainer.new()
+    col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    head.add_child(col)
+    var nick = _label(col, String(dm_peer.get("nickname", "")), 19, Color("f4edda"))
+    nick.name = "DmPeer"
+    _label(col, "Conversa privada", 13, DIM_TEXT)
+    dm_scroll = ScrollContainer.new()
+    dm_scroll.name = "DmScroll"
+    dm_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    dm_scroll.custom_minimum_size.y = 240
+    var bg = StyleBoxFlat.new()
+    bg.bg_color = Color(0.03, 0.06, 0.05, 0.75)
+    bg.border_color = Color("3d4a3a")
+    bg.set_border_width_all(1)
+    bg.set_corner_radius_all(6)
+    for side in ["left", "right", "top", "bottom"]: bg.set("content_margin_" + side, 8)
+    dm_scroll.add_theme_stylebox_override("panel", bg)
+    box.add_child(dm_scroll)
+    dm_list = VBoxContainer.new()
+    dm_list.name = "DmList"
+    dm_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    dm_list.add_theme_constant_override("separation", 6)
+    dm_scroll.add_child(dm_list)
+    if dm_loading:
+        _label(dm_list, "Carregando conversa…", 15, GOLD, true)
+    elif not dm_error.is_empty():
+        _label(dm_list, dm_error, 15, ERROR, true).name = "DmError"
+    else:
+        if dm_has_more:
+            _button(dm_list, "CARREGAR ANTERIORES", _load_older, false, true)
+        if dm_messages.is_empty():
+            _label(dm_list, "Nenhuma mensagem ainda. Diga olá!", 14, DIM_TEXT, true).name = "DmEmpty"
+        for m in dm_messages: _dm_line(m)
+    if not dm_loading and dm_error.is_empty() and not dm_can_send:
+        _label(box, dm_reason if not dm_reason.is_empty() else "Não é possível enviar mensagens nesta conversa.", 14, DIM_TEXT, true).name = "DmReason"
+    var row = HBoxContainer.new()
+    row.add_theme_constant_override("separation", 6)
+    box.add_child(row)
+    dm_input = LineEdit.new()
+    dm_input.name = "DmInput"
+    dm_input.placeholder_text = "Mensagem para %s" % String(dm_peer.get("nickname", "amigo"))
+    dm_input.max_length = DM_MAX
+    dm_input.custom_minimum_size.y = 44
+    dm_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    dm_input.add_theme_font_size_override("font_size", 16)
+    dm_input.editable = dm_can_send and not dm_loading
+    dm_input.text_submitted.connect(func(_t): send_dm())
+    row.add_child(dm_input)
+    var send = _button(row, "ENVIAR", send_dm, true, true)
+    send.name = "DmSend"
+    send.custom_minimum_size.y = 44
+    send.disabled = not dm_input.editable
+    if dm_to_end: _dm_scroll_end()
+    dm_to_end = true
+
+func _dm_time(iso: String) -> String:
+    if iso.length() < 19: return ""
+    var unix = Time.get_unix_time_from_datetime_string(iso.substr(0, 19))
+    unix += int(Time.get_time_zone_from_system().get("bias", 0)) * 60
+    var t = Time.get_datetime_dict_from_unix_time(unix)
+    return "%02d:%02d" % [int(t.hour), int(t.minute)]
+
+## Enviadas à direita (dourado), recebidas à esquerda. Texto sempre em Label comum (sem BBCode).
+func _dm_line(m: Dictionary):
+    var mine = _is_mine(m, dm_id)
+    var wrap = MarginContainer.new()
+    wrap.add_theme_constant_override("margin_left", 48 if mine else 0)
+    wrap.add_theme_constant_override("margin_right", 0 if mine else 48)
+    wrap.set_meta("dm_id", int(m.get("id", 0)))
+    wrap.set_meta("mine", mine)
+    dm_list.add_child(wrap)
+    var bubble = PanelContainer.new()
+    var st = StyleBoxFlat.new()
+    st.bg_color = Color("2c4a2f") if mine else Color("1b2a24")
+    st.border_color = Color("b19758") if mine else Color("4b5a4c")
+    st.set_border_width_all(1)
+    st.set_corner_radius_all(8)
+    for side in ["left", "right"]: st.set("content_margin_" + side, 10)
+    for side in ["top", "bottom"]: st.set("content_margin_" + side, 5)
+    bubble.add_theme_stylebox_override("panel", st)
+    wrap.add_child(bubble)
+    var col = VBoxContainer.new()
+    col.add_theme_constant_override("separation", 1)
+    bubble.add_child(col)
+    var meta = _label(col, ("Você" if mine else String(dm_peer.get("nickname", ""))) + "  ·  " + _dm_time(String(m.get("created_at", ""))), 12, GOLD if mine else DIM_TEXT)
+    meta.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if mine else HORIZONTAL_ALIGNMENT_LEFT
+    var body = _label(col, String(m.get("body", "")), 16, Color("f4edda"))
+    body.name = "DmBody"
+    body.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if mine else HORIZONTAL_ALIGNMENT_LEFT
+
+func _dm_scroll_end():
+    await get_tree().process_frame
+    await get_tree().process_frame
+    if is_instance_valid(dm_scroll): dm_scroll.scroll_vertical = int(dm_scroll.get_v_scroll_bar().max_value)

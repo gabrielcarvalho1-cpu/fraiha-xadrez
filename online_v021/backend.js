@@ -6,6 +6,7 @@ const { SupabaseAuth, DevAuth } = require('./accounts/auth');
 const { MemoryStore, SupabaseStore, validateNickname } = require('./accounts/store');
 const { ChatHub } = require('./chat');
 const { Social } = require('./social/service');
+const { DirectMessages } = require('./social/dm');
 
 const GUEST_TTL_MS = 24 * 3600e3;
 
@@ -31,6 +32,7 @@ class Backend {
     this.chat = new ChatHub({ send: (ws, o) => this.send(ws, o) });
     this.online = new Map(); // uid -> Set(ws) (contas e convidados identificados)
     this.social = new Social({ send: (ws, o) => this.send(ws, o), backend: this });
+    this.dm = new DirectMessages({ send: (ws, o) => this.send(ws, o), backend: this });
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
   attachRanked(ranked) { this.ranked = ranked; ranked.backend = this; }
@@ -121,6 +123,16 @@ class Backend {
         return this.ranked ? this.ranked.handle(ws, m) : this.fail(ws, 'Ranked indisponível.');
       }
       if (this.kind === 'disabled') return this.fail(ws, 'Contas ainda não configuradas no servidor.', { code: 'accounts_disabled' });
+      if (a.startsWith('dm_')) {
+        if (!ws.user || !ws.profile) return this.send(ws, { type: 'dm_error', message: 'Entre ou crie uma conta para conversar com amigos.', code: 'auth_required' });
+        try { return await this.dm.handle(ws, m); }
+        catch (e) {
+          const uid = String(m.user_id || '');
+          if (e && /42P01|PGRST205|direct_messages.*does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message))) return this.send(ws, { type: 'dm_error', message: 'Mensagens ainda não configuradas no servidor (migração 0003 pendente).', code: 'not_configured', user_id: uid });
+          console.error('dm', a, e && e.message);
+          return this.send(ws, { type: 'dm_error', message: 'Erro temporário no servidor. Tente novamente.', code: 'server_error', user_id: uid });
+        }
+      }
       if (a.startsWith('social_')) {
         if (!ws.user || !ws.profile) return this.send(ws, { type: 'social_error', message: 'Entre ou crie uma conta para usar Amigos.', code: 'auth_required' });
         try { return await this.social.handle(ws, m); }

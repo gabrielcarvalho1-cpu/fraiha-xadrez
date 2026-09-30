@@ -19,7 +19,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const fullStats = rows => { const out = {}; for (const m of MODES) out[m] = { ...emptyStats(), ...(rows[m] || {}) }; return out; };
 
 class MemoryStore {
-  constructor() { this.profiles = new Map(); this.stats = new Map(); this.matches = []; this.persistent = false; this.social = { requests: new Set(), friends: new Set(), blocks: new Set() }; }
+  constructor() { this.profiles = new Map(); this.stats = new Map(); this.matches = []; this.persistent = false; this.social = { requests: new Set(), friends: new Set(), blocks: new Set() }; this.dms = []; this.dmSeq = 0; }
   async getProfile(userId) { return this.profiles.get(userId) || null; }
   async createProfile(userId, nickname, avatarId) {
     if (this.profiles.has(userId)) return { error: 'Este perfil já existe.' };
@@ -67,6 +67,27 @@ class MemoryStore {
   async removeFriendship(a, b) { const [x, y] = [a, b].sort(); this.social.friends.delete(x + '|' + y); }
   async addBlock(a, b) { this.social.blocks.add(a + '|' + b); }
   async removeBlock(a, b) { this.social.blocks.delete(a + '|' + b); }
+
+  // ---------- Mensagens privadas (0003_fraiha_dm) ----------
+  async addDirectMessage(from, to, body) {
+    const m = { id: ++this.dmSeq, sender_id: from, recipient_id: to, body, created_at: new Date().toISOString(), read_at: null };
+    this.dms.push(m); return { ...m };
+  }
+  // Últimas `limit` mensagens do par (opcional: anteriores a beforeId), em ordem crescente.
+  async getConversation(a, b, limit = 50, beforeId = 0) {
+    const pair = this.dms.filter(m => ((m.sender_id === a && m.recipient_id === b) || (m.sender_id === b && m.recipient_id === a)) && (!beforeId || m.id < beforeId));
+    return pair.slice(-limit).map(m => ({ ...m }));
+  }
+  async markDirectRead(recipient, sender) {
+    const now = new Date().toISOString(); let n = 0;
+    for (const m of this.dms) if (m.recipient_id === recipient && m.sender_id === sender && !m.read_at) { m.read_at = now; n++; }
+    return n;
+  }
+  async unreadCounts(uid) {
+    const out = {};
+    for (const m of this.dms) if (m.recipient_id === uid && !m.read_at) out[m.sender_id] = (out[m.sender_id] || 0) + 1;
+    return out;
+  }
 }
 
 class SupabaseStore {
@@ -142,6 +163,29 @@ class SupabaseStore {
   async removeFriendship(a, b) { const [x, y] = [a, b].sort(); return this._delete('friendships', { user_a: x, user_b: y }); }
   async addBlock(a, b) { return this._insert('blocks', { blocker: a, blocked: b }); }
   async removeBlock(a, b) { return this._delete('blocks', { blocker: a, blocked: b }); }
+  // ---------- Mensagens privadas (0003_fraiha_dm). Ids já validados como UUID pelo serviço. ----------
+  async addDirectMessage(from, to, body) {
+    const rows = await this.req('/direct_messages?select=' + DM_COLS, { method: 'POST', headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ sender_id: from, recipient_id: to, body }) });
+    return rows[0];
+  }
+  async getConversation(a, b, limit = 50, beforeId = 0) {
+    const pair = `or=(and(sender_id.eq.${a},recipient_id.eq.${b}),and(sender_id.eq.${b},recipient_id.eq.${a}))`;
+    const before = beforeId ? '&id=lt.' + Number(beforeId) : '';
+    const rows = await this.req(`/direct_messages?${pair}${before}&select=${DM_COLS}&order=id.desc&limit=${Number(limit)}`);
+    return rows.reverse();
+  }
+  async markDirectRead(recipient, sender) {
+    const rows = await this.req(`/direct_messages?recipient_id=eq.${recipient}&sender_id=eq.${sender}&read_at=is.null&select=id`, {
+      method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ read_at: new Date().toISOString() }) });
+    return rows.length;
+  }
+  async unreadCounts(uid) {
+    const rows = await this.req(`/direct_messages?recipient_id=eq.${uid}&read_at=is.null&select=sender_id&limit=5000`);
+    const out = {}; for (const r of rows) out[r.sender_id] = (out[r.sender_id] || 0) + 1;
+    return out;
+  }
 }
+const DM_COLS = 'id,sender_id,recipient_id,body,created_at,read_at';
 
 module.exports = { MemoryStore, SupabaseStore, validateNickname, MODES, AVATARS, emptyStats, UUID_RE };

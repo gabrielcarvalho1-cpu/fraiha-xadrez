@@ -112,7 +112,7 @@ func run():
     check(await wait_until(func(): return ui.screen == "profile" and ui.profile.has("nickname"), 5.0), "abre o perfil de PeerAna")
     var t = texts(ui)
     check("PeerAna" in t and t.any(func(x): return "ONLINE" in x) and t.any(func(x): return x.begins_with("Maior liga: Madeira")) and t.any(func(x): return x.begins_with("RELÂMPAGO · Madeira")), "perfil: nickname, status, maior liga e Ranked por modo")
-    check(buttons(ui, "REMOVER AMIGO").size() == 1 and buttons(ui, "BLOQUEAR").size() == 1 and buttons(ui, "MENSAGEM (em breve)").size() == 1 and buttons(ui, "MENSAGEM (em breve)")[0].disabled, "ações de amigo: MENSAGEM/CONVIDAR (próximas etapas), REMOVER, BLOQUEAR")
+    check(buttons(ui, "REMOVER AMIGO").size() == 1 and buttons(ui, "BLOQUEAR").size() == 1 and buttons(ui, "MENSAGEM").size() == 1 and not buttons(ui, "MENSAGEM")[0].disabled, "ações de amigo: MENSAGEM (ativa), CONVIDAR (próxima etapa), REMOVER, BLOQUEAR")
     check(inside_view(ui), "perfil dentro da tela")
     await shot(ui, "3_perfil")
     press(ui, "REMOVER AMIGO")

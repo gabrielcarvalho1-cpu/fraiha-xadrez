@@ -73,4 +73,4 @@ class ChatHub {
     return fail('Ação de chat desconhecida.', 'invalid');
   }
 }
-module.exports = { ChatHub, clean, MAX_LEN };
+module.exports = { ChatHub, clean, MAX_LEN, STRIP };
