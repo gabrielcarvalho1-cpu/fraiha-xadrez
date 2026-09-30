@@ -12,6 +12,7 @@ signal friends_requested
 
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 0.0
+const EDGE_CROP = 1.035
 const APP_VERSION = "0.30"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
 const FOREST = preload("res://ui_v022/assets/home_forest_v2.png")
@@ -794,7 +795,11 @@ func _layout():
     var dimensions = get_viewport().get_visible_rect().size
     # Fit the intact composition and its frame together, using all available space.
     var framed_size = DESIGN + Vector2.ONE * FRAME_MARGIN * 2.0
-    var factor = minf(dimensions.x / framed_size.x, dimensions.y / framed_size.y)
+    var contain = minf(dimensions.x / framed_size.x, dimensions.y / framed_size.y)
+    var cover = maxf(dimensions.x / DESIGN.x, dimensions.y / DESIGN.y)
+    # Aba mais larga/alta que 16:9: amplia um pouco além do "caber" (corta no máximo ~1,7% de
+    # cada borda, só céu/folhagem) para sobrar menos faixa; o resto é preenchido pela própria arte.
+    var factor = minf(cover, contain * EDGE_CROP)
     canvas.scale = Vector2.ONE * factor
     canvas.position = (dimensions - DESIGN*factor) / 2.0
     presentation_frame.queue_redraw()
@@ -812,11 +817,68 @@ func _draw_presentation_frame():
         return
     var cover = maxf(full.size.x / DESIGN.x, full.size.y / DESIGN.y) * 1.04
     var cover_rect = Rect2((full.size - DESIGN * cover) / 2.0, DESIGN * cover)
-    presentation_frame.draw_texture_rect(_backdrop_for(tex), cover_rect, false, Color(0.62, 0.64, 0.60))
-    # Sombra suave junto à arte para separar sem moldura.
+    presentation_frame.draw_texture_rect(_backdrop_for(tex), cover_rect, false, Color(0.5, 0.52, 0.48))
+    # Junto à arte: continuação espelhada e suavizada da própria borda (cores casam na emenda),
+    # escurecendo para fora. Sem moldura, sem cinza.
+    var soft := _soft_for(tex)
+    var sw := float(soft.get_width())
+    var sh := float(soft.get_height())
+    var gaps := [artwork.position.x, full.size.x - artwork.end.x, artwork.position.y, full.size.y - artwork.end.y]
+    for side in 4:
+        var gap: float = gaps[side]
+        if gap < 0.5: continue
+        var horizontal := side < 2
+        var span := minf(gap, (artwork.size.x if horizontal else artwork.size.y) * 0.35)
+        var dest: Rect2
+        var src: Rect2
+        var outer_a: Vector2
+        var outer_b: Vector2
+        var inner_a: Vector2
+        var inner_b: Vector2
+        match side:
+            0:
+                dest = Rect2(artwork.position.x, artwork.position.y, -span, artwork.size.y)
+                src = Rect2(0, 0, sw * span / artwork.size.x, sh)
+                inner_a = artwork.position; inner_b = Vector2(artwork.position.x, artwork.end.y)
+                outer_a = inner_a - Vector2(span, 0); outer_b = inner_b - Vector2(span, 0)
+            1:
+                dest = Rect2(artwork.end.x, artwork.position.y, -span, artwork.size.y)
+                dest.position.x += span
+                src = Rect2(sw - sw * span / artwork.size.x, 0, sw * span / artwork.size.x, sh)
+                inner_a = Vector2(artwork.end.x, artwork.position.y); inner_b = artwork.end
+                outer_a = inner_a + Vector2(span, 0); outer_b = inner_b + Vector2(span, 0)
+            2:
+                dest = Rect2(artwork.position.x, artwork.position.y, artwork.size.x, -span)
+                src = Rect2(0, 0, sw, sh * span / artwork.size.y)
+                inner_a = artwork.position; inner_b = Vector2(artwork.end.x, artwork.position.y)
+                outer_a = inner_a - Vector2(0, span); outer_b = inner_b - Vector2(0, span)
+            3:
+                dest = Rect2(artwork.position.x, artwork.end.y + span, artwork.size.x, -span)
+                src = Rect2(0, sh - sh * span / artwork.size.y, sw, sh * span / artwork.size.y)
+                inner_a = Vector2(artwork.position.x, artwork.end.y); inner_b = artwork.end
+                outer_a = inner_a + Vector2(0, span); outer_b = inner_b + Vector2(0, span)
+        presentation_frame.draw_texture_rect_region(soft, dest, src, Color(0.86, 0.88, 0.84))
+        var clear := Color(0, 0, 0, 0.0)
+        var dark := Color(0, 0, 0, 0.5)
+        presentation_frame.draw_polygon(PackedVector2Array([inner_a, inner_b, outer_b, outer_a]), PackedColorArray([clear, clear, dark, dark]))
+    # Sombra bem leve na emenda para a arte "assentar" sem parecer moldura.
     var unit = canvas.scale.x
-    for step in range(1, 9):
-        presentation_frame.draw_rect(artwork.grow(step * 2 * unit), Color(0, 0, 0, (9 - step) * 0.035), false, 2 * unit)
+    for step in range(1, 5):
+        presentation_frame.draw_rect(artwork.grow(step * 2 * unit), Color(0, 0, 0, (5 - step) * 0.03), false, 2 * unit)
+
+var _soft_cache := {}
+# Versão levemente suavizada (1/5 da resolução): esconde letras/detalhes espelhados, mantém as cores.
+func _soft_for(tex: Texture2D) -> Texture2D:
+    var key = tex.get_rid()
+    if _soft_cache.has(key): return _soft_cache[key]
+    var img: Image = tex.get_image()
+    if img == null: return tex
+    img = img.duplicate()
+    if img.is_compressed(): img.decompress()
+    img.resize(maxi(8, img.get_width() / 5), maxi(8, img.get_height() / 5), Image.INTERPOLATE_LANCZOS)
+    var soft = ImageTexture.create_from_image(img)
+    _soft_cache[key] = soft
+    return soft
 
 var _backdrop_cache := {}
 # Versão desfocada da arte (reduzida a poucos pixels e ampliada com filtro linear): só cores da própria arte.

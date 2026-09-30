@@ -45,10 +45,7 @@ var mobile_ui := false
 func _ready():
     game=get_parent().get_node("World")
     layer=20
-    var config=ConfigFile.new()
-    if config.load("res://online.cfg")==OK: endpoint=String(config.get_value("online","server_url",""))
-    if not OS.has_feature("web") and config.load(OS.get_executable_path().get_base_dir()+"/online.cfg")==OK: endpoint=String(config.get_value("online","server_url",endpoint))
-    if OS.has_environment("FRAIHA_SERVER_URL"): endpoint=OS.get_environment("FRAIHA_SERVER_URL")
+    endpoint=preload("res://online_v020/endpoint.gd").server_url()
     var session=ConfigFile.new()
     if session.load("user://online_session.cfg")==OK:
         saved={"room":session.get_value("session","room",""),"token":session.get_value("session","token","")}

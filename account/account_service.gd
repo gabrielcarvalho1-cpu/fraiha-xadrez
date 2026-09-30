@@ -46,14 +46,8 @@ func _ready():
         supabase_url = String(config.get_value("accounts", "supabase_url", "")).trim_suffix("/")
         public_key = String(config.get_value("accounts", "supabase_publishable_key", ""))
         site_url = String(config.get_value("accounts", "site_url", ""))
-        server_url = String(config.get_value("online", "server_url", ""))
-    # Só no editor (F5): online.local.cfg (fora do Git) pode apontar para staging. Builds exportadas ignoram.
-    if OS.has_feature("editor"):
-        var dev = ConfigFile.new()
-        if dev.load("res://online.local.cfg") == OK:
-            server_url = String(dev.get_value("online", "server_url", server_url))
-    # Prioridade máxima: variável de ambiente explícita.
-    if OS.has_environment("FRAIHA_SERVER_URL"): server_url = OS.get_environment("FRAIHA_SERVER_URL")
+    # Servidor: resolvido em um só lugar (produção / staging no build beta / F5 / ambiente).
+    server_url = preload("res://online_v020/endpoint.gd").server_url()
     _log("servidor: " + server_url)
     if OS.has_environment("FRAIHA_SUPABASE_URL"): supabase_url = OS.get_environment("FRAIHA_SUPABASE_URL")
     if OS.has_environment("FRAIHA_SUPABASE_KEY"): public_key = OS.get_environment("FRAIHA_SUPABASE_KEY")
