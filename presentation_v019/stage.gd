@@ -55,6 +55,7 @@ func _ready():
     bot_controller = preload("res://bot/controller.gd").new()
     bot_controller.name = "BotController"
     add_child(bot_controller)
+    _build_backdrop()
     _build_navigation()
     get_viewport().size_changed.connect(_layout)
     hub.play_local_requested.connect(_start_local)
@@ -83,6 +84,33 @@ func _ready():
     forest.add_child(ambient)
     _layout()
     open_home()
+
+func _build_backdrop():
+    # Onde nada é desenhado aparecia o cinza padrão do Godot. Agora: verde-escuro + folhagem
+    # em pixel art recortada da própria arte da floresta, em mosaico espelhado (sem emendas).
+    RenderingServer.set_default_clear_color(Color("0b1a10"))
+    var img: Image = preload("res://presentation_v019/forest_wide.png").get_image()
+    if img == null: return
+    if img.is_compressed(): img.decompress()
+    var leaf := img.get_region(Rect2i(1470, 250, 160, 160))
+    var tile := Image.create(320, 320, false, leaf.get_format())
+    for i in 4:
+        var part := leaf.duplicate()
+        if i % 2 == 1: part.flip_x()
+        if i >= 2: part.flip_y()
+        tile.blit_rect(part, Rect2i(0, 0, 160, 160), Vector2i((i % 2) * 160, (i / 2) * 160))
+    var layer := CanvasLayer.new()
+    layer.name = "LeafBackdrop"
+    layer.layer = -5
+    add_child(layer)
+    var rect := TextureRect.new()
+    rect.texture = ImageTexture.create_from_image(tile)
+    rect.stretch_mode = TextureRect.STRETCH_TILE
+    rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    rect.modulate = Color(0.55, 0.62, 0.55)
+    rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    layer.add_child(rect)
 
 func _build_navigation():
     var overlay = CanvasLayer.new()
@@ -141,6 +169,7 @@ func _build_navigation():
     navigation_dialog.cancel_button_text = "Continuar jogando"
     navigation_dialog.confirmed.connect(_confirm_navigation)
     navigation_dialog.canceled.connect(_cancel_navigation)
+    navigation_dialog.theme = _medieval_dialog_theme()
     overlay.add_child(navigation_dialog)
     _build_mobile_controls(overlay)
 
@@ -218,6 +247,63 @@ func _build_desk_panel(overlay: CanvasLayer):
     desk_gear.pressed.connect(func(): game.toggle_settings())
     tools.add_child(desk_gear)
 
+## Visual medieval da confirmação (sair/abandonar): painel verde, moldura dourada, título
+## em Cinzel e botões verde/ouro. Só aparência; as ações continuam as mesmas.
+func _medieval_dialog_theme() -> Theme:
+    var th := Theme.new()
+    var gold := Color("c99a45")
+    var frame := StyleBoxFlat.new()
+    frame.bg_color = Color("0c1f14")
+    frame.border_color = gold
+    frame.set_border_width_all(3)
+    frame.border_width_top = 44
+    frame.set_corner_radius_all(8)
+    frame.expand_margin_top = 44
+    frame.expand_margin_left = 3
+    frame.expand_margin_right = 3
+    frame.expand_margin_bottom = 3
+    frame.shadow_color = Color(0, 0, 0, 0.55)
+    frame.shadow_size = 14
+    th.set_stylebox("embedded_border", "Window", frame)
+    th.set_stylebox("embedded_unfocused_border", "Window", frame)
+    th.set_font("title_font", "Window", preload("res://account/login_art.gd").FONT_BOLD)
+    th.set_font_size("title_font_size", "Window", 26)
+    th.set_color("title_color", "Window", Color("1a0f02"))
+    th.set_constant("title_height", "Window", 40)
+    var body := StyleBoxFlat.new()
+    body.bg_color = Color("0c1f14")
+    body.border_color = Color(0.79, 0.6, 0.27, 0.35)
+    body.set_border_width_all(1)
+    for side in ["left", "right", "top", "bottom"]: body.set("content_margin_" + side, 18)
+    th.set_stylebox("panel", "AcceptDialog", body)
+    th.set_color("font_color", "Label", Color("f1e4c2"))
+    th.set_font_size("font_size", "Label", 24)
+    var btn := StyleBoxFlat.new()
+    btn.bg_color = Color("1f5a2e")
+    btn.border_color = Color("f1d58a")
+    btn.set_border_width_all(2)
+    btn.set_corner_radius_all(4)
+    btn.content_margin_left = 14
+    btn.content_margin_right = 14
+    btn.content_margin_top = 8
+    btn.content_margin_bottom = 8
+    btn.shadow_color = Color(0, 0, 0, 0.4)
+    btn.shadow_size = 3
+    var lit := btn.duplicate()
+    lit.bg_color = Color("2d7a40")
+    lit.border_color = Color("fff0b8")
+    var down := btn.duplicate()
+    down.bg_color = Color("153f20")
+    th.set_stylebox("normal", "Button", btn)
+    th.set_stylebox("hover", "Button", lit)
+    th.set_stylebox("pressed", "Button", down)
+    th.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+    th.set_font("font", "Button", preload("res://account/login_art.gd").FONT_BOLD)
+    th.set_font_size("font_size", "Button", 21)
+    th.set_color("font_color", "Button", Color("f4e8c8"))
+    th.set_color("font_hover_color", "Button", Color("fff4c8"))
+    return th
+
 func _sync_fullscreen_glyph():
     if not is_instance_valid(fullscreen_button): return
     var on = get_window().mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]
@@ -229,6 +315,7 @@ func _refresh_desk_hud():
     if not is_instance_valid(desk_panel): return
     var mobile = MobileLayout.active(get_viewport())
     var in_match = mode in ["local", "online", "bot", "ranked", "casual"] and game.visible
+    navigation_dialog.min_size = Vector2i.ZERO if mobile else Vector2i(620, 230)
     game.external_hud = not mobile
     # Também na Home e suas páginas (Configurações etc.), no canto superior esquerdo.
     fullscreen_button.visible = (in_match or mode == "home") and not mobile
@@ -970,7 +1057,7 @@ func _layout_mobile(board_center: Vector2):
     navigation_dialog.get_label().add_theme_font_size_override("font_size", 17)
     for button in [navigation_dialog.get_ok_button(), navigation_dialog.get_cancel_button()]:
         button.custom_minimum_size.y = 44
-        button.add_theme_font_size_override("font_size", 16)
+        button.add_theme_font_size_override("font_size", 13)
 
 func toggle_fullscreen():
     _sync_fullscreen_glyph.call_deferred()

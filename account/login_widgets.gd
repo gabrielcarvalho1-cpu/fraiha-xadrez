@@ -40,8 +40,9 @@ class OrnateButton extends Button:
         if primary:
             # Brilho superior e estrelinhas perto das pontas.
             draw_line(Vector2(notch + 6.0, 6.0), Vector2(size.x - notch - 6.0, 6.0), Color(1, 1, 1, 0.12), 2.0)
-            for x in [notch + 24.0, size.x - notch - 24.0]:
-                Art.star4(self, Vector2(x, size.y / 2.0), 7.0, Art.GOLD)
+            if size.x >= 320.0:
+                for x in [notch + 24.0, size.x - notch - 24.0]:
+                    Art.star4(self, Vector2(x, size.y / 2.0), 7.0, Art.GOLD)
         else:
             for x in [notch * 0.55 + 8.0, size.x - notch * 0.55 - 8.0]:
                 Art.diamond(self, Vector2(x, size.y / 2.0), 4.0, Art.GOLD_MID)

@@ -19,6 +19,7 @@ var dim: ColorRect
 var panel: PanelContainer
 var box: VBoxContainer
 var scroll: ScrollContainer
+var art_frame: Control
 var footer: VBoxContainer
 var screen := ""
 var search_started := 0
@@ -52,13 +53,16 @@ func setup(service, ranked_controller):
     dim = ColorRect.new()
     dim.color = Color(0.02, 0.04, 0.03, 0.82)
     add_child(dim)
+    # Moldura medieval (mesma da tela de entrada: ouro, brasão, cavalos) atrás do conteúdo.
+    art_frame = preload("res://account/login_frame.gd").new()
+    art_frame.name = "QueueFrame"
+    add_child(art_frame)
     panel = PanelContainer.new()
-    var style = StyleBoxFlat.new()
-    style.bg_color = Color("#142217f7")
-    style.border_color = Color("#b19758")
-    style.set_border_width_all(2)
-    style.set_corner_radius_all(8)
-    for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 16)
+    var style = StyleBoxEmpty.new()
+    style.content_margin_left = 34
+    style.content_margin_right = 34
+    style.content_margin_top = 64
+    style.content_margin_bottom = 24
     panel.add_theme_stylebox_override("panel", style)
     add_child(panel)
     var frame = VBoxContainer.new()
@@ -130,7 +134,7 @@ func open_modes():
 
 func close_panel():
     screen = ""
-    dim.hide(); panel.hide()
+    dim.hide(); panel.hide(); art_frame.hide()
 
 func panel_open() -> bool:
     return panel.visible
@@ -145,6 +149,12 @@ func _clear():
 func _label(text: String, size := 16, color := Color("e8e0c8"), center := false) -> Label:
     var l = Label.new()
     l.text = text
+    if size >= 22:
+        # Títulos no estilo do jogo (Cinzel, dourado com contorno).
+        l.add_theme_font_override("font", preload("res://account/login_art.gd").FONT_BOLD)
+        size += 8
+        l.add_theme_color_override("font_outline_color", Color("2a1905"))
+        l.add_theme_constant_override("outline_size", 6)
     l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     l.add_theme_font_size_override("font_size", size)
     l.add_theme_color_override("font_color", color)
@@ -153,20 +163,13 @@ func _label(text: String, size := 16, color := Color("e8e0c8"), center := false)
     return l
 
 func _button(parent: Node, text: String, action: Callable, primary := false) -> Button:
-    var b = Button.new()
+    # Botão ornamentado do jogo (pontas em V, ouro); hover = o próprio botão mais claro.
+    var b = preload("res://account/login_widgets.gd").OrnateButton.new()
     b.text = text
-    b.custom_minimum_size.y = 46
-    b.add_theme_font_size_override("font_size", 16)
-    var style = StyleBoxFlat.new()
-    style.bg_color = Color("2c4a2f") if primary else Color("14221d")
-    style.border_color = GOLD if primary else Color("84754b")
-    style.set_border_width_all(1)
-    style.set_corner_radius_all(6)
-    b.add_theme_stylebox_override("normal", style)
-    var hover = style.duplicate()
-    hover.bg_color = Color("36593a")
-    for state in ["hover", "pressed", "focus"]: b.add_theme_stylebox_override(state, hover)
-    b.add_theme_color_override("font_color", Color("f4edda"))
+    b.label = text
+    b.primary = primary
+    b.font_size = 20 if primary else 17
+    b.custom_minimum_size.y = 52 if primary else 48
     b.pressed.connect(action)
     parent.add_child(b)
     return b
@@ -268,10 +271,12 @@ func _mode_card(grid: GridContainer, item: Array):
     var card = PanelContainer.new()
     card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     var style = StyleBoxFlat.new()
-    style.bg_color = Color("0f1a15")
-    style.border_color = Color("84754b")
-    style.set_border_width_all(1)
+    style.bg_color = Color("0a1a10")
+    style.border_color = Color("c99a45")
+    style.set_border_width_all(2)
     style.set_corner_radius_all(6)
+    style.shadow_color = Color(0, 0, 0, 0.35)
+    style.shadow_size = 4
     for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 10)
     card.add_theme_stylebox_override("panel", style)
     grid.add_child(card)
@@ -291,7 +296,8 @@ func _mode_card(grid: GridContainer, item: Array):
     head.add_child(titles)
     var t = Label.new()
     t.text = item[1]
-    t.add_theme_font_size_override("font_size", 18)
+    t.add_theme_font_size_override("font_size", 20)
+    t.add_theme_font_override("font", preload("res://account/login_art.gd").FONT_BOLD)
     t.add_theme_color_override("font_color", GOLD)
     titles.add_child(t)
     var mins = Label.new()
@@ -321,10 +327,12 @@ func _casual_card(grid: GridContainer, item: Array):
     var card = PanelContainer.new()
     card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     var style = StyleBoxFlat.new()
-    style.bg_color = Color("0f1a15")
-    style.border_color = Color("84754b")
-    style.set_border_width_all(1)
+    style.bg_color = Color("0a1a10")
+    style.border_color = Color("c99a45")
+    style.set_border_width_all(2)
     style.set_corner_radius_all(6)
+    style.shadow_color = Color(0, 0, 0, 0.35)
+    style.shadow_size = 4
     for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 10)
     card.add_theme_stylebox_override("panel", style)
     grid.add_child(card)
@@ -333,7 +341,8 @@ func _casual_card(grid: GridContainer, item: Array):
     card.add_child(col)
     var t = Label.new()
     t.text = item[1]
-    t.add_theme_font_size_override("font_size", 18)
+    t.add_theme_font_size_override("font_size", 20)
+    t.add_theme_font_override("font", preload("res://account/login_art.gd").FONT_BOLD)
     t.add_theme_color_override("font_color", GOLD)
     col.add_child(t)
     var mins = Label.new()
@@ -486,12 +495,18 @@ func _layout_panel():
     panel.scale = Vector2.ONE * ui_scale
     var max_w = 640.0 if screen == "modes" and not _narrow() else 460.0
     var width = minf(max_w, (area.size.x - 16.0) / ui_scale)
-    box.custom_minimum_size.x = width - 32.0
+    box.custom_minimum_size.x = width - 68.0
     var foot = (footer.get_combined_minimum_size().y + 10.0) if footer.visible else 0.0
-    var wanted = box.get_combined_minimum_size().y + foot + 32.0
-    var height = minf(wanted, (area.size.y - 16.0) / ui_scale)
-    scroll.custom_minimum_size = Vector2(width - 32.0, maxf(40.0, height - 32.0 - foot))
+    var wanted = box.get_combined_minimum_size().y + foot + 88.0
+    var above = 56.0   # cavalos e brasão acima da moldura
+    var height = minf(wanted, (area.size.y - 16.0) / ui_scale - above)
+    scroll.custom_minimum_size = Vector2(width - 68.0, maxf(40.0, height - 88.0 - foot))
     panel.custom_minimum_size = Vector2.ZERO
     panel.reset_size()
     panel.size = Vector2(width, height)
-    panel.position = area.position + (area.size - panel.size * ui_scale) / 2.0
+    panel.position = area.position + (area.size - panel.size * ui_scale) / 2.0 + Vector2(0, above * ui_scale * 0.5)
+    art_frame.compact = mobile
+    art_frame.visible = panel.visible
+    art_frame.position = panel.position
+    art_frame.size = panel.size
+    art_frame.scale = panel.scale
