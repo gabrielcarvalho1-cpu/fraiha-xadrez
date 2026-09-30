@@ -60,6 +60,7 @@ func setup(service):
     report_button.tooltip_text = "Enviar as mensagens do adversário para análise"
     close_button = _small(head, "FECHAR", func(): set_mobile_open(false))
     scroll = ScrollContainer.new()
+    preload("res://ui_v022/touch_scroll.gd").attach(scroll)
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     col.add_child(scroll)

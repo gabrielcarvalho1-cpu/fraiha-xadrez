@@ -5,6 +5,7 @@ extends CanvasLayer
 signal back_requested
 signal play_requested
 const Mobile = preload("res://ui_v022/mobile_layout.gd")
+const TouchScroll = preload("res://ui_v022/touch_scroll.gd")
 const ClockView = preload("res://ranked/clock_view.gd")
 const Catalog = preload("res://league/catalog.gd")
 const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
@@ -18,6 +19,7 @@ var dim: ColorRect
 var panel: PanelContainer
 var box: VBoxContainer
 var scroll: ScrollContainer
+var footer: VBoxContainer
 var screen := ""
 var search_started := 0
 var search_label: Label
@@ -59,9 +61,18 @@ func setup(service, ranked_controller):
     for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 16)
     panel.add_theme_stylebox_override("panel", style)
     add_child(panel)
+    var frame = VBoxContainer.new()
+    frame.add_theme_constant_override("separation", 10)
+    panel.add_child(frame)
     scroll = ScrollContainer.new()
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    panel.add_child(scroll)
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    frame.add_child(scroll)
+    TouchScroll.attach(scroll)
+    # Rodapé fixo (fora da rolagem): VOLTAR sempre visível, mesmo em telas baixas.
+    footer = VBoxContainer.new()
+    footer.name = "Footer"
+    frame.add_child(footer)
     box = VBoxContainer.new()
     box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     box.add_theme_constant_override("separation", 10)
@@ -125,9 +136,11 @@ func panel_open() -> bool:
     return panel.visible
 
 func _clear():
-    for child in box.get_children():
-        box.remove_child(child)
-        child.queue_free()
+    for parent in [box, footer]:
+        for child in parent.get_children():
+            parent.remove_child(child)
+            child.queue_free()
+    footer.hide()
 
 func _label(text: String, size := 16, color := Color("e8e0c8"), center := false) -> Label:
     var l = Label.new()
@@ -207,9 +220,10 @@ func _show(which: String):
                 if rated(): _mode_card(grid, item)
                 else: _casual_card(grid, item)
             notice = _label("", 15, Color("ff9d86"), true)
-            _button(box, "VOLTAR", func():
+            footer.show()
+            _button(footer, "VOLTAR", func():
                 close_panel()
-                back_requested.emit())
+                back_requested.emit()).name = "BackButton"
         "searching":
             var m = _mode_info(controller_mode_or_last())
             _label("BUSCANDO ADVERSÁRIO…", 22, GOLD, true)
@@ -472,9 +486,10 @@ func _layout_panel():
     var max_w = 640.0 if screen == "modes" and not _narrow() else 460.0
     var width = minf(max_w, (area.size.x - 16.0) / ui_scale)
     box.custom_minimum_size.x = width - 32.0
-    var wanted = box.get_combined_minimum_size().y + 32.0
+    var foot = (footer.get_combined_minimum_size().y + 10.0) if footer.visible else 0.0
+    var wanted = box.get_combined_minimum_size().y + foot + 32.0
     var height = minf(wanted, (area.size.y - 16.0) / ui_scale)
-    scroll.custom_minimum_size = Vector2(width - 32.0, height - 32.0)
+    scroll.custom_minimum_size = Vector2(width - 32.0, maxf(40.0, height - 32.0 - foot))
     panel.custom_minimum_size = Vector2.ZERO
     panel.reset_size()
     panel.size = Vector2(width, height)

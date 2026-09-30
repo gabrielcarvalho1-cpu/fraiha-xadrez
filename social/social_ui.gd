@@ -78,6 +78,7 @@ func setup(service, avatar_callable: Callable = Callable()):
     panel.add_theme_stylebox_override("panel", style)
     add_child(panel)
     scroll = ScrollContainer.new()
+    preload("res://ui_v022/touch_scroll.gd").attach(scroll)
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     panel.add_child(scroll)
     box = VBoxContainer.new()
@@ -703,6 +704,7 @@ func _build_dm():
     var dm_pres = _label(col, _dm_presence_text(), 13, DIM_TEXT)
     dm_pres.name = "DmPresence"
     dm_scroll = ScrollContainer.new()
+    preload("res://ui_v022/touch_scroll.gd").attach(dm_scroll)
     dm_scroll.name = "DmScroll"
     dm_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     dm_scroll.custom_minimum_size.y = 240

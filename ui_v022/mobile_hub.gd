@@ -27,6 +27,7 @@ func setup(owner_hub):
     profile = _button(self,hub.player_name + " · PERFIL",func(): hub.show_page("profile"))
     back_button = _button(self,"VOLTAR",hub.back)
     scroll = ScrollContainer.new()
+    preload("res://ui_v022/touch_scroll.gd").attach(scroll)
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     scroll.follow_focus = true
     add_child(scroll)
