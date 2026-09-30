@@ -230,7 +230,8 @@ func _refresh_desk_hud():
     var mobile = MobileLayout.active(get_viewport())
     var in_match = mode in ["local", "online", "bot", "ranked", "casual"] and game.visible
     game.external_hud = not mobile
-    fullscreen_button.visible = in_match and not mobile
+    # Também na Home e suas páginas (Configurações etc.), no canto superior esquerdo.
+    fullscreen_button.visible = (in_match or mode == "home") and not mobile
     _sync_fullscreen_glyph()
     match_plaque.visible = mode == "bot" and not mobile
     if match_plaque.visible:
@@ -972,6 +973,7 @@ func _layout_mobile(board_center: Vector2):
         button.add_theme_font_size_override("font_size", 16)
 
 func toggle_fullscreen():
+    _sync_fullscreen_glyph.call_deferred()
     var window = get_window()
     if OS.has_feature("web"):
         window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN

@@ -1167,19 +1167,26 @@ func _build_reference_chrome():
         ref_menu_cover.add_child(patch)
         patch.top_level = false
         patch.position = Vector2(x, 454) - ref_menu_cover.position
-    # Botões do menu: realce dourado ao passar o mouse / foco (o botão desenhado na arte fica visível).
+    # Botões do menu: ao passar o mouse / foco o PRÓPRIO botão da arte reluz (mesmos pixels,
+    # somando luz nas partes douradas). Nada de caixa por cima nem texto extra.
+    var glow_material = ShaderMaterial.new()
+    glow_material.shader = preload("res://ui_v022/home_button_glow.gdshader")
     for button in menu_buttons:
-        var hover = Panel.new()
-        hover.name = "RefHover"
-        var st = StyleBoxFlat.new()
-        st.bg_color = Color(1.0,0.86,0.5,0.10)
-        st.border_color = Color("ffe08f")
-        st.set_border_width_all(2)
-        st.set_corner_radius_all(5)
-        hover.add_theme_stylebox_override("panel", st)
         var ranked = title_of(button) == "JOGAR RANQUEADO"
-        hover.position = Vector2(6, -8 if ranked else 0)
-        hover.size = button.size + Vector2(-12, 16 if ranked else -1)
+        var offset = Vector2(-6, -12) if ranked else Vector2(0, -2)
+        var region = Rect2(button.position + offset, button.size + (Vector2(12, 26) if ranked else Vector2(0, 4)))
+        var atlas = AtlasTexture.new()
+        atlas.atlas = FOREST
+        atlas.region = region
+        var hover = TextureRect.new()
+        hover.name = "RefHover"
+        hover.texture = atlas
+        hover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        hover.stretch_mode = TextureRect.STRETCH_SCALE
+        hover.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+        hover.material = glow_material
+        hover.position = offset
+        hover.size = region.size
         hover.mouse_filter = Control.MOUSE_FILTER_IGNORE
         hover.hide()
         button.add_child(hover)
