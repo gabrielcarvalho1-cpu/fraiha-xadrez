@@ -23,6 +23,8 @@ func _ready():
         var player = AudioStreamPlayer.new()
         player.volume_db = -14
         player.bus = "Effects"
+        # Web: efeitos pelo mixer do Godot, para o volume/mudo do bus Effects valer também no celular.
+        if OS.has_feature("web"): player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
         add_child(player)
         players.append(player)
     music = AudioStreamPlayer.new()
@@ -78,7 +80,24 @@ func _web_music_init():
         if (window.fraihaMusic) return;
         const m = { el: new Audio(), url: null, vol: 0.65, hidden: false };
         m.el.loop = true; m.el.preload = 'auto';
-        m.tryPlay = () => { if (m.url && m.vol > 0 && !m.hidden) m.el.play().catch(() => {}); };
+        // Volume por GainNode (Web Audio): no iPhone o volume de <audio> é ignorado pelo navegador.
+        m.graph = () => {
+            if (m.gain) return;
+            try {
+                const C = window.AudioContext || window.webkitAudioContext;
+                m.ctx = new C();
+                m.gain = m.ctx.createGain();
+                m.ctx.createMediaElementSource(m.el).connect(m.gain);
+                m.gain.connect(m.ctx.destination);
+                m.gain.gain.value = m.vol;
+                m.el.volume = 1;
+            } catch (e) { m.gain = null; }
+        };
+        m.tryPlay = () => {
+            m.graph();
+            if (m.ctx && m.ctx.state === 'suspended') m.ctx.resume().catch(() => {});
+            if (m.url && m.vol > 0 && !m.hidden) m.el.play().catch(() => {});
+        };
         m.load = (b64) => {
             const bin = atob(b64); const bytes = new Uint8Array(bin.length);
             for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -86,9 +105,13 @@ func _web_music_init():
             m.url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
             m.el.src = m.url; m.el.currentTime = 0; m.tryPlay();
         };
-        m.setVolume = (v) => { m.vol = v; m.el.volume = Math.max(0, Math.min(1, v)); if (v <= 0) m.el.pause(); else m.tryPlay(); };
+        m.setVolume = (v) => {
+            m.vol = Math.max(0, Math.min(1, v));
+            if (m.gain) m.gain.gain.value = m.vol; else m.el.volume = m.vol;
+            if (m.vol <= 0) m.el.pause(); else if (m.el.paused) m.tryPlay();
+        };
         // Navegadores só liberam áudio depois de um toque/tecla.
-        for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, () => { if (m.el.paused) m.tryPlay(); }, true);
+        for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, () => { if (m.el.paused || (m.ctx && m.ctx.state !== 'running')) m.tryPlay(); }, true);
         document.addEventListener('visibilitychange', () => { m.hidden = document.hidden; if (m.hidden) m.el.pause(); else m.tryPlay(); });
         window.fraihaMusic = m;
     })()
