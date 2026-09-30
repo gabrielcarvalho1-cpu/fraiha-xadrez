@@ -4,6 +4,7 @@ extends Control
 ## da ranked_ui (mesmas ações, mesmas regras). Coordenadas em pixels da arte.
 const ART := preload("res://ui_v022/assets/online_panel.png")
 const TITLE_FONT := preload("res://account/fonts/Cinzel-Bold.woff")
+const BG_TAB := Color("001b0f")
 const TAB_ART := preload("res://ui_v022/assets/online_tab.png")
 const ICON_CASUAL := preload("res://ui_v022/assets/online_tab_icon_casual.png")
 const ICON_RANKED := preload("res://ui_v022/assets/online_tab_icon_ranked.png")
@@ -88,9 +89,11 @@ func _draw():
     draw_texture(ART, Vector2.ZERO)
     # Abas CASUAL e RANQUEADA com o mesmo visual (verde e ouro com louros); hover = mais brilho.
     var font0 := get_theme_default_font()
+    # Apaga a aba "Ranqueada" escura da arte original antes de desenhar as duas abas iguais.
+    draw_rect(Rect2(566, 254, 438, 82), BG_TAB)
     for pair in [[TAB_L, ICON_CASUAL, "CASUAL", "tab_l"], [TAB_R, ICON_RANKED, "RANQUEADA", "tab_r"]]:
         var r: Rect2 = pair[0]
-        var slot := Rect2(r.position.x, 255, 433, 79)
+        var slot := Rect2(118 if pair[3] == "tab_l" else 556, 252, 450, 86)
         var lit: bool = hover == pair[3]
         draw_texture_rect(TAB_ART, slot, false, Color(1.18, 1.14, 1.0) if lit else Color.WHITE)
         var label: String = pair[2]

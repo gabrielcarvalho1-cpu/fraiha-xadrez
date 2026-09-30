@@ -32,6 +32,8 @@ func _ready():
     if OS.has_feature("web"):
         music.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
     add_child(music)
+    web_music = OS.has_feature("web") and not OS.has_feature("editor")
+    if web_music: _web_music_init()
     refresh_music()
 
 func play_cue(id: String):
@@ -58,10 +60,50 @@ func refresh_music():
     music.stop()
     music.stream = track
     music_path = path
-    music.play()
     music_starts += 1
+    if web_music:
+        # Web: a música toca num <audio> do navegador, fora do laço do jogo — cliques e
+        # carregamentos não engasgam mais o som (na Web sem threads o mixer do Godot para junto).
+        JavaScriptBridge.eval("window.fraihaMusic.load('" + Marshalls.raw_to_base64(track.data) + "')")
+        _web_volume = -1.0
+        return
+    music.play()
+
+var web_music := false
+var _web_volume := -1.0
+
+func _web_music_init():
+    JavaScriptBridge.eval("""
+    (() => {
+        if (window.fraihaMusic) return;
+        const m = { el: new Audio(), url: null, vol: 0.65, hidden: false };
+        m.el.loop = true; m.el.preload = 'auto';
+        m.tryPlay = () => { if (m.url && m.vol > 0 && !m.hidden) m.el.play().catch(() => {}); };
+        m.load = (b64) => {
+            const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            if (m.url) URL.revokeObjectURL(m.url);
+            m.url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+            m.el.src = m.url; m.el.currentTime = 0; m.tryPlay();
+        };
+        m.setVolume = (v) => { m.vol = v; m.el.volume = Math.max(0, Math.min(1, v)); if (v <= 0) m.el.pause(); else m.tryPlay(); };
+        // Navegadores só liberam áudio depois de um toque/tecla.
+        for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, () => { if (m.el.paused) m.tryPlay(); }, true);
+        document.addEventListener('visibilitychange', () => { m.hidden = document.hidden; if (m.hidden) m.el.pause(); else m.tryPlay(); });
+        window.fraihaMusic = m;
+    })()
+    """)
+
+func _web_music_volume():
+    var bus = AudioServer.get_bus_index("Music")
+    var master_mute = AudioServer.is_bus_mute(0)
+    var v = 0.0 if (AudioServer.is_bus_mute(bus) or master_mute) else db_to_linear(AudioServer.get_bus_volume_db(bus) + AudioServer.get_bus_volume_db(0) + music.volume_db)
+    if absf(v - _web_volume) > 0.001:
+        _web_volume = v
+        JavaScriptBridge.eval("window.fraihaMusic.setVolume(%f)" % v)
 
 func _process(_delta):
+    if web_music: _web_music_volume()
     var game = stage.game
     var theme: String = game.visual_theme
     refresh_music()

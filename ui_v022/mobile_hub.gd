@@ -262,6 +262,9 @@ func show_page(id: String):
                     var r: Rect2 = ROW_RECTS[i] if i < ROW_RECTS.size() else Rect2(source.position, source.size)
                     if row.text == "JOGAR RANQUEADO":
                         row.art = preload("res://ui_v022/assets/home_ranked_row.png")
+                        # corpo do botão na arte: 467 de 538 px; comuns: 444 px → mesma largura visual
+                        row.draw_scale = 0.92
+                        row.featured = true
                     else:
                         var atlas = AtlasTexture.new()
                         atlas.atlas = hub.FOREST
@@ -383,6 +386,10 @@ func _fit_width(portrait: bool):
 ## Linha do menu desenhada com o recorte da arte do PC (mesmo visual); hover/toque = mais brilho.
 class ArtRow extends Button:
     var art: Texture2D
+    # Largura desenhada relativa à linha: botões comuns a 92%; o Ranqueado (com louros) é
+    # desenhado maior para o corpo do botão ter a mesma largura dos outros.
+    var draw_scale := 0.92
+    var featured := false   # JOGAR RANQUEADO: mesmo botão dos outros + título dourado e louros
     func _init():
         focus_mode = Control.FOCUS_NONE
         for s in ["normal", "hover", "pressed", "focus", "disabled"]: add_theme_stylebox_override(s, StyleBoxEmpty.new())
@@ -393,11 +400,51 @@ class ArtRow extends Button:
     func fit():
         if art == null or size.x <= 0.0: return
         var s: Vector2 = art.get_size()
-        custom_minimum_size.y = roundf(size.x * s.y / s.x)
+        custom_minimum_size.y = roundf(size.x * draw_scale * s.y / s.x)
     func _notification(what):
         if what == NOTIFICATION_RESIZED: fit.call_deferred()
     func _draw():
-        if art != null: draw_texture_rect(art, Rect2(Vector2.ZERO, size), false)
+        if art == null: return
+        var w := size.x * draw_scale
+        var r := Rect2(Vector2((size.x - w) / 2.0, 0), Vector2(w, size.y))
+        if featured:
+            # Brilho dourado suave atrás do botão.
+            for i in 4:
+                var g := r.grow(2.0 + i * 2.0)
+                draw_rect(g, Color(1.0, 0.8, 0.3, 0.07 - i * 0.015), false, 2.0)
+        draw_texture_rect(art, r, false)
+        if not featured: return
+        var k := w / 444.0
+        var font := get_theme_default_font()
+        var fs1 := int(round(19 * k))
+        var fs2 := int(round(12.5 * k))
+        var tx := r.position.x + 102.0 * k
+        draw_string_outline(font, Vector2(tx, r.position.y + 26.0 * k), "JOGAR RANQUEADO", HORIZONTAL_ALIGNMENT_LEFT, -1, fs1, 4, Color(0.1, 0.06, 0, 0.8))
+        draw_string(font, Vector2(tx, r.position.y + 26.0 * k), "JOGAR RANQUEADO", HORIZONTAL_ALIGNMENT_LEFT, -1, fs1, Color("ffd46b"))
+        draw_string(font, Vector2(tx, r.position.y + 45.0 * k), "Compita, evolua e conquiste seu lugar", HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, Color("f4ecd8"))
+        # Louros dourados desenhados (um de cada lado, abraçando as pontas).
+        for side in [-1.0, 1.0]:
+            var cx: float = r.position.x + 3.0 * k if side < 0 else r.end.x - 3.0 * k
+            var cy := r.get_center().y
+            var rad := size.y * 0.55
+            for j in 7:
+                var t := -1.0 + 2.0 * float(j) / 6.0
+                var ang := t * 1.1
+                var p := Vector2(cx + side * (cos(ang) * rad * 0.35 - rad * 0.12), cy + sin(ang) * rad)
+                var dir := Vector2(side * cos(ang + side * 0.0), sin(ang)).rotated(-side * 0.9 * signf(t + 0.001))
+                var leaf := PackedVector2Array()
+                var along := Vector2(-side * 0.45, -1.0).normalized().rotated(side * t * 0.8)
+                var perp := Vector2(-along.y, along.x)
+                var L := 9.5 * k
+                var W := 4.0 * k
+                for q in 9:
+                    var u := float(q) / 8.0
+                    leaf.append(p + along * (u - 0.5) * L * 2.0 + perp * sin(u * PI) * W)
+                for q in range(8, -1, -1):
+                    var u := float(q) / 8.0
+                    leaf.append(p + along * (u - 0.5) * L * 2.0 - perp * sin(u * PI) * W)
+                draw_colored_polygon(leaf, Color("f3c649").lerp(Color("b7822a"), absf(t) * 0.5))
+                draw_polyline(leaf, Color("6a4210"), 1.2)
 
 ## Cartão do jogador (retrato, nome, liga e barra de PL) sobre o painel da arte do PC.
 class ProfileCard extends Button:
