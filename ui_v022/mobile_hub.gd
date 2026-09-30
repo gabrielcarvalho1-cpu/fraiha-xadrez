@@ -42,6 +42,7 @@ func layout():
     backdrop.size = get_viewport().get_visible_rect().size
     var portrait = size.x < 560.0
     if is_instance_valid(menu_grid): menu_grid.columns = 1 if portrait else 2
+    _fit_width(portrait)
     if portrait:
         # Title on its own row; profile/back as a full-width touch bar below it.
         heading.position = Vector2(8,4)
@@ -154,6 +155,7 @@ func show_page(id: String):
             "ranking": _ranking(content)
             "about": _about(content)
     scroll.scroll_vertical = 0
+    _fit_width.call_deferred(size.x < 560.0)
     layout()
 
 func _touch_content(node: Node):
@@ -233,3 +235,22 @@ func _about(content: VBoxContainer):
             source.pressed.emit()
             text.text = hub.about_title.text+"\n\n"+hub.about_body.text
         )
+
+## Nada da página pode ser mais largo que a tela: botões cortam o texto (…) em vez de
+## esticar a grade; em retrato, grades de botões viram 1 coluna e a de avatares 2.
+func _fit_width(portrait: bool):
+    for grid in scroll.find_children("*", "GridContainer", true, false):
+        if grid == menu_grid: continue
+        var has_avatars = grid.find_children("*", "TextureButton", true, false).size() > 0
+        if portrait: grid.columns = 2 if has_avatars else 1
+    for b in scroll.find_children("*", "Button", true, false):
+        b.clip_text = true
+        b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    for tb in scroll.find_children("*", "TextureButton", true, false):
+        tb.custom_minimum_size = Vector2(minf(tb.custom_minimum_size.x, 84.0), minf(tb.custom_minimum_size.y, 84.0)) if portrait else tb.custom_minimum_size
+    for r in scroll.find_children("*", "TextureRect", true, false):
+        r.custom_minimum_size.x = minf(r.custom_minimum_size.x, size.x - 24.0)
+    for l in scroll.find_children("*", "LineEdit", true, false):
+        l.custom_minimum_size.x = 0
+    for c in scroll.get_children():
+        if c is Control: c.custom_minimum_size.x = 0

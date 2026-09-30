@@ -41,6 +41,10 @@ func _input(event):
             _dragging = false
     elif event is InputEventScreenDrag and event.index == _index:
         var delta: Vector2 = event.position - _start
+        # Arrasto mais horizontal que vertical é do controle tocado (ex.: barra de volume).
+        if not _dragging and delta.length() >= THRESHOLD and absf(delta.x) > absf(delta.y) and scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED:
+            _index = -1
+            return
         if not _dragging and delta.length() >= THRESHOLD:
             _dragging = true
             _cancel_press()

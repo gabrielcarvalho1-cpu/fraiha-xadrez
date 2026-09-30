@@ -130,7 +130,10 @@ func _knights(r: Rect2, k: float):
         draw_circle(rect.get_center() + Vector2(0, 10.0 * k), w * 0.55, Color(0.95, 0.75, 0.3, 0.06))
         if side == 0:
             # Preto à esquerda, espelhado para olhar para o centro.
-            draw_texture_rect(KNIGHT_B, Rect2(rect.position + Vector2(rect.size.x, 0), Vector2(-rect.size.x, rect.size.y)), false)
+            # Espelhamento por transformação (tamanho negativo deslocava o cavalo para o centro).
+            draw_set_transform(Vector2(rect.end.x, rect.position.y), 0.0, Vector2(-1, 1))
+            draw_texture_rect(KNIGHT_B, Rect2(Vector2.ZERO, rect.size), false)
+            draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
         else:
             draw_texture_rect(KNIGHT_W, rect, false)
 

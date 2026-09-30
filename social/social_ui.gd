@@ -386,6 +386,7 @@ func _show(which: String):
             srow.add_theme_constant_override("separation", 6)
             box.add_child(srow)
             search_input = LineEdit.new()
+            preload("res://ui_v022/web_text_field.gd").attach(search_input)
             search_input.name = "FriendSearch"
             search_input.placeholder_text = "Buscar jogador pelo nickname"
             search_input.max_length = 16
@@ -737,6 +738,7 @@ func _build_dm():
     row.add_theme_constant_override("separation", 6)
     box.add_child(row)
     dm_input = LineEdit.new()
+    preload("res://ui_v022/web_text_field.gd").attach(dm_input)
     dm_input.name = "DmInput"
     dm_input.placeholder_text = "Mensagem para %s" % String(dm_peer.get("nickname", "amigo"))
     dm_input.max_length = DM_MAX
