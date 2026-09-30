@@ -147,9 +147,9 @@ func show_page(id: String):
                 menu_grid = grid
                 for original in hub.menu_buttons:
                     var source = original
-                    var button = _button(grid,source.tooltip_text,func(): source.pressed.emit())
+                    var button = _button(grid,hub.title_of(source),func(): source.pressed.emit())
                     button.custom_minimum_size.y = 54
-                    if source.tooltip_text == "JOGAR RANQUEADO": _feature(button)
+                    if hub.title_of(source) == "JOGAR RANQUEADO": _feature(button)
             "profile": _profile(content)
             "ranking": _ranking(content)
             "about": _about(content)
@@ -227,9 +227,9 @@ func _about(content: VBoxContainer):
     var grid = _grid(content,2)
     var text = _text(content,hub.about_title.text+"\n\n"+hub.about_body.text,18)
     for original in hub.pages.about.find_children("*","TextureButton",true,false):
-        if original.tooltip_text.begins_with("VOLTAR"): continue
+        if hub.title_of(original).begins_with("VOLTAR"): continue
         var source = original
-        _button(grid,source.tooltip_text,func():
+        _button(grid,hub.title_of(source),func():
             source.pressed.emit()
             text.text = hub.about_title.text+"\n\n"+hub.about_body.text
         )

@@ -11,7 +11,7 @@ func run():
     root.add_child(stage)
     for i in range(3): await process_frame
     var hub = stage.hub
-    var titles = hub.menu_buttons.map(func(b): return b.tooltip_text)
+    var titles = hub.menu_buttons.map(func(b): return hub.title_of(b))
     check(titles == ["JOGAR CONTRA O BOT","JOGAR ONLINE","JOGAR RANQUEADO","LIGAS E RANKING","AMIGOS","CONFIGURAÇÕES","CONHEÇA O FRAIHA","SAIR"], "ordem da Home pública: " + str(titles))
     check(not "JOGAR LOCAL" in titles, "JOGAR LOCAL fora da Home")
     for i in range(hub.menu_buttons.size()):

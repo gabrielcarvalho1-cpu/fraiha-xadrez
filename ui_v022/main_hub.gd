@@ -161,7 +161,9 @@ func _button(parent: Node, row: int, title: String, subtitle: String, pos: Vecto
     button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     button.focus_mode = Control.FOCUS_ALL
     button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    button.tooltip_text = title
+    # Título guardado como dado (usado pelo menu mobile/testes); sem tooltip: o próprio botão
+    # já mostra o nome, e o balão repetia o mesmo texto embaixo dele.
+    button.set_meta("title", title)
     button.name = "MenuButton" + str(row)
     parent.add_child(button)
     var margin = MarginContainer.new()
@@ -332,7 +334,6 @@ func _build_account_card():
     account_card.size = Vector2(326,62)
     account_card.focus_mode = Control.FOCUS_ALL
     account_card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    account_card.tooltip_text = "Entrar / criar conta"
     canvas.add_child(account_card)
     var icon = Control.new()
     icon.name = "AccountIcon"
@@ -374,7 +375,6 @@ func set_account_card(title: String, subtitle: String, logged_in: bool):
     account_card_title.text = title
     account_card_title.add_theme_color_override("font_color", CREAM if logged_in else GOLD)
     account_card_subtitle.text = subtitle
-    account_card.tooltip_text = "Minha conta" if logged_in else "Entrar / criar conta"
     account_card.get_node("AccountIcon").queue_redraw()
     _refresh_ref_account()
 
@@ -454,6 +454,10 @@ func _single_line(label: Label):
     label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     # clip_text zera a altura mínima: dentro de containers a linha precisa de altura explícita
     label.custom_minimum_size.y = ceilf(label.get_theme_font_size("font_size") * 1.6)
+
+## Nome do botão do menu (antes vinha do tooltip, que foi removido por ser redundante).
+static func title_of(button: Control) -> String:
+    return String(button.get_meta("title", button.tooltip_text))
 
 func _new_page(id: String, title: String, eyebrow: String) -> VBoxContainer:
     var panel = Control.new()
@@ -1173,7 +1177,7 @@ func _build_reference_chrome():
         st.set_border_width_all(2)
         st.set_corner_radius_all(5)
         hover.add_theme_stylebox_override("panel", st)
-        var ranked = button.tooltip_text == "JOGAR RANQUEADO"
+        var ranked = title_of(button) == "JOGAR RANQUEADO"
         hover.position = Vector2(6, -8 if ranked else 0)
         hover.size = button.size + Vector2(-12, 16 if ranked else -1)
         hover.mouse_filter = Control.MOUSE_FILTER_IGNORE
