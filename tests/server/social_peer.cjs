@@ -12,7 +12,9 @@ async function login(name) {
   c.id = st.user_id; return c;
 }
 (async () => {
-  const ana = await login('PeerAna'), bia = await login('PeerBia'), cadu = await login('PeerCadu');
+  let ana = await login('PeerAna');
+  const bia = await login('PeerBia'), cadu = await login('PeerCadu');
+  const wireAna = () => {
   // PeerAna responde DMs do alvo com "eco: <texto>" depois de 1,5 s (dá tempo de testar não lidas).
   ana.ws.on('message', raw => { const m = JSON.parse(raw); if (m.type === 'dm_msg' && m.message.sender_id !== ana.id && m.message.body !== 'sem eco' && !m.message.body.startsWith('me convida')) setTimeout(() => ana.send({ type: 'dm_send', user_id: m.user_id, text: 'eco: ' + m.message.body }), 1500); });
   // Convites: DM "me convida <modo>" -> PeerAna convida; convites recebidos: 3 min aceita, 5 min recusa, outros ignora.
@@ -24,7 +26,21 @@ async function login(name) {
       if (m.invite.mode === 'casual_5min') ana.send({ type: 'invite_decline', invite_id: m.invite.id });
     }, 1500);
   });
-  cadu.ws.on('message', raw => { const m = JSON.parse(raw); if (m.type === 'social_event' && m.event === 'request_received') cadu.send({ type: 'social_accept', user_id: m.user.user_id }); });
+  // Presença: DM "presenca some" -> PeerAna desconecta e volta em 3 s; "presenca partida" -> joga 5 s com PeerCadu (convite).
+  ana.ws.on('message', raw => {
+    const m = JSON.parse(raw);
+    if (m.type === 'dm_msg' && m.message.body === 'presenca some') { ana.close(); setTimeout(async () => { ana = await login('PeerAna'); wireAna(); }, 3000); }
+    if (m.type === 'dm_msg' && m.message.body === 'presenca partida') ana.send({ type: 'invite_send', user_id: cadu.id, mode: 'casual_3min' });
+    if (m.type === 'casual_state' && m.status === 'playing' && !ana.resigning) { ana.resigning = true; setTimeout(() => { ana.send({ type: 'casual_resign', match_id: m.match_id }); ana.resigning = false; }, 5000); }
+  });
+  };
+  wireAna();
+  cadu.ws.on('message', raw => {
+    const m = JSON.parse(raw);
+    if (m.type === 'social_event' && m.event === 'request_received') cadu.send({ type: 'social_accept', user_id: m.user.user_id });
+    if (m.type === 'invite_received' && m.invite.mode === 'casual_3min') cadu.send({ type: 'invite_accept', invite_id: m.invite.id });
+  });
+  ana.send({ type: 'social_request', user_id: cadu.id });
   let found = null;
   for (let i = 0; i < 200 && !found; i++) {
     await sleep(700);

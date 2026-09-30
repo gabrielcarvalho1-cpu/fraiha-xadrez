@@ -8,6 +8,7 @@ const { ChatHub } = require('./chat');
 const { Social } = require('./social/service');
 const { DirectMessages } = require('./social/dm');
 const { Invites } = require('./social/invites');
+const { Presence } = require('./social/presence');
 
 const GUEST_TTL_MS = 24 * 3600e3;
 
@@ -35,6 +36,7 @@ class Backend {
     this.social = new Social({ send: (ws, o) => this.send(ws, o), backend: this });
     this.dm = new DirectMessages({ send: (ws, o) => this.send(ws, o), backend: this });
     this.invites = new Invites({ send: (ws, o) => this.send(ws, o), backend: this });
+    this.presence = new Presence({ send: (ws, o) => this.send(ws, o), backend: this });
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
   attachRanked(ranked) { this.ranked = ranked; ranked.backend = this; }
@@ -59,13 +61,12 @@ class Backend {
     return true;
   }
   inMatch(uid) { return this.games().some(g => !!g.activeMatchOf(uid)); }
-  presenceChanged(_uid) { /* conectado pelo serviço de presença */ }
+  // Sessões/partidas mudaram: o serviço de presença recalcula (com tolerância) e avisa amigos se mudou.
+  presenceChanged(uid) { if (this.presence) this.presence.changed(uid); }
   socketsOf(uid) { return [...(this.online.get(uid) || [])].filter(ws => ws.readyState === undefined || ws.readyState === 1); }
-  // Presença pública: só o estado, nunca dados de conexão.
-  presenceOf(uid) {
-    if (!(this.online.get(uid) || new Set()).size) return 'offline';
-    return this.inMatch(uid) ? 'in_match' : 'online';
-  }
+  // Presença pública publicada (com tolerância): só o estado, nunca dados de conexão.
+  presenceOf(uid) { return this.presence ? this.presence.stateOf(uid) : 'offline'; }
+  presenceRevOf(uid) { return this.presence ? this.presence.revOf(uid) : 0; }
   setIdentity(ws, identity) {
     const old = ws.identity;
     if (old && (!identity || old.id !== identity.id)) {
@@ -176,6 +177,7 @@ class Backend {
         await this.state(ws);
         if (existing) for (const g of this.games()) g.onAuthenticated(ws);
         if (existing) this.invites.onAuthenticated(ws);
+        if (existing) await this.presence.snapshot(ws);
         return;
       }
       if (!ws.user) return this.fail(ws, 'Entre na sua conta primeiro.', { code: 'auth_required' });
@@ -184,7 +186,8 @@ class Backend {
         if (v.error) return this.fail(ws, v.error, { code: 'nickname_invalid' });
         const r = await this.store.createProfile(ws.user.id, v.nickname, String(m.avatar_id || 'warrior'));
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'profile_error' });
-        return this.state(ws);
+        await this.state(ws);
+        return this.presence.snapshot(ws);
       }
       if (a === 'acct_refresh') return this.state(ws);
       if (a === 'acct_logout') {

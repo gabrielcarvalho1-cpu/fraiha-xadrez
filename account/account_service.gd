@@ -31,7 +31,7 @@ var busy := false
 var socket: WebSocketPeer
 var socket_open := false
 var retry_in := 0.0
-var ping_in := 12.0
+var ping_in := 10.0 # heartbeat: o servidor usa o ping para presença (silêncio de 45 s encerra a conexão)
 var refresh_in := -1.0
 # Convidado (Online Casual sem conta): identidade só no servidor, recuperável pelo token.
 var guest_wanted := false
@@ -328,6 +328,12 @@ static func nickname_error(nick: String) -> String:
     if re.search(n) == null: return "Use apenas letras, números, ponto, hífen ou _ (sem espaços)."
     return ""
 
+## Voltou ao primeiro plano (aba/app): heartbeat imediato; a reconexão normal cuida do resto.
+func _notification(what):
+    if what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED:
+        ping_in = 0.0
+        if socket == null and (signed_in() or guest_wanted): retry_in = 0.05   # reconecta já, sem esperar os 3 s
+
 func _process(delta):
     if refresh_in > 0.0:
         refresh_in -= delta
@@ -351,7 +357,7 @@ func _process(delta):
             if msg is Dictionary: _receive(msg)
         ping_in -= delta
         if ping_in <= 0.0:
-            ping_in = 12.0
+            ping_in = 10.0
             _send({"type": "ping"})
     elif state == WebSocketPeer.STATE_CLOSED:
         socket = null

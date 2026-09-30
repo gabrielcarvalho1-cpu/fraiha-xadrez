@@ -27,7 +27,7 @@ const list = async c => { c.inbox.splice(0); return paced(c, { type: 'social_lis
 const ids = arr => arr.map(p => p.user_id);
 
 (async () => {
-  const s = await startServer({ FRAIHA_RANKED_START_DELAY_MS: '200', ...ENV });
+  const s = await startServer({ FRAIHA_RANKED_START_DELAY_MS: '200', FRAIHA_PRESENCE_GRACE_MS: '300', FRAIHA_PRESENCE_TICK_MS: '100', ...ENV });
   const A = await login(s.port, 'AnaSocial'), B = await login(s.port, 'BrunoSocial'), C = await login(s.port, 'CarlaSocial');
   // Convidado e sem identidade não usam Amigos
   const g = client(s.port); await g.open(); g.send({ type: 'guest_auth' }); await g.next('guest_state');
@@ -42,7 +42,7 @@ const ids = arr => arr.map(p => p.user_id);
   check((await paced(A, { type: 'social_search', query: "x%'*,()" }, () => false)).code === 'bad_query', 'busca com caracteres especiais é rejeitada');
   // Perfil
   const pb = (await paced(A, { type: 'social_profile', user_id: B.id }, m => m.type === 'social_profile')).profile;
-  check(pb.nickname === 'BrunoSocial' && pb.presence === 'online' && pb.relation === 'none' && pb.ranked && 'ranked_5min' in pb.ranked && typeof pb.highest_league === 'number' && !('email' in pb), 'perfil público: nickname, ranked por modo, maior liga, status online, sem e-mail');
+  check(pb.nickname === 'BrunoSocial' && pb.presence === '' && pb.relation === 'none' && pb.ranked && 'ranked_5min' in pb.ranked && typeof pb.highest_league === 'number' && !('email' in pb), 'perfil público: nickname, ranked por modo, maior liga, sem e-mail (presença só para amigos)');
   check((await act(A, 'social_request', { user_id: A.id })).code === 'self', 'não adiciona a si mesmo');
   check((await act(A, 'social_request', { user_id: '00000000-0000-4000-a000-000000000000' })).code === 'not_found', 'jogador inexistente');
   check((await act(A, 'social_request', { user_id: 'drop table' })).code === 'bad_user', 'id inválido é rejeitado');
@@ -73,7 +73,7 @@ const ids = arr => arr.map(p => p.user_id);
   check((await act(A, 'social_request', { user_id: B.id })).code === 'already_friends', 'já amigos: não cria pedido');
   check((await paced(A, { type: 'social_profile', user_id: B.id }, m => m.type === 'social_profile')).profile.relation === 'friend', 'perfil mostra relação "amigo"');
   // Offline
-  B.close(); await sleep(300);
+  B.close(); await sleep(900);
   la = await list(A); check(la.friends.find(f => f.user_id === B.id).presence === 'offline', 'amigo desconectado aparece offline');
   const B2 = await login(s.port, 'BrunoSocial');
   la = await list(A); check(la.friends.find(f => f.user_id === B.id).presence === 'online', 'amigo reconectado volta a online');

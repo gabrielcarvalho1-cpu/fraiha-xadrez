@@ -77,5 +77,7 @@ func run():
         check(count <= 1, "invalid_token: no máximo 1 renovação de sessão (sem loop) — foram %d" % count)
         check(not acc.server_ready and not acc.has_profile() and notices.any(func(t): return "Sessão" in t), "sessão recusada vira aviso ao jogador, não loop")
         check(acc.signed_in(), "sessão local não é apagada por recusa do servidor")
+    acc.supabase_url = ""   # não deixa sessão falsa salva para os próximos testes
+    acc._clear_session()
     print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
     quit(failures)

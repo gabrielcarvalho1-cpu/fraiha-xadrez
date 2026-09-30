@@ -32,7 +32,8 @@ class Social {
     const pick = arr => arr.map(id => byId.get(id)).filter(Boolean);
     const unread = this.backend.dm ? await this.backend.dm.unreadCounts(uid).catch(() => ({})) : {};
     return { type: 'social_list',
-      friends: pick(rel.friends).map(p => ({ ...p, presence: this.presenceOf(p.user_id), unread: unread[p.user_id] || 0 })),
+      friends: pick(rel.friends).map(p => ({ ...p, presence: this.presenceOf(p.user_id), presence_rev: this.backend.presenceRevOf ? this.backend.presenceRevOf(p.user_id) : 0, unread: unread[p.user_id] || 0 })),
+      presence_epoch: this.backend.presence ? this.backend.presence.epoch : '',
       received: pick(rel.received), sent: pick(rel.sent), blocked: pick(rel.blocked) };
   }
   async pushList(uid) {
@@ -74,7 +75,7 @@ class Social {
         highest = Math.max(highest, ranked[mode].highest_league);
       }
       return this.send(ws, { type: 'social_profile', profile: { ...target, highest_league: highest, ranked,
-        presence: relation === 'blocked' ? 'offline' : this.presenceOf(other), relation } });
+        presence: relation === 'friend' ? this.presenceOf(other) : '', relation } });   // presença só para amigos
     }
     const done = async (action, notifyEvent) => {
       const newRel = Social.relation(await st.getRelations(me), other);

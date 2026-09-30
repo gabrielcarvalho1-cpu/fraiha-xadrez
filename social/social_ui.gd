@@ -54,6 +54,10 @@ var dm_to_end := true
 const INVITE_MODES = [["casual_3min", "RELÂMPAGO", 3], ["casual_5min", "RÁPIDA", 5], ["casual_10min", "NORMAL", 10], ["casual_20min", "CONVENCIONAL", 20]]
 var invite_peer: Dictionary = {}
 var invite_sending := false
+# Presença (Etapa 7): estado publicado pelo servidor; revisão por amigo e época (reinício do servidor).
+var presence: Dictionary = {}      # uid -> {"state": String, "rev": int}
+var presence_epoch := ""
+var reconnecting := false
 
 func setup(service, avatar_callable: Callable = Callable()):
     account = service
@@ -175,10 +179,14 @@ func _on_message(msg: Dictionary):
     if type == "invite_sent" or type == "invite_error":
         _on_invite(msg)
         return
+    if type == "presence_snapshot" or type == "presence_update" or type == "link_lost":
+        _on_presence(msg)
+        return
     if not type.begins_with("social_"): return
     match type:
         "social_list":
             data = {"friends": _arr(msg, "friends"), "received": _arr(msg, "received"), "sent": _arr(msg, "sent"), "blocked": _arr(msg, "blocked")}
+            _merge_list_presence(String(msg.get("presence_epoch", "")))
             has_list = true
             if screen == "list": _show("list")
         "social_search":
@@ -394,6 +402,7 @@ func _show(which: String):
         "confirm": _build_confirm()
         "dm": _build_dm()
         "invite_pick": _build_invite_pick()
+    if reconnecting and is_instance_valid(notice) and not notice.visible: notice_text("Reconectando…", GOLD)
     dim.show(); panel.show()
     _layout()
     _layout.call_deferred()
@@ -469,9 +478,10 @@ func _build_profile(narrow: bool):
     top.add_child(info)
     var nick = _label(info, String(profile.get("nickname", "")), 24, Color("f4edda"), narrow)
     nick.name = "ProfileNickname"
-    var pres = String(profile.get("presence", "offline"))
-    var pinfo = PRESENCE.get(pres, PRESENCE["offline"])
-    _label(info, "● " + pinfo[0], 15, pinfo[1], narrow).name = "ProfilePresence"
+    var pres = String(profile.get("presence", ""))
+    if not pres.is_empty():   # o servidor só envia presença de amigos
+        var pinfo = PRESENCE.get(pres, PRESENCE["offline"])
+        _label(info, "● " + pinfo[0], 15, pinfo[1], narrow).name = "ProfilePresence"
     var hl = int(profile.get("highest_league", 0))
     _label(info, "Maior liga: " + LEAGUES[clampi(hl, 0, 10)], 15, GOLD, narrow).name = "ProfileHighest"
     _label(box, "RANQUEADO", 15, GOLD)
@@ -509,6 +519,10 @@ func _build_profile(narrow: bool):
             var inv_peer: Dictionary = profile.duplicate()
             var inv = _button(actions, "CONVIDAR PARA JOGAR", func(): open_invite(uid, inv_peer), true)
             inv.name = "ProfileInvite"
+            var friend_state = String(profile.get("presence", "offline"))
+            if friend_state != "online":   # só visual: o servidor continua validando fila/partida/conexão
+                inv.disabled = true
+                _label(actions, ("%s está em partida agora." % nickname) if friend_state == "in_match" else ("Convite disponível quando %s estiver Online." % nickname), 13, DIM_TEXT, true).name = "InviteUnavailable"
             _button(actions, "REMOVER AMIGO", func(): _ask("remove", uid, "REMOVER AMIGO?", "%s deixará de ser seu amigo. Vocês podem voltar a se adicionar depois." % nickname))
     if String(profile.get("relation", "")) == "blocked":
         _label(actions, "Você bloqueou este jogador: ele não pode te enviar pedidos.", 14, DIM_TEXT, true)
@@ -650,7 +664,9 @@ func _on_dm(msg: Dictionary):
                     if empty != null: empty.queue_free()
                     _dm_line(m)
                     _dm_scroll_end()
-                if mine and String(msg.get("client_ref", "")) == dm_pending_ref and is_instance_valid(dm_input):
+                # Só limpa o campo na confirmação DESTE envio (não quando a mesma conta envia de outra aba/dispositivo).
+                if mine and not dm_pending_ref.is_empty() and String(msg.get("client_ref", "")) == dm_pending_ref and is_instance_valid(dm_input):
+                    dm_pending_ref = ""
                     dm_input.clear()
                     notice_text("")
                 if not mine: _send({"type": "dm_read", "user_id": dm_id})
@@ -684,7 +700,8 @@ func _build_dm():
     head.add_child(col)
     var nick = _label(col, String(dm_peer.get("nickname", "")), 19, Color("f4edda"))
     nick.name = "DmPeer"
-    _label(col, "Conversa privada", 13, DIM_TEXT)
+    var dm_pres = _label(col, _dm_presence_text(), 13, DIM_TEXT)
+    dm_pres.name = "DmPresence"
     dm_scroll = ScrollContainer.new()
     dm_scroll.name = "DmScroll"
     dm_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -824,3 +841,70 @@ func _build_invite_pick():
         b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         b.disabled = invite_sending
     if invite_sending: _label(box, "Enviando convite…", 14, GOLD, true)
+
+# ---------- Presença ----------
+func presence_of(uid: String) -> String:
+    var p = presence.get(uid, null)
+    return String(p["state"]) if p != null else ""
+
+func _dm_presence_text() -> String:
+    var st = presence_of(dm_id)
+    if st.is_empty():
+        for f in data["friends"]:
+            if String(f.get("user_id", "")) == dm_id: st = String(f.get("presence", ""))
+    var label = {"online": "Online", "in_match": "Em partida", "offline": "Offline"}.get(st, "")
+    return "Conversa privada" + ((" · " + label) if not label.is_empty() else "")
+
+func _new_epoch(epoch: String):
+    if epoch.is_empty() or epoch == presence_epoch: return
+    presence_epoch = epoch      # servidor reiniciou: revisões recomeçam
+    presence.clear()
+
+## Aplica se for mais novo (revisão maior; o snapshot também aceita igual).
+func _apply_presence(uid: String, state: String, rev: int, allow_equal := false) -> bool:
+    var cur = presence.get(uid, null)
+    if cur != null and (rev < int(cur["rev"]) or (rev == int(cur["rev"]) and not allow_equal)): return false
+    var changed = cur == null or String(cur["state"]) != state
+    presence[uid] = {"state": state, "rev": rev}
+    for f in data["friends"]:
+        if String(f.get("user_id", "")) == uid: f["presence"] = state
+    return changed
+
+func _merge_list_presence(epoch: String):
+    _new_epoch(epoch)
+    for f in data["friends"]:
+        var uid = String(f.get("user_id", ""))
+        var cur = presence.get(uid, null)
+        if cur != null and int(cur["rev"]) > int(f.get("presence_rev", 0)): f["presence"] = cur["state"]   # lista mais antiga que um update já recebido
+        else: presence[uid] = {"state": String(f.get("presence", "offline")), "rev": int(f.get("presence_rev", 0))}
+
+func _on_presence(msg: Dictionary):
+    var type = String(msg.get("type", ""))
+    if type == "link_lost":
+        # Minha conexão caiu: mantém o último estado dos amigos até o novo snapshot.
+        reconnecting = true
+        if is_open(): notice_text("Reconectando…", GOLD)
+        return
+    _new_epoch(String(msg.get("epoch", "")))
+    var touched := []
+    if type == "presence_snapshot":
+        var was = reconnecting
+        reconnecting = false
+        for e in _arr(msg, "friends"):
+            if _apply_presence(String(e.get("user_id", "")), String(e.get("state", "offline")), int(e.get("rev", 0)), true): touched.append(String(e.get("user_id", "")))
+        if was and is_open() and is_instance_valid(notice) and notice.text == "Reconectando…": notice_text("")
+        if was and is_open() and screen == "list": _request_list()
+    else:
+        var uid = String(msg.get("user_id", ""))
+        if _apply_presence(uid, String(msg.get("state", "offline")), int(msg.get("rev", 0))): touched.append(uid)
+    if touched.is_empty() or not is_open(): return
+    match screen:
+        "list": _show("list")      # reorganiza Online / Em partida / Offline na hora
+        "profile":
+            if touched.has(String(profile.get("user_id", ""))) and String(profile.get("relation", "")) == "friend":
+                profile["presence"] = presence_of(String(profile.get("user_id", "")))
+                _show("profile")
+        "dm":
+            if touched.has(dm_id):
+                var lbl = box.find_child("DmPresence", true, false)
+                if lbl != null: lbl.text = _dm_presence_text()   # sem reconstruir: não perde o texto digitado
