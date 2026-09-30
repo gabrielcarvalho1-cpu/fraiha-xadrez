@@ -15,6 +15,9 @@ config/use_custom_user_dir=true
 config/custom_user_dir_name="FRAIHA Xadrez Musicas V026 Teste"
 run/main_scene="res://presentation_v019/stage.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
+boot_splash/bg_color=Color(0.067, 0.102, 0.075, 1)
+boot_splash/image="res://branding/fraiha_loading_splash.png"
+boot_splash/minimum_display_time=1200
 
 [display]
 
