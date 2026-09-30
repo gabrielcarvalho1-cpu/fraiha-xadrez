@@ -73,6 +73,10 @@ func _process(_delta):
     el.style.top = "%dpx" % roundi(pos.y)
     el.style.width = "%dpx" % roundi(size.x)
     el.style.height = "%dpx" % roundi(size.y)
+    # Senha: o botão de mostrar/ocultar do jogo troca também o tipo do campo HTML.
+    if field.virtual_keyboard_type == LineEdit.KEYBOARD_TYPE_PASSWORD:
+        var want := "password" if field.secret else "text"
+        if str(el.type) != want: el.type = want
     # Espelha o texto nos dois sentidos (o jogo limpa o campo depois de enviar).
     var dom := str(el.value)
     if dom != _last:
