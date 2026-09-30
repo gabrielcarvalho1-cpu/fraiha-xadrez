@@ -112,10 +112,11 @@ func layout():
         subtitle.size = Vector2(size.x - 16, 20)
         if is_instance_valid(menu_grid): menu_grid.columns = 1 if portrait else 2
         _fit_width(portrait)
-        profile.position = Vector2(8, hero_h - 4)
-        profile.size = Vector2(size.x - 16, 50)
-        scroll.position = Vector2(8, hero_h + 56)
-        scroll.size = Vector2(size.x - 16, maxf(60, size.y - hero_h - 60))
+        profile.hide()
+        scroll.position = Vector2(8, hero_h + 4)
+        scroll.size = Vector2(size.x - 16, maxf(60, size.y - hero_h - 8))
+        for row in scroll.find_children("*", "Button", true, false):
+            if row is ArtRow or row is ProfileCard: row.fit()
         return
     if is_instance_valid(menu_grid): menu_grid.columns = 1 if portrait else 2
     _fit_width(portrait)
@@ -235,15 +236,30 @@ func show_page(id: String):
         scroll.add_child(content)
         match id:
             "main":
+                # Cartão do jogador recortado da própria arte do PC, com dados vivos por cima.
+                var card = ProfileCard.new()
+                card.hub = hub
+                card.text = hub.player_name + " · PERFIL"
+                card.pressed.connect(func(): hub.show_page("profile"))
+                content.add_child(card)
                 if hub.has_signal("account_requested"):
                     _button(content,hub.account_caption,func(): hub.account_requested.emit()).custom_minimum_size.y = 50
                 var grid = _grid(content,2)
                 menu_grid = grid
-                for original in hub.menu_buttons:
-                    var source = original
-                    var button = _button(grid,hub.title_of(source),func(): source.pressed.emit())
-                    button.custom_minimum_size.y = 54
-                    if hub.title_of(source) == "JOGAR RANQUEADO": _feature(button)
+                # Botões do menu: os mesmos da Home do PC (ícone, título e descrição), recortados da arte.
+                for i in hub.menu_buttons.size():
+                    var source = hub.menu_buttons[i]
+                    var row = ArtRow.new()
+                    row.text = hub.title_of(source)
+                    var r = Rect2(source.position, source.size)
+                    if row.text == "JOGAR RANQUEADO": r = Rect2(r.position + Vector2(-14, -9), r.size + Vector2(28, 18))
+                    var atlas = AtlasTexture.new()
+                    atlas.atlas = hub.FOREST
+                    atlas.region = r
+                    row.art = atlas
+                    row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+                    row.pressed.connect(func(): source.pressed.emit())
+                    grid.add_child(row)
             "profile": _profile(content)
             "ranking": _ranking(content)
             "about": _about(content)
@@ -347,3 +363,69 @@ func _fit_width(portrait: bool):
         l.custom_minimum_size.x = 0
     for c in scroll.get_children():
         if c is Control: c.custom_minimum_size.x = 0
+
+
+## Linha do menu desenhada com o recorte da arte do PC (mesmo visual); hover/toque = mais brilho.
+class ArtRow extends Button:
+    var art: Texture2D
+    func _init():
+        focus_mode = Control.FOCUS_NONE
+        for s in ["normal", "hover", "pressed", "focus", "disabled"]: add_theme_stylebox_override(s, StyleBoxEmpty.new())
+        for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+            add_theme_color_override(c, Color(0, 0, 0, 0))
+        button_down.connect(func(): self_modulate = Color(1.25, 1.2, 1.05))
+        button_up.connect(func(): self_modulate = Color.WHITE)
+    func fit():
+        if art == null or size.x <= 0.0: return
+        var s: Vector2 = art.get_size()
+        custom_minimum_size.y = roundf(size.x * s.y / s.x)
+    func _notification(what):
+        if what == NOTIFICATION_RESIZED: fit.call_deferred()
+    func _draw():
+        if art != null: draw_texture_rect(art, Rect2(Vector2.ZERO, size), false)
+
+## Cartão do jogador (retrato, nome, liga e barra de PL) sobre o painel da arte do PC.
+class ProfileCard extends Button:
+    const REGION := Rect2(1219, 47, 410, 198)
+    var hub
+    var art: AtlasTexture
+    func _init():
+        focus_mode = Control.FOCUS_NONE
+        size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+        for s in ["normal", "hover", "pressed", "focus", "disabled"]: add_theme_stylebox_override(s, StyleBoxEmpty.new())
+        for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+            add_theme_color_override(c, Color(0, 0, 0, 0))
+        button_down.connect(func(): self_modulate = Color(1.2, 1.2, 1.05))
+        button_up.connect(func(): self_modulate = Color.WHITE)
+    func fit():
+        var parent_w: float = get_parent().size.x if get_parent() is Control else size.x
+        var w := minf(parent_w, 420.0)
+        if w > 0.0: custom_minimum_size = Vector2(w, roundf(w * REGION.size.y / REGION.size.x))
+    func _notification(what):
+        if what == NOTIFICATION_RESIZED: fit.call_deferred()
+    func _draw():
+        if hub == null: return
+        if art == null:
+            art = AtlasTexture.new()
+            art.atlas = hub.FOREST
+            art.region = REGION
+        var k := size.x / REGION.size.x
+        var o := REGION.position
+        draw_texture_rect(art, Rect2(Vector2.ZERO, size), false)
+        var pr := Rect2((Vector2(1256, 65) - o) * k, Vector2(87, 94) * k)
+        var av: Texture2D = hub.avatar_texture()
+        if av != null:
+            var ts := av.get_size()
+            var sc := minf(pr.size.x / ts.x, pr.size.y / ts.y)
+            var d := ts * sc
+            draw_texture_rect(av, Rect2(pr.position + (pr.size - d) / 2.0, d), false)
+        var font := get_theme_default_font()
+        var data = hub.league_profile.data
+        var league = hub.LeagueCatalog.entry(data.current_league, data)
+        var fs := int(22 * k)
+        while fs > 8 and font.get_string_size(hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > 150 * k: fs -= 1
+        draw_string_outline(font, (Vector2(1394, 80) - o) * k, hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.6))
+        draw_string(font, (Vector2(1394, 80) - o) * k, hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("f4edda"))
+        draw_string(font, (Vector2(1364, 106) - o) * k, "%s · %d / 100 PL" % [league.display_name, int(data.lp)], HORIZONTAL_ALIGNMENT_LEFT, 190 * k, int(15 * k), Color("f4ce7f"))
+        var bar := Rect2((Vector2(1372, 118) - o) * k, Vector2(168 * clampf(float(data.lp) / 100.0, 0.0, 1.0), 6) * k)
+        draw_rect(bar, Color("e9c46a"))
