@@ -414,6 +414,7 @@ func _process(_delta):
     if screen == "searching" and is_instance_valid(search_label):
         var s = (Time.get_ticks_msec() - search_started) / 1000
         search_label.text = "%d:%02d" % [s / 60, s % 60]
+        if controller.requeue_pending: search_label.text += "  ·  reconectando…"
     if screen == "found" and is_instance_valid(found_label):
         var left = maxi(0, controller.starts_in_ms - (Time.get_ticks_msec() - controller.state_at))
         found_label.text = "Começa em %d…" % ceili(left / 1000.0) if left > 0 else ""

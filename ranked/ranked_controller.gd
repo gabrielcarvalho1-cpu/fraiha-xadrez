@@ -31,21 +31,40 @@ var promotion_choices: Array = []
 var last_result: Dictionary = {}
 var opponent: Dictionary = {}
 var kind := "ranked"
+# Fila desejada pelo jogador. Se a conexão cair enquanto busca, o servidor tira o jogador
+# da fila (onClose); ao reconectar, o cliente volta a entrar sozinho na mesma fila.
+var queue_mode := ""
+var requeue_pending := false
 
 func setup(service, world):
     account = service
     game = world
     account.server_message.connect(_on_message)
+    account.changed.connect(_maybe_requeue)
 
 func queue(which: String):
     if searching or in_match(): return
     last_result = {}
     if not account.send_server({"type": kind + "_queue", "mode": which}):
         problem.emit("Sem conexão com o servidor. Tente novamente.")
+        return
+    queue_mode = which
+    requeue_pending = false
+
+func _ready_for_queue() -> bool:
+    return account.server_ready if kind == "ranked" else account.online_ready()
+
+func _maybe_requeue():
+    if not requeue_pending or queue_mode.is_empty() or in_match(): return
+    if not _ready_for_queue(): return
+    if account.send_server({"type": kind + "_queue", "mode": queue_mode}):
+        requeue_pending = false
 
 func cancel_queue():
     account.send_server({"type": kind + "_cancel"})
     searching = false
+    queue_mode = ""
+    requeue_pending = false
     cancelled.emit()
 
 func resign():
@@ -130,6 +149,8 @@ func _on_message(msg: Dictionary):
             searching = false
         "match_found":
             searching = false
+            queue_mode = ""
+            requeue_pending = false
             match_id = String(msg.match_id)
             mode = String(msg.mode)
             mode_name = String(msg.get("mode_name", ""))
@@ -149,11 +170,23 @@ func _on_message(msg: Dictionary):
                 finished.emit(msg)
         "match_error":
             pending = false
-            if String(msg.get("code", "")) != "move_rejected": problem.emit(String(msg.get("message", "")))
+            var code = String(msg.get("code", ""))
+            # Reentrada automática depois de reconectar: o servidor ainda tinha a entrada (conexão
+            # antiga ainda não fechada do lado dele) — continua buscando normalmente.
+            if code == "already_queued" and not queue_mode.is_empty():
+                searching = true
+                return
+            if not queue_mode.is_empty() and not in_match():
+                queue_mode = ""
+                requeue_pending = false
+                searching = false
+            if code != "move_rejected": problem.emit(String(msg.get("message", "")))
         "link_lost":
             pending = false
             if in_match(): problem.emit("Conexão perdida. Reconectando — o relógio oficial continua no servidor.")
-            searching = false
+            # Buscando: continua na tela de busca e volta para a fila ao reconectar.
+            requeue_pending = not queue_mode.is_empty() and not in_match()
+            searching = requeue_pending
         "acct_error":
             if kind == "ranked" and String(msg.get("code", "")) == "auth_required": problem.emit(String(msg.get("message", "")))
 

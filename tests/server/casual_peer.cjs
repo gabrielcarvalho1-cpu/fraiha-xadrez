@@ -2,11 +2,12 @@
 // Adversário automático (convidado) para o teste do cliente Godot no Casual.
 // Joga 1 lance quando for a vez dele e desiste depois do segundo lance do cliente.
 const { client } = require('./helpers.cjs');
-const port = Number(process.argv[2]), mode = process.argv[3] || 'casual_3min';
+const port = Number(process.argv[2]), mode = process.argv[3] || 'casual_3min', delayMs = Number(process.argv[4] || 0);
 const sq = s => ['abcdefgh'.indexOf(s[0]), 8 - Number(s[1])];
 (async () => {
   const c = client(port); await c.open();
   c.send({ type: 'guest_auth' }); await c.next('guest_state');
+  if (delayMs) await new Promise(r => setTimeout(r, delayMs));   // entra na fila depois (teste de reconexão)
   c.send({ type: 'casual_queue', mode }); await c.next('casual_queued');
   const f = await c.next('casual_found', 60000);
   const me = f.you; let played = 0, seen = 0;
