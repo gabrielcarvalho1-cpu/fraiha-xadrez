@@ -20,6 +20,8 @@ var panel: PanelContainer
 var box: VBoxContainer
 var scroll: ScrollContainer
 var art_frame: Control
+var art_panel
+signal switch_requested(kind: String)
 var footer: VBoxContainer
 var screen := ""
 var search_started := 0
@@ -54,9 +56,13 @@ func setup(service, ranked_controller):
     dim.color = Color(0.02, 0.04, 0.03, 0.82)
     add_child(dim)
     # Moldura medieval (mesma da tela de entrada: ouro, brasão, cavalos) atrás do conteúdo.
+    art_panel = preload("res://ranked/online_art_panel.gd").new()
+    art_panel.name = "OnlineArtPanel"
     art_frame = preload("res://account/login_frame.gd").new()
     art_frame.name = "QueueFrame"
     add_child(art_frame)
+    add_child(art_panel)
+    art_panel.setup(self)
     panel = PanelContainer.new()
     var style = StyleBoxEmpty.new()
     style.content_margin_left = 34
@@ -134,10 +140,10 @@ func open_modes():
 
 func close_panel():
     screen = ""
-    dim.hide(); panel.hide(); art_frame.hide()
+    dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide()
 
 func panel_open() -> bool:
-    return panel.visible
+    return panel.visible or art_panel.visible
 
 func _clear():
     for parent in [box, footer]:
@@ -254,6 +260,13 @@ func _show(which: String):
                 close_panel()
                 controller.resign())
     dim.show(); panel.show()
+    # Desktop: escolha de ritmo com a arte da referência (a lista acima continua sendo a fonte das ações).
+    art_panel.visible = which == "modes" and not Mobile.active(get_viewport())
+    if art_panel.visible:
+        panel.hide()
+        art_frame.hide()
+        dim.size = get_viewport().get_visible_rect().size
+        art_panel.layout(get_viewport().get_visible_rect().size)
     _layout_panel()
     _layout_panel.call_deferred()
 
@@ -318,9 +331,10 @@ func _mode_card(grid: GridContainer, item: Array):
     rec.add_theme_font_size_override("font_size", 13)
     rec.add_theme_color_override("font_color", Color("a9b2a4"))
     col.add_child(rec)
-    _button(col, "BUSCAR PARTIDA", func():
+    var qb = _button(col, "BUSCAR PARTIDA", func():
         last_mode = id
         controller.queue(id), true)
+    qb.name = "Queue_" + id
 
 func _casual_card(grid: GridContainer, item: Array):
     var id: String = item[0]
@@ -420,6 +434,9 @@ func _narrow() -> bool:
 
 func _process(_delta):
     if panel.visible: _layout_panel()
+    if art_panel.visible:
+        dim.size = get_viewport().get_visible_rect().size
+        art_panel.layout(get_viewport().get_visible_rect().size)
     if screen == "searching" and is_instance_valid(search_label):
         var s = (Time.get_ticks_msec() - search_started) / 1000
         search_label.text = "%d:%02d" % [s / 60, s % 60]

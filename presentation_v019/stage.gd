@@ -390,6 +390,13 @@ func _setup_account():
     add_child(casual_ui)
     casual_ui.setup(account, casual)
     casual_ui.back_requested.connect(open_home)
+    # Abas CASUAL / RANQUEADA da tela de escolha de ritmo.
+    casual_ui.switch_requested.connect(func(k): if k == "ranked":
+        _open_ranked()
+        if ranked_ui.panel_open(): casual_ui.close_panel())
+    ranked_ui.switch_requested.connect(func(k): if k == "casual":
+        ranked_ui.close_panel()
+        _open_casual())
     casual_ui.play_requested.connect(_back_to_casual_lobby)
     casual.found.connect(_casual_found)
     match_chat = preload("res://social/match_chat.gd").new()
