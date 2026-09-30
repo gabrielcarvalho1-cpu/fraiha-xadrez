@@ -11,7 +11,8 @@ signal account_requested
 signal friends_requested
 
 const DESIGN = Vector2(1672, 941)
-const FRAME_MARGIN = 12.0
+const FRAME_MARGIN = 0.0
+const APP_VERSION = "0.30"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
 const FOREST = preload("res://ui_v022/assets/home_forest_v2.png")
 const FOREST_V2 = FOREST
@@ -206,6 +207,7 @@ func _build():
     presentation_frame.name = "PresentationFrame"
     presentation_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     presentation_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    presentation_frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
     presentation_frame.draw.connect(_draw_presentation_frame)
     root.add_child(presentation_frame)
     canvas = Control.new()
@@ -244,7 +246,7 @@ func _build():
     if not pages_pending: _build_pages()
     # Versão só no rodapé direito, em moldura discreta (o cabeçalho do topo foi removido).
     _ornate_panel(canvas, Vector2(1400,864), Vector2(250,62)).name = "VersionPanel"
-    var signature = _label(_stack(canvas, Vector2(1414,872), Vector2(222,46)), "Versão 0.30 · Ligas\nMaringá · PR · Brasil", 14, MUTED)
+    var signature = _label(_stack(canvas, Vector2(1414,872), Vector2(222,46)), "Versão %s · Ligas\nMaringá · PR · Brasil" % APP_VERSION, 14, MUTED)
     signature.name = "VersionLabel"
     signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     _build_account_card()
@@ -798,35 +800,38 @@ func _layout():
     presentation_frame.queue_redraw()
 
 func _draw_presentation_frame():
-    # All ornament stays outside the composition; no duplicated scenery or input layer.
+    # Sobras fora da composição: a própria arte, ampliada para cobrir a tela e escurecida
+    # (cor sempre derivada da arte atual, nunca cinza neutro). Nada disso recebe clique.
     var artwork = Rect2(canvas.position, DESIGN * canvas.scale)
+    var full = Rect2(Vector2.ZERO, presentation_frame.size)
+    if artwork.encloses(full.grow(-0.5)): return
+    var art = canvas.get_node_or_null("ForestArtwork")
+    var tex: Texture2D = art.texture if art != null else null
+    if tex == null:
+        presentation_frame.draw_rect(full, Color("0f1a12"))
+        return
+    var cover = maxf(full.size.x / DESIGN.x, full.size.y / DESIGN.y) * 1.04
+    var cover_rect = Rect2((full.size - DESIGN * cover) / 2.0, DESIGN * cover)
+    presentation_frame.draw_texture_rect(_backdrop_for(tex), cover_rect, false, Color(0.62, 0.64, 0.60))
+    # Sombra suave junto à arte para separar sem moldura.
     var unit = canvas.scale.x
-    presentation_frame.draw_rect(Rect2(Vector2.ZERO, presentation_frame.size), Color("08090b"))
-    # A faint brushed finish stays neutral for every league; it contains no artwork.
-    for row in range(0, ceili(presentation_frame.size.y), 4):
-        presentation_frame.draw_line(Vector2(0, row), Vector2(presentation_frame.size.x, row), Color(1,1,1,0.008))
-    presentation_frame.draw_rect(artwork.grow(11 * unit), Color("131416"))
-    presentation_frame.draw_rect(artwork.grow(10 * unit), Color("383a3d"), false, unit)
-    presentation_frame.draw_rect(artwork.grow(9 * unit), Color("81858a"), false, unit)
-    presentation_frame.draw_rect(artwork.grow(8 * unit), Color("222427"), false, unit)
-    # Recessed inner lip, softly shaded toward the artwork without covering any pixels.
-    for step in range(1, 7):
-        presentation_frame.draw_rect(artwork.grow(step * unit), Color(0, 0, 0, (7-step) * 0.1), false, unit)
-    for corner in [Vector2.ZERO, Vector2(1,0), Vector2(0,1), Vector2.ONE]:
-        var direction = Vector2.ONE - corner * 2
-        var point = artwork.position + artwork.size * corner - direction * 9 * unit
-        var horizontal = Vector2(direction.x, 0)
-        var vertical = Vector2(0, direction.y)
-        var metal = Color("a0a3a7")
-        presentation_frame.draw_polyline(PackedVector2Array([
-            point + horizontal * 30 * unit, point + horizontal * 7 * unit,
-            point + vertical * 7 * unit, point + vertical * 30 * unit
-        ]), metal, unit, true)
-        var gem = 2 * unit
-        presentation_frame.draw_colored_polygon(PackedVector2Array([
-            point + Vector2(0,-gem), point + Vector2(gem,0),
-            point + Vector2(0,gem), point + Vector2(-gem,0)
-        ]), metal)
+    for step in range(1, 9):
+        presentation_frame.draw_rect(artwork.grow(step * 2 * unit), Color(0, 0, 0, (9 - step) * 0.035), false, 2 * unit)
+
+var _backdrop_cache := {}
+# Versão desfocada da arte (reduzida a poucos pixels e ampliada com filtro linear): só cores da própria arte.
+func _backdrop_for(tex: Texture2D) -> Texture2D:
+    var key = tex.get_rid()
+    if _backdrop_cache.has(key): return _backdrop_cache[key]
+    var img: Image = tex.get_image()
+    if img == null: return tex
+    img = img.duplicate()
+    if img.is_compressed(): img.decompress()
+    img.resize(24, 14, Image.INTERPOLATE_LANCZOS)
+    img.resize(96, 54, Image.INTERPOLATE_CUBIC)
+    var blurred = ImageTexture.create_from_image(img)
+    _backdrop_cache[key] = blurred
+    return blurred
 
 func show_page(id: String):
     if pages_pending and id != "main":
@@ -963,6 +968,23 @@ func _is_ref_art(texture: Texture2D) -> bool:
     return texture == FOREST_V2
 
 func _build_reference_chrome():
+    # Versão viva sobre o painel do rodapé direito (texto removido da arte; engrenagem e bandeira ficam na arte).
+    var ref_version = Label.new()
+    ref_version.name = "RefVersionLabel"
+    ref_version.text = "Versão %s · Ligas\nMaringá · PR · Brasil" % APP_VERSION
+    ref_version.position = Vector2(1438,861)
+    ref_version.size = Vector2(146,44)
+    ref_version.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    ref_version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    ref_version.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    ref_version.add_theme_font_size_override("font_size", 15)
+    ref_version.add_theme_constant_override("line_spacing", -1)
+    ref_version.add_theme_color_override("font_color", Color("e6e1d0"))
+    ref_version.add_theme_color_override("font_shadow_color", Color(0,0,0,0.55))
+    ref_version.add_theme_constant_override("shadow_offset_y", 1)
+    ref_version.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    canvas.add_child(ref_version)
+    ref_nodes.append(ref_version)
     # Perfil
     var pbtn = TextureButton.new()
     pbtn.name = "RefProfileButton"
@@ -1092,6 +1114,7 @@ func _build_reference_chrome():
 func _sync_chrome():
     var ref = _is_ref_art(canvas.get_node("ForestArtwork").texture)
     ref_mode = ref
+    if is_instance_valid(presentation_frame): presentation_frame.queue_redraw()
     for n in ref_nodes: n.visible = ref
     for name in ["ProfilePanel","AccountPanel","VersionPanel"]:
         var n = canvas.get_node_or_null(name)
