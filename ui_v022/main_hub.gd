@@ -890,7 +890,9 @@ func _set_volume(value: float, save := true):
     AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(volume,0.0001)))
     AudioServer.set_bus_mute(bus, volume <= 0.0)
     volume_label.text = "EFEITOS SONOROS  ·  %d%%" % round(value)
-    if save: _save_preferences()
+    if save:
+        _save_preferences()
+        _osd().show_volume("effects", value)
 
 func _set_music_volume(value: float, save := true):
     music_volume = value/100.0
@@ -898,7 +900,17 @@ func _set_music_volume(value: float, save := true):
     AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(music_volume,0.0001)))
     AudioServer.set_bus_mute(bus,music_volume <= 0.0)
     music_volume_label.text = "MÚSICA  ·  %d%%" % round(value)
-    if save: _save_preferences()
+    if save:
+        _save_preferences()
+        _osd().show_volume("music", value)
+
+var volume_osd
+func _osd():
+    if not is_instance_valid(volume_osd):
+        volume_osd = preload("res://ui_v022/volume_osd.gd").new()
+        volume_osd.name = "VolumeOSD"
+        add_child(volume_osd)
+    return volume_osd
 
 func _toggle_fullscreen():
     get_parent().toggle_fullscreen()
