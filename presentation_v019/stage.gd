@@ -25,6 +25,7 @@ var bot_level_name := "FÁCIL"
 # HUD da partida no desktop (o mobile mantém seus próprios controles).
 const HudButton = preload("res://ui_v022/hud_button.gd")
 var fullscreen_button: Button
+var medieval_modal
 var match_plaque: Control
 var desk_panel: PanelContainer
 var desk_person: HBoxContainer
@@ -170,7 +171,15 @@ func _build_navigation():
     navigation_dialog.confirmed.connect(_confirm_navigation)
     navigation_dialog.canceled.connect(_cancel_navigation)
     navigation_dialog.theme = _medieval_dialog_theme()
+    navigation_dialog.exclusive = false
+    medieval_modal = preload("res://presentation_v019/medieval_modal.gd").new()
+    medieval_modal.name = "MedievalModal"
     overlay.add_child(navigation_dialog)
+    var modal_layer := CanvasLayer.new()
+    modal_layer.layer = 70
+    add_child(modal_layer)
+    modal_layer.add_child(medieval_modal)
+    medieval_modal.setup(navigation_dialog, func(): return mode)
     _build_mobile_controls(overlay)
 
 func _build_desk_panel(overlay: CanvasLayer):
@@ -611,6 +620,7 @@ func _build_mobile_controls(overlay: CanvasLayer):
         choices.add_child(choice)
 
 func _process(_delta):
+    if is_instance_valid(medieval_modal) and (medieval_modal.visible or navigation_dialog.visible): _sync_modal()
     if not is_instance_valid(mobile_status): return
     var mobile = MobileLayout.active(get_viewport())
     var playing = mode in ["local", "online", "bot", "ranked", "casual"]
@@ -832,15 +842,22 @@ func _request_navigation(destination: String):
     if MobileLayout.active(get_viewport()):
         dialog_size = Vector2i(minf(480, MobileLayout.safe_rect(get_viewport()).size.x-32), 200)
     navigation_dialog.popup_centered(dialog_size)
+    _sync_modal()
+
+func _sync_modal():
+    if is_instance_valid(medieval_modal):
+        medieval_modal.sync(not MobileLayout.active(get_viewport()), get_viewport_rect().size)
 
 func _cancel_navigation():
     navigation_dialog.hide()
+    _sync_modal()
     pending_navigation = ""
     navigation_confirmed = false
     _refresh_input()
 
 func _confirm_navigation():
     navigation_dialog.hide()
+    _sync_modal()
     navigation_confirmed = true
     if online.joined or mode == "online":
         # The existing client resigns and waits for the server before leaving.
