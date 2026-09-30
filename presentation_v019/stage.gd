@@ -22,6 +22,17 @@ var player_caption: Label
 var mobile_actions: BoxContainer
 var mobile_restart: Button
 var bot_level_name := "FÁCIL"
+# HUD da partida no desktop (o mobile mantém seus próprios controles).
+const HudButton = preload("res://ui_v022/hud_button.gd")
+var fullscreen_button: Button
+var match_plaque: Control
+var desk_panel: PanelContainer
+var desk_person: HBoxContainer
+var desk_portrait: TextureRect
+var desk_name: Label
+var desk_side: Label
+var desk_gear: Button
+var desk_restart: Button
 var bot_side_name := "BRANCAS"
 var mobile_status: Label
 var mobile_promotion: PanelContainer
@@ -74,13 +85,24 @@ func _build_navigation():
     overlay.name = "Navigation"
     overlay.layer = 40
     add_child(overlay)
-    home_button = Button.new()
+    home_button = HudButton.make("home", "INÍCIO", "ESC")
     home_button.name = "HomeButton"
-    home_button.text = "← TELA INICIAL  ·  ESC"
-    home_button.size = Vector2(248, 46)
-    home_button.add_theme_font_size_override("font_size", 18)
+    home_button.tooltip_text = "Voltar à tela inicial (Esc)"
+    home_button.size = Vector2(196, 54)
     home_button.pressed.connect(return_to_home)
     overlay.add_child(home_button)
+    fullscreen_button = HudButton.make("fullscreen")
+    fullscreen_button.name = "FullscreenButton"
+    fullscreen_button.tooltip_text = "Tela cheia (Alt+Enter)"
+    fullscreen_button.size = Vector2(54, 54)
+    fullscreen_button.pressed.connect(func():
+        toggle_fullscreen()
+        _sync_fullscreen_glyph.call_deferred())
+    overlay.add_child(fullscreen_button)
+    match_plaque = preload("res://presentation_v019/match_plaque.gd").new()
+    match_plaque.name = "MatchPlaque"
+    overlay.add_child(match_plaque)
+    _build_desk_panel(overlay)
     bot_info = Label.new()
     bot_info.name = "BotInfo"
     bot_info.add_theme_font_size_override("font_size", 20)
@@ -117,6 +139,124 @@ func _build_navigation():
     navigation_dialog.canceled.connect(_cancel_navigation)
     overlay.add_child(navigation_dialog)
     _build_mobile_controls(overlay)
+
+func _build_desk_panel(overlay: CanvasLayer):
+    # Canto superior direito: jogador (retrato maior + nome + cor) e ferramentas da partida.
+    desk_panel = PanelContainer.new()
+    desk_panel.name = "MatchPlayerPanel"
+    var style := StyleBoxFlat.new()
+    style.bg_color = Color(0.06, 0.13, 0.09, 0.93)
+    style.border_color = Color("b99555")
+    style.set_border_width_all(2)
+    style.set_corner_radius_all(10)
+    style.shadow_color = Color(0, 0, 0, 0.5)
+    style.shadow_size = 8
+    style.shadow_offset = Vector2(0, 3)
+    for side in ["left", "right"]: style.set("content_margin_" + side, 12)
+    for side in ["top", "bottom"]: style.set("content_margin_" + side, 9)
+    desk_panel.add_theme_stylebox_override("panel", style)
+    overlay.add_child(desk_panel)
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation", 12)
+    desk_panel.add_child(row)
+    desk_person = HBoxContainer.new()
+    desk_person.add_theme_constant_override("separation", 12)
+    desk_person.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    row.add_child(desk_person)
+    desk_portrait = TextureRect.new()
+    desk_portrait.name = "DeskPortrait"
+    desk_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    desk_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    desk_portrait.custom_minimum_size = Vector2(74, 74)
+    desk_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    desk_person.add_child(desk_portrait)
+    var words := VBoxContainer.new()
+    words.alignment = BoxContainer.ALIGNMENT_CENTER
+    words.add_theme_constant_override("separation", 2)
+    words.custom_minimum_size.x = 170
+    desk_person.add_child(words)
+    desk_name = Label.new()
+    desk_name.name = "DeskName"
+    desk_name.add_theme_font_size_override("font_size", 22)
+    desk_name.add_theme_color_override("font_color", Color("f4ce7f"))
+    desk_name.add_theme_color_override("font_outline_color", Color("0b150f"))
+    desk_name.add_theme_constant_override("outline_size", 4)
+    desk_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    desk_name.clip_text = true
+    desk_name.custom_minimum_size = Vector2(170, 30)
+    words.add_child(desk_name)
+    desk_side = Label.new()
+    desk_side.name = "DeskSide"
+    desk_side.add_theme_font_size_override("font_size", 16)
+    desk_side.add_theme_color_override("font_color", Color("e8dcc0"))
+    words.add_child(desk_side)
+    var line := ColorRect.new()
+    line.custom_minimum_size = Vector2(1.5, 58)
+    line.color = Color(0.957, 0.808, 0.498, 0.35)
+    line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    desk_person.add_child(line)
+    var tools := HBoxContainer.new()
+    tools.alignment = BoxContainer.ALIGNMENT_CENTER
+    tools.add_theme_constant_override("separation", 8)
+    row.add_child(tools)
+    desk_restart = HudButton.make("restart")
+    desk_restart.name = "RestartButton"
+    desk_restart.tooltip_text = "Reiniciar partida"
+    desk_restart.custom_minimum_size = Vector2(54, 54)
+    desk_restart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    desk_restart.pressed.connect(func(): game.restart_match())
+    tools.add_child(desk_restart)
+    desk_gear = HudButton.make("gear")
+    desk_gear.name = "GearButton"
+    desk_gear.tooltip_text = "Opções da partida"
+    desk_gear.custom_minimum_size = Vector2(54, 54)
+    desk_gear.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    desk_gear.pressed.connect(func(): game.toggle_settings())
+    tools.add_child(desk_gear)
+
+func _sync_fullscreen_glyph():
+    if not is_instance_valid(fullscreen_button): return
+    var on = get_window().mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]
+    fullscreen_button.glyph = "exit_fullscreen" if on else "fullscreen"
+    fullscreen_button.tooltip_text = ("Sair da tela cheia" if on else "Tela cheia") + " (Alt+Enter)"
+    fullscreen_button.queue_redraw()
+
+func _refresh_desk_hud():
+    if not is_instance_valid(desk_panel): return
+    var mobile = MobileLayout.active(get_viewport())
+    var in_match = mode in ["local", "online", "bot", "ranked", "casual"] and game.visible
+    game.external_hud = not mobile
+    fullscreen_button.visible = in_match and not mobile
+    _sync_fullscreen_glyph()
+    match_plaque.visible = mode == "bot" and not mobile
+    if match_plaque.visible:
+        var king = game.piece_textures.get("wK" if bot_side_name == "BRANCAS" else "bK")
+        match_plaque.set_info(bot_controller.difficulty, bot_level_name, bot_side_name, king)
+    desk_panel.visible = in_match and not mobile
+    desk_person.visible = mode in ["local", "online", "bot"]
+    desk_restart.visible = mode in ["local", "online", "bot"] and game.game_started
+    if desk_person.visible:
+        desk_portrait.texture = hub.avatar_texture()
+        hub.attach_league_frame(desk_portrait)
+        desk_name.text = hub.player_name
+        var side = "Pretas" if game.board_flipped() else "Brancas"
+        desk_side.text = "Partida local" if mode == "local" else "Você joga de " + side
+    _layout_desk_hud()
+
+func _layout_desk_hud():
+    if not is_instance_valid(desk_panel) or MobileLayout.active(get_viewport()): return
+    var size = get_viewport_rect().size
+    fullscreen_button.position = Vector2(24, 20)
+    home_button.position = Vector2(88, 20) if fullscreen_button.visible else Vector2(24, 20)
+    home_button.size = Vector2(196, 54)
+    if match_plaque.visible:
+        match_plaque.position = Vector2((size.x - match_plaque.size.x) / 2.0, 16)
+    desk_panel.reset_size()
+    desk_panel.position = Vector2(size.x - 24 - desk_panel.size.x, 16)
+    # O painel de opções (desenhado pelo tabuleiro) abre logo abaixo deste cartão.
+    if desk_panel.visible and game.scale.x > 0.0:
+        var anchor = Vector2(size.x - 24, 16 + desk_panel.size.y + 10)
+        game.place_settings_panel((anchor - game.position) / game.scale.x)
 
 func _setup_account():
     account = preload("res://account/account_service.gd").new()
@@ -451,7 +591,7 @@ func _refresh_input():
     if casual != null:
         casual.set_paused(not pending_navigation.is_empty())
         casual_ui.hud.visible = mode == "casual"
-    bot_info.visible = mode == "bot" or (mode == "local" and MobileLayout.active(get_viewport()))
+    bot_info.visible = MobileLayout.active(get_viewport()) and mode in ["bot", "local"]
     _refresh_bot_caption()
     game.set_process_unhandled_input(playing and pending_navigation.is_empty())
     # On mobile the online menu has its own full-width back button.
@@ -459,10 +599,11 @@ func _refresh_input():
     _refresh_account_chip()
     home_button.disabled = not pending_navigation.is_empty()
     refresh_player_card()
+    _refresh_desk_hud()
 
 func refresh_player_card():
     if not is_instance_valid(player_card): return
-    player_card.visible = mode in ["local","online","bot"]
+    player_card.visible = mode in ["local","online","bot"] and MobileLayout.active(get_viewport())
     player_portrait.texture = hub.avatar_texture()
     hub.attach_league_frame(player_portrait)
     var side = "Pretas" if game.board_flipped() else "Brancas"
@@ -644,10 +785,15 @@ func _layout():
     var size = get_viewport_rect().size
     var mobile = MobileLayout.active(get_viewport())
     game.mobile_presentation = mobile
-    if is_instance_valid(home_button):
-        home_button.text = "← TELA INICIAL  ·  ESC"
-        home_button.size = Vector2(248, 46)
-        home_button.position = Vector2(20, size.y - 66)
+    if is_instance_valid(home_button) and not mobile:
+        home_button.text = "INÍCIO"
+        home_button.hint = "ESC"
+        home_button.glyph = "home"
+        home_button.icon_box = 54.0
+        home_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+        home_button.icon_only = false
+        home_button._margins()
+        home_button.add_theme_font_size_override("font_size", 18)
     if is_instance_valid(account_chip):
         account_chip.position = Vector2(20, size.y - 62)
     if is_instance_valid(bot_info):
@@ -688,6 +834,7 @@ func _layout():
         for ui in [ranked_ui, casual_ui]:
             if ui != null: ui.layout_hud(board_rect, false, false, get_viewport_rect(), Rect2(), Rect2())
         if match_chat != null: match_chat.layout(board_rect, false, get_viewport_rect())
+    _refresh_desk_hud()
 
 # Painted wood board: 600 grid units span ~522 texture pixels (calibrated at 1920x1080).
 const WOOD_ART_BOARD_RATIO := (540.0/445.5) / (1080.0/1024.0)
@@ -717,6 +864,12 @@ func _layout_mobile(board_center: Vector2):
     player_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
     player_caption.clip_text = true
     home_button.text = "INÍCIO"
+    # Mobile mantém o botão como antes (só texto, centralizado).
+    home_button.hint = ""
+    home_button.glyph = ""
+    home_button.icon_box = 16.0
+    home_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+    home_button.call_deferred("_margins")
     home_button.add_theme_font_size_override("font_size", 15)
     for button in [home_button] + mobile_actions.get_children():
         _touch_button_style(button)

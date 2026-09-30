@@ -65,6 +65,8 @@ var drag_position := Vector2.ZERO
 var dragging := false
 var settings_open := false
 var mobile_presentation := false
+# Desktop: engrenagem e reiniciar viram botões do HUD (stage); o tabuleiro só desenha o painel de opções.
+var external_hud := false
 var presentation_rect := Rect2(0, 0, 1024, 1024)
 var settings_panel := Rect2(776, 60, 232, 136)
 var fullscreen_button := Rect2(788, 134, 208, 38)
@@ -342,6 +344,10 @@ func _draw_pixel_ellipse(c:Vector2,r:Vector2,col:Color):
 func _draw_ui():
     if mobile_presentation: return
     var font=ThemeDB.fallback_font
+    if external_hud:
+        if not game_started: draw_rect(presentation_rect,Color(0,0,0,0.20))
+        _draw_status_and_settings(font)
+        return
     # Engrenagem discreta no canto superior direito.
     draw_rect(gear_button, Color(0.08,0.07,0.05,0.72))
     draw_rect(gear_button, Color("#b99555"), false, 1)
@@ -361,6 +367,9 @@ func _draw_ui():
         # Tela inicial sem esconder o mapa: apenas escurece levemente e mostra um botão pequeno.
         draw_rect(presentation_rect,Color(0,0,0,0.20))
 
+    _draw_status_and_settings(font)
+
+func _draw_status_and_settings(font):
     if game_started:
         var label_width = font.get_string_size(status, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
         draw_style_box(_panel_style(), Rect2(512-label_width/2-18, 851, label_width+36, 38))
@@ -368,9 +377,15 @@ func _draw_ui():
 
     if settings_open:
         var panel=settings_panel
-        draw_rect(panel,Color(0.07,0.06,0.05,0.92))
-        draw_rect(panel,Color("#9e8150"),false,1)
-        draw_string(font,panel.position+Vector2(16,27),"CONFIGURAÇÕES",HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("#e8d6a8"))
+        var frame := StyleBoxFlat.new()
+        frame.bg_color = Color(0.06,0.13,0.09,0.95)
+        frame.border_color = Color("#b99555")
+        frame.set_border_width_all(2)
+        frame.set_corner_radius_all(8)
+        frame.shadow_color = Color(0,0,0,0.45)
+        frame.shadow_size = 6
+        draw_style_box(frame, panel)
+        draw_string(font,panel.position+Vector2(16,27),"OPÇÕES DA PARTIDA",HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("#f4ce7f"))
         draw_string(font,panel.position+Vector2(16,53),"M • ativar / silenciar música",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("#d5ccb9"))
         draw_style_box(_panel_style(), fullscreen_button)
         var fullscreen_on = get_window().mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]
@@ -480,7 +495,7 @@ func _unhandled_input(event):
 
 func _handle_game_input(event):
     if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
-        if not mobile_presentation and gear_button.has_point(event.position):
+        if not mobile_presentation and not external_hud and gear_button.has_point(event.position):
             settings_open = not settings_open
             cancel_drag()
             selected = Vector2i(-1,-1)
@@ -495,7 +510,7 @@ func _handle_game_input(event):
                 _new_game()
                 queue_redraw()
             return
-        if not mobile_presentation and restart_button.has_point(event.position):
+        if not mobile_presentation and not external_hud and restart_button.has_point(event.position):
             _new_game()
             queue_redraw()
             return
@@ -575,10 +590,12 @@ func _handle_game_input(event):
 
 func _panel_style() -> StyleBoxFlat:
     var style = StyleBoxFlat.new()
-    style.bg_color = Color(0.055,0.085,0.045,0.92)
-    style.border_color = Color("#a78b50")
-    style.set_border_width_all(1)
-    style.set_corner_radius_all(5)
+    style.bg_color = Color(0.06,0.13,0.09,0.94)
+    style.border_color = Color("#b99555")
+    style.set_border_width_all(2)
+    style.set_corner_radius_all(8)
+    style.shadow_color = Color(0,0,0,0.4)
+    style.shadow_size = 5
     return style
 
 func _exit_tree():
@@ -586,6 +603,22 @@ func _exit_tree():
         if is_instance_valid(player):
             player.stop()
             player.stream = null
+
+func toggle_settings():
+    settings_open = not settings_open
+    cancel_drag()
+    selected = Vector2i(-1,-1)
+    legal_moves.clear()
+    queue_redraw()
+
+func restart_match():
+    _new_game()
+    queue_redraw()
+
+func place_settings_panel(top_right: Vector2):
+    settings_panel = Rect2(top_right.x-252.0, top_right.y, 252, 136)
+    fullscreen_button = Rect2(settings_panel.position+Vector2(12,65), Vector2(228,38))
+    queue_redraw()
 
 func update_presentation(view_rect: Rect2):
     cancel_drag()

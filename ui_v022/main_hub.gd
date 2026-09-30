@@ -480,7 +480,7 @@ func _new_page(id: String, title: String, eyebrow: String) -> VBoxContainer:
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     content.add_theme_constant_override("separation", 13)
     margin.add_child(content)
-    _label(content, eyebrow, 13, GOLD)
+    if not eyebrow.is_empty(): _label(content, eyebrow, 13, GOLD)
     _label(content, title, 25)
     _button(panel, 6, "VOLTAR AOS NÍVEIS" if id == "bot_side" else "VOLTAR À HOME", "ESC também volta", Vector2(0,439), back)
     pages[id] = panel
@@ -552,7 +552,7 @@ func _build_pages():
     for mode in Ranked.MODES:
         _body(profile,ranked.summary(mode),16)
     _refresh_avatars()
-    var settings = _new_page("settings", "DO SEU JEITO", "CONFIGURAÇÕES")
+    var settings = _new_page("settings", "CONFIGURAÇÕES", "")
     music_volume_label = _label(settings, "", 19, GOLD)
     var music_slider = HSlider.new()
     music_slider.name = "MusicVolume"
