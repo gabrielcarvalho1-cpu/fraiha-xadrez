@@ -11,6 +11,12 @@ var borrowed_parent: Node
 var current_page := "main"
 var menu_grid: GridContainer
 var backdrop: ColorRect
+var leaves: TextureRect
+var hero: TextureRect
+var hero_fade: TextureRect
+var subtitle: Label
+const Art = preload("res://account/login_art.gd")
+const Widgets = preload("res://account/login_widgets.gd")
 
 func setup(owner_hub):
     hub = owner_hub
@@ -22,8 +28,43 @@ func setup(owner_hub):
     background.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(background)
     backdrop = background
+    # Fundo: folhagem pixel art (da própria floresta) escurecida.
+    leaves = TextureRect.new()
+    leaves.texture = _leaf_tile()
+    leaves.stretch_mode = TextureRect.STRETCH_TILE
+    leaves.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    leaves.modulate = Color(0.22, 0.27, 0.22)
+    leaves.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    background.add_child(leaves)
+    # Topo da Home: rei e rainha dourados (arte da abertura) com o título por cima.
+    hero = TextureRect.new()
+    hero.texture = preload("res://branding/fraiha_loading_splash.png")
+    hero.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    hero.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    hero.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(hero)
+    hero_fade = TextureRect.new()
+    var grad = Gradient.new()
+    grad.set_color(0, Color(0.04, 0.07, 0.05, 0.0))
+    grad.set_color(1, Color(0.04, 0.07, 0.05, 1.0))
+    var gt = GradientTexture2D.new()
+    gt.gradient = grad
+    gt.fill_from = Vector2(0, 0.35)
+    gt.fill_to = Vector2(0, 1)
+    hero_fade.texture = gt
+    hero_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    hero.add_child(hero_fade)
     heading = _text(self,"FRAIHA XADREZ",22)
-    heading.add_theme_color_override("font_color",Color("efcf83"))
+    heading.add_theme_font_override("font", Art.FONT_BOLD)
+    heading.add_theme_color_override("font_color",Color("f1d58a"))
+    heading.add_theme_color_override("font_outline_color",Color("2a1905"))
+    heading.add_theme_constant_override("outline_size",6)
+    heading.add_theme_color_override("font_shadow_color",Color(0,0,0,0.7))
+    heading.add_theme_constant_override("shadow_offset_y",3)
+    subtitle = _text(self,"ESTRATÉGIA PARA IR MAIS LONGE",13)
+    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    subtitle.add_theme_color_override("font_color",Color("e9d29a"))
+    subtitle.add_theme_font_override("font", Art.FONT_SEMI)
     profile = _button(self,hub.player_name + " · PERFIL",func(): hub.show_page("profile"))
     back_button = _button(self,"VOLTAR",hub.back)
     scroll = ScrollContainer.new()
@@ -31,6 +72,18 @@ func setup(owner_hub):
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     scroll.follow_focus = true
     add_child(scroll)
+
+func _leaf_tile() -> Texture2D:
+    var img: Image = preload("res://presentation_v019/forest_wide.png").get_image()
+    if img.is_compressed(): img.decompress()
+    var leaf := img.get_region(Rect2i(1470, 250, 160, 160))
+    var tile := Image.create(320, 320, false, leaf.get_format())
+    for i in 4:
+        var part := leaf.duplicate()
+        if i % 2 == 1: part.flip_x()
+        if i >= 2: part.flip_y()
+        tile.blit_rect(part, Rect2i(0, 0, 160, 160), Vector2i((i % 2) * 160, (i / 2) * 160))
+    return ImageTexture.create_from_image(tile)
 
 func layout():
     var area = Mobile.safe_rect(get_viewport())
@@ -40,7 +93,30 @@ func layout():
     backdrop.set_anchors_preset(Control.PRESET_TOP_LEFT)
     backdrop.position = -area.position
     backdrop.size = get_viewport().get_visible_rect().size
+    leaves.size = backdrop.size
     var portrait = size.x < 560.0
+    var main = current_page == "main"
+    hero.visible = main
+    subtitle.visible = main
+    heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if main else HORIZONTAL_ALIGNMENT_LEFT
+    heading.add_theme_font_size_override("font_size", (34 if portrait else 26) if main else 22)
+    if main:
+        var hero_h = minf(size.y * 0.30, 260.0) if portrait else minf(size.y * 0.30, 120.0)
+        hero.position = Vector2(-area.position.x, -area.position.y)
+        hero.size = Vector2(backdrop.size.x, hero_h + area.position.y)
+        hero_fade.size = hero.size
+        if not portrait: heading.add_theme_font_size_override("font_size", 22)
+        heading.position = Vector2(8, hero_h - (78 if portrait else 62))
+        heading.size = Vector2(size.x - 16, 44)
+        subtitle.position = Vector2(8, hero_h - 34)
+        subtitle.size = Vector2(size.x - 16, 20)
+        if is_instance_valid(menu_grid): menu_grid.columns = 1 if portrait else 2
+        _fit_width(portrait)
+        profile.position = Vector2(8, hero_h - 4)
+        profile.size = Vector2(size.x - 16, 50)
+        scroll.position = Vector2(8, hero_h + 56)
+        scroll.size = Vector2(size.x - 16, maxf(60, size.y - hero_h - 60))
+        return
     if is_instance_valid(menu_grid): menu_grid.columns = 1 if portrait else 2
     _fit_width(portrait)
     if portrait:
@@ -73,6 +149,18 @@ func _text(parent: Node, text: String, font_size := 18) -> Label:
     return label
 
 func _button(parent: Node, text: String, action: Callable) -> Button:
+    # Botão ornamentado do jogo (moldura dourada com pontas); o texto é desenhado pelo próprio botão.
+    var button = Widgets.OrnateButton.new()
+    button.text = text
+    button.label = text
+    button.font_size = 17
+    button.custom_minimum_size = Vector2(0,50)
+    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    button.pressed.connect(action)
+    parent.add_child(button)
+    return button
+
+func _old_button(parent: Node, text: String, action: Callable) -> Button:
     var button = Button.new()
     button.text = text
     button.custom_minimum_size = Vector2(0,48)
@@ -96,6 +184,11 @@ func _button(parent: Node, text: String, action: Callable) -> Button:
 
 ## JOGAR RANQUEADO em destaque também no Mobile V2 (moldura dourada e texto dourado).
 func _feature(button: Button):
+    if button is Widgets.OrnateButton:
+        button.primary = true
+        button.font_size = 19
+        button.custom_minimum_size.y = 58
+        return
     var style: StyleBoxFlat = button.get_theme_stylebox("normal").duplicate()
     style.bg_color = Color("223a2a")
     style.border_color = Color("f0cf7a")

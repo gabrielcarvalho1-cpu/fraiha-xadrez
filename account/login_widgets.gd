@@ -52,8 +52,8 @@ class OrnateButton extends Button:
         # Ajusta a fonte para caber entre as pontas (telas estreitas).
         var fs := font_size
         var room := size.x - notch * 2.0 - 16.0 - icon_w - gap
-        while fs > 10 and f.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > room: fs -= 1
-        var tw := f.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+        while fs > 10 and f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > room: fs -= 1
+        var tw := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
         var x0 := (size.x - tw - icon_w - gap) / 2.0
         if icon_w > 0.0:
             var ib := Rect2(Vector2(x0, (size.y - icon_w) / 2.0), Vector2(icon_w, icon_w))
@@ -65,8 +65,8 @@ class OrnateButton extends Button:
         var base := Vector2(x0 + icon_w + gap, size.y / 2.0 + f.get_ascent(fs) * 0.36)
         var col := Art.CREAM if primary else Color("eef0ea")
         if disabled: col = Color("8b8f86")
-        draw_string_outline(f, base, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0, 0, 0, 0.55))
-        draw_string(f, base, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Art.GOLD if (primary and lit) else col)
+        draw_string_outline(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0, 0, 0, 0.55))
+        draw_string(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Art.GOLD if (primary and lit) else col)
 
 ## Campo com moldura dourada fina, ícone à esquerda e (senha) botão de mostrar.
 class Field extends MarginContainer:
