@@ -19,6 +19,8 @@ var completed := {}
 var promotion_choices: Array = []
 var think_delay := 0.0
 var last_search_metrics := {}
+var coop_search          # busca cooperativa em andamento (sem threads)
+var _threads_ok := true
 
 func start(world: Node, level: String, side: String):
     stop()
@@ -41,6 +43,9 @@ func start_local(world: Node):
 func restart():
     if not active: return
     epoch += 1
+    if coop_search != null:
+        coop_search.abort()
+        coop_search = null
     completed.clear()
     promotion_choices.clear()
     rules.reset()
@@ -68,6 +73,9 @@ func stop():
         game.bot = null
         game.promotion_pending = false
         game.cancel_drag()
+    if coop_search != null:
+        coop_search.abort()
+        coop_search = null
     # In-flight work is invalidated, never synchronously awaited on navigation.
     # The bounded worker is collected by _process when it finishes.
 
@@ -177,19 +185,40 @@ func _process(delta: float):
         if not _apply(move):
             push_error("Bot returned a move rejected by the rules engine")
         return
-    if worker != null: return
+    if worker != null or coop_search != null: return
     thinking = true
     job_epoch = epoch
-    search = Search.new()
-    worker = Thread.new()
     var snapshot = rules.copy_position()
     var settings := Search.profile(difficulty)
+    if not threads_available():
+        _run_cooperative(snapshot, int(settings.budget_ms), int(settings.max_depth))
+        return
+    search = Search.new()
+    worker = Thread.new()
     var err = worker.start(search.choose.bind(snapshot,difficulty,int(settings.budget_ms),int(settings.max_depth)))
-    if err != OK:
+    if err != OK or not worker.is_started():
+        # Sem thread (ex.: Web exportada sem suporte a threads): busca fatiada no próprio quadro.
         worker = null
-        # Easy selection is a legal fallback if the operating system cannot
-        # start a worker. This path never runs a minimax search on the UI thread.
-        completed = Search.new().choose(snapshot,"easy",10,1)
+        search = null
+        _threads_ok = false
+        _run_cooperative(snapshot, int(settings.budget_ms), int(settings.max_depth))
+
+## Web sem SharedArrayBuffer/threads não consegue iniciar Thread: a busca roda em fatias
+## curtas entre quadros (a tela, a música e os cliques continuam respondendo).
+func threads_available() -> bool:
+    if not _threads_ok: return false
+    if OS.has_feature("web") and not OS.has_feature("threads"): return false
+    return true
+
+func _run_cooperative(snapshot, budget_ms: int, max_depth: int):
+    var job := Search.new()
+    coop_search = job
+    var my_epoch := job_epoch
+    var result = await job.choose_async(snapshot, difficulty, budget_ms, max_depth)
+    if coop_search == job: coop_search = null
+    if active and my_epoch == epoch and job_epoch == my_epoch and result is Dictionary:
+        completed = result
+        last_search_metrics = job.last_metrics.duplicate()
 
 func _exit_tree():
     stop()
