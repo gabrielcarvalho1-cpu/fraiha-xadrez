@@ -53,6 +53,8 @@ func sync_unlocks(index: int, confirmed: bool):
 func apply_theme(theme_id: String, persist := true) -> bool:
     if not Catalog.THEME_DATA.has(theme_id): return false
     if not is_unlocked(theme_id): return false
+    # Mesmo tema já aplicado (ex.: clicar de novo em Madeira nas Ligas): nada a refazer.
+    if theme_id == active_theme and not persist_changed(theme_id, persist): return true
     var data = Catalog.get_theme(theme_id)
     var home_texture = Catalog.texture(data.arena_path if data.get("free_arena",false) else data.home_path)
     var arena_texture = Catalog.texture(data.arena_path)
@@ -74,6 +76,9 @@ func apply_theme(theme_id: String, persist := true) -> bool:
     stage._layout()
     theme_changed.emit(active_theme,active_piece_set)
     return true
+
+func persist_changed(theme_id: String, persist: bool) -> bool:
+    return persist and saved_theme != theme_id
 
 func apply_piece_set(piece_set_id: String) -> bool:
     if piece_set_id != "classic" and not Catalog.THEME_DATA.has(piece_set_id): return false

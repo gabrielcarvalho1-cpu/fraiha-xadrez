@@ -27,8 +27,14 @@ static func get_theme(id: String) -> Dictionary:
     data.music_path = data.get("music_path","res://music_v026/"+data.id+".mp3")
     return data
 
+static var _texture_cache := {}
+## Mantém as texturas já carregadas: sem isso, trocar de liga na Home recarregava (e
+## decodificava) as artes grandes a cada clique — na Web isso travava o áudio.
 static func texture(path: String) -> Texture2D:
-    return load(path) as Texture2D if ResourceLoader.exists(path) else null
+    if _texture_cache.has(path): return _texture_cache[path]
+    var tex: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+    if tex != null: _texture_cache[path] = tex
+    return tex
 
 static func piece_textures(id: String) -> Dictionary:
     if piece_cache.has(id): return piece_cache[id]
