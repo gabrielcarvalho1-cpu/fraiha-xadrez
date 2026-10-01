@@ -138,7 +138,8 @@ class SkinLink extends Button:
         var fs := 37
         while fs > 16 and f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > size.x - 130.0 - 60.0: fs -= 1
         var base := Vector2(125, 31 + f.get_ascent(fs) * 0.36)
-        draw_string(f, base + Vector2(0, 2), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.6))
+        # sem sombra deslocada (ficava "dobrado" ao reduzir a escala): só contorno fino escuro
+        draw_string_outline(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0.05, 0.08, 0.05, 0.85))
         draw_string(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("fff0c8") if lit else CREAM)
         if lit: draw_rect(Rect2(Vector2(30, 0), Vector2(size.x - 40, 56)), Color(1.0, 0.9, 0.6, 0.06))
 
