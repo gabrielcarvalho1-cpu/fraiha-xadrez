@@ -11,6 +11,7 @@ const { DirectMessages } = require('./social/dm');
 const { Invites } = require('./social/invites');
 const { Presence } = require('./social/presence');
 const { Payments } = require('./payments/service');
+const { BotService } = require('./bots/service');
 
 const GUEST_TTL_MS = 24 * 3600e3;
 // Análise pós-partida: contas sem Club têm N análises por dia (dia UTC, relógio do servidor).
@@ -44,6 +45,7 @@ class Backend {
     this.invites = new Invites({ send: (ws, o) => this.send(ws, o), backend: this });
     this.presence = new Presence({ send: (ws, o) => this.send(ws, o), backend: this });
     this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
+    this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o) }) : null;
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
   attachRanked(ranked) { this.ranked = ranked; ranked.backend = this; }
@@ -105,6 +107,7 @@ class Backend {
     const ranked = profile ? await this.store.getRankedStats(u.id) : null;
     const entitlements = profile ? await this.store.getEntitlements(u.id) : null;
     const analysis = profile ? await this.analysisSummary(u.id, entitlements) : null;
+    const bots = profile && this.bots ? await this.bots.summary(u.id) : null;
     ws.profile = profile;
     if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: profile.avatar_id, guest: false }); }
     // nickname_next_change_at: calculado pelo SERVIDOR (cooldown de 30 dias); o cliente só exibe.
@@ -112,7 +115,7 @@ class Backend {
     this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,
       needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind,
       entitlements: entitlements ? { is_founder: !!entitlements.is_founder, club_active: !!entitlements.club_active, club_expires_at: entitlements.club_expires_at || null } : null,
-      analysis });
+      analysis, bots });
   }
   // Convidado: identidade só em memória, recuperável pelo token (reconexão ao Casual).
   guestAuth(ws, m) {
@@ -187,6 +190,10 @@ class Backend {
         }
       }
       if (a.startsWith('payment_')) return this.payments.handle(ws, m);
+      if (a.startsWith('bot_')) {
+        try { return await this.bots.handle(ws, m); }
+        catch (e) { console.error('bots', a, e && e.message); return this.send(ws, { type: 'bot_error', code: 'server_error', message: 'Erro temporário no servidor. Tente novamente.' }); }
+      }
       if (a === 'acct_auth') {
         const user = await this.auth.verify(m.access_token);
         if (!user) { ws.user = null; ws.profile = null; return this.fail(ws, 'Sessão inválida ou expirada. Entre novamente.', { code: 'invalid_token' }); }

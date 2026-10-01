@@ -105,6 +105,20 @@ class MemoryStore {
     this.analysis.set(k, used + 1);
     return { ok: true, used: used + 1 };
   }
+  // ---------- Escada de bots (0006): 1ª vitória por (conta, bot) ----------
+  async getBotProgress(userId) {
+    if (this.botProgressDisabled) { const e = new Error('Could not find the table bot_progress'); e.code = 'PGRST205'; throw e; }
+    this.bots = this.bots || new Map();
+    return [...(this.bots.get(userId) || new Map()).values()];
+  }
+  async recordBotVictory(userId, botId, info) {
+    this.bots = this.bots || new Map();
+    if (!this.bots.has(userId)) this.bots.set(userId, new Map());
+    const m = this.bots.get(userId);
+    if (m.has(botId)) return false;
+    m.set(botId, { bot_id: botId, defeated_at: new Date().toISOString(), plies: info.plies, human_color: info.human_color });
+    return true;
+  }
   async saveAnalysis(userId, sum) {
     this.analyses = this.analyses || [];
     this.analyses.push({ user_id: userId, ...sum });
@@ -255,6 +269,15 @@ class SupabaseStore {
     }
   }
   async setEntitlements() { throw new Error('entitlements só mudam pelo webhook de pagamento'); }
+  // ---------- Escada de bots (0006). Sem a tabela → erro PGRST205/42P01 (tratado como "não configurado"). ----------
+  async getBotProgress(userId) {
+    return await this.req('/bot_progress?user_id=eq.' + encodeURIComponent(userId) + '&select=bot_id,defeated_at&order=defeated_at.asc');
+  }
+  async recordBotVictory(userId, botId, info) {
+    const rows = await this.req('/bot_progress?on_conflict=user_id,bot_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+      body: JSON.stringify({ user_id: userId, bot_id: botId, plies: Number(info.plies) || 0, human_color: info.human_color === 'b' ? 'b' : 'w' }) });
+    return Array.isArray(rows) && rows.length > 0;
+  }
   async saveAnalysis(userId, sum) {
     const row = { user_id: userId, match_id: UUID_RE.test(String(sum.match_id || '')) ? sum.match_id : null, mode: String(sum.mode || ''),
       played_at: sum.played_at ? new Date(Number(sum.played_at) * 1000).toISOString() : null, color: sum.color || null, result: sum.result || null,
