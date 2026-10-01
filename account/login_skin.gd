@@ -54,7 +54,6 @@ class Field extends Control:
             eye.focus_mode = Control.FOCUS_NONE
             eye.flat = true
             eye.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-            eye.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
             eye.position = Vector2(738 - 60 - 56, 24)
             eye.size = Vector2(72, 72)
             eye.draw.connect(func(): Art.icon(eye, "eye" if line.secret else "eye_off", Rect2(Vector2(10, 10), Vector2(52, 52)), Color("e6dcc0")))

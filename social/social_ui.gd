@@ -483,7 +483,7 @@ func _build_profile(narrow: bool):
     var pres = String(profile.get("presence", ""))
     if not pres.is_empty():   # o servidor só envia presença de amigos
         var pinfo = PRESENCE.get(pres, PRESENCE["offline"])
-        _label(info, "● " + pinfo[0], 15, pinfo[1], narrow).name = "ProfilePresence"
+        _label(info, "- " + pinfo[0], 15, pinfo[1], narrow).name = "ProfilePresence"
     var hl = int(profile.get("highest_league", 0))
     _label(info, "Maior liga: " + LEAGUES[clampi(hl, 0, 10)], 15, GOLD, narrow).name = "ProfileHighest"
     _label(box, "RANQUEADO", 15, GOLD)

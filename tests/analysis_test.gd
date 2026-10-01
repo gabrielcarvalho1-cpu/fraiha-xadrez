@@ -139,11 +139,11 @@ func run():
     check(rep.moves.size() == rec.moves.size() and rep.players.has("w") and rep.players.has("b"), "relatório com todos os lances e dois jogadores")
     check(node("AccuracyMe") != null and node("AccuracyOpp") != null and "%" in node("AccuracyMe").text, "precisão VOCÊ / ADVERSÁRIO")
     check(node("EvalGraph") != null and node("ReviewBoard") != null and node("MoveListPanel") != null, "gráfico, tabuleiro e lista")
-    check(node("Move_0") != null and "◆" in node("Move_0").text, "lance marcado aparece com marcador na lista")
+    check(node("Move_0") != null and "*" in node("Move_0").text, "lance marcado aparece com marcador na lista")
     # lista padrão: sem rótulos/ícones de classificação; exportação dos lances
     var plain := true
     for i in rep.moves.size():
-        var bt: String = node("Move_%d" % i).text.replace("  ◆", "")
+        var bt: String = node("Move_%d" % i).text.replace("  *", "")
         if bt != String(rep.moves[i].san): plain = false
     check(plain, "lista de lances só anota o lance (sem rótulos de classificação)")
     check(node("DetailClass") == null and node("CopyMoves") != null and node("SaveMovesText") != null and node("SaveScreenshot") != null, "sem selo de classe no detalhe; botões copiar / salvar texto / salvar print")

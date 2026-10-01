@@ -112,7 +112,7 @@ func _draw():
     # Título e subtítulo no estandarte.
     var title := "JOGAR RANQUEADO" if rated else "JOGAR ONLINE"
     _center(TITLE_FONT, title, 564, 176, 66, 470, Color("f6c85a"), 10, Color(0.16, 0.08, 0.0, 0.95))
-    var sub := "RANQUEADA  ◆  CADA RITMO TEM LIGA E PL PRÓPRIOS" if rated else "PARTIDA CASUAL  ◆  ESCOLHA O RITMO E ENTRE NA FILA"
+    var sub := "RANQUEADA  ·  CADA RITMO TEM LIGA E PL PRÓPRIOS" if rated else "PARTIDA CASUAL  ·  ESCOLHA O RITMO E ENTRE NA FILA"
     _center(font, sub, 564, 224, 19, 520, Color("f1e6c8"))
     # Descrição (+ aviso de conexão/erro da própria ranked_ui).
     var desc := "Cada ritmo tem liga, PL e estatísticas próprios. Cores sorteadas pelo servidor." if rated else "Partida casual contra outro jogador: escolha o ritmo e entre na fila.\nNão vale PL e não altera o Ranked."

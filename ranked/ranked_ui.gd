@@ -544,7 +544,7 @@ func _analyze_button():
     if stage == null or not stage.has_method("analysis_available") or not stage.analysis_available(): return
     var access = stage.get("analysis_access")
     var line := ""
-    if access != null: line = ("♛ " if access.club_unlimited() else "") + access.status_line()
+    if access != null: line = ("CLUB  " if access.club_unlimited() and not access.status_line().begins_with("CLUB") else "") + access.status_line()
     var b = _button(box, "ANALISAR PARTIDA", func():
         close_panel()
         stage.open_analysis(), true)

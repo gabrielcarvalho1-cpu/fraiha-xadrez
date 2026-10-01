@@ -133,7 +133,7 @@ func _show_exercise():
     var t := Art.label(hv, "EXERCÍCIO %d DE %d" % [index + 1, exercises.size()], 22, Art.GOLD, Art.FONT_BOLD)
     t.name = "ExerciseTitle"
     Art.label(hv, "ENCONTRE UMA CONTINUAÇÃO MELHOR.", 18, Art.CREAM, Art.FONT_SEMI)
-    Art.label(hv, "Na partida você jogou %s (%s %s). Lance %d · %s jogam." % [m.san, Config.GLYPHS[m.class], Config.LABELS[m.class], ply / 2 + 1, "Brancas" if m.color == "w" else "Pretas"], 14, Art.MUTED)
+    Art.label(hv, "Na partida você jogou %s. Lance %d · %s jogam." % [m.san, ply / 2 + 1, "Brancas" if m.color == "w" else "Pretas"], 14, Art.MUTED)
     var row: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
     row.add_theme_constant_override("separation", 18)
     column.add_child(row)

@@ -173,7 +173,7 @@ func build_ui():
     privacy.add_theme_color_override("font_color",Color("baa778"))
     privacy.add_theme_font_size_override("font_size",16)
     box.add_child(privacy)
-    button(box,"← VOLTAR À TELA INICIAL",return_to_main_hub)
+    button(box,"VOLTAR À TELA INICIAL",return_to_main_hub)
     hud=PanelContainer.new()
     hud.position=Vector2(18,18)
     hud.add_theme_stylebox_override("panel",panel_style())

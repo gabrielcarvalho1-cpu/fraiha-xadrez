@@ -109,7 +109,7 @@ func _on_text(value: String):
         return
     var err: String = account.nickname_error(value)
     if not err.is_empty():
-        status.text = "✕ " + err
+        status.text = "X  " + err
         status.add_theme_color_override("font_color", BAD)
         check_timer.stop()
         return
@@ -125,8 +125,8 @@ func _on_checked(nick: String, available: bool, error: String):
     if account.clean_nickname(input.text).to_lower() != nick.to_lower(): return
     checked_name = nick
     checked_ok = available
-    status.text = ("✓ NOME DISPONÍVEL" if available else "✕ ESSE NOME JÁ ESTÁ SENDO USADO") if error.is_empty() or available else "✕ " + error
-    if not available and error.begins_with("Esse nome"): status.text = "✕ ESSE NOME JÁ ESTÁ SENDO USADO"
+    status.text = ("OK  NOME DISPONÍVEL" if available else "X  ESSE NOME JÁ ESTÁ SENDO USADO") if error.is_empty() or available else "X  " + error
+    if not available and error.begins_with("Esse nome"): status.text = "X  ESSE NOME JÁ ESTÁ SENDO USADO"
     status.add_theme_color_override("font_color", OK if available else BAD)
     save_button.disabled = not available
 
@@ -138,12 +138,12 @@ func _save():
 
 func _on_changed(nick: String, next_at: String):
     input.text = nick
-    status.text = "✓ Nome salvo: " + nick
+    status.text = "OK  Nome salvo: " + nick
     status.add_theme_color_override("font_color", OK)
     refresh()
 
 func _on_failed(code: String, message: String, next_at: String):
-    status.text = "✕ " + message
+    status.text = "X  " + message
     status.add_theme_color_override("font_color", BAD)
     if code == "nickname_cooldown" and not next_at.is_empty():
         cooldown.text = "PRÓXIMA ALTERAÇÃO DISPONÍVEL EM: " + format_date(next_at)

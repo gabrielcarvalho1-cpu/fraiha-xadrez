@@ -500,7 +500,7 @@ func _page_report():
     var nav := HBoxContainer.new()
     nav.add_theme_constant_override("separation", 6)
     left.add_child(nav)
-    for pair in [["⏮", -999, "NavFirst"], ["◀", -1, "NavPrev"], ["▶", 1, "NavNext"], ["⏭", 999, "NavLast"]]:
+    for pair in [["|<", -999, "NavFirst"], ["<", -1, "NavPrev"], [">", 1, "NavNext"], [">|", 999, "NavLast"]]:
         var b := Art.Cta.new(pair[0], "dark", 46, 18)
         b.name = pair[2]
         b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -548,7 +548,7 @@ func _page_report():
         var b := Button.new()
         b.name = "Move_%d" % i
         b.focus_mode = Control.FOCUS_NONE
-        b.text = String(m.san) + ("  ◆" if m.marked else "")   # ◆ = marcado para revisar
+        b.text = String(m.san) + ("  *" if m.marked else "")   # * = marcado para revisar
         b.alignment = HORIZONTAL_ALIGNMENT_LEFT
         b.custom_minimum_size.x = 92 if narrow else 110
         b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -676,7 +676,7 @@ func _fill_detail():
     f.add_child(v)
     if cur_ply < 0:
         Art.label(v, "POSIÇÃO INICIAL", fs(22), Art.GOLD, Art.FONT_BOLD)
-        Art.label(v, "Use ◀ ▶ (ou as setas do teclado), o gráfico ou a lista para percorrer a partida.", fs(15), Art.MUTED)
+        Art.label(v, "Use < > (ou as setas do teclado), o gráfico ou a lista para percorrer a partida.", fs(15), Art.MUTED)
         return
     var m: Dictionary = report.moves[cur_ply]
     var mine: bool = String(report.human_color) == "" or m.color == report.human_color

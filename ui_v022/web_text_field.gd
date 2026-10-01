@@ -37,9 +37,14 @@ func _ready():
             el.autocomplete = 'off'; el.autocapitalize = 'sentences'; el.spellcheck = true;
             el.placeholder = %s; el.enterKeyHint = 'send';
             el.style.cssText = 'position:fixed;display:none;z-index:20;margin:0;border:0;outline:none;' +
-                'background:transparent;color:#efe3c4;caret-color:#f4ce7f;font:16px sans-serif;' +
+                'background:transparent;color:#f2e6c6;caret-color:#f4ce7f;font:16px Georgia,"Times New Roman",serif;' +
                 'padding:0 10px;box-sizing:border-box;-webkit-appearance:none;border-radius:6px';
             el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.dataset.submit = '1'; } });
+            if (!document.getElementById('fraiha-text-style')) {
+                const st = document.createElement('style'); st.id = 'fraiha-text-style';
+                st.textContent = 'input[id^=fraiha-text-]::placeholder{color:#b9ad8e;opacity:1}';
+                document.head.appendChild(st);
+            }
             document.body.appendChild(el);
         })()
     """ % [JSON.stringify(dom_id), JSON.stringify(kind), field.max_length if field.max_length > 0 else 512, JSON.stringify(field.placeholder_text)])
@@ -73,6 +78,7 @@ func _process(_delta):
     el.style.top = "%dpx" % roundi(pos.y)
     el.style.width = "%dpx" % roundi(size.x)
     el.style.height = "%dpx" % roundi(size.y)
+    el.style.fontSize = "%dpx" % clampi(roundi(size.y * 0.42), 14, 28)   # acompanha a escala do campo do jogo
     # Senha: o botão de mostrar/ocultar do jogo troca também o tipo do campo HTML.
     if field.virtual_keyboard_type == LineEdit.KEYBOARD_TYPE_PASSWORD:
         var want := "password" if field.secret else "text"
