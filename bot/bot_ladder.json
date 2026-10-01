@@ -1,0 +1,239 @@
+{
+ "_doc": "Escada de bots do FRAIHA (fonte única: cliente Godot, servidor Node e medições). Stockfish 19 Lite é o motor; cada nível é um perfil. skill = Skill Level (0-20); elo = UCI_LimitStrength + UCI_Elo (1320-3190); go = limite por lance (depth/nodes/movetime); multipv + error/random_chance = camada de erro controlada só nos níveis baixos. think_ms = tempo mínimo exibido (sensação de pensar). fallback = nível do motor interno se o Stockfish não carregar. reward = recompensa da 1ª vitória.",
+ "version": 1,
+ "bots": [
+  {
+   "id": "madeira",
+   "name": "BOT MADEIRA",
+   "title": "O Aprendiz da Floresta",
+   "description": "Acabou de aprender como as peças se movem. Erra muito e responde rápido.",
+   "engine": {
+    "skill": 0,
+    "go": {
+     "depth": 1
+    },
+    "multipv": 5,
+    "random_chance": 0.35,
+    "error": {
+     "chance": 0.35,
+     "max_loss": 400
+    }
+   },
+   "think_ms": 350,
+   "fallback": "easy",
+   "reward": {
+    "type": "avatar",
+    "id": "mage"
+   },
+   "league": "madeira"
+  },
+  {
+   "id": "ferro",
+   "name": "BOT FERRO",
+   "title": "O Ferreiro Teimoso",
+   "description": "Já evita perder peças de graça, mas ainda deixa escapar lances simples.",
+   "engine": {
+    "skill": 0,
+    "go": {
+     "depth": 2
+    },
+    "multipv": 5,
+    "random_chance": 0.14,
+    "error": {
+     "chance": 0.25,
+     "max_loss": 280
+    }
+   },
+   "think_ms": 450,
+   "fallback": "easy",
+   "reward": {
+    "type": "avatar",
+    "id": "paladin"
+   },
+   "league": "ferro"
+  },
+  {
+   "id": "bronze",
+   "name": "BOT BRONZE",
+   "title": "O Escudeiro",
+   "description": "Joga de forma razoável e pune erros grosseiros.",
+   "engine": {
+    "skill": 1,
+    "go": {
+     "depth": 3
+    },
+    "multipv": 4,
+    "random_chance": 0.06,
+    "error": {
+     "chance": 0.2,
+     "max_loss": 220
+    }
+   },
+   "think_ms": 550,
+   "fallback": "medium",
+   "reward": {
+    "type": "avatar",
+    "id": "bronze_reward"
+   },
+   "league": "bronze"
+  },
+  {
+   "id": "prata",
+   "name": "BOT PRATA",
+   "title": "O Cavaleiro de Prata",
+   "description": "Intermediário: calcula trocas e aproveita peças soltas.",
+   "engine": {
+    "skill": 2,
+    "go": {
+     "depth": 4
+    },
+    "multipv": 3,
+    "random_chance": 0.03,
+    "error": {
+     "chance": 0.12,
+     "max_loss": 150
+    }
+   },
+   "think_ms": 650,
+   "fallback": "medium",
+   "reward": {
+    "type": "avatar",
+    "id": "prata_reward"
+   },
+   "league": "prata"
+  },
+  {
+   "id": "ouro",
+   "name": "BOT OURO",
+   "title": "O Tesoureiro do Rei",
+   "description": "Competitivo. Pouco erra em posições simples.",
+   "engine": {
+    "elo": 1500,
+    "go": {
+     "movetime": 200
+    }
+   },
+   "think_ms": 700,
+   "fallback": "medium",
+   "reward": {
+    "type": "avatar",
+    "id": "ouro_reward"
+   },
+   "league": "ouro"
+  },
+  {
+   "id": "platina",
+   "name": "BOT PLATINA",
+   "title": "A Guardiã de Platina",
+   "description": "Planeja e ataca com consistência.",
+   "engine": {
+    "elo": 1700,
+    "go": {
+     "movetime": 250
+    }
+   },
+   "think_ms": 750,
+   "fallback": "hard",
+   "reward": {
+    "type": "avatar",
+    "id": "platina_reward"
+   },
+   "league": "platina"
+  },
+  {
+   "id": "esmeralda",
+   "name": "BOT ESMERALDA",
+   "title": "O Druida Esmeralda",
+   "description": "Forte em táticas; exige atenção a cada lance.",
+   "engine": {
+    "elo": 1900,
+    "go": {
+     "movetime": 300
+    }
+   },
+   "think_ms": 800,
+   "fallback": "hard",
+   "reward": {
+    "type": "avatar",
+    "id": "esmeralda_reward"
+   },
+   "league": "esmeralda"
+  },
+  {
+   "id": "diamante",
+   "name": "BOT DIAMANTE",
+   "title": "A Lâmina de Diamante",
+   "description": "Jogador avançado. Converte vantagens com precisão.",
+   "engine": {
+    "elo": 2100,
+    "go": {
+     "movetime": 350
+    }
+   },
+   "think_ms": 850,
+   "fallback": "hard",
+   "reward": {
+    "type": "avatar",
+    "id": "diamante_reward"
+   },
+   "league": "diamante"
+  },
+  {
+   "id": "mestre",
+   "name": "BOT MESTRE",
+   "title": "O Mestre do Castelo",
+   "description": "Nível mestre. Poucas chances para erros.",
+   "engine": {
+    "elo": 2350,
+    "go": {
+     "movetime": 450
+    }
+   },
+   "think_ms": 900,
+   "fallback": "expert",
+   "reward": {
+    "type": "avatar",
+    "id": "mestre_reward"
+   },
+   "league": "mestre"
+  },
+  {
+   "id": "grande_mestre",
+   "name": "BOT GRANDE MESTRE",
+   "title": "O Grão-Mestre",
+   "description": "Extremamente forte. Cada vitória aqui é uma conquista.",
+   "engine": {
+    "elo": 2650,
+    "go": {
+     "movetime": 600
+    }
+   },
+   "think_ms": 900,
+   "fallback": "expert",
+   "reward": {
+    "type": "avatar",
+    "id": "grande_mestre_reward"
+   },
+   "league": "grande_mestre"
+  },
+  {
+   "id": "challenger",
+   "name": "BOT CHALLENGER",
+   "title": "O Desafiante Final",
+   "description": "Stockfish sem limite de força. O desafio máximo do FRAIHA.",
+   "engine": {
+    "skill": 20,
+    "go": {
+     "movetime": 900
+    }
+   },
+   "think_ms": 900,
+   "fallback": "expert",
+   "reward": {
+    "type": "avatar",
+    "id": "challenger_reward"
+   },
+   "league": "challenger"
+  }
+ ]
+}

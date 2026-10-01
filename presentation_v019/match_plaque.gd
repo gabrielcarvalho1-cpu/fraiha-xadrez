@@ -28,7 +28,11 @@ func _font() -> Font:
 
 func _left_width() -> float:
     var f := _font()
-    return maxf(f.get_string_size("ADVERSÁRIO", HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x, f.get_string_size("BOT " + level_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 21).x + 60.0)
+    return maxf(f.get_string_size("ADVERSÁRIO", HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x, f.get_string_size(_main_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 21).x + (60.0 if level_id in LEVELS else 8.0))
+
+## Bots da escada já trazem o nome completo ("BOT MADEIRA"); níveis antigos recebem o prefixo.
+func _main_text() -> String:
+    return level_name if level_name.begins_with("BOT ") else "BOT " + level_name
 
 func _right_width() -> float:
     var f := _font()
@@ -62,13 +66,13 @@ func _draw():
         draw_colored_polygon(PackedVector2Array([c + Vector2(0, -4), c + Vector2(4, 0), c + Vector2(0, 4), c + Vector2(-4, 0)]), Color("3a2a12"))
     var x0 := 34.0
     draw_string(f, Vector2(x0, 23), "ADVERSÁRIO", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, MUTED)
-    var main := "BOT " + level_name
+    var main := _main_text()
     draw_string_outline(f, Vector2(x0, 47), main, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, 4, Color("0b150f"))
     draw_string(f, Vector2(x0, 47), main, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, GOLD)
     # Marcadores de nível: losangos cheios até a dificuldade escolhida.
     var filled := LEVELS.find(level_id) + 1
     var px := x0 + f.get_string_size(main, HORIZONTAL_ALIGNMENT_LEFT, -1, 21).x + 14.0
-    for i in 4:
+    for i in (4 if level_id in LEVELS else 0):
         var c := Vector2(px + i * 13.0, 40.0)
         var pts := PackedVector2Array([c + Vector2(0, -5), c + Vector2(5, 0), c + Vector2(0, 5), c + Vector2(-5, 0)])
         if i < filled: draw_colored_polygon(pts, GOLD)

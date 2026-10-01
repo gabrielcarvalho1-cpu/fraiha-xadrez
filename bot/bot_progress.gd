@@ -1,0 +1,139 @@
+extends Node
+## Progresso da escada de bots + avatares desbloqueados.
+##   • Conta logada com o servidor pronto e migração 0006 aplicada: o SERVIDOR é a autoridade.
+##     A vitória é enviada (lances UCI) e só vira progresso/recompensa quando o servidor confirma
+##     (online_v021/bots/service.js refaz a partida). Aparece em qualquer aparelho da conta.
+##   • Convidado, ou servidor sem 0006: progresso LOCAL deste aparelho (user://bot_progress.cfg),
+##     separado por conta. Nunca é enviado depois como "prova" — o servidor só aceita partidas.
+signal changed
+signal reward_unlocked(bot_id: String, reward: Dictionary)
+signal notice(text: String)
+
+const Ladder = preload("res://bot/bot_ladder.gd")
+const FILE := "user://bot_progress.cfg"
+const INITIAL_AVATARS := ["warrior", "archer"]
+
+var key := "local"             # "local" (convidado) ou user_id da conta
+var defeated := {}             # bot_id -> unix (1ª vitória)
+var server_available := false  # conta com progresso no servidor (0006)
+var account                    # account/account_service.gd
+var _pending := {}             # bot_id aguardando confirmação do servidor
+
+func setup(acc):
+    account = acc
+    if account != null:
+        account.changed.connect(_on_account_changed)
+        account.bot_progress_changed.connect(_on_server_progress)
+        account.bot_progress_failed.connect(_on_server_failed)
+    _on_account_changed()
+
+func _on_account_changed():
+    var k := "local"
+    if account != null and account.has_profile() and not String(account.user_id).is_empty(): k = String(account.user_id)
+    if k != key or defeated.is_empty():
+        key = k
+        if key == "local": server_available = false
+        _load()
+        changed.emit()
+
+func _load():
+    defeated.clear()
+    var cfg := ConfigFile.new()
+    if cfg.load(FILE) != OK: return
+    for id in Ladder.ids():
+        if cfg.has_section_key(key, id): defeated[id] = int(cfg.get_value(key, id))
+
+func _save():
+    var cfg := ConfigFile.new()
+    cfg.load(FILE)
+    for id in Ladder.ids():
+        if defeated.has(id): cfg.set_value(key, id, defeated[id])
+        elif cfg.has_section_key(key, id): cfg.erase_section_key(key, id)
+    cfg.save(FILE)
+
+# ---------------------------------------------------------------- consultas
+func is_defeated(id: String) -> bool:
+    return defeated.has(id)
+
+func is_unlocked(id: String) -> bool:
+    var i := Ladder.index_of(id)
+    if i < 0: return false
+    return i == 0 or is_defeated(Ladder.ids()[i - 1])
+
+## "defeated" | "available" | "locked"
+func status(id: String) -> String:
+    if is_defeated(id): return "defeated"
+    return "available" if is_unlocked(id) else "locked"
+
+func next_bot() -> String:
+    for id in Ladder.ids():
+        if not is_defeated(id): return id
+    return ""
+
+## Bot cuja 1ª vitória dá este avatar ("" = avatar inicial ou desconhecido).
+static func unlock_bot_for_avatar(avatar_id: String) -> String:
+    for b in Ladder.bots():
+        var r: Dictionary = b.get("reward", {})
+        if String(r.get("type", "")) == "avatar" and String(r.get("id", "")) == avatar_id: return String(b.id)
+    return ""
+
+func avatar_unlocked(avatar_id: String) -> bool:
+    if avatar_id in INITIAL_AVATARS: return true
+    var bot := unlock_bot_for_avatar(avatar_id)
+    return not bot.is_empty() and is_defeated(bot)
+
+func unlock_hint(avatar_id: String) -> String:
+    var bot := unlock_bot_for_avatar(avatar_id)
+    if bot.is_empty(): return ""
+    return "Derrote o " + String(Ladder.bot(bot).get("name", "bot"))
+
+func storage_label() -> String:
+    if key == "local": return "Progresso salvo neste aparelho (entre na conta para salvar em todos)."
+    return "Progresso salvo na sua conta." if server_available else "Progresso salvo neste aparelho (servidor ainda sem progresso de bots)."
+
+# ---------------------------------------------------------------- vitória
+## Chamado ao fim de uma partida GANHA contra um bot da escada (xeque-mate do bot).
+func report_victory(bot_id: String, human_color: String, moves: PackedStringArray):
+    if not is_unlocked(bot_id) or is_defeated(bot_id): return
+    var logged: bool = account != null and account.has_profile() and key != "local"
+    if logged and server_available and account.server_ready:
+        _pending[bot_id] = true
+        if not account.claim_bot_victory(bot_id, human_color, moves):
+            _pending.erase(bot_id)
+            notice.emit("Sem conexão com o servidor: a vitória não foi registrada na conta.")
+        return
+    _grant(bot_id)
+
+func _grant(bot_id: String):
+    if is_defeated(bot_id): return
+    defeated[bot_id] = int(Time.get_unix_time_from_system())
+    _save()
+    changed.emit()
+    reward_unlocked.emit(bot_id, Ladder.reward(bot_id))
+
+func _on_server_progress(data: Dictionary):
+    if key == "local": return
+    server_available = bool(data.get("available", false))
+    if not server_available:
+        changed.emit()
+        return
+    var list: Array = data.get("defeated", [])
+    var before := defeated.duplicate()
+    defeated.clear()
+    for id in list:
+        if Ladder.is_bot_id(String(id)): defeated[String(id)] = int(before.get(String(id), Time.get_unix_time_from_system()))
+    _save()
+    changed.emit()
+    var nb = data.get("new_bot")
+    if nb != null and not String(nb).is_empty():
+        _pending.erase(String(nb))
+        reward_unlocked.emit(String(nb), Ladder.reward(String(nb)))
+
+func _on_server_failed(code: String, message: String, bot_id: String):
+    if not _pending.has(bot_id): return
+    _pending.erase(bot_id)
+    if code == "not_configured":
+        server_available = false
+        _grant(bot_id)   # servidor sem 0006: guarda neste aparelho
+    else:
+        notice.emit("Vitória não registrada: " + message)
