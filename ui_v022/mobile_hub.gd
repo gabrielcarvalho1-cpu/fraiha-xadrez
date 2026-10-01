@@ -249,6 +249,14 @@ func show_page(id: String):
                 card.text = hub.player_name + " · PERFIL"
                 card.pressed.connect(func(): hub.show_page("profile"))
                 content.add_child(card)
+                # CLUB FRAIHA: linha própria, separada do menu.
+                club_row = load("res://monetization/club_home_entry.gd").new()
+                club_row.compact = true
+                club_row.custom_minimum_size.y = 50
+                club_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+                club_row.pressed.connect(func(): hub.open_club())
+                content.add_child(club_row)
+                refresh_club(hub.entitlements != null and hub.entitlements.club_active())
                 if hub.has_signal("account_requested"):
                     _button(content,hub.account_caption,func(): hub.account_requested.emit()).custom_minimum_size.y = 50
                 var grid = _grid(content,2)
@@ -284,6 +292,11 @@ func show_page(id: String):
     scroll.scroll_vertical = 0
     _fit_width.call_deferred(size.x < 560.0)
     layout()
+
+var club_row = null
+
+func refresh_club(on: bool):
+    if is_instance_valid(club_row): club_row.set_active(on)
 
 func _touch_content(node: Node):
     if node is TextureButton:

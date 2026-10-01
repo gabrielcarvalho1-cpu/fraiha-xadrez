@@ -74,6 +74,9 @@ var music_volume := 0.65
 var premove_enabled := true
 var premove_button: TextureButton
 var premium = null   # FRAIHA PREMIUM (Monetização V1, simulação)
+var monetization_state = null   # flags dev_mock_* (simulação)
+var entitlements = null         # direitos (servidor + simulação) — única leitura para a interface
+var club_entry = null           # fita CLUB FRAIHA na Home (desktop)
 var fullscreen := true
 var volume_label: Label
 var music_volume_label: Label
@@ -95,6 +98,9 @@ func _ready():
     AudioServer.set_bus_mute(0,false)
     league_profile.load_profile()
     ranked.load_local()
+    monetization_state = load("res://monetization/monetization_state.gd").new()
+    entitlements = load("res://monetization/entitlements.gd").new(monetization_state)
+    entitlements.changed.connect(refresh_club)
     _build()
     get_viewport().size_changed.connect(_layout)
     _layout()
@@ -230,6 +236,16 @@ func _build():
     art.size = DESIGN
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(art)
+    # Detalhes vivos da arte oficial (gato dormindo, viajantes na ponte, easter eggs): camada
+    # transparente por cima — a arte original fica intacta. Só aparece com a arte oficial.
+    var details = TextureRect.new()
+    details.name = "ForestDetails"
+    details.texture = preload("res://ui_v022/assets/home_forest_v2_details.png")
+    details.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    details.stretch_mode = TextureRect.STRETCH_SCALE
+    details.size = DESIGN
+    details.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    canvas.add_child(details)
     var main = Control.new()
     main.name = "MainMenu"
     main.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -935,6 +951,8 @@ func apply_theme(texture: Texture2D, theme_id: String = "wood"):
     if texture == FOREST_LEGACY: texture = FOREST   # temas que usavam a Home da floresta passam a usar a arte oficial
     if texture != null:
         canvas.get_node("ForestArtwork").texture = texture
+        var details = canvas.get_node_or_null("ForestDetails")
+        if details != null: details.visible = _is_ref_art(texture)
         _sync_chrome()
         var logo = canvas.get_node_or_null("ThemeLogo")
         var needs_logo = ThemeCatalog.get_theme(theme_id).get("free_arena",false)
@@ -1003,9 +1021,18 @@ func _toggle_fullscreen():
 
 func open_premium(page_id := "hub"):
     if premium == null:
-        premium = load("res://monetization/premium_hub.gd").new()
+        premium = load("res://monetization/premium_hub.gd").new(monetization_state)
         add_child(premium)
     premium.open(page_id)
+
+func open_club():
+    open_premium("club")
+
+## Club ativo (real OU simulação) → atualiza a fita da Home e o cartão do jogador.
+func refresh_club():
+    var on: bool = entitlements != null and entitlements.club_active()
+    if is_instance_valid(club_entry): club_entry.set_active(on)
+    if is_instance_valid(mobile_ui) and mobile_ui.has_method("refresh_club"): mobile_ui.refresh_club(on)
 
 func _toggle_premove():
     premove_enabled = not premove_enabled
@@ -1114,6 +1141,14 @@ func _build_reference_chrome():
     pbtn.tooltip_text = "Perfil"
     canvas.add_child(pbtn)
     ref_nodes.append(pbtn)
+    # CLUB FRAIHA: fita pendurada no cartão de perfil (entrada própria, fora de Configurações).
+    club_entry = preload("res://monetization/club_home_entry.gd").new()
+    club_entry.position = Vector2(1282, 240)
+    club_entry.size = Vector2(310, 50)
+    club_entry.pressed.connect(open_club)
+    canvas.add_child(club_entry)
+    ref_nodes.append(club_entry)
+    refresh_club()
     var clip = Control.new()
     clip.name = "RefPortraitClip"
     clip.clip_contents = true
