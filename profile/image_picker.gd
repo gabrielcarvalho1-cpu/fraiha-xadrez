@@ -56,31 +56,38 @@ func _open_web():
         document.body.appendChild(inp);
         inp.addEventListener('change', () => {
             const f = inp.files && inp.files[0];
-            if (!f) { window.fraihaPickCb(['cancel', '', '']); inp.remove(); return; }
-            if (f.size > %d) { window.fraihaPickCb(['error', 'Arquivo grande demais (máximo 12 MB).', '']); inp.remove(); return; }
+            if (!f) { window.fraihaPickCb('cancel', '', ''); inp.remove(); return; }
+            if (f.size > %d) { window.fraihaPickCb('error', 'Arquivo grande demais (máximo 12 MB).', ''); inp.remove(); return; }
             const r = new FileReader();
             r.onload = () => {
                 const b = new Uint8Array(r.result); let s = '';
                 for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
-                window.fraihaPickCb(['ok', btoa(s), f.name]); inp.remove();
+                window.fraihaPickCb('ok', btoa(s), f.name); inp.remove();
             };
-            r.onerror = () => { window.fraihaPickCb(['error', 'Não foi possível ler o arquivo.', '']); inp.remove(); };
+            r.onerror = () => { window.fraihaPickCb('error', 'Não foi possível ler o arquivo.', ''); inp.remove(); };
             r.readAsArrayBuffer(f);
         });
         inp.click();
     })()
     """ % MAX_FILE)
 
+## O navegador chama fraihaPickCb(tipo, dados, nome) com 3 strings. O Godot entrega os argumentos
+## do JS como um Array de Variants; um array JS viraria JavaScriptObject (não Array) e era
+## descartado em silêncio — por isso o editor de foto nunca abria na Web.
 func _on_web_result(args: Array):
-    if args.is_empty() or not (args[0] is Array): return
-    var a: Array = args[0]
-    var kind := String(a[0])
+    if args.size() < 3:
+        failed.emit("Não foi possível ler o arquivo.")
+        return
+    var kind := str(args[0])
     if kind == "ok":
-        var bytes := Marshalls.base64_to_raw(String(a[1]))
-        var fname := String(a[2])
+        var bytes := Marshalls.base64_to_raw(str(args[1]))
+        var fname := str(args[2])
+        if bytes.is_empty():
+            failed.emit("Não foi possível ler o arquivo.")
+            return
         if fname.get_extension().to_lower() not in EXTENSIONS and fname.get_extension() != "":
             failed.emit("Formato não aceito. Use PNG, JPG ou WebP.")
             return
         picked.emit(bytes, fname)
     elif kind == "error":
-        failed.emit(String(a[1]))
+        failed.emit(str(args[1]))
