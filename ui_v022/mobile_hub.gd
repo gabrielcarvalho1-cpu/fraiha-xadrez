@@ -251,6 +251,7 @@ func show_page(id: String):
                 content.add_child(card)
                 # CLUB FRAIHA: linha própria, separada do menu.
                 club_row = load("res://monetization/club_home_entry.gd").new()
+                club_row.name = "ClubHomeEntryMobile"
                 club_row.compact = true
                 club_row.custom_minimum_size.y = 50
                 club_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -294,9 +295,17 @@ func show_page(id: String):
     layout()
 
 var club_row = null
+var avatar_note: Label = null
+
+func avatar_message(text: String, is_error: bool):
+    if is_instance_valid(avatar_note):
+        avatar_note.text = text
+        avatar_note.add_theme_color_override("font_color", Color("ff9d86") if is_error else Color("c9c2a8"))
 
 func refresh_club(on: bool):
     if is_instance_valid(club_row): club_row.set_active(on)
+    for card in find_children("*", "", true, false):
+        if card is ProfileCard: card.queue_redraw()
 
 func _touch_content(node: Node):
     if node is TextureButton:
@@ -329,21 +338,41 @@ func _profile(content: VBoxContainer):
             hub.choose_avatar(avatar_id)
             show_page.call_deferred("profile")
         )
+        portrait.set_meta("no_club_frame", true)
         box.add_child(portrait)
         hub.attach_league_frame(portrait)
         _text(box,{"warrior":"Guerreiro","archer":"Arqueira","mage":"Mago","paladin":"Paladino"}[id]+(" ✓" if hub.avatar_id == id else ""),16).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _text(content,"SEU NOME",16)
-    var input = LineEdit.new()
-    input.text = hub.player_name
-    input.max_length = 20
-    input.custom_minimum_size.y = 48
-    input.add_theme_font_size_override("font_size",20)
-    content.add_child(input)
-    input.text_changed.connect(func(value):
-        hub.player_name = value.strip_edges() if not value.strip_edges().is_empty() else "Jogador"
-        hub.profile_name.text = hub.player_name
-        hub._save_preferences()
-    )
+    # Foto própria (escolher → enquadrar → salvar) e remover.
+    var photo_row = HBoxContainer.new()
+    photo_row.add_theme_constant_override("separation", 8)
+    content.add_child(photo_row)
+    var change_photo = _button(photo_row, "ALTERAR FOTO", func(): hub.pick_photo())
+    change_photo.name = "ChangePhoto"
+    change_photo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    var remove_photo = _button(photo_row, "REMOVER FOTO", func(): hub.remove_custom_avatar())
+    remove_photo.name = "RemovePhoto"
+    remove_photo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    avatar_note = _text(content, "", 14)
+    avatar_note.name = "AvatarNote"
+    # Nome público da conta (único, 30 dias) — mesmo editor do PC.
+    var logged: bool = hub.account != null and hub.account.has_profile()
+    if hub.account != null:
+        var editor = load("res://account/nickname_editor.gd").new()
+        content.add_child(editor)
+        editor.setup(hub.account, 16)
+    if not logged:
+        _text(content,"NOME LOCAL (SEM CONTA)",16)
+        var input = LineEdit.new()
+        input.text = hub.player_name
+        input.max_length = 20
+        input.custom_minimum_size.y = 48
+        input.add_theme_font_size_override("font_size",20)
+        content.add_child(input)
+        input.text_changed.connect(func(value):
+            hub.player_name = value.strip_edges() if not value.strip_edges().is_empty() else "Jogador"
+            hub.profile_name.text = hub.player_name
+            hub._save_preferences()
+        )
     for mode in hub.Ranked.MODES: _text(content,hub.ranked.summary(mode),17)
 
 func _ranking(content: VBoxContainer):
@@ -491,6 +520,18 @@ class ProfileCard extends Button:
             var sc := minf(pr.size.x / ts.x, pr.size.y / ts.y)
             var d := ts * sc
             draw_texture_rect(av, Rect2(pr.position + (pr.size - d) / 2.0, d), false)
+        # Moldura CLUB (benefício do Club) por cima do retrato, no mesmo recorte.
+        var cf = get_node_or_null("ClubFrame")
+        if hub.club_active():
+            if cf == null:
+                cf = load("res://monetization/club_frame.gd").new()
+                cf.compact = true
+                cf.fill_parent = false
+                add_child(cf)
+            cf.visible = true
+            cf.position = pr.position
+            cf.size = pr.size
+        elif cf != null: cf.visible = false
         var font := get_theme_default_font()
         var data = hub.league_profile.data
         var league = hub.LeagueCatalog.entry(data.current_league, data)

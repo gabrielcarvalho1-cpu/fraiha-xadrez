@@ -26,7 +26,7 @@ const { SupabaseStore } = require('../../online_v021/accounts/store');
   let st = await c.next('acct_state');
   check(st.needs_nickname === true && st.profile === null, 'primeiro login pede nickname');
   check(st.persistent === false, 'modo dev informa que NÃO é persistente');
-  for (const [nick, label] of [['ab', 'curto'], ['nome com espaço', 'espaço'], ['<script>', 'símbolos'], ['admin', 'reservado'], ['a'.repeat(17), 'longo']]) {
+  for (const [nick, label] of [['ab', 'curto'], ['nome com espaço', 'espaço'], ['<script>', 'símbolos'], ['admin', 'reservado'], ['a'.repeat(21), 'longo']]) {
     c.send({ type: 'acct_create_profile', nickname: nick });
     check((await c.next('acct_error')).code === 'nickname_invalid', 'nickname inválido recusado: ' + label);
   }

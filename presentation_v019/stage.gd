@@ -363,6 +363,7 @@ func _setup_account():
     account_ui.name = "AccountUI"
     add_child(account_ui)
     account_ui.setup(account)
+    hub.bind_account(account)
     account_ui.ready_for_ranked.connect(_open_ranked)
     ranked = preload("res://ranked/ranked_controller.gd").new()
     ranked.name = "RankedController"

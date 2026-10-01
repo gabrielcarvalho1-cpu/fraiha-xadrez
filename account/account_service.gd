@@ -6,6 +6,11 @@ signal changed
 signal notice(text: String, is_error: bool)
 signal recovery_started
 signal server_message(msg: Dictionary)
+signal nickname_checked(nickname: String, available: bool, error: String)
+signal nickname_changed(nickname: String, next_change_at: String)
+signal nickname_failed(code: String, message: String, next_change_at: String)
+signal avatar_saved(avatar_url: String)
+signal entitlements_changed(data: Dictionary)
 
 const SESSION_FILE = "user://account_session.cfg"
 const GUEST_FILE = "user://guest_session.cfg"
@@ -315,12 +320,56 @@ func create_profile(nick: String, avatar := "warrior"):
     if not _send({"type": "acct_create_profile", "nickname": nick.strip_edges(), "avatar_id": avatar}):
         notice.emit("Conectando ao servidor… tente novamente em instantes.", true)
 
+## Limpeza igual à do servidor: remove invisíveis/controle/bidi e espaços nas pontas.
+static func clean_nickname(nick: String) -> String:
+    var out := ""
+    for ch in nick:
+        var c: int = ch.unicode_at(0)
+        var invisible := c < 0x20 or (c >= 0x7F and c <= 0x9F) or c == 0xAD or c == 0x34F or c == 0x61C or c == 0x180E \
+            or (c >= 0x200B and c <= 0x200F) or (c >= 0x202A and c <= 0x202E) or (c >= 0x2060 and c <= 0x206F) \
+            or (c >= 0xFE00 and c <= 0xFE0F) or c == 0xFEFF or c == 0x3164 or c == 0xFFA0
+        if not invisible: out += ch
+    return out.strip_edges()
+
+## Regra do nome público (igual ao servidor): 3–20 caracteres, só letras, números e _.
 static func nickname_error(nick: String) -> String:
-    var n = nick.strip_edges()
-    if n.length() < 3 or n.length() > 16: return "O nome precisa ter entre 3 e 16 caracteres."
-    var re = RegEx.create_from_string("^[A-Za-z0-9_.À-ÖØ-öø-ÿ-]+$")
-    if re.search(n) == null: return "Use apenas letras, números, ponto, hífen ou _ (sem espaços)."
+    var n = clean_nickname(nick)
+    if n.is_empty(): return "Digite um nome."
+    if n.length() < 3 or n.length() > 20: return "O nome precisa ter entre 3 e 20 caracteres."
+    var re = RegEx.create_from_string("^[A-Za-z0-9_]+$")
+    if re.search(n) == null: return "Use apenas letras, números e _ (sem espaços nem acentos)."
     return ""
+
+# ---------- Nome público (0004) ----------
+func check_nickname(nick: String) -> bool:
+    return _send({"type": "acct_check_nickname", "nickname": clean_nickname(nick)})
+
+func change_nickname(nick: String) -> bool:
+    var err = nickname_error(nick)
+    if not err.is_empty():
+        nickname_failed.emit("nickname_invalid", err, "")
+        return false
+    if not _send({"type": "acct_change_nickname", "nickname": clean_nickname(nick)}):
+        nickname_failed.emit("offline", "Conectando ao servidor… tente novamente em instantes.", "")
+        return false
+    return true
+
+## Data (do servidor) em que o nome pode ser trocado de novo; "" = pode trocar agora.
+func nickname_next_change_at() -> String:
+    var v = profile.get("nickname_next_change_at")
+    return String(v) if v != null else ""
+
+# ---------- Foto de perfil (0004): bytes já recortados (512x512, WebP/PNG) ----------
+func upload_avatar(bytes: PackedByteArray) -> bool:
+    if bytes.is_empty() or bytes.size() > 400 * 1024: return false
+    return _send({"type": "acct_avatar_upload", "data": Marshalls.raw_to_base64(bytes)})
+
+func clear_avatar() -> bool:
+    return _send({"type": "acct_avatar_clear"})
+
+func avatar_url() -> String:
+    var v = profile.get("avatar_url")
+    return String(v) if v != null else ""
 
 ## Voltou ao primeiro plano (aba/app): heartbeat imediato; a reconexão normal cuida do resto.
 func _notification(what):
@@ -372,6 +421,7 @@ func _receive(msg: Dictionary):
         ranked = msg.ranked if msg.get("ranked") is Dictionary else {}
         needs_nickname = bool(msg.get("needs_nickname", false))
         persistent_backend = bool(msg.get("persistent", false))
+        if msg.get("entitlements") is Dictionary: entitlements_changed.emit(msg.entitlements)
         if needs_nickname and not pending_nickname.is_empty():
             var nick = pending_nickname
             pending_nickname = ""
@@ -385,7 +435,20 @@ func _receive(msg: Dictionary):
             _refresh_session()
         else: notice.emit(String(msg.get("message", "Erro de conta.")), true)
         if code.begins_with("nickname") or code == "profile_error": changed.emit()
+        if code.begins_with("nickname"):
+            var next_at = msg.get("next_change_at")
+            nickname_failed.emit(code, String(msg.get("message", "")), String(next_at) if next_at != null else "")
         if code == "auth_required": server_message.emit(msg)
+    elif type == "acct_nickname_check":
+        nickname_checked.emit(String(msg.get("nickname", "")), bool(msg.get("available", false)), String(msg.get("error", "")))
+    elif type == "acct_nickname_changed":
+        var next_at = msg.get("next_change_at")
+        nickname_changed.emit(String(msg.get("nickname", "")), String(next_at) if next_at != null else "")
+    elif type == "acct_avatar_saved":
+        var url = msg.get("avatar_url")
+        avatar_saved.emit(String(url) if url != null else "")
+    elif type == "acct_entitlements":
+        entitlements_changed.emit(msg.get("entitlements", {}) if msg.get("entitlements") is Dictionary else {})
     elif type == "acct_logged_out":
         pass
     elif type == "guest_state":

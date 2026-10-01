@@ -3,7 +3,8 @@
 // As salas antigas por código continuam no server.js (uso interno), sem alterações.
 const crypto = require('crypto');
 const { SupabaseAuth, DevAuth } = require('./accounts/auth');
-const { MemoryStore, SupabaseStore, validateNickname } = require('./accounts/store');
+const { MemoryStore, SupabaseStore, validateNickname, nextNickChange } = require('./accounts/store');
+const { validateAvatarUpload } = require('./accounts/avatar');
 const { ChatHub } = require('./chat');
 const { Social } = require('./social/service');
 const { DirectMessages } = require('./social/dm');
@@ -92,7 +93,9 @@ class Backend {
     const ranked = profile ? await this.store.getRankedStats(u.id) : null;
     ws.profile = profile;
     if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: profile.avatar_id, guest: false }); }
-    this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile,
+    // nickname_next_change_at: calculado pelo SERVIDOR (cooldown de 30 dias); o cliente só exibe.
+    const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile) } : null;
+    this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,
       needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind });
   }
   // Convidado: identidade só em memória, recuperável pelo token (reconexão ao Casual).
@@ -190,6 +193,40 @@ class Backend {
         return this.presence.snapshot(ws);
       }
       if (a === 'acct_refresh') return this.state(ws);
+      // ---------- Nome público (0004) ----------
+      if (a === 'acct_check_nickname') {
+        const v = validateNickname(m.nickname);
+        if (v.error) return this.send(ws, { type: 'acct_nickname_check', nickname: String(m.nickname || ''), available: false, error: v.error, code: 'nickname_invalid' });
+        const free = await this.store.nicknameAvailable(v.nickname, ws.user.id);
+        return this.send(ws, { type: 'acct_nickname_check', nickname: v.nickname, available: free, error: free ? '' : 'Esse nome já está sendo usado.', code: free ? '' : 'nickname_taken' });
+      }
+      if (a === 'acct_change_nickname') {
+        if (!ws.profile) return this.fail(ws, 'Crie seu perfil primeiro.', { code: 'profile_missing' });
+        const v = validateNickname(m.nickname);
+        if (v.error) return this.fail(ws, v.error, { code: 'nickname_invalid' });
+        const r = await this.store.changeNickname(ws.user.id, v.nickname);
+        if (r.error) return this.fail(ws, r.error, { code: r.code || 'profile_error', next_change_at: r.next_change_at || null });
+        await this.state(ws);                       // atualiza ws.profile e a identidade pública (chat, amigos…)
+        this.presenceChanged(ws.user.id);
+        return this.send(ws, { type: 'acct_nickname_changed', nickname: v.nickname, next_change_at: nextNickChange(r.profile) });
+      }
+      // ---------- Foto de perfil (0004): o cliente manda a imagem já recortada (512x512); o servidor revalida ----------
+      if (a === 'acct_avatar_upload') {
+        if (!ws.profile) return this.fail(ws, 'Crie seu perfil primeiro.', { code: 'profile_missing' });
+        const v = validateAvatarUpload(m.data);
+        if (v.error) return this.fail(ws, v.error, { code: 'avatar_invalid' });
+        const r = await this.store.saveAvatar(ws.user.id, v.bytes, v.mime);
+        if (r.error) return this.fail(ws, r.error, { code: r.code || 'avatar_error' });
+        await this.state(ws);
+        return this.send(ws, { type: 'acct_avatar_saved', avatar_url: r.profile.avatar_url || null });
+      }
+      if (a === 'acct_avatar_clear') {
+        if (!ws.profile) return this.fail(ws, 'Crie seu perfil primeiro.', { code: 'profile_missing' });
+        const r = await this.store.clearAvatar(ws.user.id);
+        if (r.error) return this.fail(ws, r.error, { code: r.code || 'avatar_error' });
+        await this.state(ws);
+        return this.send(ws, { type: 'acct_avatar_saved', avatar_url: null });
+      }
       if (a === 'acct_logout') {
         this.setIdentity(ws, null);
         ws.user = null; ws.profile = null; ws.guest = null;

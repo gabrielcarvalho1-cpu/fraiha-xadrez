@@ -77,6 +77,13 @@ var premium = null   # FRAIHA PREMIUM (Monetização V1, simulação)
 var monetization_state = null   # flags dev_mock_* (simulação)
 var entitlements = null         # direitos (servidor + simulação) — única leitura para a interface
 var club_entry = null           # fita CLUB FRAIHA na Home (desktop)
+var account = null              # account_service (ligado pelo stage em bind_account)
+var avatar_store                # profile/avatar_store.gd (cache local + download)
+var image_picker = null         # escolha de arquivo (desktop/web)
+var avatar_editor = null        # editor de enquadramento
+var nickname_editor = null      # editor do nome público (página Perfil, desktop)
+var avatar_note: Label = null   # mensagens do avatar (página Perfil, desktop)
+var local_name_box: Control = null
 var fullscreen := true
 var volume_label: Label
 var music_volume_label: Label
@@ -98,6 +105,10 @@ func _ready():
     AudioServer.set_bus_mute(0,false)
     league_profile.load_profile()
     ranked.load_local()
+    avatar_store = load("res://profile/avatar_store.gd").new()
+    avatar_store.name = "AvatarStore"
+    add_child(avatar_store)
+    avatar_store.texture_ready.connect(func(_k): _refresh_avatars())
     monetization_state = load("res://monetization/monetization_state.gd").new()
     entitlements = load("res://monetization/entitlements.gd").new(monetization_state)
     entitlements.changed.connect(refresh_club)
@@ -536,9 +547,9 @@ func _build_pages():
     var profile_panel = _wide_page("profile","PERFIL DO JOGADOR")
     var portraits = GridContainer.new()
     portraits.columns = 2
-    portraits.position = Vector2(85,95)
+    portraits.position = Vector2(85,80)
     portraits.add_theme_constant_override("h_separation",50)
-    portraits.add_theme_constant_override("v_separation",20)
+    portraits.add_theme_constant_override("v_separation",8)
     profile_panel.add_child(portraits)
     for id in ["warrior","archer","mage","paladin"]:
         var option = VBoxContainer.new()
@@ -548,17 +559,52 @@ func _build_pages():
         portrait_button.ignore_texture_size = true
         portrait_button.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
         portrait_button.texture_normal = avatar_texture(id)
+        portrait_button.set_meta("no_club_frame", true)
         portrait_button.pressed.connect(func(): choose_avatar(id))
         option.add_child(portrait_button)
         attach_league_frame(portrait_button)
         var caption = _label(option,{"warrior":"GUERREIRO","archer":"ARQUEIRA","mage":"MAGO","paladin":"PALADINO"}[id],18,GOLD)
         caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         avatar_choices[id] = portrait_button
-    var hint = _label(profile_panel,"Escolha seu avatar. A moldura representa a liga do perfil.",17)
-    hint.position = Vector2(45,500)
-    hint.size = Vector2(610,45)
+    var hint = _label(profile_panel,"Escolha um avatar ou use a sua foto. A moldura representa a liga do perfil.",15)
+    hint.position = Vector2(45,452)
+    hint.size = Vector2(640,24)
+    # Foto própria: escolher arquivo → enquadrar → salvar (512x512). Remover volta ao avatar.
+    var photo_row = HBoxContainer.new()
+    photo_row.name = "PhotoRow"
+    photo_row.position = Vector2(45,482)
+    photo_row.size = Vector2(640,46)
+    photo_row.add_theme_constant_override("separation", 12)
+    profile_panel.add_child(photo_row)
+    var change_photo = Button.new()
+    change_photo.name = "ChangePhoto"
+    change_photo.text = "ALTERAR FOTO"
+    change_photo.custom_minimum_size = Vector2(190, 46)
+    change_photo.add_theme_font_size_override("font_size", 17)
+    change_photo.pressed.connect(pick_photo)
+    photo_row.add_child(change_photo)
+    var remove_photo = Button.new()
+    remove_photo.name = "RemovePhoto"
+    remove_photo.text = "REMOVER FOTO"
+    remove_photo.custom_minimum_size = Vector2(180, 46)
+    remove_photo.add_theme_font_size_override("font_size", 17)
+    remove_photo.pressed.connect(remove_custom_avatar)
+    photo_row.add_child(remove_photo)
+    avatar_note = _label(profile_panel, "", 13, MUTED)
+    avatar_note.name = "AvatarNote"
+    avatar_note.position = Vector2(45,528)
+    avatar_note.size = Vector2(640,20)
     var profile = _stack(profile_panel,Vector2(745,115),Vector2(640,480),Vector4.ZERO,10)
-    _label(profile,"COMO VOCÊ QUER SER CONHECIDO?",20,GOLD)
+    # Nome público da conta (único, troca a cada 30 dias) — servidor decide tudo.
+    nickname_editor = preload("res://account/nickname_editor.gd").new()
+    profile.add_child(nickname_editor)
+    if account != null: nickname_editor.setup(account, 18)
+    # Sem conta: nome local só para a partida contra o computador / tela inicial.
+    local_name_box = VBoxContainer.new()
+    local_name_box.name = "LocalNameBox"
+    local_name_box.add_theme_constant_override("separation", 6)
+    profile.add_child(local_name_box)
+    _label(local_name_box,"NOME LOCAL (SEM CONTA)",16,GOLD)
     var name_input = LineEdit.new()
     name_input.name = "PlayerName"
     name_input.custom_minimum_size.y = 46
@@ -566,15 +612,22 @@ func _build_pages():
     name_input.text = player_name
     name_input.placeholder_text = "Seu nome"
     name_input.add_theme_font_size_override("font_size",20)
-    profile.add_child(name_input)
+    local_name_box.add_child(name_input)
     name_input.text_changed.connect(func(value):
         player_name = value.strip_edges()
         if player_name.is_empty(): player_name = "Jogador"
         profile_name.text = player_name
         _save_preferences()
     )
+    _refresh_name_boxes()
+    var stats_grid = GridContainer.new()
+    stats_grid.columns = 2
+    stats_grid.add_theme_constant_override("h_separation", 18)
+    stats_grid.add_theme_constant_override("v_separation", 4)
+    profile.add_child(stats_grid)
     for mode in Ranked.MODES:
-        _body(profile,ranked.summary(mode),16)
+        var cell = _body(stats_grid,ranked.summary(mode),13)
+        cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     _refresh_avatars()
     var settings = _new_page("settings", "CONFIGURAÇÕES", "")
     # FRAIHA PREMIUM (Fundador + Club) — Monetização V1 em modo de teste.
@@ -630,8 +683,20 @@ func _wide_page(id: String, title: String) -> Control:
     pages[id] = panel
     return panel
 
+## Chave do cache local da foto: user_id da conta, ou "local" sem conta.
+func avatar_key() -> String:
+    if account != null and account.has_profile() and not String(account.user_id).is_empty(): return String(account.user_id)
+    return "local"
+
+## Foto personalizada do jogador (cache local), se houver.
+func custom_avatar() -> Texture2D:
+    return avatar_store.texture_for(avatar_key()) if avatar_store != null else null
+
 func avatar_texture(id: String = "") -> Texture2D:
-    if id.is_empty(): id = avatar_id
+    if id.is_empty():
+        var custom := custom_avatar()
+        if custom != null: return custom
+        id = avatar_id
     if id == "paladin": return ThemeCatalog.texture("res://profile/paladin.png")
     if id == "warrior": return AVATAR
     var atlas = ThemeCatalog.texture("res://cosmetics/v025/avatars.png")
@@ -1033,6 +1098,7 @@ func refresh_club():
     var on: bool = entitlements != null and entitlements.club_active()
     if is_instance_valid(club_entry): club_entry.set_active(on)
     if is_instance_valid(mobile_ui) and mobile_ui.has_method("refresh_club"): mobile_ui.refresh_club(on)
+    _refresh_avatars()   # molduras (Home, Perfil, cartão do jogador)
 
 func _toggle_premove():
     premove_enabled = not premove_enabled
@@ -1085,7 +1151,9 @@ func _build_ranked():
     play.disabled = true
     _highlight(play,false)
 func attach_league_frame(portrait: Control):
-    if portrait.has_meta("no_league_frame"): return   # retrato da Home oficial: a moldura já está na arte
+    if portrait.has_meta("no_league_frame"):
+        attach_club_frame(portrait)   # a moldura de liga já está na arte; a do Club vai por cima
+        return
     var border = portrait.get_node_or_null("LeagueFrame")
     if border == null:
         border = preload("res://profile/league_frame.gd").new()
@@ -1093,6 +1161,26 @@ func attach_league_frame(portrait: Control):
         portrait.add_child(border)
     border.league_id = league_profile.data.current_league
     border.queue_redraw()
+    attach_club_frame(portrait)
+
+## Moldura CLUB por cima de qualquer retrato (só com Club ativo: servidor ou simulação).
+func attach_club_frame(portrait: Control, round_shape := false, compact := false):
+    if portrait.has_meta("no_club_frame"): return   # avatares de escolha no Perfil não recebem a moldura
+    var on: bool = club_active()
+    var frame = portrait.get_node_or_null("ClubFrame")
+    if not on:
+        if frame != null: frame.visible = false
+        return
+    if frame == null:
+        frame = preload("res://monetization/club_frame.gd").new()
+        portrait.add_child(frame)
+    frame.round_shape = round_shape
+    frame.compact = compact or portrait.size.x < 60.0
+    frame.visible = true
+    frame.queue_redraw()
+
+func club_active() -> bool:
+    return entitlements != null and entitlements.club_active()
 
 # ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
 # Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo
@@ -1103,6 +1191,8 @@ var ref_mode := false
 var desk_profile := {}
 var ref_profile := {}
 var ref_account_avatar: TextureRect
+var ref_account_frame_host: Control = null
+var ref_profile_club_host: Control = null
 var ref_badge: TextureRect
 var ref_badge_plate: Panel
 var ref_menu_cover: Panel
@@ -1159,10 +1249,20 @@ func _build_reference_chrome():
     var portrait = TextureRect.new()
     portrait.name = "RefPortrait"
     portrait.set_meta("no_league_frame", true)
+    portrait.set_meta("no_club_frame", true)   # a moldura Club fica no RefPortraitClubHost (fora do recorte)
     portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     portrait.size = clip.size
     portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
     clip.add_child(portrait)
+    # Moldura CLUB fora do recorte (a coroa fica acima do retrato); só aparece com Club ativo.
+    var club_host = Control.new()
+    club_host.name = "RefPortraitClubHost"
+    club_host.position = clip.position - Vector2(4, 4)
+    club_host.size = clip.size + Vector2(8, 8)
+    club_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pbtn.add_child(club_host)
+    ref_profile_club_host = club_host
+    attach_club_frame(club_host)
     var name_label = _label(pbtn, player_name, 22)
     name_label.name = "RefProfileName"
     _single_line(name_label)
@@ -1213,6 +1313,15 @@ func _build_reference_chrome():
     mask.shader.code = "shader_type canvas_item;\nvoid fragment(){ vec4 c = texture(TEXTURE, UV); float d = distance(UV, vec2(0.5)); COLOR = vec4(c.rgb, c.a * (1.0 - smoothstep(0.47, 0.5, d))); }"
     ref_account_avatar.material = mask
     canvas.add_child(ref_account_avatar)
+    var acct_frame_host = Control.new()
+    acct_frame_host.name = "RefAccountAvatarFrameHost"
+    acct_frame_host.position = ref_account_avatar.position
+    acct_frame_host.size = ref_account_avatar.size
+    acct_frame_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    acct_frame_host.set_meta("round_club_frame", true)
+    canvas.add_child(acct_frame_host)
+    ref_nodes.append(acct_frame_host)
+    ref_account_frame_host = acct_frame_host
     ref_nodes.append(ref_account_avatar)
     # Páginas internas: cobre os botões desenhados na arte (a moldura dourada continua visível).
     ref_menu_cover = Panel.new()
@@ -1320,6 +1429,7 @@ func _use_profile(ref: bool):
     profile_name.text = text
     profile_portrait.texture = avatar_texture()
     if ref:
+        if is_instance_valid(ref_profile_club_host): attach_club_frame(ref_profile_club_host)
         # retratos quadrados preenchem a moldura; o medalhão redondo (Guerreiro) fica centralizado
         profile_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if avatar_id == "warrior" else TextureRect.STRETCH_KEEP_ASPECT_COVERED
         var league_id = String(league_profile.data.current_league)
@@ -1333,7 +1443,73 @@ func _use_profile(ref: bool):
 func _refresh_ref_account():
     if not is_instance_valid(ref_account_avatar): return
     ref_account_avatar.visible = ref_mode and account_card_logged
+    if is_instance_valid(ref_account_frame_host):
+        ref_account_frame_host.visible = ref_account_avatar.visible
+        attach_club_frame(ref_account_frame_host, true, true)
     ref_account_avatar.texture = avatar_texture()
 
 func _sync_menu_cover():
     if is_instance_valid(ref_menu_cover): ref_menu_cover.visible = ref_mode and page != "main"
+
+
+# ---------- Conta ligada ao Home: nome público e foto (0004) ----------
+func bind_account(acc):
+    account = acc
+    if nickname_editor != null and nickname_editor.account == null: nickname_editor.setup(acc, 18)
+    acc.changed.connect(_on_account_changed)
+    acc.avatar_saved.connect(func(_url): _refresh_avatars())
+    acc.entitlements_changed.connect(func(data): if entitlements != null: entitlements.apply_server(data))
+    _on_account_changed()
+
+func _on_account_changed():
+    _refresh_name_boxes()
+    # Foto da conta ainda não está no cache local → baixa da URL pública.
+    if account != null and account.has_profile() and avatar_store != null:
+        var url: String = account.avatar_url()
+        if not url.is_empty() and not avatar_store.has_local(avatar_key()): avatar_store.fetch(avatar_key(), url)
+        elif url.is_empty() and avatar_store.has_local(avatar_key()) and avatar_key() != "local":
+            avatar_store.clear_local(avatar_key())   # removida em outro aparelho
+    _refresh_avatars()
+
+func _refresh_name_boxes():
+    var logged: bool = account != null and account.has_profile()
+    if is_instance_valid(local_name_box): local_name_box.visible = not logged
+    if nickname_editor != null and nickname_editor.account != null: nickname_editor.refresh()
+
+func pick_photo():
+    if image_picker == null:
+        image_picker = load("res://profile/image_picker.gd").new()
+        image_picker.name = "ImagePicker"
+        add_child(image_picker)
+        image_picker.picked.connect(_on_photo_picked)
+        image_picker.failed.connect(func(msg): _avatar_message(msg, true))
+    if avatar_editor == null:
+        avatar_editor = load("res://profile/avatar_editor.gd").new()
+        add_child(avatar_editor)
+        avatar_editor.saved.connect(_on_photo_saved)
+    image_picker.open()
+
+func _on_photo_picked(bytes: PackedByteArray, _filename: String):
+    var err: String = avatar_editor.open_with(bytes)
+    if not err.is_empty(): _avatar_message(err, true)
+
+func _on_photo_saved(image: Image, bytes: PackedByteArray):
+    avatar_store.save_local(avatar_key(), image)
+    _refresh_avatars()
+    if account != null and account.has_profile():
+        if account.upload_avatar(bytes): _avatar_message("Foto salva. Enviando para a sua conta…", false)
+        else: _avatar_message("Foto salva neste aparelho. Conecte-se para enviá-la à conta.", false)
+    else:
+        _avatar_message("Foto salva neste aparelho. Entre na conta para usá-la em todo lugar.", false)
+
+func remove_custom_avatar():
+    avatar_store.clear_local(avatar_key())
+    if account != null and account.has_profile(): account.clear_avatar()
+    _refresh_avatars()
+    _avatar_message("Foto removida. Avatar padrão de volta.", false)
+
+func _avatar_message(text: String, is_error: bool):
+    if is_instance_valid(avatar_note):
+        avatar_note.text = text
+        avatar_note.add_theme_color_override("font_color", Color("ff9d86") if is_error else MUTED)
+    if is_instance_valid(mobile_ui) and mobile_ui.has_method("avatar_message"): mobile_ui.avatar_message(text, is_error)
