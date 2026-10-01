@@ -115,3 +115,15 @@ static func accuracy(losses: Array, before_wins: Array) -> float:
         num += w * clampf(100.0 - float(losses[i]) * 2.2, 0.0, 100.0)
         den += w
     return clampf(num / maxf(0.001, den), 0.0, 100.0)
+
+## PERFIL DE ANÁLISE do motor (separado dos perfis dos bots em bot/bot_ladder.json).
+## Stockfish em força total (instância própria role="analysis": sem Skill/UCI_Elo), limitado por
+## profundidade E tempo por posição — o que vier primeiro. Fallback interno: raso para não travar.
+const ANALYSIS_PROFILE := {"depth": 14, "max_ms": 1600}
+const ANALYSIS_FALLBACK_PROFILE := {"depth": 7, "max_ms": 500}
+const TRAINING_PROFILE := {"depth": 12, "max_ms": 1400}
+const TRAINING_FALLBACK_PROFILE := {"depth": 7, "max_ms": 500}
+
+static func engine_profile(transport: String, training := false) -> Dictionary:
+    if transport == "builtin": return TRAINING_FALLBACK_PROFILE if training else ANALYSIS_FALLBACK_PROFILE
+    return TRAINING_PROFILE if training else ANALYSIS_PROFILE

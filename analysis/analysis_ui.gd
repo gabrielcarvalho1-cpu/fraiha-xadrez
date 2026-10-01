@@ -97,8 +97,10 @@ func _on_denied(code: String, message: String):
     _show_page("quota")
 
 func _run():
-    analyzer.depth = 14 if engine.transport != "builtin" else 7
-    analyzer.max_ms_per_pos = 1600 if engine.transport != "builtin" else 500
+    if not engine.engine_ready: await engine.start()
+    var prof: Dictionary = preload("res://analysis/analysis_config.gd").engine_profile(engine.transport)
+    analyzer.depth = int(prof.depth)
+    analyzer.max_ms_per_pos = int(prof.max_ms)
     var rep: Dictionary = await analyzer.analyze(record)
     if rep.is_empty() or not visible: return
     report = rep

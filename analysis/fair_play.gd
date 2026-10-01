@@ -24,3 +24,17 @@ static func engine_hidden(stage) -> bool:
     var mode := String(stage.get("mode"))
     if mode not in HUMAN_MODES: return false
     return not stage.game.game_over
+
+## Porta ÚNICA para qualquer consulta de engine (análise OU bot). true = proibido agora.
+##   • Partida humana em andamento (Ranked, Casual, online/desafio, local 2 jogadores): sempre bloqueia.
+##   • role "bot": além disso, só pode responder quando o modo atual é "bot".
+static func engine_blocked(stage, role: String) -> bool:
+    if stage == null: return false
+    for c in [stage.get("ranked"), stage.get("casual")]:
+        if c != null and c.has_method("in_match") and c.in_match(): return true
+    var mode := String(stage.get("mode"))
+    var game = stage.get("game")
+    var over: bool = game != null and bool(game.get("game_over"))
+    if mode in HUMAN_MODES and not over: return true
+    if role == "bot" and mode != "bot": return true
+    return false

@@ -6,14 +6,24 @@ extends Node
 ##   • "web": Stockfish 19 Lite WASM (stockfish.js, GPLv3) num Web Worker, via JavaScriptBridge.
 ##   • "builtin": busca própria do FRAIHA (bot/search.gd) — sempre disponível, mais fraca.
 ## A interface nunca fala com o transporte: usa evaluate(fen, depth) e recebe {cp|mate, pv, bestmove}.
-## FAIR PLAY: este nó só é usado DEPOIS da partida (analyzer/training). Nada aqui roda durante
-## partida humana ativa — ver analysis/fair_play.gd.
+## UMA arquitetura, várias INSTÂNCIAS independentes (cada uma com o seu processo/Worker):
+##   • role "analysis": análise pós-partida e treino (perfil de análise: depth/movetime altos).
+##   • role "bot": adversário de JOGAR CONTRA O COMPUTADOR (perfis por liga em bot/bot_ladder.json).
+## Uma instância nunca mexe nas opções da outra (Skill/UCI_Elo do bot não afetam a análise).
+## FAIR PLAY: `guard` (Callable) é consultado antes de CADA busca; se devolver true (partida humana
+## ativa: Ranked, Casual, desafio PvP), a consulta é recusada. Ver analysis/fair_play.gd.
 signal ready_changed(engine_ready: bool)
 
 const Notation := preload("res://analysis/notation.gd")
 const Search := preload("res://bot/search.gd")
 const ENGINE_DIR := "user://engines"
 
+static var _next_id := 1
+var instance_id := 0
+var role := "analysis"       # "analysis" | "bot" (só para log/diagnóstico)
+var allow_builtin := true    # bot: false → sem Stockfish o controlador usa o fallback dele
+var guard: Callable          # devolve true quando engine é PROIBIDA agora (fair play)
+var options_applied := {}    # últimas opções UCI enviadas (diagnóstico/testes)
 var transport := ""          # "process" | "web" | "builtin"
 var engine_name := ""
 var engine_ready := false
@@ -26,20 +36,47 @@ var _busy := false
 var _cancel := false
 var _builtin: RefCounted
 var _thread: Thread = null   # busca interna em andamento (desktop)
+var _starting := false
+
+func _init(p_role := "analysis"):
+    role = p_role
+    instance_id = _next_id
+    _next_id += 1
 
 func _ready():
     set_process(false)
+
+## "STOCKFISH" ou "FALLBACK" (log de QA pedido: ANALYSIS ENGINE = … / BOT ENGINE = …).
+func engine_kind() -> String:
+    return "STOCKFISH" if engine_ready and transport in ["process", "web"] else "FALLBACK"
+
+func _log_engine():
+    print("%s ENGINE = %s (%s)" % [role.to_upper(), engine_kind(), engine_name if not engine_name.is_empty() else "sem motor"])
+
+## Fair play: true = consulta recusada agora.
+func blocked() -> bool:
+    if guard.is_valid() and bool(guard.call()):
+        print("FAIR PLAY: consulta de engine (%s) bloqueada — partida humana ativa" % role)
+        return true
+    return false
 
 # ---------------------------------------------------------------- inicialização
 ## Tenta o melhor transporte disponível. Retorna o nome do motor.
 func start() -> String:
     if engine_ready: return engine_name
+    if _starting:
+        while _starting: await get_tree().process_frame
+        return engine_name
+    _starting = true
+    var ok := false
     if OS.has_feature("web"):
-        if await _start_web(): return engine_name
+        ok = await _start_web()
     else:
         var exe := _find_native()
-        if not exe.is_empty() and await _start_process(exe): return engine_name
-    _start_builtin()
+        if not exe.is_empty(): ok = await _start_process(exe)
+    if not ok and allow_builtin: _start_builtin()
+    _starting = false
+    _log_engine()
     return engine_name
 
 func _find_native() -> String:
@@ -73,22 +110,25 @@ func _start_process(exe: String) -> bool:
     return true
 
 func _start_web() -> bool:
+    var key := "fraihaEngine%d" % instance_id
     if _web_cb == null:
         _web_cb = JavaScriptBridge.create_callback(_on_web_line)
-        JavaScriptBridge.get_interface("window").fraihaEngineCb = _web_cb
+        JavaScriptBridge.get_interface("window").set(key + "Cb", _web_cb)
+    # O Worker chama o callback com UMA string por linha. (Um array JS chegaria ao Godot como
+    # JavaScriptObject, não como String — era isso que impedia a análise Web de ler o Stockfish.)
     var started = JavaScriptBridge.eval("""
     (() => {
         try {
-            if (window.fraihaEngine) return true;
+            if (window.%s) return 1;
             const w = new Worker('engines/stockfish-19-lite-single.js');
-            w.onmessage = (e) => { window.fraihaEngineCb([String(e.data)]); };
-            w.onerror = (e) => { window.fraihaEngineCb(['__error ' + (e.message || 'worker')]); };
-            window.fraihaEngine = w;
-            return true;
-        } catch (e) { return false; }
+            w.onmessage = (e) => { window.%sCb(String(e.data)); };
+            w.onerror = (e) => { window.%sCb('__error ' + (e.message || 'worker')); };
+            window.%s = w;
+            return 1;
+        } catch (e) { return 0; }
     })()
-    """)
-    if started != true: return false
+    """ % [key, key, key, key])
+    if not ((started is bool and started) or ((started is int or started is float) and int(started) == 1)): return false
     transport = "web"
     _send("uci")
     var ok := await _wait_for("uciok", 15.0)
@@ -115,7 +155,8 @@ func stop():
         OS.kill(int(_proc.get("pid", 0)))
         _proc = {}
     elif transport == "web":
-        JavaScriptBridge.eval("if (window.fraihaEngine) { window.fraihaEngine.terminate(); window.fraihaEngine = null; }")
+        var key := "fraihaEngine%d" % instance_id
+        JavaScriptBridge.eval("if (window.%s) { window.%s.terminate(); window.%s = null; }" % [key, key, key])
     engine_ready = false
     transport = ""
     _lines.clear()
@@ -137,11 +178,12 @@ func _send(cmd: String):
                 f.store_line(cmd)
                 f.flush()
         "web":
-            JavaScriptBridge.eval("window.fraihaEngine && window.fraihaEngine.postMessage(%s)" % JSON.stringify(cmd))
+            var key := "fraihaEngine%d" % instance_id
+            JavaScriptBridge.eval("window.%s && window.%s.postMessage(%s)" % [key, key, JSON.stringify(cmd)])
 
 func _on_web_line(args: Array):
     if args.is_empty(): return
-    _lines.append(String(args[0]))
+    _lines.append(str(args[0]))
 
 func _pump():
     if transport != "process": return
@@ -171,6 +213,7 @@ func _wait_for(token: String, timeout: float) -> bool:
 ## {"cp": int, "mate": int(0 = não), "bestmove": "e2e4", "pv": ["e2e4", ...], "depth": int}
 ## Vazio se cancelado. Nunca trava a interface: aguarda quadro a quadro.
 func evaluate(fen: String, depth: int, max_ms := 4000) -> Dictionary:
+    if blocked(): return {}
     if not engine_ready: await start()
     if not engine_ready: return {}
     while _busy: await get_tree().process_frame
@@ -214,7 +257,7 @@ func evaluate(fen: String, depth: int, max_ms := 4000) -> Dictionary:
 
 ## Igual a evaluate(), mas restrito a `moves` (UCI "searchmoves"). Só nos transportes UCI.
 func evaluate_searchmoves(fen: String, depth: int, max_ms: int, moves: PackedStringArray) -> Dictionary:
-    if transport == "builtin" or not engine_ready or moves.is_empty(): return {}
+    if transport == "builtin" or not engine_ready or moves.is_empty() or blocked(): return {}
     while _busy: await get_tree().process_frame
     _busy = true
     _lines.clear()
@@ -239,6 +282,64 @@ func evaluate_searchmoves(fen: String, depth: int, max_ms: int, moves: PackedStr
         await get_tree().process_frame
     _busy = false
     return {} if _cancel else last
+
+# ---------------------------------------------------------------- bot (perfil por liga)
+## Envia opções UCI (só desta instância) e espera readyok.
+func configure(opts: Dictionary) -> bool:
+    if not engine_ready: await start()
+    if not engine_ready or transport == "builtin": return false
+    while _busy: await get_tree().process_frame
+    _busy = true
+    for k in opts: _send("setoption name %s value %s" % [k, str(opts[k])])
+    _lines.clear()
+    _send("isready")
+    var ok := await _wait_for("readyok", 5.0)
+    _lines.clear()
+    _busy = false
+    if ok: options_applied = opts.duplicate()
+    return ok
+
+## Escolhe o lance da posição `fen` com o comando `go_cmd` (ex.: "go movetime 300").
+## Devolve {"bestmove": "e2e4", "lines": {1: {"cp", "mate", "move"}, 2: …}, "ms": int} ou {}.
+func search_move(fen: String, go_cmd: String, timeout_ms := 8000) -> Dictionary:
+    if blocked(): return {}
+    if not engine_ready or transport == "builtin": return {}
+    while _busy: await get_tree().process_frame
+    _busy = true
+    _cancel = false
+    _lines.clear()
+    var t0 := Time.get_ticks_msec()
+    _send("position fen " + fen)
+    _send(go_cmd)
+    var lines := {}
+    var best := ""
+    var end := t0 + timeout_ms
+    var done := false
+    while Time.get_ticks_msec() < end and not done:
+        _pump()
+        for l in _lines:
+            var s := String(l)
+            if s.begins_with("info ") and " pv " in s and " score " in s:
+                var info := _parse_info(s)
+                var k := 1
+                var mi := s.find(" multipv ")
+                if mi >= 0: k = int(s.substr(mi + 9).get_slice(" ", 0))
+                if not info.pv.is_empty(): lines[k] = {"cp": info.cp, "mate": info.mate, "move": String(info.pv[0]), "depth": info.depth}
+            elif s.begins_with("bestmove"):
+                best = s.get_slice(" ", 1)
+                done = true
+            elif s.begins_with("__error"):
+                done = true
+        _lines.clear()
+        if _cancel and not done:
+            _send("stop")
+            await _wait_for("bestmove", 2.0)
+            _lines.clear()
+            break
+        if not done: await get_tree().process_frame
+    _busy = false
+    if _cancel or best.is_empty() or best == "(none)": return {}
+    return {"bestmove": best, "lines": lines, "ms": Time.get_ticks_msec() - t0}
 
 func cancel():
     _cancel = true

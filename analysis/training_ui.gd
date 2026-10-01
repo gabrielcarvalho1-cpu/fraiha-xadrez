@@ -46,8 +46,9 @@ func open_for(p_report: Dictionary):
     exercises.sort()
     index = 0
     solved = 0
-    depth = 12 if engine.transport != "builtin" else 7
-    max_ms = 1400 if engine.transport != "builtin" else 500
+    var prof: Dictionary = preload("res://analysis/analysis_config.gd").engine_profile(engine.transport, true)
+    depth = int(prof.depth)
+    max_ms = int(prof.max_ms)
     visible = true
     root.visible = true
     _show_exercise()

@@ -1,4 +1,32 @@
-# Motor de análise — como funciona e como configurar
+# Motor (Stockfish) — análise, treino e bots
+
+## Arquitetura (uma engine, várias instâncias, perfis separados)
+
+```
+analysis/engine.gd  (cliente UCI: process | web | builtin)
+├── instância role="analysis"  → análise pós-partida e treino
+│     perfil: analysis/analysis_config.gd → ANALYSIS_PROFILE {depth 14, max 1600 ms/posição},
+│             TRAINING_PROFILE {depth 12, 1400 ms}; força total (sem Skill/UCI_Elo)
+└── instância role="bot"       → JOGAR CONTRA O COMPUTADOR (bot/controller.gd)
+      perfis por liga: bot/bot_ladder.json (Madeira → Challenger), aplicados por bot/bot_ladder.gd
+```
+
+- Cada instância tem o seu próprio processo (desktop) ou Web Worker (`window.fraihaEngine<N>`), então
+  `Skill Level`/`UCI_Elo` do bot **nunca** afetam a análise.
+- Log de QA (console): `ANALYSIS ENGINE = STOCKFISH|FALLBACK (…)`, `BOT ENGINE = STOCKFISH|FALLBACK · <bot> · <opções> <go>`
+  e `BOT MOVE · <bot> · <lance> · engine|suboptimal|random · engine N ms`.
+- **Fair play:** `analysis/fair_play.gd → engine_blocked(stage, role)` é consultado antes de CADA
+  busca. Partida humana ativa (Ranked, Casual, online/desafio, local) → recusada. A instância do bot
+  só responde no modo "bot".
+- Fallback: se o Stockfish não carregar, a análise usa o motor interno (`bot/search.gd`) e o bot usa
+  o nível interno indicado em `fallback` no JSON — sempre com o log `… = FALLBACK`.
+
+## Controles suportados pelo Stockfish 19 Lite WASM (medido com `uci`)
+
+`Threads` (máx. 1), `Hash`, `MultiPV`, `Skill Level` 0–20, `UCI_LimitStrength`, `UCI_Elo` 1320–3190,
+`Move Overhead`, `nodestime`, `UCI_ShowWDL`; `go depth | nodes | movetime`.
+
+# Análise — como funciona e como configurar
 
 `analysis/engine.gd` é um cliente UCI assíncrono com três transportes. A interface só chama
 `evaluate(fen, depth)` e recebe `{cp, mate, bestmove, pv, depth}` (ponto de vista de quem joga).
@@ -15,6 +43,10 @@ Nada roda durante partida humana ativa (`analysis/fair_play.gd`).
 `searchmoves` (por isso as classes EXTRAORDINÁRIO/LENDÁRIO só aparecem com Stockfish).
 
 O nome do motor em uso aparece na tela "ANALISANDO…" (`Motor: …`).
+
+**Correção desta fase:** na Web, o Worker entregava cada linha como `fraihaEngineCb([linha])` — um
+array JS chega ao Godot como `JavaScriptObject`, não `String`, então o cliente nunca via `uciok` e,
+depois de 15 s, caía no motor interno. Agora o Worker chama o callback com a string direto.
 
 ## Web (WASM) — Stockfish.js 19 Lite single-thread
 

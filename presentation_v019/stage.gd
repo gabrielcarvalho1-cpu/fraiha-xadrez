@@ -1,4 +1,5 @@
 extends Node2D
+const FairPlay = preload("res://analysis/fair_play.gd")
 const MobileLayout = preload("res://ui_v022/mobile_layout.gd")
 # Only this presentation root handles the screen dimensions. Game coordinates stay intact.
 @onready var game: Node2D = $World
@@ -41,6 +42,7 @@ var mobile_analyze: Button
 var recorder                   # analysis/match_recorder.gd
 var result_overlay             # presentation_v019/game_result_overlay.gd (VITÓRIA / DERROTA)
 var analysis_engine            # analysis/engine.gd
+var reward_modal               # bot/reward_modal.gd
 var analysis_access            # analysis/analysis_access.gd
 var analysis_ui = null
 var training_ui = null
@@ -66,6 +68,7 @@ func _ready():
     get_tree().auto_accept_quit = false
     bot_controller = preload("res://bot/controller.gd").new()
     bot_controller.name = "BotController"
+    bot_controller.guard = func() -> bool: return FairPlay.engine_blocked(self, "bot")
     add_child(bot_controller)
     _build_backdrop()
     _build_navigation()
@@ -353,7 +356,7 @@ func _refresh_desk_hud():
     match_plaque.visible = mode == "bot" and not mobile
     if match_plaque.visible:
         var king = game.piece_textures.get("wK" if bot_side_name == "BRANCAS" else "bK")
-        match_plaque.set_info(bot_controller.difficulty, bot_level_name, bot_side_name, king)
+        match_plaque.set_info(bot_controller.bot_id if not String(bot_controller.bot_id).is_empty() else bot_controller.difficulty, bot_level_name, bot_side_name, king)
     desk_panel.visible = in_match and not mobile
     desk_person.visible = mode in ["local", "online", "bot"]
     desk_restart.visible = mode in ["local", "online", "bot"] and game.game_started
@@ -804,9 +807,10 @@ func _start_bot(difficulty: String, side: String):
     mode = "bot"
     game.show()
     bot_controller.start(game,difficulty,side)
-    bot_level_name = {"easy":"FÁCIL","medium":"MÉDIO","hard":"DIFÍCIL","expert":"EXPERT"}.get(difficulty,"FÁCIL")
+    var ladder_bot: Dictionary = preload("res://bot/bot_ladder.gd").bot(difficulty)
+    bot_level_name = String(ladder_bot.get("name", "")) if not ladder_bot.is_empty() else {"easy":"FÁCIL","medium":"MÉDIO","hard":"DIFÍCIL","expert":"EXPERT"}.get(difficulty,"FÁCIL")
     bot_side_name = "BRANCAS" if bot_controller.human_color == "w" else "PRETAS"
-    if recorder != null: recorder.begin("bot", bot_controller.human_color, hub.player_name, "Computador · " + bot_level_name)
+    if recorder != null: recorder.begin("bot", bot_controller.human_color, hub.player_name, bot_level_name if not ladder_bot.is_empty() else "Computador · " + bot_level_name)
     _refresh_bot_caption()
     _clear_selection()
     _refresh_input()
@@ -1168,8 +1172,9 @@ func _setup_analysis():
     recorder.finished.connect(_on_match_finished)
     result_overlay = preload("res://presentation_v019/game_result_overlay.gd").new()
     add_child(result_overlay)
-    analysis_engine = preload("res://analysis/engine.gd").new()
+    analysis_engine = preload("res://analysis/engine.gd").new("analysis")
     analysis_engine.name = "AnalysisEngine"
+    analysis_engine.guard = func() -> bool: return FairPlay.engine_blocked(self, "analysis")
     add_child(analysis_engine)
     analysis_access = preload("res://analysis/analysis_access.gd").new()
     analysis_access.name = "AnalysisAccess"
@@ -1178,6 +1183,15 @@ func _setup_analysis():
     analysis_history = preload("res://analysis/analysis_history.gd").new()
     analysis_history.name = "AnalysisHistory"
     add_child(analysis_history)
+    reward_modal = preload("res://bot/reward_modal.gd").new()
+    reward_modal.name = "BotRewardModal"
+    reward_modal.avatar_for = func(id): return hub.avatar_texture(id)
+    add_child(reward_modal)
+    if hub.bot_progress != null:
+        hub.bot_progress.reward_unlocked.connect(func(bid, rw):
+            await get_tree().create_timer(1.6).timeout   # depois da animação de VITÓRIA
+            reward_modal.show_reward(bid, rw))
+        hub.bot_progress.notice.connect(func(t): if result_overlay != null and result_overlay.has_method("toast"): result_overlay.toast(t) else: print("BOT PROGRESS: ", t))
 
 ## MARCAR PARA REVISAR: só grava o índice do lance. Nenhuma engine roda aqui.
 func mark_for_review():
@@ -1217,6 +1231,9 @@ func _on_match_finished(record):
     var res := String(record.result)
     if res == "win": result_overlay.show_result("victory")
     elif res == "loss": result_overlay.show_result("defeat")
+    # Desafio das Ligas: 1ª vitória (xeque-mate no bot) → progresso + recompensa (servidor valida na conta).
+    if res == "win" and String(record.mode) == "bot" and not String(bot_controller.bot_id).is_empty() and "MATE" in String(record.result_reason) and String(record.start_fen).is_empty():
+        if hub.bot_progress != null: hub.bot_progress.report_victory(String(bot_controller.bot_id), String(record.human_color), PackedStringArray(record.moves))
 
 func open_analysis():
     if not analysis_available(): return
