@@ -25,6 +25,7 @@ var _buffer := ""
 var _busy := false
 var _cancel := false
 var _builtin: RefCounted
+var _thread: Thread = null   # busca interna em andamento (desktop)
 
 func _ready():
     set_process(false)
@@ -121,6 +122,10 @@ func stop():
     ready_changed.emit(false)
 
 func _exit_tree():
+    if _builtin != null: _builtin.abort()
+    if _thread != null:
+        _thread.wait_to_finish()
+        _thread = null
     if engine_ready: stop()
 
 # ---------------------------------------------------------------- transporte
@@ -263,6 +268,12 @@ func _evaluate_builtin(fen: String, depth: int, max_ms: int) -> Dictionary:
     var outcome: String = pos.outcome()
     if outcome == "mate": return {"cp": 0, "mate": -1, "pv": [], "depth": 0, "bestmove": "", "terminal": "mate"}   # quem joga está em mate
     if not outcome.is_empty(): return {"cp": 0, "mate": 0, "pv": [], "depth": 0, "bestmove": "", "terminal": outcome}
+    # Uma busca anterior (cancelada) ainda pode estar na thread: espera terminar antes de outra.
+    if _thread != null:
+        if _builtin != null: _builtin.abort()
+        while _thread.is_alive(): await get_tree().process_frame
+        _thread.wait_to_finish()
+        _thread = null
     if _builtin == null or _builtin._abort: _builtin = Search.new()   # depois de cancelar, busca nova
     var search: RefCounted = _builtin
     var move: Dictionary
@@ -270,9 +281,11 @@ func _evaluate_builtin(fen: String, depth: int, max_ms: int) -> Dictionary:
         move = await search.choose_async(pos, "expert", max_ms, mini(depth, 8))
     else:
         var th := Thread.new()
+        _thread = th
         th.start(func(): return search.choose(pos, "expert", max_ms, mini(depth, 10)))
         while th.is_alive(): await get_tree().process_frame
         move = th.wait_to_finish()
+        if _thread == th: _thread = null
     if move.is_empty(): return {}
     var m: Dictionary = search.last_metrics
     var score := int(m.get("score", 0))

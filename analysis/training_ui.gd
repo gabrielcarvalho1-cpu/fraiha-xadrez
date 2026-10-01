@@ -196,17 +196,18 @@ func _on_move(mv: Dictionary):
     vl.name = "Verdict"
     panel.add_child(vl)
     panel.move_child(vl, 1)
-    var g := GridContainer.new()
+    var g: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
     g.name = "VerdictGrid"
-    g.columns = 3
-    g.add_theme_constant_override("h_separation", 14)
+    g.add_theme_constant_override("separation", 12)
+    g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     panel.add_child(g)
     panel.move_child(g, 2)
     for pair in [["NA PARTIDA:", m.text_after, Config.COLORS[m.class]], ["AGORA:", Config.eval_text(-int(r.get("cp", 0)), -int(r.get("mate", 0)), m.color), Color("bfe8a8") if ok else Color("f2a070")], ["MELHOR:", m.text_before, Color("9de5a0")]]:
         var cell := VBoxContainer.new()
+        cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         g.add_child(cell)
-        Art.label(cell, pair[0], 12, Art.MUTED)
-        Art.label(cell, String(pair[1]), 22, pair[2], Art.FONT_BOLD)
+        Art.label(cell, pair[0], 12, Art.MUTED).autowrap_mode = TextServer.AUTOWRAP_OFF
+        Art.label(cell, String(pair[1]), 22, pair[2], Art.FONT_BOLD).autowrap_mode = TextServer.AUTOWRAP_OFF
     status.text = "Você jogou %s." % san
     if ok:
         solved += 1

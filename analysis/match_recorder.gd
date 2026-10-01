@@ -40,12 +40,25 @@ func finish(result: String, reason := ""):
 func current():
     return record
 
+## FEN da posição atual. Só afirma roque/en passant quando o estado EXATO existe (regras do
+## controlador: Casual/Ranked vêm do servidor; bot/local do motor local). Sem isso, o FEN é
+## conservador: roque "-" e en passant "-" (nunca deduzidos pela posição — rei/torre podem ter
+## ido e voltado) e o registro fica marcado como reconstruído/incompleto.
 func _fen_from_game() -> String:
+    var ctrl = game.bot
+    if ctrl != null and ctrl.get("rules") != null:
+        var r = ctrl.rules
+        if r.board.size() == game.pieces.size() and String(r.turn) == String(game.turn):
+            record.start_fen_approx = false
+            return Notation.fen(r)
     var pos = Rules.new()
     pos.board = game.pieces.duplicate()
     pos.turn = String(game.turn)
-    pos.rights = "KQkq"   # desconhecido no cliente após reconexão: assume o padrão
+    pos.rights = ""          # desconhecido → "-" no FEN
+    pos.ep = Rules.EMPTY     # desconhecido → "-"
+    pos.halfmove = 0
     pos.ply = int(game.move_count)
+    record.start_fen_approx = true
     return Notation.fen(pos)
 
 func _process(_d):

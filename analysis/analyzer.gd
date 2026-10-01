@@ -31,7 +31,8 @@ func analyze(record) -> Dictionary:
     _cancel = false
     var total: int = record.moves.size()
     var out := {"moves": [], "players": {}, "mode": record.mode, "human_color": record.human_color,
-        "result": record.result, "engine": engine.engine_name, "depth": depth, "total": total}
+        "result": record.result, "engine": engine.engine_name, "depth": depth, "total": total,
+        "partial": not String(record.start_fen).is_empty(), "start_fen_approx": bool(record.start_fen_approx)}
     var pos = record.start_position()
     if pos == null:
         running = false

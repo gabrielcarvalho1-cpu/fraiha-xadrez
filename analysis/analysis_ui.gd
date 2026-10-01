@@ -81,6 +81,7 @@ func open_report(p_record, p_report: Dictionary):
 
 func close():
     if analyzer.running: analyzer.cancel()
+    if engine != null: engine.cancel()
     visible = false
     root.visible = false
     closed.emit()
@@ -373,6 +374,10 @@ func _page_report():
     tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     var res: String = {"win": "VITÓRIA", "loss": "DERROTA", "draw": "EMPATE"}.get(String(report.result), "")
     if res != "": title_row.add_child(Art.Stamp.new(res, "ok" if report.result == "win" else ("test" if report.result == "loss" else "soon"), 13))
+    if bool(report.get("partial", false)):
+        var note := "Análise parcial: a partida foi registrada a partir de uma reconexão (lances anteriores não entram)."
+        if bool(report.get("start_fen_approx", false)): note += " Posição reconstruída sem histórico: roque e en passant foram considerados indisponíveis."
+        Art.label(sv, note, fs(13), Color("8a4a1a"))
     var acc_row: BoxContainer = HBoxContainer.new()
     acc_row.add_theme_constant_override("separation", 26)
     sv.add_child(acc_row)
@@ -416,23 +421,31 @@ func _page_report():
     for pair in [["MELHOR MOMENTO", int(me.get("best_moment", -1)), "star"], ["PONTO CRÍTICO", int(me.get("critical", -1)), "target"]]:
         var ply: int = int(pair[1])
         if ply < 0: continue
+        # Botão flat com o conteúdo em HBox ancorado: os labels não quebram (uma linha cada).
         var b := Button.new()
         b.flat = true
         b.focus_mode = Control.FOCUS_NONE
+        b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         b.pressed.connect(func(): _goto(ply))
         moments.add_child(b)
         var hb := HBoxContainer.new()
         hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
         hb.add_theme_constant_override("separation", 8)
+        hb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         b.add_child(hb)
         hb.add_child(Art.Glyph.new(pair[2], 30, Art.INK))
         var col := VBoxContainer.new()
         col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         hb.add_child(col)
-        Art.label(col, pair[0], fs(12), Art.INK.lightened(0.3))
+        var l1 := Art.label(col, pair[0], fs(12), Art.INK.lightened(0.3))
+        l1.autowrap_mode = TextServer.AUTOWRAP_OFF
         var mv: Dictionary = report.moves[ply]
-        Art.label(col, "Lance %d · %s" % [ply / 2 + 1, mv.san], fs(18), Art.INK, Art.FONT_BOLD)
-        b.custom_minimum_size = Vector2(240, 48)
+        var l2 := Art.label(col, "Lance %d · %s" % [ply / 2 + 1, mv.san], fs(18), Art.INK, Art.FONT_BOLD)
+        l2.autowrap_mode = TextServer.AUTOWRAP_OFF
+        b.custom_minimum_size = Vector2(0, 52)
+        var want := maxf(l1.get_minimum_size().x, l2.get_minimum_size().x) + 30.0 + 16.0
+        b.custom_minimum_size.x = want
     # Gráfico
     var gf := Art.Frame.new("dark", 14)
     gf.name = "GraphPanel"
@@ -743,17 +756,21 @@ func _on_try_move(mv: Dictionary):
     vl.name = "TryVerdict"
     try_panel.add_child(vl)
     try_panel.move_child(vl, 2)
-    var g := GridContainer.new()
+    # Três colunas que dividem a largura (celular: empilha). Labels de uma linha.
+    var g: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
     g.name = "TryGrid"
-    g.columns = 3
-    g.add_theme_constant_override("h_separation", 16)
+    g.add_theme_constant_override("separation", 12)
+    g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     try_panel.add_child(g)
     try_panel.move_child(g, 3)
     for pair in [["JOGADA ORIGINAL:", m.text_after, Config.COLORS[m.class]], ["SUA NOVA JOGADA:", Config.eval_text(new_cp, new_mate, m.color), Color("bfe8a8") if tone == "ok" else Color("f2a070")], ["MELHOR POSSÍVEL:", m.text_before, Color("9de5a0")]]:
         var cell := VBoxContainer.new()
+        cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         g.add_child(cell)
-        Art.label(cell, pair[0], fs(12), Art.MUTED)
-        Art.label(cell, String(pair[1]), fs(24), pair[2], Art.FONT_BOLD)
+        var a := Art.label(cell, pair[0], fs(12), Art.MUTED)
+        a.autowrap_mode = TextServer.AUTOWRAP_OFF
+        var v2 := Art.label(cell, String(pair[1]), fs(24), pair[2], Art.FONT_BOLD)
+        v2.autowrap_mode = TextServer.AUTOWRAP_OFF
     try_status.text = "Você jogou %s." % san
     var again := Art.Cta.new("TENTAR OUTRO LANCE", "green", 46, 15)
     again.name = "TryAgainBtn"

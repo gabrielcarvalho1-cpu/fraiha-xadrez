@@ -18,6 +18,7 @@ var finished_at := 0
 var match_id := ""
 var finished := false
 var start_fen := ""         # "" = posição inicial; senão a partida registrada começa deste FEN (reconexão)
+var start_fen_approx := false   # true: FEN reconstruído sem histórico exato (roque/en passant = "-"); análise parcial/conservadora
 
 func start(p_mode: String, p_human: String, p_player: String, p_opponent: String, p_match_id := ""):
     mode = p_mode
@@ -77,7 +78,7 @@ func position_after(n: int):
 func to_dict() -> Dictionary:
     return {"mode": mode, "human_color": human_color, "player_name": player_name, "opponent_name": opponent_name,
         "moves": moves.duplicate(), "marked": marked.duplicate(), "result": result, "result_reason": result_reason,
-        "started_at": started_at, "finished_at": finished_at, "match_id": match_id, "finished": finished, "start_fen": start_fen}
+        "started_at": started_at, "finished_at": finished_at, "match_id": match_id, "finished": finished, "start_fen": start_fen, "start_fen_approx": start_fen_approx}
 
 static func from_dict(d: Dictionary):
     var r = new()
@@ -94,4 +95,5 @@ static func from_dict(d: Dictionary):
     r.match_id = String(d.get("match_id", ""))
     r.finished = bool(d.get("finished", false))
     r.start_fen = String(d.get("start_fen", ""))
+    r.start_fen_approx = bool(d.get("start_fen_approx", false))
     return r
