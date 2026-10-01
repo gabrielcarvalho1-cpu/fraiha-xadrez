@@ -88,6 +88,9 @@ func _build():
     view = Control.new()
     view.name = "AvatarView"
     view.custom_minimum_size = Vector2(preview_size, preview_size)
+    # quadrado exato e centralizado (sem esticar na largura do painel — senão o círculo fica torto)
+    view.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    view.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     view.mouse_filter = Control.MOUSE_FILTER_STOP
     view.clip_contents = true
     view.draw.connect(_draw_view)
@@ -114,9 +117,7 @@ func _build():
     var centre := Art.Cta.new("CENTRALIZAR", "dark", 40, 14)
     centre.name = "AvatarCenter"
     centre.custom_minimum_size.x = 130
-    centre.pressed.connect(func():
-        pan = Vector2.ZERO
-        view.queue_redraw())
+    centre.pressed.connect(center_photo)
     zrow.add_child(centre)
     var buttons := HBoxContainer.new()
     buttons.add_theme_constant_override("separation", 12)
@@ -139,7 +140,15 @@ func _layout():
     var vs := root.get_viewport_rect().size
     preview_size = clampf(minf(vs.x - 80.0, vs.y - 300.0), 180.0, 360.0)
     view.custom_minimum_size = Vector2(preview_size, preview_size)
+    view.size = view.custom_minimum_size
     frame.custom_minimum_size.x = minf(vs.x - 24.0, 520.0)
+    view.queue_redraw()
+
+## CENTRALIZAR: recoloca o centro da foto no centro do círculo (mantém o zoom).
+func center_photo():
+    pan = Vector2.ZERO
+    if status != null: status.text = "Foto centralizada · arraste para ajustar"
+    view.queue_redraw()
 
 # ---------------------------------------------------------------- geometria
 ## Escala base: a foto cobre o quadrado da prévia pelo menor lado.
@@ -173,6 +182,8 @@ func set_zoom(value: float):
 
 func _draw_view():
     if source_tex == null: return
+    if absf(view.size.x - preview_size) > 1.0 or absf(view.size.y - preview_size) > 1.0:
+        preview_size = minf(view.size.x, view.size.y)   # geometria sempre no quadrado real
     var r := _photo_rect()
     view.draw_rect(Rect2(Vector2.ZERO, view.size), Color(0.02, 0.05, 0.03))
     view.draw_texture_rect(source_tex, r, false)
@@ -192,7 +203,7 @@ func _draw_view():
         var p1 := c + Vector2(cos(a1), sin(a1)) * rad
         var far0 := c + Vector2(cos(a0), sin(a0)) * rad * 1.6
         var far1 := c + Vector2(cos(a1), sin(a1)) * rad * 1.6
-        view.draw_colored_polygon(PackedVector2Array([p0, far0, far1, p1]), Color(0, 0, 0, 0.55))
+        view.draw_colored_polygon(PackedVector2Array([p0, far0, far1, p1]), Color(0, 0, 0, 0.68))
     view.draw_arc(c, rad - 1.0, 0, TAU, 96, Color("f1d58a"), 2.5)
     view.draw_arc(c, rad - 6.0, 0, TAU, 96, Color(0.95, 0.84, 0.54, 0.35), 1.0)
     view.draw_rect(Rect2(Vector2.ZERO, view.size), Color("c99a45"), false, 2.0)

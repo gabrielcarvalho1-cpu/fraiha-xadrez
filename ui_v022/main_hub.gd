@@ -1109,7 +1109,7 @@ func _toggle_premove():
 func _refresh_premove_button():
     if premove_button == null: return
     var title := "PRÉ-MOVE: " + ("LIGADO" if premove_enabled else "DESLIGADO")
-    var sub := "Marque seu lance na vez do adversário" if premove_enabled else "Clique para ligar"
+    var sub := "Jogue na vez do adversário" if premove_enabled else "Clique para ligar"
     premove_button.set_meta("title", title)
     var labels := premove_button.get_child(0).get_child(0)
     (labels.get_child(0) as Label).text = title
