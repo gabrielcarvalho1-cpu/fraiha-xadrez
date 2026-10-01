@@ -257,6 +257,11 @@ func _build():
     details.size = DESIGN
     details.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(details)
+    # Espírito das águas sobre o lago (abaixo da cachoeira, à esquerda da placa), animado.
+    var spirit = preload("res://ui_v022/water_spirit.gd").new()
+    spirit.position = Vector2(1258, 642)
+    spirit.size = Vector2(112, 112)
+    canvas.add_child(spirit)
     var main = Control.new()
     main.name = "MainMenu"
     main.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1018,6 +1023,8 @@ func apply_theme(texture: Texture2D, theme_id: String = "wood"):
         canvas.get_node("ForestArtwork").texture = texture
         var details = canvas.get_node_or_null("ForestDetails")
         if details != null: details.visible = _is_ref_art(texture)
+        var spirit = canvas.get_node_or_null("WaterSpirit")
+        if spirit != null: spirit.visible = _is_ref_art(texture)
         _sync_chrome()
         var logo = canvas.get_node_or_null("ThemeLogo")
         var needs_logo = ThemeCatalog.get_theme(theme_id).get("free_arena",false)
