@@ -104,6 +104,10 @@ function crc32(buf) { let c, crc = 0xFFFFFFFF; for (let n = 0; n < buf.length; n
   c.send({ type: 'acct_avatar_upload', data: big.toString('base64') });
   m = await c.next(x => x.type === 'acct_avatar_saved' || x.type === 'acct_error');
   check(m.type === 'acct_avatar_saved' && !!m.avatar_url, 'foto grande (~300 KB) aceita sem derrubar a conexão');
+  // O cliente Godot envia as chaves em ordem alfabética: {"data":"…","type":"acct_avatar_upload"}.
+  c.ws.send(JSON.stringify({ data: big.toString('base64'), type: 'acct_avatar_upload' }));
+  m = await c.next(x => x.type === 'acct_avatar_saved' || x.type === 'acct_error');
+  check(m.type === 'acct_avatar_saved' && !!m.avatar_url, 'foto grande com "type" depois de "data" (formato do Godot) aceita');
   c.send({ type: 'analysis_record', summary: { mode: 'bot', moves: Array.from({ length: 300 }, (_, i) => ({ uci: 'e2e4', class: 'good', loss: i, best: 'e2e4' })) } });
   c.send({ type: 'acct_check_nickname', nickname: 'Livre_123' });
   m = await c.next('acct_nickname_check');
@@ -113,6 +117,11 @@ function crc32(buf) { let c, crc = 0xFFFFFFFF; for (let n = 0; n < buf.length; n
   e.send({ type: 'chat_send', text: 'x'.repeat(20000) });
   await new Promise(r => setTimeout(r, 400));
   check(closed, 'pacote grande de outro tipo continua recusado (conexão fechada)');
+  const f = client(s.port); await f.open();
+  let closed2 = false; f.ws.on('close', () => { closed2 = true; });
+  f.ws.send(JSON.stringify({ text: '"type":"acct_avatar_upload"' + 'x'.repeat(20000), type: 'chat_send' }));
+  await new Promise(r => setTimeout(r, 400));
+  check(closed2, 'pacote grande que só cita acct_avatar_upload no texto continua recusado');
   c.send({ type: 'acct_avatar_clear' });
   m = await c.next('acct_avatar_saved');
   check(m.avatar_url === null, 'remover foto volta ao avatar padrão');
