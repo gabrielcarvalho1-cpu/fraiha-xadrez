@@ -6,6 +6,7 @@ const Notation := preload("res://analysis/notation.gd")
 const Config := preload("res://analysis/analysis_config.gd")
 const Book := preload("res://analysis/opening_book.gd")
 const FairPlay := preload("res://analysis/fair_play.gd")
+const Export := preload("res://analysis/export.gd")
 var failures := 0
 var checks := 0
 var stage
@@ -138,7 +139,22 @@ func run():
     check(rep.moves.size() == rec.moves.size() and rep.players.has("w") and rep.players.has("b"), "relatório com todos os lances e dois jogadores")
     check(node("AccuracyMe") != null and node("AccuracyOpp") != null and "%" in node("AccuracyMe").text, "precisão VOCÊ / ADVERSÁRIO")
     check(node("EvalGraph") != null and node("ReviewBoard") != null and node("MoveListPanel") != null, "gráfico, tabuleiro e lista")
-    check(node("Move_0") != null and "🔖" in node("Move_0").text, "lance marcado aparece com marcador na lista")
+    check(node("Move_0") != null and "◆" in node("Move_0").text, "lance marcado aparece com marcador na lista")
+    # lista padrão: sem rótulos/ícones de classificação; exportação dos lances
+    var plain := true
+    for i in rep.moves.size():
+        var bt: String = node("Move_%d" % i).text.replace("  ◆", "")
+        if bt != String(rep.moves[i].san): plain = false
+    check(plain, "lista de lances só anota o lance (sem rótulos de classificação)")
+    check(node("DetailClass") == null and node("CopyMoves") != null and node("SaveMovesText") != null and node("SaveScreenshot") != null, "sem selo de classe no detalhe; botões copiar / salvar texto / salvar print")
+    check(Export.pgn_san("Cf3") == "Nf3" and Export.pgn_san("Txe1+") == "Rxe1+" and Export.pgn_san("e8=D") == "e8=Q" and Export.pgn_san("O-O") == "O-O" and Export.pgn_san("Bb5") == "Bb5" and Export.pgn_san("Rg1") == "Kg1" and Export.pgn_san("e4") == "e4", "conversão PT → PGN")
+    var sans := []
+    for m in rep.moves: sans.append(String(m.san))
+    var txt := Export.text_of(rec, sans)
+    check(txt.begins_with("FRAIHA XADREZ") and ("1. " + sans[0]) in txt and "[Result " in txt and ("1. " + Export.pgn_san(sans[0])) in txt, "texto exportado: cabeçalho, lances em português e PGN")
+    press("CopyMoves")
+    check(DisplayServer.clipboard_get().begins_with("FRAIHA XADREZ") or OS.has_feature("headless"), "COPIAR LANCES copia o texto")
+    check(node("ExportStatus") != null and "copiad" in node("ExportStatus").text, "status de exportação atualizado")
     ui._goto(0)
     check(ui.cur_ply == 0 and node("DetailSan").text == rep.moves[0].san, "navegação para o lance 1")
     press("NavNext")

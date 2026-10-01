@@ -12,6 +12,7 @@ const Notation := preload("res://analysis/notation.gd")
 const Mobile := preload("res://ui_v022/mobile_layout.gd")
 const ReviewBoard := preload("res://analysis/review_board.gd")
 const EvalGraph := preload("res://analysis/eval_graph.gd")
+const Export := preload("res://analysis/export.gd")
 
 var engine
 var analyzer
@@ -142,15 +143,24 @@ func _build():
     outer.add_child(header)
     back_button = Art.Cta.new("FECHAR", "dark", 50, 17)
     back_button.name = "AnalysisBack"
+    back_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER   # nunca estica na altura
     back_button.pressed.connect(func():
         if trying: _end_try()
         else: close())
     header.add_child(back_button)
     header_label = Art.label(header, "ANÁLISE DA PARTIDA", 24, Art.GOLD, Art.FONT_BOLD)
     header_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    header_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    header_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     var quota_tag := Art.Stamp.new("", "info", 13)
     quota_tag.name = "QuotaTag"
     header.add_child(quota_tag)
+    # Celular em pé: o selo da cota vai para uma linha própria (senão o título fica sem largura).
+    var tag_row := HBoxContainer.new()
+    tag_row.name = "QuotaRow"
+    tag_row.alignment = BoxContainer.ALIGNMENT_END
+    tag_row.visible = false
+    outer.add_child(tag_row)
     scroll = ScrollContainer.new()
     scroll.name = "AnalysisScroll"
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -180,6 +190,14 @@ func _relayout():
     column.custom_minimum_size.x = minf(vs.x - gutter * 2.0 - 16.0, 1240.0)
     header_label.add_theme_font_size_override("font_size", fs(24))
     back_button.custom_minimum_size = Vector2(120 if narrow else 160, 46)
+    var tag = root.find_child("QuotaTag", true, false)
+    var tag_row = root.find_child("QuotaRow", true, false)
+    if tag != null and tag_row != null:
+        var want: Node = tag_row if narrow else back_button.get_parent()
+        if tag.get_parent() != want:
+            tag.get_parent().remove_child(tag)
+            want.add_child(tag)
+        tag_row.visible = narrow
     if visible and page != "": _show_page(page)
 
 func fs(n: int) -> int:
@@ -244,79 +262,108 @@ func _page_quota():
     v.add_child(later)
 
 # ---------------------------------------------------------------- progresso
+## ANALISANDO: ocupa a tela toda (painel na altura disponível), tabuleiro grande acompanhando
+## os lances, porcentagem, barra e os últimos lances anotados (sem rótulos de classificação).
 func _page_progress():
+    var vs := root.get_viewport_rect().size
     var f := Art.Frame.new("club", 24)
     f.name = "ProgressPanel"
+    f.custom_minimum_size.y = maxf(320.0, vs.y - 12.0 - 8.0 - 46.0 - 8.0 - 8.0)
+    f.size_flags_vertical = Control.SIZE_EXPAND_FILL
     column.add_child(f)
     var v := VBoxContainer.new()
     v.add_theme_constant_override("separation", 12)
+    v.size_flags_vertical = Control.SIZE_EXPAND_FILL
     f.add_child(v)
-    var t := Art.label(v, "ANALISANDO SUA PARTIDA...", fs(30), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
+    var t := Art.label(v, "ANALISANDO SUA PARTIDA", fs(32), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
     t.name = "ProgressTitle"
+    Art.label(v, "O motor revisa cada lance; ao final você vê a avaliação e pode guardar os lances.", fs(14), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
     var layout: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
-    layout.add_theme_constant_override("separation", 20)
+    layout.add_theme_constant_override("separation", 28)
+    layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    layout.alignment = BoxContainer.ALIGNMENT_CENTER
     v.add_child(layout)
     progress_board = ReviewBoard.new()
-    progress_board.custom_minimum_size = Vector2(300, 300) * (1.0 if narrow else 1.3)
+    var side_px := minf(column.custom_minimum_size.x - 8.0, 380.0) if narrow else clampf(f.custom_minimum_size.y - 190.0, 320.0, 640.0)
+    progress_board.custom_minimum_size = Vector2(side_px, side_px)
     progress_board.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    progress_board.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     progress_board.flipped = String(record.human_color) == "b"
     progress_board.show_fen(Notation.fen(record.position_after(0)), false)
     layout.add_child(progress_board)
     var side := VBoxContainer.new()
     side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    side.add_theme_constant_override("separation", 10)
+    side.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    side.add_theme_constant_override("separation", 12)
     layout.add_child(side)
-    progress_label = Art.label(side, "LANCE 0 DE %d" % record.moves.size(), fs(24), Art.CREAM, Art.FONT_SEMI, HORIZONTAL_ALIGNMENT_CENTER)
+    var pct := Art.label(side, "0%", fs(64), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
+    pct.name = "ProgressPercent"
+    progress_label = Art.label(side, "LANCE 0 DE %d" % record.moves.size(), fs(22), Art.CREAM, Art.FONT_SEMI, HORIZONTAL_ALIGNMENT_CENTER)
     progress_label.name = "ProgressLabel"
     progress_bar = ProgressBar.new()
     progress_bar.name = "ProgressBar"
     progress_bar.max_value = maxi(1, record.moves.size())
     progress_bar.value = 0
     progress_bar.show_percentage = false
-    progress_bar.custom_minimum_size.y = 18
+    progress_bar.custom_minimum_size.y = 22
     var bgs := StyleBoxFlat.new()
     bgs.bg_color = Color(0.03, 0.08, 0.05)
     bgs.border_color = Color("c99a45")
     bgs.set_border_width_all(1)
-    bgs.set_corner_radius_all(6)
+    bgs.set_corner_radius_all(8)
     var fgs := StyleBoxFlat.new()
     fgs.bg_color = Color("e9c46a")
-    fgs.set_corner_radius_all(6)
+    fgs.set_corner_radius_all(8)
     progress_bar.add_theme_stylebox_override("background", bgs)
     progress_bar.add_theme_stylebox_override("fill", fgs)
     side.add_child(progress_bar)
+    var ff := Art.Frame.new("dark", 12)
+    ff.custom_minimum_size.y = 170 if narrow else 230
+    side.add_child(ff)
+    var fv := VBoxContainer.new()
+    fv.add_theme_constant_override("separation", 4)
+    ff.add_child(fv)
+    Art.label(fv, "ÚLTIMOS LANCES ANOTADOS", fs(12), Art.GOLD, Art.FONT_SEMI)
     var feed := VBoxContainer.new()
     feed.name = "ProgressFeed"
-    feed.add_theme_constant_override("separation", 4)
-    side.add_child(feed)
-    Art.label(side, "Motor: %s · profundidade %d" % [engine.engine_name, analyzer.depth], fs(13), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
+    feed.add_theme_constant_override("separation", 3)
+    fv.add_child(feed)
+    var eng := Art.label(side, "", fs(13), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
+    eng.name = "ProgressEngine"
+    _refresh_engine_line()
+    if not engine.ready_changed.is_connected(_refresh_engine_line): engine.ready_changed.connect(_refresh_engine_line)
     var cancel := Art.Cta.new("CANCELAR", "ember", 52, 18)
     cancel.name = "AnalysisCancel"
     cancel.pressed.connect(close)
     side.add_child(cancel)
 
+func _refresh_engine_line(_v = null):
+    var eng = root.find_child("ProgressEngine", true, false)
+    if eng == null: return
+    var nm := String(engine.engine_name)
+    if nm.is_empty(): eng.text = "Iniciando o motor de análise…"
+    else: eng.text = "%s%s · profundidade %d" % ["" if nm.begins_with("Motor") else "Motor: ", nm, analyzer.depth]
+
 func _on_progress(done: int, total: int, m: Dictionary):
     if page != "progress": return
     if is_instance_valid(progress_label): progress_label.text = "LANCE %d DE %d" % [done, total]
+    var pct = root.find_child("ProgressPercent", true, false)
+    if pct != null: pct.text = "%d%%" % int(round(100.0 * done / maxf(1.0, total)))
     if is_instance_valid(progress_bar):
         var tw := create_tween()
         tw.tween_property(progress_bar, "value", float(done), 0.25)
     if is_instance_valid(progress_board):
         var mv := Notation.uci_to_move(String(m.uci))
         progress_board.show_fen(String(m.fen_after), true, mv.from, mv.to)
-        var cls := String(m.class)
-        if cls in ["best", "excellent", "brilliant", "legendary", "mistake", "blunder", "missed"]:
-            progress_board.set_mark(cls, Config.GLYPHS[cls], Config.COLORS[cls])
-            _class_effect(cls)
-        else:
-            progress_board.set_mark("", "", Color.WHITE)
+        progress_board.set_mark("", "", Color.WHITE)
     var feed = root.find_child("ProgressFeed", true, false)
     if feed != null:
-        var l := Art.label(feed, "%d. %s  %s %s" % [int(m.ply) / 2 + 1, m.san, Config.GLYPHS[m.class], Config.LABELS[m.class]], fs(15), Config.COLORS[m.class])
+        var who := ("%d. " % (int(m.ply) / 2 + 1)) if m.color == "w" else ("%d… " % (int(m.ply) / 2 + 1))
+        var l := Art.label(feed, who + String(m.san), fs(16), Art.CREAM)
         l.modulate.a = 0.0
         var tw2 := create_tween()
         tw2.tween_property(l, "modulate:a", 1.0, 0.3)
-        while feed.get_child_count() > 6:
+        while feed.get_child_count() > (6 if narrow else 8):
             var first := feed.get_child(0)
             feed.remove_child(first)
             first.queue_free()
@@ -390,31 +437,6 @@ func _page_report():
         var al := Art.label(cell, "%.1f%%" % float(pair[1].get("accuracy", 0.0)), fs(40), Art.INK, Art.FONT_BOLD)
         al.name = pair[2]
         al.text = al.text.replace(".", ",")
-    var counts: Dictionary = me.get("counts", {})
-    var chips := HFlowContainer.new()
-    chips.add_theme_constant_override("h_separation", 8)
-    chips.add_theme_constant_override("v_separation", 6)
-    sv.add_child(chips)
-    for cls in ["legendary", "brilliant", "best", "excellent", "good", "book", "inaccuracy", "mistake", "missed", "blunder"]:
-        var n := int(counts.get(cls, 0))
-        if n == 0: continue
-        var chip := Button.new()
-        chip.text = "%s %d %s" % [Config.GLYPHS[cls], n, _plural(cls, n)]
-        chip.focus_mode = Control.FOCUS_NONE
-        chip.add_theme_font_size_override("font_size", fs(14))
-        var st := StyleBoxFlat.new()
-        st.bg_color = Color(0.1, 0.16, 0.1, 0.9)
-        st.border_color = Config.COLORS[cls]
-        st.set_border_width_all(1)
-        st.set_corner_radius_all(8)
-        st.content_margin_left = 10
-        st.content_margin_right = 10
-        chip.add_theme_stylebox_override("normal", st)
-        chip.add_theme_stylebox_override("hover", st)
-        chip.add_theme_stylebox_override("pressed", st)
-        chip.add_theme_color_override("font_color", Config.COLORS[cls])
-        chip.pressed.connect(func(): _goto(_first_of(cls, human)))
-        chips.add_child(chip)
     var moments: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
     moments.add_theme_constant_override("separation", 20)
     sv.add_child(moments)
@@ -493,34 +515,52 @@ func _page_report():
     detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     detail.add_theme_constant_override("separation", 10)
     rev.add_child(detail)
-    # Lista de lances
+    # Lista de lances: anotação padrão (igual para todos), sem rótulos de classificação.
+    # Botões para guardar a partida: copiar o texto, salvar .txt ou salvar um print.
     var lf := Art.Frame.new("dark", 12)
     lf.name = "MoveListPanel"
     column.add_child(lf)
     var lv := VBoxContainer.new()
+    lv.add_theme_constant_override("separation", 8)
     lf.add_child(lv)
-    Art.label(lv, "LANCES", fs(15), Art.GOLD, Art.FONT_SEMI)
+    var lh := HBoxContainer.new()
+    lh.add_theme_constant_override("separation", 10)
+    lv.add_child(lh)
+    var lt := Art.label(lh, "LANCES DA PARTIDA", fs(15), Art.GOLD, Art.FONT_SEMI)
+    lt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    Art.label(lv, "%s (brancas) × %s (pretas) · %s" % [Export.names(record)[0], Export.names(record)[1], Export.date_text(record)], fs(13), Art.MUTED)
     var grid := GridContainer.new()
-    grid.columns = 2 if narrow else 4
-    grid.add_theme_constant_override("h_separation", 6)
+    grid.name = "MoveGrid"
+    grid.columns = 3 if narrow else 6
+    grid.add_theme_constant_override("h_separation", 4)
     grid.add_theme_constant_override("v_separation", 3)
+    grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     lv.add_child(grid)
     move_list = lv
+    var move_font := fs(15)
     for i in report.moves.size():
         var m: Dictionary = report.moves[i]
+        if m.color == "w" or i == 0:
+            var num := Art.label(grid, "%d." % (i / 2 + 1), move_font, Art.GOLD, Art.FONT_SEMI, HORIZONTAL_ALIGNMENT_RIGHT)
+            num.size_flags_horizontal = Control.SIZE_SHRINK_END
+            num.custom_minimum_size.x = 34
+            if m.color == "b": grid.add_child(_move_cell("…", move_font, false))
         var b := Button.new()
         b.name = "Move_%d" % i
         b.focus_mode = Control.FOCUS_NONE
-        var who := "%d." % (i / 2 + 1) if m.color == "w" else "%d…" % (i / 2 + 1)
-        b.text = "%s %s %s" % [who, m.san, Config.GLYPHS[m.class] if m.class not in ["good", "book"] else ""]
-        if m.marked: b.text += "  🔖"
+        b.text = String(m.san) + ("  ◆" if m.marked else "")   # ◆ = marcado para revisar
         b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-        b.add_theme_font_size_override("font_size", fs(14))
-        b.add_theme_color_override("font_color", Config.COLORS[m.class] if m.class not in ["good", "book"] else Art.CREAM)
+        b.custom_minimum_size.x = 92 if narrow else 110
+        b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        b.add_theme_font_size_override("font_size", move_font)
+        b.add_theme_color_override("font_color", Art.CREAM)
+        b.add_theme_color_override("font_hover_color", Art.GOLD)
+        b.add_theme_color_override("font_pressed_color", Art.GOLD)
         var st := StyleBoxFlat.new()
-        st.bg_color = Color(0.05, 0.1, 0.07, 0.8) if m.color == human else Color(0.03, 0.06, 0.05, 0.6)
+        st.bg_color = Color(0.05, 0.10, 0.07, 0.8)
         st.set_corner_radius_all(4)
         st.content_margin_left = 8
+        st.content_margin_right = 8
         b.add_theme_stylebox_override("normal", st)
         var hv := st.duplicate()
         hv.bg_color = Color(0.12, 0.22, 0.14, 0.95)
@@ -530,6 +570,29 @@ func _page_report():
         b.pressed.connect(func(): _goto(idx))
         grid.add_child(b)
         move_buttons[i] = b
+    var sans := []
+    for m in report.moves: sans.append(String(m.san))
+    var export_text := Export.text_of(record, sans)
+    var tools: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
+    tools.add_theme_constant_override("separation", 8)
+    lv.add_child(tools)
+    var cp := Art.Cta.new("COPIAR LANCES", "gold", 48, 15)
+    cp.name = "CopyMoves"
+    cp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    tools.add_child(cp)
+    var st_txt := Art.Cta.new("SALVAR TEXTO (.txt)", "dark", 48, 15)
+    st_txt.name = "SaveMovesText"
+    st_txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    tools.add_child(st_txt)
+    var sp := Art.Cta.new("SALVAR PRINT (.png)", "dark", 48, 15)
+    sp.name = "SaveScreenshot"
+    sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    tools.add_child(sp)
+    var exp_status := Art.label(lv, "Guarde os lances para analisar depois: copie o texto, salve um .txt ou um print da tela.", fs(13), Art.MUTED)
+    exp_status.name = "ExportStatus"
+    cp.pressed.connect(func(): exp_status.text = Export.copy(export_text))
+    st_txt.pressed.connect(func(): exp_status.text = Export.save_text(export_text, Export.file_stem(record)))
+    sp.pressed.connect(func(): _save_screenshot(exp_status))
     # Treine meus erros
     var trainable := _trainable(human)
     var tf := Art.Frame.new("club", 20)
@@ -551,6 +614,17 @@ func _page_report():
     column.add_child(tail)
     # começa no ponto crítico (ou no primeiro lance)
     _goto(int(me.get("critical", -1)) if int(me.get("critical", -1)) >= 0 else -1, false)
+
+func _move_cell(text: String, size: int, bold: bool) -> Label:
+    var l := Art.label(null, text, size, Art.MUTED, Art.FONT_SEMI if bold else null)
+    l.autowrap_mode = TextServer.AUTOWRAP_OFF
+    return l
+
+## SALVAR PRINT: captura a tela inteira da análise (gráfico, tabuleiro e lances) num PNG.
+func _save_screenshot(status_label: Label):
+    await RenderingServer.frame_post_draw
+    var img := get_viewport().get_texture().get_image()
+    status_label.text = Export.save_png(img, Export.file_stem(record))
 
 func _plural(cls: String, n: int) -> String:
     var names := {"legendary": ["Lendário", "Lendários"], "brilliant": ["Extraordinário", "Extraordinários"], "best": ["Melhor Lance", "Melhores Lances"],
@@ -583,12 +657,11 @@ func _goto(ply: int, animate := true):
         var m: Dictionary = report.moves[ply]
         var mv := Notation.uci_to_move(String(m.uci))
         board.show_fen(String(m.fen_after), animate, mv.from, mv.to)
-        if m.class not in ["good", "book"]: board.set_mark(m.class, Config.GLYPHS[m.class], Config.COLORS[m.class])
-        if animate: _class_effect(String(m.class))
     if is_instance_valid(graph): graph.set_selected(ply)
     for i in move_buttons:
         var b: Button = move_buttons[i]
         b.modulate = Color(1.3, 1.25, 1.0) if i == ply else Color.WHITE
+        b.add_theme_color_override("font_color", Art.GOLD if i == ply else Art.CREAM)
     _fill_detail()
 
 func _fill_detail():
@@ -618,9 +691,6 @@ func _fill_detail():
     sl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     sl.autowrap_mode = TextServer.AUTOWRAP_OFF
     var cls := String(m.class)
-    var stamp := Art.Stamp.new(Config.GLYPHS[cls] + " " + Config.LABELS[cls], "ok" if cls in ["best", "excellent", "brilliant", "legendary", "good", "book"] else "test", 13)
-    stamp.name = "DetailClass"
-    row.add_child(stamp)
     if m.marked: row.add_child(Art.Stamp.new("MARCADO PARA REVISAR", "info", 12))
     var ev := GridContainer.new()
     ev.columns = 2
@@ -630,7 +700,7 @@ func _fill_detail():
     Art.label(ev, "DEPOIS", fs(13), Art.MUTED)
     var eb := Art.label(ev, String(m.text_before), fs(26), Art.GOLD, Art.FONT_BOLD)
     eb.name = "DetailBefore"
-    var ea := Art.label(ev, String(m.text_after), fs(26), Config.COLORS[cls], Art.FONT_BOLD)
+    var ea := Art.label(ev, String(m.text_after), fs(26), Art.GOLD, Art.FONT_BOLD)
     ea.name = "DetailAfter"
     if not String(m.best_san).is_empty() and String(m.best) != String(m.uci):
         Art.label(v, "MELHOR:", fs(13), Art.MUTED)
@@ -686,7 +756,6 @@ func _toggle_best():
     else:
         board.clear_marks()
         board.show_fen(String(m.fen_after), true, played.from, played.to)
-        if m.class not in ["good", "book"]: board.set_mark(m.class, Config.GLYPHS[m.class], Config.COLORS[m.class])
     var btn = root.find_child("ShowBest", true, false)
     if btn != null: btn.text = "VER LANCE JOGADO" if showing_best else "VER MELHOR LANCE"
 
