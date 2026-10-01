@@ -20,6 +20,27 @@ var pending := {}         # url -> key (downloads em andamento)
 static func local_path(key: String) -> String:
     return DIR + "/" + key.validate_filename() + ".webp"
 
+## URL do servidor de onde veio (ou para onde foi) a cópia local. Se o servidor informar outra URL
+## (foto trocada em outro aparelho), a cópia local está velha e é baixada de novo.
+static func url_path(key: String) -> String:
+    return DIR + "/" + key.validate_filename() + ".url"
+
+func cached_url(key: String) -> String:
+    var path := url_path(key)
+    return FileAccess.get_file_as_string(path).strip_edges() if FileAccess.file_exists(path) else ""
+
+func set_cached_url(key: String, url: String):
+    DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(DIR))
+    var f := FileAccess.open(url_path(key), FileAccess.WRITE)
+    if f != null:
+        f.store_string(url)
+        f.close()
+
+## Precisa baixar? Sim se não há cópia local ou se ela não corresponde à URL atual do servidor.
+func needs_fetch(key: String, url: String) -> bool:
+    if url.is_empty() or not url.begins_with("http"): return false
+    return not has_local(key) or cached_url(key) != url
+
 func texture_for(key: String) -> Texture2D:
     if textures.has(key): return textures[key]
     var path := local_path(key)
@@ -49,6 +70,7 @@ func clear_local(key: String):
     textures.erase(key)
     var path := local_path(key)
     if FileAccess.file_exists(path): DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+    if FileAccess.file_exists(url_path(key)): DirAccess.remove_absolute(ProjectSettings.globalize_path(url_path(key)))
     texture_ready.emit(key)
 
 ## WebP com perda, baixando a qualidade até caber no limite de upload.
@@ -60,10 +82,9 @@ static func encode_webp(img: Image) -> PackedByteArray:
         bytes = img.save_webp_to_buffer(true, q)
     return bytes
 
-## Baixa a foto pública (profiles.avatar_url) para o cache local, se ainda não existir.
+## Baixa a foto pública (profiles.avatar_url) para o cache local, se faltar ou estiver velha.
 func fetch(key: String, url: String):
-    if url.is_empty() or not url.begins_with("http") or pending.has(url): return
-    if has_local(key) and textures.has(key): return
+    if pending.has(url) or not needs_fetch(key, url): return
     var req := HTTPRequest.new()
     req.timeout = 20.0
     add_child(req)
@@ -75,7 +96,8 @@ func fetch(key: String, url: String):
         var img := decode(body)
         if img == null: return
         if img.get_width() != SIZE or img.get_height() != SIZE: img.resize(SIZE, SIZE, Image.INTERPOLATE_LANCZOS)
-        save_local(key, img))
+        save_local(key, img)
+        set_cached_url(key, url))
     if req.request(url) != OK:
         pending.erase(url)
         req.queue_free()

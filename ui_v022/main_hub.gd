@@ -1466,6 +1466,8 @@ func bind_account(acc):
     acc.changed.connect(_on_account_changed)
     acc.avatar_saved.connect(func(url):
         _server_avatar_url = String(url)
+        # A cópia local é exatamente a foto que acabou de ser enviada: marca a URL para não baixar de novo.
+        if avatar_store != null and not String(url).is_empty() and avatar_store.has_local(avatar_key()): avatar_store.set_cached_url(avatar_key(), String(url))
         _avatar_message("Foto enviada para a sua conta." if not String(url).is_empty() else "Foto removida da conta.", false)
         _refresh_avatars())
     acc.avatar_failed.connect(func(_code, msg):
@@ -1481,7 +1483,7 @@ func _on_account_changed():
     # Foto da conta ainda não está no cache local → baixa da URL pública.
     if account != null and account.has_profile() and avatar_store != null:
         var url: String = account.avatar_url()
-        if not url.is_empty() and not avatar_store.has_local(avatar_key()): avatar_store.fetch(avatar_key(), url)
+        if avatar_store.needs_fetch(avatar_key(), url): avatar_store.fetch(avatar_key(), url)
         elif url.is_empty() and not _server_avatar_url.is_empty() and avatar_store.has_local(avatar_key()) and avatar_key() != "local":
             avatar_store.clear_local(avatar_key())   # a conta TINHA foto e ela foi removida em outro aparelho
         elif url.is_empty() and avatar_store.has_local(avatar_key()) and avatar_key() != "local" and not _avatar_resent.has(avatar_key()) and account.server_ready:
