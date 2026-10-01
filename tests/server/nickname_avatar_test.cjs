@@ -12,6 +12,15 @@ function png(w, h) {   // PNG mínimo válido (cinza) só com cabeçalhos corret
   const raw = Buffer.alloc((w + 1) * h, 0x80); for (let y = 0; y < h; y++) raw[y * (w + 1)] = 0;
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
+function noisyPng(w, h, targetBytes) {   // PNG cinza com ruído (não comprime): tamanho de foto real
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc32(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8;
+  const raw = Buffer.alloc((w + 1) * h, 0x80);
+  const noisyRows = Math.min(h, Math.floor(targetBytes / (w + 1)));
+  const noise = require('crypto').randomBytes(noisyRows * w);
+  for (let y = 0; y < h; y++) { raw[y * (w + 1)] = 0; if (y < noisyRows) noise.copy(raw, y * (w + 1) + 1, y * w, (y + 1) * w); }
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
 function crc32(buf) { let c, crc = 0xFFFFFFFF; for (let n = 0; n < buf.length; n++) { c = (crc ^ buf[n]) & 0xFF; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; crc = (crc >>> 8) ^ c; } return (crc ^ 0xFFFFFFFF) >>> 0; }
 
 (async () => {
@@ -89,6 +98,21 @@ function crc32(buf) { let c, crc = 0xFFFFFFFF; for (let n = 0; n < buf.length; n
   c.send({ type: 'acct_avatar_upload', data: png(100, 100).toString('base64') });
   m = await c.next('acct_error');
   check(m.code === 'avatar_invalid', 'upload inválido recusado');
+  // foto REAL é bem maior que 8 KB (antes o servidor fechava a conexão: bug do avatar no celular)
+  const big = noisyPng(512, 512, 300 * 1024);
+  check(big.length > 200 * 1024 && big.length <= 400 * 1024, 'foto de teste com tamanho real (' + Math.round(big.length / 1024) + ' KB)');
+  c.send({ type: 'acct_avatar_upload', data: big.toString('base64') });
+  m = await c.next(x => x.type === 'acct_avatar_saved' || x.type === 'acct_error');
+  check(m.type === 'acct_avatar_saved' && !!m.avatar_url, 'foto grande (~300 KB) aceita sem derrubar a conexão');
+  c.send({ type: 'analysis_record', summary: { mode: 'bot', moves: Array.from({ length: 300 }, (_, i) => ({ uci: 'e2e4', class: 'good', loss: i, best: 'e2e4' })) } });
+  c.send({ type: 'acct_check_nickname', nickname: 'Livre_123' });
+  m = await c.next('acct_nickname_check');
+  check(!!m, 'resumo de análise longo (> 8 KB) não derruba a conexão');
+  const e = client(s.port); await e.open();
+  let closed = false; e.ws.on('close', () => { closed = true; });
+  e.send({ type: 'chat_send', text: 'x'.repeat(20000) });
+  await new Promise(r => setTimeout(r, 400));
+  check(closed, 'pacote grande de outro tipo continua recusado (conexão fechada)');
   c.send({ type: 'acct_avatar_clear' });
   m = await c.next('acct_avatar_saved');
   check(m.avatar_url === null, 'remover foto volta ao avatar padrão');
