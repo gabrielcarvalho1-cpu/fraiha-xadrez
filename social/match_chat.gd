@@ -26,6 +26,9 @@ var input: LineEdit
 var send_button: Button
 var status: Label
 var toggle_button: Button
+var minimize_button: Button
+var minimized := false   # desktop: chat recolhido num botão "CHAT"
+var restore_button: Button
 
 func setup(service):
     account = service
@@ -35,11 +38,13 @@ func setup(service):
     panel.name = "MatchChat"
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
     var style = StyleBoxFlat.new()
-    style.bg_color = Color(0.05, 0.09, 0.07, 0.92)
-    style.border_color = Color("84754b")
-    style.set_border_width_all(1)
-    style.set_corner_radius_all(6)
-    for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 8)
+    style.bg_color = Color(0.03, 0.10, 0.06, 0.88)
+    style.border_color = Color("c99a45")
+    style.set_border_width_all(2)
+    style.set_corner_radius_all(10)
+    style.shadow_color = Color(0, 0, 0, 0.4)
+    style.shadow_size = 8
+    for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 12)
     panel.add_theme_stylebox_override("panel", style)
     add_child(panel)
     var col = VBoxContainer.new()
@@ -53,12 +58,15 @@ func setup(service):
     title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     title.clip_text = true
     title.add_theme_color_override("font_color", GOLD)
+    title.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
     head.add_child(title)
     mute_button = _small(head, "SILENCIAR", _toggle_mute)
     mute_button.tooltip_text = "Deixar de ver as mensagens do adversário (só para você)"
     report_button = _small(head, "DENUNCIAR", _report)
     report_button.tooltip_text = "Enviar as mensagens do adversário para análise"
     close_button = _small(head, "FECHAR", func(): set_mobile_open(false))
+    minimize_button = _small(head, "—", func(): set_minimized(true))
+    minimize_button.tooltip_text = "Minimizar o chat"
     scroll = ScrollContainer.new()
     preload("res://ui_v022/touch_scroll.gd").attach(scroll)
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -91,6 +99,27 @@ func setup(service):
     toggle_button.name = "ChatToggle"
     toggle_button.text = "Chat"
     toggle_button.pressed.connect(func(): set_mobile_open(not open_mobile))
+    # Desktop: com o chat minimizado, um botão "CHAT" dourado traz o painel de volta.
+    restore_button = _small(self, "CHAT", func(): set_minimized(false))
+    restore_button.name = "ChatRestore"
+    restore_button.tooltip_text = "Abrir o chat"
+    var rs: StyleBoxFlat = restore_button.get_theme_stylebox("normal").duplicate()
+    rs.bg_color = Color(0.05, 0.16, 0.09, 0.92)
+    rs.border_color = Color("c99a45")
+    rs.set_border_width_all(2)
+    rs.set_corner_radius_all(10)
+    rs.shadow_color = Color(0, 0, 0, 0.45)
+    rs.shadow_size = 6
+    restore_button.add_theme_stylebox_override("normal", rs)
+    var rh: StyleBoxFlat = rs.duplicate()
+    rh.bg_color = Color(0.09, 0.26, 0.14, 0.95)
+    rh.border_color = Color("f4ce7f")
+    for state in ["hover", "pressed"]: restore_button.add_theme_stylebox_override(state, rh)
+    restore_button.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
+    restore_button.add_theme_color_override("font_color", GOLD)
+    restore_button.add_theme_color_override("font_hover_color", Color("ffe6a0"))
+    restore_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    restore_button.hide()
     panel.hide()
 
 func _small(parent: Node, text: String, action: Callable) -> Button:
@@ -138,6 +167,7 @@ func unbind():
     controller = null
     open_mobile = false
     panel.hide()
+    if restore_button != null: restore_button.hide()
     if input.has_focus(): input.release_focus()
 
 func active() -> bool:
@@ -190,7 +220,8 @@ func _on_message(msg: Dictionary):
             _show_status("Denúncia enviada. Obrigado!", Color("c4cbbd"))
 
 func _visible_now() -> bool:
-    return panel.visible and (not Mobile.active(get_viewport()) or open_mobile)
+    if Mobile.active(get_viewport()): return panel.visible and open_mobile
+    return panel.visible and not minimized
 
 func _show_status(text: String, color := Color("ff9d86")):
     status.text = text
@@ -232,6 +263,15 @@ func _scroll_end():
     if is_instance_valid(scroll): scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value)
 
 # ---------- Layout ----------
+func set_minimized(value: bool):
+    minimized = value
+    if value:
+        if input.has_focus(): input.release_focus()
+    else:
+        unread = 0
+    _refresh_toggle()
+    layout_needed.emit()
+
 func set_mobile_open(value: bool):
     open_mobile = value
     if value:
@@ -242,25 +282,38 @@ func set_mobile_open(value: bool):
     layout_needed.emit()
 
 func _refresh_toggle():
-    toggle_button.text = ("Chat (%d)" % unread) if unread > 0 else "Chat"
+    var t := ("CHAT (%d)" % unread) if unread > 0 else "CHAT"
+    toggle_button.text = t
+    if restore_button != null: restore_button.text = t
 
 ## Desktop: painel à esquerda do tabuleiro (coordenadas 1920x1080). Mobile: folha sobre a parte de baixo.
 func layout(board: Rect2, mobile: bool, safe: Rect2):
     if not active():
         panel.hide()
+        restore_button.hide()
         return
     var fonts = 15 if mobile else 20
     for node in [title, mute_button, report_button, close_button, input, send_button, status]:
         node.add_theme_font_size_override("font_size", fonts)
     for child in list.get_children(): child.add_theme_font_size_override("font_size", fonts)
     close_button.visible = mobile
+    minimize_button.visible = not mobile
     input.custom_minimum_size.y = 44 if mobile else 48
     send_button.custom_minimum_size = Vector2(0, 44 if mobile else 48)
     if mobile:
+        restore_button.hide()
         panel.visible = open_mobile
         var h = minf(safe.size.y * 0.62, 460.0)
         panel.position = Vector2(safe.position.x, safe.end.y - h - 52.0)
         panel.size = Vector2(safe.size.x, h)
+        return
+    # Desktop minimizado: só o botão CHAT no canto do tabuleiro.
+    restore_button.visible = minimized
+    if minimized:
+        panel.visible = false
+        restore_button.add_theme_font_size_override("font_size", 20)
+        restore_button.size = Vector2(170, 52)
+        restore_button.position = Vector2(maxf(safe.position.x + 8.0, board.position.x - 190.0), board.end.y - 52.0)
         return
     panel.visible = true
     var left_space = board.position.x - safe.position.x - 36.0

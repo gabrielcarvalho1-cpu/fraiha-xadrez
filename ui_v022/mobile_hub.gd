@@ -227,7 +227,7 @@ func show_page(id: String):
     profile.visible = id == "main"
     profile.text = hub.player_name + " · PERFIL"
     back_button.visible = id != "main"
-    heading.text = {"main":"FRAIHA XADREZ","bot":"JOGAR CONTRA O BOT","bot_side":"ESCOLHA SEU LADO","profile":"PERFIL","ranking":"LIGAS E RANKING","about":"CONHEÇA O FRAIHA","settings":"CONFIGURAÇÕES","ranked":"JOGAR RANQUEADO"}.get(id,"FRAIHA XADREZ")
+    heading.text = {"main":"FRAIHA XADREZ","bot":"JOGAR CONTRA O COMPUTADOR","bot_side":"ESCOLHA SEU LADO","profile":"PERFIL","ranking":"LIGAS E RANKING","about":"CONHEÇA O FRAIHA","settings":"CONFIGURAÇÕES","ranked":"JOGAR RANQUEADO"}.get(id,"FRAIHA XADREZ")
     if hub.page_scrolls.has(id):
         borrowed = hub.page_scrolls[id].get_child(0)
         borrowed_parent = borrowed.get_parent()

@@ -12,7 +12,7 @@ func run():
     for i in range(3): await process_frame
     var hub = stage.hub
     var titles = hub.menu_buttons.map(func(b): return hub.title_of(b))
-    check(titles == ["JOGAR CONTRA O BOT","JOGAR ONLINE","JOGAR RANQUEADO","LIGAS E RANKING","AMIGOS","CONFIGURAÇÕES","CONHEÇA O FRAIHA","SAIR"], "ordem da Home pública: " + str(titles))
+    check(titles == ["JOGAR CONTRA O COMPUTADOR","JOGAR ONLINE","JOGAR RANQUEADO","LIGAS E RANKING","AMIGOS","CONFIGURAÇÕES","CONHEÇA O FRAIHA","SAIR"], "ordem da Home pública: " + str(titles))
     check(not "JOGAR LOCAL" in titles, "JOGAR LOCAL fora da Home")
     for i in range(hub.menu_buttons.size()):
         check(hub.menu_buttons[i].position == Vector2(611,341+i*63), "sem buraco no layout %d" % i)

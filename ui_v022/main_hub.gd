@@ -235,7 +235,7 @@ func _build():
     theme_frame.name = "ThemeMenuFrame"
     theme_frame.hide()
     # JOGAR LOCAL saiu da Home pública; o modo continua disponível internamente (play_local_requested).
-    var titles = ["JOGAR CONTRA O BOT", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "AMIGOS", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
+    var titles = ["JOGAR CONTRA O COMPUTADOR", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "AMIGOS", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
     var subtitles = ["Treine e evolua seu jogo", "Partida casual · fila automática", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Amigos, mensagens e convites", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
     var actions = [func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), func(): friends_requested.emit(), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
     var icons = [1,2,3,3,0,4,5,6]
@@ -500,12 +500,12 @@ func _page_button(parent: Node, row: int, title: String, subtitle: String, callb
     return _button(parent, row, title, subtitle, Vector2.ZERO, callback, Vector2(394,68))
 
 func _build_pages():
-    var bot = _new_page("bot", "ESCOLHA A DIFICULDADE", "JOGAR CONTRA O BOT")
+    var bot = _new_page("bot", "ESCOLHA A DIFICULDADE", "JOGAR CONTRA O COMPUTADOR")
     difficulty_buttons.easy = _page_button(bot, 1, "FÁCIL", "Para começar e praticar", func(): _choose_difficulty("easy"))
     difficulty_buttons.medium = _page_button(bot, 1, "MÉDIO", "Planeje suas próximas jogadas", func(): _choose_difficulty("medium"))
     difficulty_buttons.hard = _page_button(bot, 1, "DIFÍCIL", "Um desafio mais profundo", func(): _choose_difficulty("hard"))
     difficulty_buttons.expert = _page_button(bot, 1, "EXPERT", "Seu desafio mais exigente", func(): _choose_difficulty("expert"))
-    var sides = _new_page("bot_side", "ESCOLHA SEU LADO", "JOGAR CONTRA O BOT")
+    var sides = _new_page("bot_side", "ESCOLHA SEU LADO", "JOGAR CONTRA O COMPUTADOR")
     difficulty_label = _label(sides, "Nível: Fácil", 18, GOLD)
     side_buttons.w = _page_button(sides, 0, "BRANCAS", "Você faz a primeira jogada", func(): play_bot_requested.emit(selected_difficulty, "w"))
     side_buttons.b = _page_button(sides, 0, "PRETAS", "O bot começa a partida", func(): play_bot_requested.emit(selected_difficulty, "b"))

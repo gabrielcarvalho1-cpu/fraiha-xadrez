@@ -17,7 +17,7 @@ var slot := 0
 
 func _ready():
     stage = get_parent()
-    for id in ["wood","metal","capture","check","mate","win","loss","promotion","ui"]:
+    for id in ["wood","metal","capture","check","mate","win","loss","promotion","ui","bell"]:
         streams[id] = load("res://audio_v025/"+id+".wav")
     for i in range(4):
         var player = AudioStreamPlayer.new()
@@ -143,6 +143,9 @@ func _process(_delta):
             play_cue("promotion")
         var checked = game.bot.rules.in_check(game.turn) if game.bot != null else game._in_check(game.turn)
         if checked and not game.game_over: play_cue("check")
+        # Partida online (Casual/Ranked): sininho quando o adversário joga e chega a sua vez.
+        if stage.mode in ["ranked","casual"] and game.bot != null and not game.game_over and game.turn == String(game.bot.human_color):
+            play_cue("bell")
     if was_promotion and not game.promotion_pending and previous_count >= 0:
         play_cue("promotion")
     if game.game_over and not previous_end and previous_count >= 0:
