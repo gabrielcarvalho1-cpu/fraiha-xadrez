@@ -14,7 +14,9 @@ static func active(_viewport: Viewport) -> bool:
     if _active_cache < 0:
         var mobile = "--mobile-test" in OS.get_cmdline_user_args() or OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
         if not mobile and OS.has_feature("web"):
-            mobile = JavaScriptBridge.eval("(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches))") == true
+            # O navegador pode devolver bool OU número (0/1): comparar int com bool aborta a função na Web.
+            var r = JavaScriptBridge.eval("(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches)) ? 1 : 0")
+            mobile = (r is bool and r) or ((r is int or r is float) and int(r) == 1)
         _active_cache = 1 if mobile else 0
     return _active_cache == 1
 
