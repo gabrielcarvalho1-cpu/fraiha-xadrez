@@ -135,12 +135,18 @@ class SkinLink extends Button:
             "person": LoginSkinRef.person_icon(self, ic, col)
             _: Art.icon(self, icon_kind, ic, col)
         var f: Font = Art.FONT_SEMI
-        var fs := 37
+        var fs := 33
         while fs > 16 and f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > size.x - 130.0 - 60.0: fs -= 1
         var base := Vector2(125, 31 + f.get_ascent(fs) * 0.36)
-        # sem sombra deslocada (ficava "dobrado" ao reduzir a escala): só contorno fino escuro
-        draw_string_outline(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0.05, 0.08, 0.05, 0.85))
-        draw_string(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("fff0c8") if lit else CREAM)
+        # O painel inteiro é reduzido (scale k): o texto é rasterizado no tamanho FINAL em pixels
+        # (fonte fs*k desenhada com transform 1/k) para ficar nítido, sem bordas grossas/serrilhadas.
+        var gk: float = maxf(0.05, get_global_transform().get_scale().x)
+        var pfs := maxi(9, int(round(fs * gk)))
+        draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE / gk)
+        var pb := base * gk
+        draw_string_outline(f, pb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, 2, Color(0.05, 0.08, 0.05, 0.7))
+        draw_string(f, pb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, Color("fff0c8") if lit else CREAM)
+        draw_set_transform(Vector2.ZERO)
         if lit: draw_rect(Rect2(Vector2(30, 0), Vector2(size.x - 40, 56)), Color(1.0, 0.9, 0.6, 0.06))
 
 # ---------------------------------------------------------------- divisor
