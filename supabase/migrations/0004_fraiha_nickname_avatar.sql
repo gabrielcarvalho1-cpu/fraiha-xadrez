@@ -73,7 +73,7 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('avatars', 'avatars', true, 524288, array['image/webp','image/png','image/jpeg'])
 on conflict (id) do nothing;
 
-drop policy if exists avatars_public_read on storage.objects;
-create policy avatars_public_read on storage.objects
-  for select to public using (bucket_id = 'avatars');
--- Sem policy de insert/update/delete para anon/authenticated: só a service_role escreve.
+-- Leitura: o bucket é público, então as URLs /storage/v1/object/public/avatars/<id>.webp funcionam
+-- SEM policy. Não criamos policy de SELECT em storage.objects de propósito: ela permitiria LISTAR
+-- todos os arquivos do bucket (expondo os user_id). Sem policy de insert/update/delete para
+-- anon/authenticated: só a service_role (servidor) grava e apaga.
