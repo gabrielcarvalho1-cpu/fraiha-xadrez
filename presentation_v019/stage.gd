@@ -64,6 +64,11 @@ func _ready():
     hub.play_online_requested.connect(_open_casual)
     hub.play_bot_requested.connect(_start_bot)
     hub.quit_requested.connect(request_quit)
+    # Pré-move (Configurações): vale contra o computador, Online e Ranqueado.
+    game.premove_enabled = hub.premove_enabled
+    hub.premove_changed.connect(func(on):
+        game.premove_enabled = on
+        if not on: game.clear_premove())
     online.room_joined.connect(_room_joined)
     online.room_left.connect(_room_left)
     online.connection_failed.connect(_connection_failed)

@@ -65,6 +65,14 @@ var drag_position := Vector2.ZERO
 var dragging := false
 var settings_open := false
 var mobile_presentation := false
+# Pré-move (como no Chess.com): na vez do adversário, deixa um lance marcado; ele é
+# jogado sozinho assim que chegar a sua vez (se ainda for legal; senão é descartado).
+var premove_enabled := true
+var premove_from := Vector2i(-1,-1)
+var premove_to := Vector2i(-1,-1)
+var premove_selecting := false
+var check_flash := 0.0
+const PREMOVE_TINT := Color(0.22,0.52,0.95,0.50)
 # Desktop: engrenagem e reiniciar viram botões do HUD (stage); o tabuleiro só desenha o painel de opções.
 var external_hud := false
 var presentation_rect := Rect2(0, 0, 1024, 1024)
@@ -88,6 +96,7 @@ func _ready():
     set_process(true)
 
 func _new_game():
+    clear_premove()
     if bot != null:
         bot.restart()
         return
@@ -129,6 +138,8 @@ func _process(delta):
             alive.append(p)
     particles = alive
     flash = max(0.0, flash-delta*3.5)
+    check_flash = max(0.0, check_flash-delta*1.6)
+    _premove_tick()
     # cenário vivo: redesenha continuamente para água, fogo e vegetação
     queue_redraw()
 
@@ -410,6 +421,7 @@ func _draw():
     var cosmetic = preload("res://cosmetics/theme_catalog.gd").get_theme(visual_theme)
     if cosmetic.get("free_arena",false):
         preload("res://cosmetics/league_board.gd").draw_frame(self,ORIGIN,BOARD,visual_theme,cosmetic.rim)
+    var check_sq := _check_square()
     for y in range(8):
         for x in range(8):
             var c=Vector2i(x,y)
@@ -424,8 +436,14 @@ func _draw():
             # The playable surface belongs to the dedicated forest artwork.
             if c==last_from or c==last_to:
                 draw_rect(r.grow(-3),Color(1.0,0.78,0.20,0.26))
+            if c==premove_from or c==premove_to:
+                draw_rect(r,PREMOVE_TINT)
+            if c==check_sq:
+                _draw_check_glow(r)
             if c in legal_moves:
-                if pieces.has(c):
+                if premove_selecting:
+                    draw_circle(r.get_center(),8,Color(0.45,0.70,1.0,0.80))
+                elif pieces.has(c):
                     draw_rect(r.grow(-6),Color("#d94f3d"),false,5)
                 else:
                     draw_circle(r.get_center(),8,Color(0.95,0.83,0.35,0.82))
@@ -434,10 +452,16 @@ func _draw():
 
     # Sem letras/números: arena limpa como a referência.
 
+    var pre_on := premove_from!=Vector2i(-1,-1) and pieces.has(premove_from)
     for pos in pieces:
         if dragging and pos == drag_origin:
             continue
+        if pre_on and (pos == premove_from or pos == premove_to):
+            continue
         _piece(square_center(pos),pieces[pos])
+    if pre_on:
+        # A peça já aparece na casa do pré-move (como no Chess.com).
+        _piece(square_center(premove_to),pieces[premove_from])
 
     if dragging and pieces.has(drag_origin):
         _piece(drag_position, pieces[drag_origin])
@@ -461,6 +485,15 @@ func _captured_text(a:Array[String])->String:
     return s
 
 func _select(cell:Vector2i):
+    if _premove_mode():
+        var me := _premove_color()
+        if pieces.has(cell) and _color_at(cell)==me:
+            selected=cell
+            legal_moves=_premove_targets(cell)
+            premove_selecting=true
+        else:
+            selected=Vector2i(-1,-1); legal_moves.clear(); premove_selecting=false
+        return
     if bot != null and not bot.can_interact(): return
     if online != null and not online.can_interact():
         return
@@ -468,6 +501,8 @@ func _select(cell:Vector2i):
     if pieces.has(cell) and _color_at(cell)==turn:
         selected=cell
         legal_moves=_moves(cell)
+        # Em xeque e a peça não tem lance: o rei pisca em vermelho para mostrar o motivo.
+        if legal_moves.is_empty() and _check_square()!=Vector2i(-1,-1): check_flash=1.0
     else:
         selected=Vector2i(-1,-1); legal_moves.clear()
 
@@ -494,6 +529,10 @@ func _unhandled_input(event):
     _handle_game_input(local_event)
 
 func _handle_game_input(event):
+    if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_RIGHT and event.pressed:
+        if premove_from!=Vector2i(-1,-1) or premove_selecting:
+            clear_premove()
+            return
     if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
         if not mobile_presentation and not external_hud and gear_button.has_point(event.position):
             settings_open = not settings_open
@@ -550,6 +589,10 @@ func _handle_game_input(event):
         var local=event.position-ORIGIN
         if local.x<0 or local.y<0 or local.x>=BOARD or local.y>=BOARD: return
         var cell=cell_at(event.position)
+        if _premove_mode():
+            _premove_click(cell)
+            queue_redraw()
+            return
         if selected==Vector2i(-1,-1):
             _select(cell)
         elif cell==selected:
@@ -635,10 +678,11 @@ func _drag_input(event: InputEvent) -> bool:
     if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
         if event.pressed:
             cancel_drag()
-            if not game_started or game_over or promotion_pending or settings_open or (online != null and not online.can_interact()) or (bot != null and not bot.can_interact()):
+            var pre := _premove_mode()
+            if not pre and (not game_started or game_over or promotion_pending or settings_open or (online != null and not online.can_interact()) or (bot != null and not bot.can_interact())):
                 return false
             var cell = cell_at(event.position)
-            if _inside(cell) and pieces.has(cell) and _color_at(cell) == turn:
+            if _inside(cell) and pieces.has(cell) and _color_at(cell) == (_premove_color() if pre else turn):
                 drag_origin = cell
                 drag_start = event.position
                 drag_position = event.position
@@ -674,3 +718,129 @@ func cancel_drag():
 func _notification(what):
     if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
         cancel_drag()
+
+# ---------- Xeque ----------
+## Casa do rei de quem está na vez, se estiver em xeque (inclui xeque-mate).
+func _check_square() -> Vector2i:
+    if not game_started or pieces.is_empty(): return Vector2i(-1,-1)
+    var king=_find_king(turn)
+    if king==Vector2i(-1,-1): return king
+    return king if _square_attacked(king,"b" if turn=="w" else "w") else Vector2i(-1,-1)
+
+func _draw_check_glow(r: Rect2):
+    var pulse := 0.5+0.5*sin(anim_time*5.0)
+    var c := r.get_center()
+    # Brilho vermelho em volta do rei (sem texto e sem som).
+    draw_rect(r,Color(0.85,0.08,0.05,0.22+0.10*pulse+check_flash*0.25))
+    for i in range(6):
+        var k := 1.0-float(i)/6.0
+        draw_circle(c,TILE*(0.14+0.065*i),Color(1.0,0.15,0.08,(0.16+0.08*pulse)*k+check_flash*0.12))
+    draw_rect(r.grow(-2),Color(1.0,0.22,0.15,0.75+0.25*pulse),false,4.0+check_flash*3.0)
+    if check_flash>0.0:
+        draw_rect(r.grow(4.0*check_flash),Color(1.0,0.25,0.18,check_flash*0.9),false,3.0)
+
+# ---------- Pré-move ----------
+## Cor do jogador humano quando o pré-move pode ser usado nesta partida; "" se não.
+func _premove_color() -> String:
+    if not premove_enabled or bot == null or not game_started or game_over or settings_open: return ""
+    if bool(bot.get("local_mode")): return ""
+    if not bool(bot.get("active")): return ""
+    var st = bot.get("status")
+    if st != null and String(st) not in ["playing","starting"]: return ""
+    return String(bot.human_color)
+
+## Vez do adversário (ou lance seu ainda a caminho do servidor): cliques viram pré-move.
+func _premove_mode() -> bool:
+    return _premove_color()!="" and not promotion_pending and not bot.can_interact()
+
+func clear_premove():
+    premove_from=Vector2i(-1,-1)
+    premove_to=Vector2i(-1,-1)
+    if premove_selecting:
+        selected=Vector2i(-1,-1); legal_moves.clear()
+    premove_selecting=false
+    queue_redraw()
+
+func _premove_click(cell: Vector2i):
+    var me := _premove_color()
+    var own := pieces.has(cell) and _color_at(cell)==me
+    if premove_from!=Vector2i(-1,-1) and not premove_selecting:
+        # Já havia um pré-move: clicar em outro lugar cancela; numa peça sua, escolhe de novo.
+        clear_premove()
+        if own: _select(cell)
+        return
+    if selected==Vector2i(-1,-1) or not premove_selecting:
+        _select(cell)
+    elif cell==selected:
+        clear_premove()
+    elif cell in legal_moves:
+        premove_from=selected
+        premove_to=cell
+        selected=Vector2i(-1,-1); legal_moves.clear(); premove_selecting=false
+    elif own:
+        _select(cell)
+    else:
+        clear_premove()
+
+## Casas para onde a peça poderia ir (o adversário ainda vai jogar, então só as suas peças bloqueiam).
+func _premove_targets(fr: Vector2i) -> Array[Vector2i]:
+    var out: Array[Vector2i] = []
+    var code: String = pieces.get(fr,"")
+    if code.is_empty(): return out
+    var me := code.substr(0,1)
+    var kind := code.substr(1,1)
+    var add := func(q: Vector2i):
+        if _inside(q) and _color_at(q)!=me and q not in out: out.append(q)
+    match kind:
+        "P":
+            var dy := -1 if me=="w" else 1
+            var one := fr+Vector2i(0,dy)
+            if _inside(one) and _color_at(one)!=me:
+                add.call(one)
+                var start := 6 if me=="w" else 1
+                if fr.y==start and not pieces.has(one): add.call(fr+Vector2i(0,2*dy))
+            add.call(fr+Vector2i(-1,dy)); add.call(fr+Vector2i(1,dy))
+        "N":
+            for d in [Vector2i(1,2),Vector2i(2,1),Vector2i(2,-1),Vector2i(1,-2),Vector2i(-1,-2),Vector2i(-2,-1),Vector2i(-2,1),Vector2i(-1,2)]:
+                add.call(fr+d)
+        "K":
+            for yy in range(-1,2):
+                for xx in range(-1,2):
+                    if xx!=0 or yy!=0: add.call(fr+Vector2i(xx,yy))
+            var home := 7 if me=="w" else 0
+            if fr==Vector2i(4,home):
+                if pieces.get(Vector2i(7,home),"")==me+"R": add.call(Vector2i(6,home))
+                if pieces.get(Vector2i(0,home),"")==me+"R": add.call(Vector2i(2,home))
+        _:
+            var dirs := []
+            if kind in ["R","Q"]: dirs += [Vector2i(1,0),Vector2i(-1,0),Vector2i(0,1),Vector2i(0,-1)]
+            if kind in ["B","Q"]: dirs += [Vector2i(1,1),Vector2i(1,-1),Vector2i(-1,1),Vector2i(-1,-1)]
+            for d in dirs:
+                var q: Vector2i = fr+d
+                while _inside(q) and _color_at(q)!=me:
+                    out.append(q)
+                    q+=d
+    return out
+
+## Chegou a sua vez: joga o pré-move se ainda for legal (promoção vira Dama), senão descarta.
+func _premove_tick():
+    if premove_from==Vector2i(-1,-1) and not premove_selecting: return
+    if _premove_color()=="":
+        clear_premove()
+        return
+    if not bot.can_interact(): return
+    if premove_selecting:
+        # A seleção feita na vez do adversário vira seleção normal.
+        premove_selecting=false
+        if selected!=Vector2i(-1,-1) and _color_at(selected)==turn: legal_moves=_moves(selected)
+        else: selected=Vector2i(-1,-1); legal_moves.clear()
+    if premove_from==Vector2i(-1,-1): return
+    var f := premove_from
+    var t := premove_to
+    premove_from=Vector2i(-1,-1)
+    premove_to=Vector2i(-1,-1)
+    if _color_at(f)!=turn: return
+    selected=Vector2i(-1,-1); legal_moves.clear()
+    if bot.request_move(f,t) and promotion_pending and bot.promotion_choices.size()>1:
+        bot.promote("Q")
+    queue_redraw()

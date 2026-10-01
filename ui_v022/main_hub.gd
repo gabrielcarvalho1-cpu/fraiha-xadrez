@@ -9,6 +9,7 @@ signal quit_requested
 signal ranked_requested
 signal account_requested
 signal friends_requested
+signal premove_changed(enabled: bool)
 
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 0.0
@@ -70,6 +71,8 @@ var about_title: Label
 var about_body: Label
 var volume := 0.8
 var music_volume := 0.65
+var premove_enabled := true
+var premove_button: TextureButton
 var fullscreen := true
 var volume_label: Label
 var music_volume_label: Label
@@ -578,6 +581,9 @@ func _build_pages():
     settings.add_child(slider)
     slider.value_changed.connect(_set_volume)
     _set_volume(slider.value, false)
+    premove_button = _page_button(settings, 1, "", "", _toggle_premove)
+    premove_button.name = "PremoveToggle"
+    _refresh_premove_button()
     _page_button(settings, 1, "TELA CHEIA", "Alternar janela / tela cheia", _toggle_fullscreen)
     display_label = _label(settings, "", 17, MUTED)
     _body(settings, "As preferências são salvas automaticamente.\nAlt + Enter também alterna a tela.", 16)
@@ -990,6 +996,21 @@ func _toggle_fullscreen():
     _save_preferences()
     _refresh_display_label()
 
+func _toggle_premove():
+    premove_enabled = not premove_enabled
+    _save_preferences()
+    _refresh_premove_button()
+    premove_changed.emit(premove_enabled)
+
+func _refresh_premove_button():
+    if premove_button == null: return
+    var title := "PRÉ-MOVE: " + ("LIGADO" if premove_enabled else "DESLIGADO")
+    var sub := "Marque seu lance na vez do adversário" if premove_enabled else "Clique para ligar"
+    premove_button.set_meta("title", title)
+    var labels := premove_button.get_child(0).get_child(0)
+    (labels.get_child(0) as Label).text = title
+    (labels.get_child(1) as Label).text = sub
+
 func _refresh_display_label():
     display_label.text = "Modo atual: " + ("tela cheia" if get_window().mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN] else "janela")
 
@@ -1001,6 +1022,7 @@ func _load_preferences():
     if avatar_id not in ["warrior","archer","mage","paladin"]: avatar_id = "warrior"
     volume = clampf(float(config.get_value("audio","volume",0.8)),0,1)
     music_volume = clampf(float(config.get_value("audio","music_volume",0.65)),0,1)
+    premove_enabled = bool(config.get_value("game","premove",true))
     fullscreen = true
 
 func _save_preferences():
@@ -1010,6 +1032,7 @@ func _save_preferences():
     config.set_value("audio","volume",volume)
     config.set_value("audio","music_volume",music_volume)
     config.set_value("video","fullscreen",fullscreen)
+    config.set_value("game","premove",premove_enabled)
     config.save(PREFS)
 
 func _build_ranked():
