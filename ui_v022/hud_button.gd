@@ -98,6 +98,14 @@ func _draw():
                 var a := TAU * float(i) / 8.0
                 var d := Vector2(cos(a), sin(a))
                 draw_line(center + d * r * 0.78, center + d * r * 1.12, col, w * 1.3)
+        "bookmark":
+            # Marcador de página: MARCAR PARA REVISAR (sem engine).
+            var top := center + Vector2(-r * 0.6, -r * 1.0)
+            draw_colored_polygon(PackedVector2Array([top, top + Vector2(r * 1.2, 0), top + Vector2(r * 1.2, r * 2.0), center + Vector2(0, r * 0.55), top + Vector2(0, r * 2.0)]), col)
+        "magnifier":
+            # Lupa: ANALISAR PARTIDA (só depois do fim).
+            draw_arc(center + Vector2(-r * 0.2, -r * 0.2), r * 0.62, 0, TAU, 24, col, w * 1.2)
+            draw_line(center + Vector2(r * 0.3, r * 0.3), center + Vector2(r * 0.95, r * 0.95), col, w * 1.8)
         "restart":
             draw_arc(center, r * 0.85, deg_to_rad(-70), deg_to_rad(220), 20, col, w)
             var end := center + Vector2(cos(deg_to_rad(-70)), sin(deg_to_rad(-70))) * r * 0.85

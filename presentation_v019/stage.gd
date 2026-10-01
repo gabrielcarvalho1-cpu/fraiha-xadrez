@@ -34,6 +34,16 @@ var desk_name: Label
 var desk_side: Label
 var desk_gear: Button
 var desk_restart: Button
+var desk_mark: Button          # MARCAR PARA REVISAR (sem engine; só guarda o lance)
+var desk_analyze: Button       # ANALISAR PARTIDA (só depois do fim)
+var mobile_mark: Button
+var mobile_analyze: Button
+var recorder                   # analysis/match_recorder.gd
+var analysis_engine            # analysis/engine.gd
+var analysis_access            # analysis/analysis_access.gd
+var analysis_ui = null
+var training_ui = null
+var analysis_history           # analysis/analysis_history.gd
 var bot_side_name := "BRANCAS"
 var mobile_status: Label
 var mobile_promotion: PanelContainer
@@ -244,6 +254,20 @@ func _build_desk_panel(overlay: CanvasLayer):
     desk_restart.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     desk_restart.pressed.connect(func(): game.restart_match())
     tools.add_child(desk_restart)
+    desk_mark = HudButton.make("bookmark")
+    desk_mark.name = "MarkButton"
+    desk_mark.tooltip_text = "Marcar para revisar (sem engine): guarda este lance para a análise depois da partida"
+    desk_mark.custom_minimum_size = Vector2(54, 54)
+    desk_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    desk_mark.pressed.connect(mark_for_review)
+    tools.add_child(desk_mark)
+    desk_analyze = HudButton.make("magnifier", "ANALISAR PARTIDA")
+    desk_analyze.name = "AnalyzeButton"
+    desk_analyze.tooltip_text = "Analisar partida"
+    desk_analyze.custom_minimum_size = Vector2(240, 54)
+    desk_analyze.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    desk_analyze.pressed.connect(open_analysis)
+    tools.add_child(desk_analyze)
     desk_gear = HudButton.make("gear")
     desk_gear.name = "GearButton"
     desk_gear.tooltip_text = "Opções da partida"
@@ -332,6 +356,7 @@ func _refresh_desk_hud():
     desk_panel.visible = in_match and not mobile
     desk_person.visible = mode in ["local", "online", "bot"]
     desk_restart.visible = mode in ["local", "online", "bot"] and game.game_started
+    _refresh_analysis_buttons()
     if desk_person.visible:
         desk_portrait.texture = hub.avatar_texture()
         hub.attach_league_frame(desk_portrait)
@@ -364,6 +389,7 @@ func _setup_account():
     add_child(account_ui)
     account_ui.setup(account)
     hub.bind_account(account)
+    _setup_analysis()
     account_ui.ready_for_ranked.connect(_open_ranked)
     ranked = preload("res://ranked/ranked_controller.gd").new()
     ranked.name = "RankedController"
@@ -518,6 +544,7 @@ func _casual_found(_msg: Dictionary):
     hub.hide_hub()
     mode = "casual"
     casual.attach()
+    if recorder != null: recorder.begin("casual", casual.human_color, hub.player_name, String(casual.opponent.get("nickname", "Adversário")), String(casual.match_id))
     game.show()
     _clear_selection()
     casual_ui.hud.show()
@@ -539,6 +566,7 @@ func _ranked_found(_msg: Dictionary):
     hub.hide_hub()
     mode = "ranked"
     ranked.attach()
+    if recorder != null: recorder.begin("ranked", ranked.human_color, hub.player_name, String(ranked.opponent.get("nickname", "Adversário")), String(ranked.match_id))
     game.show()
     _clear_selection()
     ranked_ui.hud.show()
@@ -559,13 +587,21 @@ func _build_mobile_controls(overlay: CanvasLayer):
     mobile_actions.vertical = true
     mobile_actions.add_theme_constant_override("separation", 8)
     overlay.add_child(mobile_actions)
-    for caption in ["Reiniciar", "Música", "Tela cheia"]:
+    for caption in ["Reiniciar", "Marcar", "Analisar", "Música", "Tela cheia"]:
         var button = Button.new()
         button.text = caption
         button.custom_minimum_size.y = 44
         button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         button.add_theme_font_size_override("font_size", 15)
         mobile_actions.add_child(button)
+        if caption == "Marcar":
+            mobile_mark = button
+            button.text = "Marcar p/ revisar"
+            button.pressed.connect(mark_for_review)
+        if caption == "Analisar":
+            mobile_analyze = button
+            button.text = "Analisar partida"
+            button.pressed.connect(open_analysis)
         if caption == "Reiniciar":
             mobile_restart = button
             button.pressed.connect(func():
@@ -632,6 +668,7 @@ func _process(_delta):
     # Online has its own server-side rematch; a local reset would desync the room.
     mobile_restart.visible = mode != "online" and not (mode == "ranked" and not ranked.in_match()) and not (mode == "casual" and not casual.in_match())
     mobile_restart.text = "Desistir" if mode in ["ranked", "casual"] else "Reiniciar"
+    _refresh_analysis_buttons()
     if match_chat != null:
         var want_chat = mobile and mode in ["ranked", "casual"] and match_chat.active()
         if match_chat.toggle_button.visible != want_chat:
@@ -727,6 +764,7 @@ func _start_local():
     online.start_local()
     bot_controller.start_local(game)
     mode = "local"
+    if recorder != null: recorder.begin("local", "", hub.player_name, "Partida local")
     game.show()
     _clear_selection()
     _refresh_input()
@@ -749,6 +787,7 @@ func _start_bot(difficulty: String, side: String):
     bot_controller.start(game,difficulty,side)
     bot_level_name = {"easy":"FÁCIL","medium":"MÉDIO","hard":"DIFÍCIL","expert":"EXPERT"}.get(difficulty,"FÁCIL")
     bot_side_name = "BRANCAS" if bot_controller.human_color == "w" else "PRETAS"
+    if recorder != null: recorder.begin("bot", bot_controller.human_color, hub.player_name, "Computador · " + bot_level_name)
     _refresh_bot_caption()
     _clear_selection()
     _refresh_input()
@@ -1099,3 +1138,65 @@ func toggle_fullscreen():
         # Desktop: tela cheia EXCLUSIVA. A não exclusiva do Windows deixa uma linha de 1 px (cor de fundo) tremendo no topo.
         window.mode = Window.MODE_EXCLUSIVE_FULLSCREEN
     game.queue_redraw()
+
+
+# ---------- Análise pós-partida (FAIR PLAY: engine só depois do fim) ----------
+func _setup_analysis():
+    recorder = preload("res://analysis/match_recorder.gd").new()
+    recorder.name = "MatchRecorder"
+    add_child(recorder)
+    recorder.setup(self)
+    analysis_engine = preload("res://analysis/engine.gd").new()
+    analysis_engine.name = "AnalysisEngine"
+    add_child(analysis_engine)
+    analysis_access = preload("res://analysis/analysis_access.gd").new()
+    analysis_access.name = "AnalysisAccess"
+    add_child(analysis_access)
+    analysis_access.setup(account, hub.entitlements)
+    analysis_history = preload("res://analysis/analysis_history.gd").new()
+    analysis_history.name = "AnalysisHistory"
+    add_child(analysis_history)
+
+## MARCAR PARA REVISAR: só grava o índice do lance. Nenhuma engine roda aqui.
+func mark_for_review():
+    if recorder == null or recorder.current() == null: return
+    recorder.mark_for_review()
+    var n: int = recorder.current().marked.size()
+    if is_instance_valid(desk_mark): desk_mark.tooltip_text = "Marcado para revisar (%d)" % n
+    if is_instance_valid(mobile_mark): mobile_mark.text = "Marcado (%d)" % n
+
+func analysis_available() -> bool:
+    if recorder == null: return false
+    var rec = recorder.current()
+    if rec == null: return false
+    return preload("res://analysis/fair_play.gd").can_analyze(rec, self) and rec.moves.size() >= 2
+
+func _refresh_analysis_buttons():
+    var mobile = MobileLayout.active(get_viewport())
+    var playing = mode in ["local", "online", "bot", "ranked", "casual"] and game.game_started and not game.game_over
+    var human_mode = mode in ["ranked", "casual", "online", "local"]
+    var can_mark = playing and recorder != null and recorder.current() != null and not recorder.current().finished
+    var can_analyze = analysis_available()
+    if is_instance_valid(desk_mark): desk_mark.visible = can_mark and not mobile
+    if is_instance_valid(desk_analyze):
+        desk_analyze.visible = can_analyze and not mobile
+        if can_analyze and analysis_access != null:
+            desk_analyze.tooltip_text = "Analisar partida · " + analysis_access.status_line()
+    if is_instance_valid(mobile_mark): mobile_mark.visible = can_mark and mobile
+    if is_instance_valid(mobile_analyze): mobile_analyze.visible = can_analyze and mobile
+    if human_mode and playing and is_instance_valid(desk_analyze): desk_analyze.visible = false   # nunca durante partida humana
+
+func open_analysis():
+    if not analysis_available(): return
+    if analysis_ui == null:
+        analysis_ui = preload("res://analysis/analysis_ui.gd").new(analysis_engine, analysis_access, hub)
+        add_child(analysis_ui)
+        analysis_ui.train_requested.connect(open_training)
+        analysis_ui.analyzer.finished.connect(func(rep): if analysis_history != null: analysis_history.record(recorder.current(), rep, account))
+    analysis_ui.open_for(recorder.current())
+
+func open_training(report: Dictionary):
+    if training_ui == null:
+        training_ui = preload("res://analysis/training_ui.gd").new(analysis_engine)
+        add_child(training_ui)
+    training_ui.open_for(report)

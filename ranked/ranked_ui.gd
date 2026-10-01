@@ -376,6 +376,7 @@ func _result(r: Dictionary):
     var color = {"win": GOLD, "loss": Color("ff9d86"), "draw": Color("dfe6d6")}[outcome]
     _label(title, 30, color, true)
     _label("%s · %s" % [String(r.get("mode_name", "")).to_upper(), String(r.get("reason_text", ""))], 16, Color("efe3c4"), true)
+    _analyze_button()
     if not rated():
         _label("Partida casual · sem alteração de PL", 16, Color("c4cbbd"), true)
         _button(box, "JOGAR NOVAMENTE", func():
@@ -535,3 +536,17 @@ func _layout_panel():
     art_frame.position = panel.position
     art_frame.size = panel.size
     art_frame.scale = panel.scale
+
+
+## ANALISAR PARTIDA na tela de resultado (só aqui, depois do fim — nunca durante a partida).
+func _analyze_button():
+    var stage = get_parent()
+    if stage == null or not stage.has_method("analysis_available") or not stage.analysis_available(): return
+    var access = stage.get("analysis_access")
+    var line := ""
+    if access != null: line = ("♛ " if access.club_unlimited() else "") + access.status_line()
+    var b = _button(box, "ANALISAR PARTIDA", func():
+        close_panel()
+        stage.open_analysis(), true)
+    b.name = "AnalyzeMatch"
+    if not line.is_empty(): _label(line, 13, GOLD if (access != null and access.club_unlimited()) else Color("c4cbbd"), true)
