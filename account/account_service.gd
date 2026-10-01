@@ -300,6 +300,9 @@ func _server_auth():
 
 func _connect():
     socket = WebSocketPeer.new()
+    # Padrão do Godot = 64 KB: a foto de perfil (até 400 KB em base64) não cabia e era descartada.
+    socket.outbound_buffer_size = 1024 * 1024
+    socket.inbound_buffer_size = 1024 * 1024
     socket_open = false
     if socket.connect_to_url(server_url) != OK:
         socket = null
@@ -307,8 +310,9 @@ func _connect():
 
 func _send(msg: Dictionary) -> bool:
     if socket == null or not socket_open: return false
-    socket.send_text(JSON.stringify(msg))
-    return true
+    var err := socket.send_text(JSON.stringify(msg))
+    if err != OK: _log("send falhou (%d) para %s" % [err, String(msg.get("type", ""))])
+    return err == OK
 
 func send_server(msg: Dictionary) -> bool:
     return _send(msg)
