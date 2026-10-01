@@ -3,6 +3,7 @@ extends Node
 ## Funciona para bot, local, casual, ranked e amigo: deriva o lance de last_from/last_to e da
 ## peça resultante (promoção). Em reconexão (posição chega "pronta" com vários lances), o registro
 ## reinicia daquela posição (start_fen). Também guarda MARCAR PARA REVISAR.
+signal finished(record)   # partida registrada terminou (resultado já do ponto de vista do humano)
 const Record := preload("res://analysis/match_record.gd")
 const Notation := preload("res://analysis/notation.gd")
 const Rules := preload("res://chess/rules.gd")
@@ -35,7 +36,9 @@ func mark_for_review():
     if record != null and not record.finished: record.mark_current()
 
 func finish(result: String, reason := ""):
-    if record != null and not record.finished: record.finish(result, reason)
+    if record != null and not record.finished:
+        record.finish(result, reason)
+        finished.emit(record)
 
 func current():
     return record
@@ -96,3 +99,4 @@ func _process(_d):
             result = "win" if winner == human else "loss"
         if human == "": result = "draw" if "EMPATE" in status else ("w" if ("BRANCAS" in status) else "b")
         record.finish(result, status)
+        finished.emit(record)

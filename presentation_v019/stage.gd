@@ -39,6 +39,7 @@ var desk_analyze: Button       # ANALISAR PARTIDA (só depois do fim)
 var mobile_mark: Button
 var mobile_analyze: Button
 var recorder                   # analysis/match_recorder.gd
+var result_overlay             # presentation_v019/game_result_overlay.gd (VITÓRIA / DERROTA)
 var analysis_engine            # analysis/engine.gd
 var analysis_access            # analysis/analysis_access.gd
 var analysis_ui = null
@@ -373,12 +374,30 @@ func _layout_desk_hud():
     home_button.size = Vector2(196, 54)
     if match_plaque.visible:
         match_plaque.position = Vector2((size.x - match_plaque.size.x) / 2.0, 16)
+    # ANALISAR PARTIDA com texto só quando cabe entre a placa central e a borda direita;
+    # senão vira ícone (com tooltip). O cartão nunca sai da tela.
+    if is_instance_valid(desk_analyze) and desk_analyze.visible:
+        _set_analyze_compact(false)
+        desk_panel.reset_size()
+        var limit_left: float = (size.x + match_plaque.size.x) / 2.0 + 16.0 if match_plaque.visible else home_button.position.x + home_button.size.x + 16.0
+        if size.x - 24.0 - desk_panel.get_combined_minimum_size().x < limit_left:
+            _set_analyze_compact(true)
     desk_panel.reset_size()
-    desk_panel.position = Vector2(size.x - 24 - desk_panel.size.x, 16)
+    desk_panel.size = desk_panel.get_combined_minimum_size()
+    desk_panel.position = Vector2(maxf(8.0, size.x - 24 - desk_panel.size.x), 16)
     # O painel de opções (desenhado pelo tabuleiro) abre logo abaixo deste cartão.
     if desk_panel.visible and game.scale.x > 0.0:
         var anchor = Vector2(size.x - 24, 16 + desk_panel.size.y + 10)
         game.place_settings_panel((anchor - game.position) / game.scale.x)
+
+func _set_analyze_compact(compact: bool):
+    if not is_instance_valid(desk_analyze): return
+    var want_text := "" if compact else "ANALISAR PARTIDA"
+    if desk_analyze.text == want_text: return
+    desk_analyze.text = want_text
+    desk_analyze.icon_only = compact
+    desk_analyze.custom_minimum_size = Vector2(54 if compact else 240, 54)
+    desk_analyze._margins()
 
 func _setup_account():
     account = preload("res://account/account_service.gd").new()
@@ -1146,6 +1165,9 @@ func _setup_analysis():
     recorder.name = "MatchRecorder"
     add_child(recorder)
     recorder.setup(self)
+    recorder.finished.connect(_on_match_finished)
+    result_overlay = preload("res://presentation_v019/game_result_overlay.gd").new()
+    add_child(result_overlay)
     analysis_engine = preload("res://analysis/engine.gd").new()
     analysis_engine.name = "AnalysisEngine"
     add_child(analysis_engine)
@@ -1185,6 +1207,16 @@ func _refresh_analysis_buttons():
     if is_instance_valid(mobile_mark): mobile_mark.visible = can_mark and mobile
     if is_instance_valid(mobile_analyze): mobile_analyze.visible = can_analyze and mobile
     if human_mode and playing and is_instance_valid(desk_analyze): desk_analyze.visible = false   # nunca durante partida humana
+    if not mobile: _layout_desk_hud.call_deferred()   # a largura do cartão muda quando ANALISAR aparece
+
+## Fim de partida: usa o RESULTADO REAL do registro (vencedor comparado com a cor do jogador —
+## nunca só "brancas"/"pretas"). Partida local (dois humanos) e empates não abrem a tela.
+func _on_match_finished(record):
+    if record == null or result_overlay == null: return
+    if String(record.human_color).is_empty(): return
+    var res := String(record.result)
+    if res == "win": result_overlay.show_result("victory")
+    elif res == "loss": result_overlay.show_result("defeat")
 
 func open_analysis():
     if not analysis_available(): return
