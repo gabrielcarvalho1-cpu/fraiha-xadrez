@@ -12,6 +12,8 @@ signal nickname_failed(code: String, message: String, next_change_at: String)
 signal avatar_saved(avatar_url: String)
 signal avatar_failed(code: String, message: String)   # upload/remoção recusados pelo servidor
 signal entitlements_changed(data: Dictionary)
+signal bot_progress_changed(data: Dictionary)   # {available, defeated:[ids], new_bot}
+signal bot_progress_failed(code: String, message: String, bot_id: String)
 
 const SESSION_FILE = "user://account_session.cfg"
 const GUEST_FILE = "user://guest_session.cfg"
@@ -369,6 +371,10 @@ func upload_avatar(bytes: PackedByteArray) -> bool:
     if bytes.is_empty() or bytes.size() > 400 * 1024: return false
     return _send({"type": "acct_avatar_upload", "data": Marshalls.raw_to_base64(bytes)})
 
+## Vitória contra um bot da escada: o servidor refaz a partida e decide (ver online_v021/bots/service.js).
+func claim_bot_victory(bot_id: String, human_color: String, moves: PackedStringArray) -> bool:
+    return _send({"type": "bot_victory", "bot_id": bot_id, "human_color": human_color, "moves": Array(moves)})
+
 func clear_avatar() -> bool:
     return _send({"type": "acct_avatar_clear"})
 
@@ -427,6 +433,7 @@ func _receive(msg: Dictionary):
         needs_nickname = bool(msg.get("needs_nickname", false))
         persistent_backend = bool(msg.get("persistent", false))
         if msg.get("entitlements") is Dictionary: entitlements_changed.emit(msg.entitlements)
+        if msg.get("bots") is Dictionary: bot_progress_changed.emit((msg.bots as Dictionary).merged({"new_bot": null}))
         if needs_nickname and not pending_nickname.is_empty():
             var nick = pending_nickname
             pending_nickname = ""
@@ -455,6 +462,10 @@ func _receive(msg: Dictionary):
         avatar_saved.emit(String(url) if url != null else "")
     elif type == "acct_entitlements":
         entitlements_changed.emit(msg.get("entitlements", {}) if msg.get("entitlements") is Dictionary else {})
+    elif type == "bot_progress":
+        bot_progress_changed.emit(msg)
+    elif type == "bot_error":
+        bot_progress_failed.emit(String(msg.get("code", "")), String(msg.get("message", "")), String(msg.get("bot_id", "")))
     elif type == "acct_logged_out":
         pass
     elif type == "guest_state":

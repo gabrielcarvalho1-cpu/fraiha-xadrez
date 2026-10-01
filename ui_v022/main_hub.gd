@@ -76,6 +76,11 @@ var premove_button: TextureButton
 var premium = null   # FRAIHA PREMIUM (Monetização V1, simulação)
 var monetization_state = null   # flags dev_mock_* (simulação)
 var entitlements = null         # direitos (servidor + simulação) — única leitura para a interface
+var avatar_captions := {}
+const AVATAR_CAPTIONS := {"warrior":"GUERREIRO","archer":"ARQUEIRA","mage":"MAGO","paladin":"PALADINO"}
+var bot_progress = null         # bot/bot_progress.gd — escada de bots e avatares desbloqueados
+var bot_ladder_ui = null        # bot/bot_ladder_ui.gd (página larga do PC)
+const BotLadder = preload("res://bot/bot_ladder.gd")
 var club_entry = null           # fita CLUB FRAIHA na Home (desktop)
 var account = null              # account_service (ligado pelo stage em bind_account)
 var avatar_store                # profile/avatar_store.gd (cache local + download)
@@ -112,6 +117,11 @@ func _ready():
     monetization_state = load("res://monetization/monetization_state.gd").new()
     entitlements = load("res://monetization/entitlements.gd").new(monetization_state)
     entitlements.changed.connect(refresh_club)
+    bot_progress = load("res://bot/bot_progress.gd").new()
+    bot_progress.name = "BotProgress"
+    add_child(bot_progress)
+    bot_progress.setup(null)
+    bot_progress.changed.connect(func(): _refresh_avatars())
     _build()
     get_viewport().size_changed.connect(_layout)
     _layout()
@@ -536,13 +546,9 @@ func _page_button(parent: Node, row: int, title: String, subtitle: String, callb
     return _button(parent, row, title, subtitle, Vector2.ZERO, callback, Vector2(394,68))
 
 func _build_pages():
-    var bot = _new_page("bot", "ESCOLHA A DIFICULDADE", "JOGAR CONTRA O COMPUTADOR")
-    difficulty_buttons.easy = _page_button(bot, 1, "FÁCIL", "Para começar e praticar", func(): _choose_difficulty("easy"))
-    difficulty_buttons.medium = _page_button(bot, 1, "MÉDIO", "Planeje suas próximas jogadas", func(): _choose_difficulty("medium"))
-    difficulty_buttons.hard = _page_button(bot, 1, "DIFÍCIL", "Um desafio mais profundo", func(): _choose_difficulty("hard"))
-    difficulty_buttons.expert = _page_button(bot, 1, "EXPERT", "Seu desafio mais exigente", func(): _choose_difficulty("expert"))
+    _build_bot_ladder_page()
     var sides = _new_page("bot_side", "ESCOLHA SEU LADO", "JOGAR CONTRA O COMPUTADOR")
-    difficulty_label = _label(sides, "Nível: Fácil", 18, GOLD)
+    difficulty_label = _label(sides, "Adversário: BOT MADEIRA", 18, GOLD)
     side_buttons.w = _page_button(sides, 0, "BRANCAS", "Você faz a primeira jogada", func(): play_bot_requested.emit(selected_difficulty, "w"))
     side_buttons.b = _page_button(sides, 0, "PRETAS", "O bot começa a partida", func(): play_bot_requested.emit(selected_difficulty, "b"))
     side_buttons.random = _page_button(sides, 2, "ALEATÓRIO", "Deixe a escolha para o sorteio", func(): play_bot_requested.emit(selected_difficulty, "random"))
@@ -568,8 +574,9 @@ func _build_pages():
         portrait_button.pressed.connect(func(): choose_avatar(id))
         option.add_child(portrait_button)
         attach_league_frame(portrait_button)
-        var caption = _label(option,{"warrior":"GUERREIRO","archer":"ARQUEIRA","mage":"MAGO","paladin":"PALADINO"}[id],18,GOLD)
+        var caption = _label(option,AVATAR_CAPTIONS[id],18,GOLD)
         caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        avatar_captions[id] = caption
         avatar_choices[id] = portrait_button
     var hint = _label(profile_panel,"Escolha um avatar ou use a sua foto. A moldura representa a liga do perfil.",15)
     hint.position = Vector2(45,452)
@@ -669,10 +676,43 @@ func _build_pages():
     _refresh_display_label()
 
 func _choose_difficulty(id: String):
+    if BotLadder.is_bot_id(id):
+        if bot_progress != null and not bot_progress.is_unlocked(id): return
+        selected_difficulty = id
+        difficulty_label.text = "Adversário: " + String(BotLadder.bot(id).get("name", ""))
+        show_page("bot_side")
+        return
     if id not in ["easy", "medium", "hard", "expert"]: return
     selected_difficulty = id
     difficulty_label.text = "Nível: " + {"easy":"Fácil","medium":"Médio","hard":"Difícil","expert":"Expert"}[id]
     show_page("bot_side")
+
+## PC: escada de bots pelas ligas em página larga (2 fileiras de cartões).
+func _build_bot_ladder_page():
+    var panel = _wide_page("bot", "JOGAR CONTRA O COMPUTADOR  ·  DESAFIO DAS LIGAS")
+    var sub = _label(panel, "Comece pelo BOT MADEIRA. Cada vitória libera o próximo adversário e uma recompensa.", 16, MUTED)
+    sub.position = Vector2(42, 74)
+    sub.size = Vector2(1370, 26)
+    var scroll = ScrollContainer.new()
+    scroll.name = "BotLadderScroll"
+    scroll.position = Vector2(30, 104)
+    scroll.size = Vector2(1392, 436)
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    panel.add_child(scroll)
+    bot_ladder_ui = load("res://bot/bot_ladder_ui.gd").new()
+    bot_ladder_ui.name = "BotLadder"
+    scroll.add_child(bot_ladder_ui)
+    bot_ladder_ui.setup(bot_progress, 6, Vector2(220, 196), false)
+    bot_ladder_ui.challenge.connect(_choose_difficulty)
+    storage_note = _label(panel, "", 13, MUTED)
+    storage_note.position = Vector2(470, 566)
+    storage_note.size = Vector2(940, 22)
+    bot_progress.changed.connect(_refresh_storage_note)
+    _refresh_storage_note()
+
+var storage_note: Label
+func _refresh_storage_note():
+    if is_instance_valid(storage_note) and bot_progress != null: storage_note.text = bot_progress.storage_label()
 
 func _wide_page(id: String, title: String) -> Control:
     var panel = Control.new()
@@ -711,6 +751,9 @@ func avatar_texture(id: String = "") -> Texture2D:
 
 func choose_avatar(id: String):
     if id not in ["warrior","archer","mage","paladin"]: return
+    if bot_progress != null and not bot_progress.avatar_unlocked(id) and id != avatar_id:
+        _avatar_message("Bloqueado · " + bot_progress.unlock_hint(id) + " para liberar este avatar.", true)
+        return
     avatar_id = id
     _refresh_avatars()
     _save_preferences()
@@ -722,12 +765,19 @@ func _refresh_avatars():
     _refresh_ref_account()
     for id in avatar_choices:
         attach_league_frame(avatar_choices[id])
-        avatar_choices[id].self_modulate = Color.WHITE if id == avatar_id else Color(0.60,0.65,0.63)
+        var unlocked: bool = bot_progress == null or bot_progress.avatar_unlocked(id)
+        avatar_choices[id].self_modulate = Color.WHITE if id == avatar_id else (Color(0.60,0.65,0.63) if unlocked else Color(0.22,0.24,0.24))
+        avatar_choices[id].tooltip_text = "" if unlocked else "Bloqueado · " + bot_progress.unlock_hint(id)
+        var cap = avatar_captions.get(id)
+        if is_instance_valid(cap):
+            cap.text = AVATAR_CAPTIONS[id] if unlocked else "BLOQUEADO"
+            cap.add_theme_font_size_override("font_size", 18 if unlocked else 15)
+            cap.add_theme_color_override("font_color", GOLD if unlocked else MUTED)
     if get_parent().has_method("refresh_player_card"): get_parent().refresh_player_card()
 
 func _build_about_page():
     var panel = _wide_page("about","CONHEÇA O FRAIHA  ·  MUITO MAIS QUE UM XADREZ")
-    var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. Alt+Enter alterna tela cheia. Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Bot: quatro dificuldades, escolha entre brancas, pretas ou aleatório.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha Guerreiro, Arqueira ou Mago no Perfil.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
+    var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. Alt+Enter alterna tela cheia. Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
     var navigation = _stack(panel,Vector2(38,108),Vector2(390,418),Vector4.ZERO,4)
     var details = _stack(panel,Vector2(482,117),Vector2(870,392),Vector4.ZERO,22)
     about_title = _label(details,"",27,GOLD)
@@ -1462,6 +1512,7 @@ func _sync_menu_cover():
 # ---------- Conta ligada ao Home: nome público e foto (0004) ----------
 func bind_account(acc):
     account = acc
+    if bot_progress != null: bot_progress.setup(acc)
     if nickname_editor != null and nickname_editor.account == null: nickname_editor.setup(acc, 18)
     acc.changed.connect(_on_account_changed)
     acc.avatar_saved.connect(func(url):
