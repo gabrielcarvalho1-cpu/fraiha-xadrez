@@ -10,6 +10,7 @@ signal nickname_checked(nickname: String, available: bool, error: String)
 signal nickname_changed(nickname: String, next_change_at: String)
 signal nickname_failed(code: String, message: String, next_change_at: String)
 signal avatar_saved(avatar_url: String)
+signal avatar_failed(code: String, message: String)   # upload/remoção recusados pelo servidor
 signal entitlements_changed(data: Dictionary)
 
 const SESSION_FILE = "user://account_session.cfg"
@@ -438,6 +439,7 @@ func _receive(msg: Dictionary):
         if code.begins_with("nickname"):
             var next_at = msg.get("next_change_at")
             nickname_failed.emit(code, String(msg.get("message", "")), String(next_at) if next_at != null else "")
+        if code.begins_with("avatar") or code == "storage_error": avatar_failed.emit(code, String(msg.get("message", "")))
         if code == "auth_required": server_message.emit(msg)
     elif type == "acct_nickname_check":
         nickname_checked.emit(String(msg.get("nickname", "")), bool(msg.get("available", false)), String(msg.get("error", "")))

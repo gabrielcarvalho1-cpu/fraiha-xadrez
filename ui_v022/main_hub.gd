@@ -1464,9 +1464,17 @@ func bind_account(acc):
     account = acc
     if nickname_editor != null and nickname_editor.account == null: nickname_editor.setup(acc, 18)
     acc.changed.connect(_on_account_changed)
-    acc.avatar_saved.connect(func(_url): _refresh_avatars())
+    acc.avatar_saved.connect(func(url):
+        _server_avatar_url = String(url)
+        _avatar_message("Foto enviada para a sua conta." if not String(url).is_empty() else "Foto removida da conta.", false)
+        _refresh_avatars())
+    acc.avatar_failed.connect(func(_code, msg):
+        _avatar_message("A foto ficou salva neste aparelho, mas a conta não a recebeu: " + msg, true))
     acc.entitlements_changed.connect(func(data): if entitlements != null: entitlements.apply_server(data))
     _on_account_changed()
+
+var _server_avatar_url := ""   # última URL informada pelo servidor nesta sessão (por conta)
+var _avatar_resent := {}       # contas para as quais a foto local já foi reenviada nesta sessão
 
 func _on_account_changed():
     _refresh_name_boxes()
@@ -1474,8 +1482,14 @@ func _on_account_changed():
     if account != null and account.has_profile() and avatar_store != null:
         var url: String = account.avatar_url()
         if not url.is_empty() and not avatar_store.has_local(avatar_key()): avatar_store.fetch(avatar_key(), url)
-        elif url.is_empty() and avatar_store.has_local(avatar_key()) and avatar_key() != "local":
-            avatar_store.clear_local(avatar_key())   # removida em outro aparelho
+        elif url.is_empty() and not _server_avatar_url.is_empty() and avatar_store.has_local(avatar_key()) and avatar_key() != "local":
+            avatar_store.clear_local(avatar_key())   # a conta TINHA foto e ela foi removida em outro aparelho
+        elif url.is_empty() and avatar_store.has_local(avatar_key()) and avatar_key() != "local" and not _avatar_resent.has(avatar_key()) and account.server_ready:
+            # A conta não tem foto mas este aparelho tem: reenvia uma vez (upload anterior pode ter falhado).
+            _avatar_resent[avatar_key()] = true
+            var local_bytes := FileAccess.get_file_as_bytes(avatar_store.local_path(avatar_key()))
+            if not local_bytes.is_empty(): account.upload_avatar(local_bytes)
+        _server_avatar_url = url
     _refresh_avatars()
 
 func _refresh_name_boxes():
