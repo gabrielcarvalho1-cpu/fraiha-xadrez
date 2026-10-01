@@ -73,6 +73,7 @@ var volume := 0.8
 var music_volume := 0.65
 var premove_enabled := true
 var premove_button: TextureButton
+var premium = null   # FRAIHA PREMIUM (Monetização V1, simulação)
 var fullscreen := true
 var volume_label: Label
 var music_volume_label: Label
@@ -560,6 +561,10 @@ func _build_pages():
         _body(profile,ranked.summary(mode),16)
     _refresh_avatars()
     var settings = _new_page("settings", "CONFIGURAÇÕES", "")
+    # FRAIHA PREMIUM (Fundador + Club) — Monetização V1 em modo de teste.
+    var premium_entry = preload("res://monetization/premium_entry.gd").new()
+    premium_entry.pressed.connect(func(): open_premium())
+    settings.add_child(premium_entry)
     music_volume_label = _label(settings, "", 19, GOLD)
     var music_slider = HSlider.new()
     music_slider.name = "MusicVolume"
@@ -995,6 +1000,12 @@ func _toggle_fullscreen():
     fullscreen = get_window().mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]
     _save_preferences()
     _refresh_display_label()
+
+func open_premium(page_id := "hub"):
+    if premium == null:
+        premium = load("res://monetization/premium_hub.gd").new()
+        add_child(premium)
+    premium.open(page_id)
 
 func _toggle_premove():
     premove_enabled = not premove_enabled
