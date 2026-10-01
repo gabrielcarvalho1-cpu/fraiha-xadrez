@@ -80,6 +80,36 @@ class MemoryStore {
     return { profile: p };
   }
   async getRankedStats(userId) { return fullStats(this.stats.get(userId) || {}); }
+  // ---------- Direitos (0005): em memória só para desenvolvimento ----------
+  async getEntitlements(userId) {
+    this.entitlements = this.entitlements || new Map();
+    const e = this.entitlements.get(userId) || {};
+    return { is_founder: !!e.is_founder, club_active: !!e.club_active && (!e.club_expires_at || new Date(e.club_expires_at) > new Date()), club_expires_at: e.club_expires_at || null };
+  }
+  async setEntitlements(userId, patch) {
+    this.entitlements = this.entitlements || new Map();
+    this.entitlements.set(userId, { ...(this.entitlements.get(userId) || {}), ...patch });
+    return this.getEntitlements(userId);
+  }
+  // ---------- Cota de análise (0005): N por dia UTC; Club = ilimitado ----------
+  async analysisUsage(userId, day) {
+    this.analysis = this.analysis || new Map();
+    const k = userId + '|' + day;
+    return this.analysis.get(k) || 0;
+  }
+  async analysisConsume(userId, day, limit) {
+    this.analysis = this.analysis || new Map();
+    const k = userId + '|' + day;
+    const used = this.analysis.get(k) || 0;
+    if (used >= limit) return { ok: false, used };
+    this.analysis.set(k, used + 1);
+    return { ok: true, used: used + 1 };
+  }
+  async saveAnalysis(userId, sum) {
+    this.analyses = this.analyses || [];
+    this.analyses.push({ user_id: userId, ...sum });
+    return true;
+  }
   async recordRankedMatch(r) {
     const w = this.stats.get(r.white_user_id)[r.mode], b = this.stats.get(r.black_user_id)[r.mode];
     if (w.pl !== r.white_pl_before || w.league !== r.white_league_before || b.pl !== r.black_pl_before || b.league !== r.black_league_before) throw new Error('estado Ranked mudou durante a partida');
@@ -211,6 +241,46 @@ class SupabaseStore {
   }
   async recordRankedMatch(r) {
     return this.req('/rpc/fraiha_record_ranked_match', { method: 'POST', body: JSON.stringify({ p: r }) });
+  }
+  // ---------- Direitos (0005): tabela entitlements, escrita só pelo webhook/backend ----------
+  async getEntitlements(userId) {
+    try {
+      const rows = await this.req('/entitlements?user_id=eq.' + encodeURIComponent(userId) + '&select=is_founder,club_active,club_expires_at');
+      const e = rows[0] || {};
+      const active = !!e.club_active && (!e.club_expires_at || new Date(e.club_expires_at) > new Date());
+      return { is_founder: !!e.is_founder, club_active: active, club_expires_at: e.club_expires_at || null };
+    } catch (e) {
+      if (/42P01|PGRST205|does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message))) return { is_founder: false, club_active: false, club_expires_at: null, not_configured: true };
+      throw e;
+    }
+  }
+  async setEntitlements() { throw new Error('entitlements só mudam pelo webhook de pagamento'); }
+  async saveAnalysis(userId, sum) {
+    const row = { user_id: userId, match_id: UUID_RE.test(String(sum.match_id || '')) ? sum.match_id : null, mode: String(sum.mode || ''),
+      played_at: sum.played_at ? new Date(Number(sum.played_at) * 1000).toISOString() : null, color: sum.color || null, result: sum.result || null,
+      accuracy: Number(sum.accuracy) || 0, counts: sum.counts || {}, critical_ply: Number(sum.critical_ply), best_ply: Number(sum.best_ply),
+      moves: Array.isArray(sum.moves) ? sum.moves.slice(0, 400) : [], engine: String(sum.engine || '').slice(0, 60), depth: Number(sum.depth) || 0 };
+    await this.req('/analysis_history', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+    return true;
+  }
+  // ---------- Cota de análise (0005): fraiha_analysis_consume decide no banco (relógio do servidor) ----------
+  async analysisUsage(userId, day) {
+    try {
+      const rows = await this.req('/analysis_usage?user_id=eq.' + encodeURIComponent(userId) + '&day=eq.' + day + '&select=used');
+      return rows[0] ? Number(rows[0].used) : 0;
+    } catch (e) {
+      if (/42P01|PGRST205|does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message))) return 0;
+      throw e;
+    }
+  }
+  async analysisConsume(userId, day, limit) {
+    try {
+      const used = await this.req('/rpc/fraiha_analysis_consume', { method: 'POST', body: JSON.stringify({ p_user: userId, p_day: day, p_limit: limit }) });
+      return { ok: Number(used) >= 0, used: Math.abs(Number(used)) };
+    } catch (e) {
+      if (/42P01|PGRST205|does not exist|Could not find the (table|function)/.test(String(e.code) + ' ' + String(e.message))) return { ok: false, used: 0, not_configured: true };
+      throw e;
+    }
   }
   // ---------- Amigos (0002_fraiha_social). Todos os ids já validados como UUID pelo serviço. ----------
   async searchProfiles(query, limit = 20) {

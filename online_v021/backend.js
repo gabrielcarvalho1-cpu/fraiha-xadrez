@@ -10,8 +10,13 @@ const { Social } = require('./social/service');
 const { DirectMessages } = require('./social/dm');
 const { Invites } = require('./social/invites');
 const { Presence } = require('./social/presence');
+const { Payments } = require('./payments/service');
 
 const GUEST_TTL_MS = 24 * 3600e3;
+// Análise pós-partida: contas sem Club têm N análises por dia (dia UTC, relógio do servidor).
+const ANALYSIS_FREE_PER_DAY = Number(process.env.FRAIHA_ANALYSIS_FREE_PER_DAY || 3);
+const utcDay = () => new Date().toISOString().slice(0, 10);
+const nextUtcMidnight = () => { const d = new Date(); d.setUTCHours(24, 0, 0, 0); return d.toISOString(); };
 
 function createBackend(env = process.env) {
   const url = env.SUPABASE_URL || '';
@@ -38,6 +43,7 @@ class Backend {
     this.dm = new DirectMessages({ send: (ws, o) => this.send(ws, o), backend: this });
     this.invites = new Invites({ send: (ws, o) => this.send(ws, o), backend: this });
     this.presence = new Presence({ send: (ws, o) => this.send(ws, o), backend: this });
+    this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
   attachRanked(ranked) { this.ranked = ranked; ranked.backend = this; }
@@ -87,16 +93,26 @@ class Backend {
     if (!set || !set.delete(ws)) return;
     if (!set.size) { this.online.delete(uid); this.presenceChanged(uid); }
   }
+  // Resumo da cota de análise (servidor é a autoridade): usado/limite/renovação, ou ilimitado (Club).
+  async analysisSummary(uid, ent) {
+    if (ent && ent.club_active) return { unlimited: true, used: 0, limit: 0, resets_at: null };
+    const used = await this.store.analysisUsage(uid, utcDay());
+    return { unlimited: false, used, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight() };
+  }
   async state(ws) {
     const u = ws.user;
     const profile = await this.store.getProfile(u.id);
     const ranked = profile ? await this.store.getRankedStats(u.id) : null;
+    const entitlements = profile ? await this.store.getEntitlements(u.id) : null;
+    const analysis = profile ? await this.analysisSummary(u.id, entitlements) : null;
     ws.profile = profile;
     if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: profile.avatar_id, guest: false }); }
     // nickname_next_change_at: calculado pelo SERVIDOR (cooldown de 30 dias); o cliente só exibe.
     const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile) } : null;
     this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,
-      needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind });
+      needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind,
+      entitlements: entitlements ? { is_founder: !!entitlements.is_founder, club_active: !!entitlements.club_active, club_expires_at: entitlements.club_expires_at || null } : null,
+      analysis });
   }
   // Convidado: identidade só em memória, recuperável pelo token (reconexão ao Casual).
   guestAuth(ws, m) {
@@ -170,6 +186,7 @@ class Backend {
           return this.send(ws, { type: 'social_error', message: 'Erro temporário no servidor. Tente novamente.', code: 'server_error' });
         }
       }
+      if (a.startsWith('payment_')) return this.payments.handle(ws, m);
       if (a === 'acct_auth') {
         const user = await this.auth.verify(m.access_token);
         if (!user) { ws.user = null; ws.profile = null; return this.fail(ws, 'Sessão inválida ou expirada. Entre novamente.', { code: 'invalid_token' }); }
@@ -193,6 +210,34 @@ class Backend {
         return this.presence.snapshot(ws);
       }
       if (a === 'acct_refresh') return this.state(ws);
+      // ---------- Análise pós-partida: pedir uma análise consome 1 do dia (Club: ilimitado) ----------
+      if (a === 'analysis_request') {
+        if (!ws.profile) return this.send(ws, { type: 'analysis_denied', code: 'auth_required', message: 'Entre na sua conta para analisar partidas.' });
+        const ent = await this.store.getEntitlements(ws.user.id);
+        if (ent.club_active) return this.send(ws, { type: 'analysis_granted', unlimited: true, used: 0, limit: 0, resets_at: null });
+        const r = await this.store.analysisConsume(ws.user.id, utcDay(), ANALYSIS_FREE_PER_DAY);
+        if (r.not_configured) return this.send(ws, { type: 'analysis_denied', code: 'not_configured', message: 'Análise ainda não configurada no servidor (migração 0005 pendente).' });
+        if (!r.ok) return this.send(ws, { type: 'analysis_denied', code: 'quota', used: r.used, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight(), message: 'Você usou suas análises gratuitas de hoje.' });
+        return this.send(ws, { type: 'analysis_granted', unlimited: false, used: r.used, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight() });
+      }
+      if (a === 'analysis_record') {
+        if (!ws.profile) return;
+        const sum = m.summary && typeof m.summary === 'object' ? m.summary : null;
+        if (!sum) return;
+        try { await this.store.saveAnalysis(ws.user.id, sum); } catch (e) { /* histórico é opcional (0005) */ }
+        return;
+      }
+      if (a === 'analysis_status') {
+        if (!ws.profile) return this.send(ws, { type: 'analysis_state', unlimited: false, used: 0, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight(), guest: true });
+        const ent = await this.store.getEntitlements(ws.user.id);
+        return this.send(ws, { type: 'analysis_state', ...(await this.analysisSummary(ws.user.id, ent)) });
+      }
+      // ---------- DEV: simular direitos no servidor em memória (nunca no Supabase) ----------
+      if (a === 'dev_set_entitlements') {
+        if (this.kind !== 'dev' || !ws.profile) return this.fail(ws, 'Só no servidor de desenvolvimento.', { code: 'dev_only' });
+        await this.store.setEntitlements(ws.user.id, { is_founder: !!m.is_founder, club_active: !!m.club_active, club_expires_at: m.club_expires_at || null });
+        return this.state(ws);
+      }
       // ---------- Nome público (0004) ----------
       if (a === 'acct_check_nickname') {
         const v = validateNickname(m.nickname);
