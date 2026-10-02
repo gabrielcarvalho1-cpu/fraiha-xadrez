@@ -735,9 +735,9 @@ func _touch_button_style(button: Button):
 
 func _refresh_bot_caption():
     if MobileLayout.active(get_viewport()):
-        bot_info.text = "BOT · %s" % bot_level_name if mode == "bot" else "PARTIDA LOCAL"
+        bot_info.text = (bot_level_name if bot_level_name.begins_with("BOT ") else "BOT · %s" % bot_level_name) if mode == "bot" else "PARTIDA LOCAL"
     else:
-        bot_info.text = "BOT %s  ·  VOCÊ: %s" % [bot_level_name, bot_side_name]
+        bot_info.text = "%s  ·  VOCÊ: %s" % [bot_level_name if bot_level_name.begins_with("BOT ") else "BOT " + bot_level_name, bot_side_name]
 
 func _clear_selection():
     game.cancel_drag()
