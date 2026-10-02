@@ -37,12 +37,11 @@ func run():
         Input.parse_input_event(alt)
         await frames(5)
         check(win.mode == Window.MODE_EXCLUSIVE_FULLSCREEN, "Alt+Enter: janela -> exclusiva")
-    # R29: não existe mais opção/botão de TELA CHEIA (o jogo sempre usa a área máxima).
-    var found := []
-    for n in stage.find_children("*", "", true, false):
-        if n is Button and String(n.text).to_lower().contains("tela cheia"): found.append(n.get_path())
-        if String(n.name) == "FullscreenButton": found.append(n.get_path())
-    check(found.is_empty(), "nenhum botão TELA CHEIA / FullscreenButton na árvore %s" % [found])
+    # R29.2: UM botão de tela cheia na Home, ao lado do som (entra/sai); nada nas Configurações.
+    var fs_btn = stage.hub.fullscreen_button
+    check(fs_btn != null and fs_btn.get_parent() == stage.hub.canvas, "Home: botão de tela cheia existe")
+    check(fs_btn != null and absf(fs_btn.position.y - stage.hub.sound_button.position.y) < 1.0 and fs_btn.position.x > stage.hub.sound_button.position.x, "botão de tela cheia ao lado do som")
+    check(stage.screen_mode != null and stage.screen_mode.supported() and fs_btn.visible, "desktop: botão visível")
     check(not stage.hub.has_method("_toggle_fullscreen") and stage.hub.get("fullscreen") == null, "Configurações sem opção de tela cheia (sem estado no hub)")
     stage.hub.show_page("settings")
     await frames(3)
@@ -54,11 +53,30 @@ func run():
     var cfg := ConfigFile.new()
     cfg.load(stage.hub.PREFS)
     check(not cfg.has_section_key("video", "fullscreen"), "nenhuma preferência persistente de tela cheia")
-    check(stage.has_method("_web_fullscreen_once"), "Web: pedido de tela cheia no 1º gesto (_web_fullscreen_once)")
-    var js: String = stage.WEB_FULLSCREEN_JS
-    check(js.contains("documentElement") and js.contains("requestFullscreen"), "Web: tela cheia da página inteira (documentElement)")
-    check(js.contains("keyboard.lock") or js.contains("k.lock(['Escape'])"), "Web: Keyboard Lock do Esc em tela cheia (Esc curto volta a página sem derrubar a tela cheia)")
-    check(js.contains("lost >= 3") and not js.contains("exitFullscreen"), "Web: re-tenta no próximo gesto se cair; nunca sai da tela cheia por conta própria")
+    var FC = preload("res://ui_v022/fullscreen_control.gd")
+    check(FC.JS_ENTER.contains("documentElement") and FC.JS_ENTER.contains("requestFullscreen"), "Web: tela cheia da página inteira (documentElement)")
+    check(FC.JS_EXIT.contains("exitFullscreen"), "Web: botão também SAI da tela cheia (exitFullscreen)")
+    var all_js: String = FC.JS_SETUP + FC.JS_ENTER + FC.JS_EXIT + FC.JS_AUTO
+    check(not all_js.contains("keyboard.lock") and not all_js.contains("lock(['Escape'])"), "Web: Esc NÃO é travado (sai da tela cheia naturalmente)")
+    check(FC.JS_AUTO.contains("userLeft") and FC.JS_AUTO.contains("autoDone"), "Web: pedido automático só 1x e nunca depois que o jogador sai")
+    check(FC.SITE_URL == "https://fraihaxadrez.com/", "Web: SAIR volta para fraihaxadrez.com")
+    # Desktop: o botão alterna nos dois sentidos
+    if DisplayServer.get_name() != "headless":
+        var w3 = stage.get_window()
+        w3.mode = Window.MODE_WINDOWED
+        await frames(5)
+        fs_btn.pressed.emit()
+        await frames(5)
+        check(stage.screen_mode.is_on(), "desktop: botão entra em tela cheia")
+        await frames(15)
+        check(fs_btn.glyph == "exit_fullscreen", "desktop: ícone vira SAIR da tela cheia")
+        fs_btn.pressed.emit()
+        await frames(5)
+        check(not stage.screen_mode.is_on(), "desktop: botão sai da tela cheia")
+        await frames(15)
+        check(fs_btn.glyph == "fullscreen", "desktop: ícone volta a ENTRAR em tela cheia")
+        w3.mode = Window.MODE_EXCLUSIVE_FULLSCREEN
+        await frames(5)
     # Trocar de página interna NÃO mexe no modo nem no tamanho da janela
     var win2 = stage.get_window()
     var mode0 = win2.mode

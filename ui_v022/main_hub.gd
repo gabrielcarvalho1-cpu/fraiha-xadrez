@@ -1330,6 +1330,55 @@ func set_sound_muted(value: bool):
     _refresh_sound_button()
     if is_instance_valid(mobile_ui) and mobile_ui.has_method("refresh_sound"): mobile_ui.refresh_sound()
 
+## Tela cheia (R29.2): botão ao lado do som; o estado vem do ui_v022/fullscreen_control.gd (stage).
+var screen_mode
+var fullscreen_button: Button
+func attach_screen_mode(sm):
+    screen_mode = sm
+    if not is_instance_valid(fullscreen_button):
+        fullscreen_button = preload("res://ui_v022/hud_button.gd").make("fullscreen")
+        fullscreen_button.name = "FullscreenButton"
+        fullscreen_button.size = Vector2(62, 62)
+        fullscreen_button.position = Vector2(434, 16)
+        fullscreen_button.pressed.connect(func(): if screen_mode != null: screen_mode.toggle())
+        canvas.add_child(fullscreen_button)
+    sm.changed.connect(func(_on): refresh_fullscreen_button())
+    refresh_fullscreen_button()
+    if is_instance_valid(mobile_ui) and mobile_ui.has_method("refresh_fullscreen"): mobile_ui.refresh_fullscreen()
+    _build_web_quit_caption()
+
+func refresh_fullscreen_button():
+    var ok: bool = screen_mode != null and screen_mode.supported()
+    var on: bool = ok and screen_mode.is_on()
+    for b in [fullscreen_button, mobile_ui.fullscreen_button if is_instance_valid(mobile_ui) else null]:
+        if not is_instance_valid(b): continue
+        b.visible = ok   # iPhone/Safari sem a API: o botão some
+        b.glyph = "exit_fullscreen" if on else "fullscreen"
+        b.tooltip_text = "Sair da tela cheia" if on else "Tela cheia"
+        b.queue_redraw()
+
+## Web: SAIR volta para o site — o subtítulo desenhado na arte ("Até a próxima partida!") é coberto
+## com o mesmo verde do botão e recebe "Voltar para o site".
+func _build_web_quit_caption():
+    if not OS.has_feature("web") or canvas.get_node_or_null("WebQuitCaption") != null: return
+    var patch = ColorRect.new()
+    patch.name = "WebQuitCaption"
+    patch.color = Color8(1, 36, 21)
+    patch.position = Vector2(714, 818)   # coordenadas da arte (DESIGN 1672x941)
+    patch.size = Vector2(290, 24)
+    patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    canvas.add_child(patch)
+    canvas.move_child(patch, canvas.get_node("MainMenu").get_index())
+    var cap = _label(patch, "Voltar para o site", 16, Color("e8e2d0"))
+    cap.position = Vector2(2, 0)
+    cap.size = Vector2(236, 24)
+    cap.autowrap_mode = TextServer.AUTOWRAP_OFF
+    ref_nodes.append(patch)
+    patch.visible = ref_mode
+    var last := menu_buttons.size() - 1
+    if last >= 0:
+        menu_buttons[last].tooltip_text = "Voltar para o site fraihaxadrez.com"
+
 func _refresh_sound_button():
     if not is_instance_valid(sound_button): return
     sound_button.glyph = "sound_off" if sound_muted else "sound_on"
@@ -1698,6 +1747,8 @@ func _sync_menu_cover():
     if is_instance_valid(account_card): account_card.mouse_filter = Control.MOUSE_FILTER_STOP if home else Control.MOUSE_FILTER_IGNORE
     var acct = canvas.get_node_or_null("AccountPanel")
     if acct != null: acct.modulate.a = 1.0 if home else 0.0
+    var quit_cap = canvas.get_node_or_null("WebQuitCaption")
+    if quit_cap != null: quit_cap.visible = ref_mode and home
 
 
 # ---------- Conta ligada ao Home: nome público e foto (0004) ----------

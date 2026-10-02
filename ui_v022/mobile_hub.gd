@@ -290,12 +290,18 @@ func show_page(id: String):
                 # largura a partir da tela (não da própria linha: isso realimentava e estourava a largura)
                 _fit_club()
                 if not resized.is_connected(_fit_club): resized.connect(_fit_club)
+                fullscreen_button = preload("res://ui_v022/hud_button.gd").make("fullscreen")
+                fullscreen_button.name = "FullscreenButtonMobile"
+                fullscreen_button.custom_minimum_size = Vector2(54, 54)
+                fullscreen_button.pressed.connect(func(): if hub.screen_mode != null: hub.screen_mode.toggle())
+                top_row.add_child(fullscreen_button)
                 sound_button = preload("res://ui_v022/hud_button.gd").make("sound_on")
                 sound_button.name = "SoundButtonMobile"
                 sound_button.custom_minimum_size = Vector2(54, 54)
                 sound_button.pressed.connect(func(): hub.toggle_sound())
                 top_row.add_child(sound_button)
                 refresh_sound()
+                hub.refresh_fullscreen_button()
                 # Cartão do jogador recortado da própria arte do PC, com dados vivos por cima.
                 var card = ProfileCard.new()
                 card.hub = hub
@@ -323,6 +329,7 @@ func show_page(id: String):
                         atlas.atlas = hub.FOREST
                         atlas.region = r
                         row.art = atlas
+                    if row.text == "SAIR" and OS.has_feature("web"): row.subtitle_override = "Voltar para o site"
                     row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
                     row.pressed.connect(func(): source.pressed.emit())
                     grid.add_child(row)
@@ -339,6 +346,7 @@ func show_page(id: String):
     layout()
 
 var club_row = null
+var fullscreen_button
 var sound_button: Button = null
 var avatar_note: Label = null
 
@@ -354,7 +362,10 @@ func avatar_message(text: String, is_error: bool):
         avatar_note.add_theme_color_override("font_color", Color("ff9d86") if is_error else Color("c9c2a8"))
 
 func _fit_club():
-    if is_instance_valid(club_row): club_row.custom_minimum_size.x = clampf(size.x - 40.0 - 64.0, 200.0, 380.0)
+    if is_instance_valid(club_row): club_row.custom_minimum_size.x = clampf(size.x - 40.0 - 128.0, 180.0, 380.0)
+
+func refresh_fullscreen():
+    hub.refresh_fullscreen_button()
 
 func refresh_club(on: bool):
     if is_instance_valid(club_row): club_row.set_active(on)
@@ -485,6 +496,7 @@ class ArtRow extends Button:
     # Largura desenhada relativa à linha: botões comuns a 92%; o Ranqueado (com louros) é
     # desenhado maior para o corpo do botão ter a mesma largura dos outros.
     var draw_scale := 0.92
+    var subtitle_override := ""
     var featured := false   # JOGAR RANQUEADO: mesmo botão dos outros + título dourado e louros
     func _init():
         focus_mode = Control.FOCUS_NONE
@@ -509,6 +521,11 @@ class ArtRow extends Button:
                 var g := r.grow(2.0 + i * 2.0)
                 draw_rect(g, Color(1.0, 0.8, 0.3, 0.07 - i * 0.015), false, 2.0)
         draw_texture_rect(art, r, false)
+        if not subtitle_override.is_empty():
+            # Web: subtítulo da arte ("Até a próxima partida!") trocado por outro texto, no mesmo verde.
+            var kk := w / 444.0
+            draw_rect(Rect2(r.position + Vector2(100, 33) * kk, Vector2(290, 23) * kk), Color8(1, 36, 21))
+            draw_string(get_theme_default_font(), r.position + Vector2(102, 50) * kk, subtitle_override, HORIZONTAL_ALIGNMENT_LEFT, -1, int(round(13 * kk)), Color("e8e2d0"))
         if not featured: return
         var k := w / 444.0
         var font := get_theme_default_font()

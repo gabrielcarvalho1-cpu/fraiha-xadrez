@@ -78,6 +78,7 @@ func _ready():
     hub.play_online_requested.connect(_open_casual)
     hub.play_bot_requested.connect(_start_bot)
     hub.quit_requested.connect(request_quit)
+    _setup_screen_mode()
     # Pré-move (Configurações): vale contra o computador, Online e Ranqueado.
     game.premove_enabled = hub.premove_enabled
     hub.premove_changed.connect(func(on):
@@ -135,7 +136,7 @@ func _build_navigation():
     home_button.pressed.connect(return_to_home)
     overlay.add_child(home_button)
     # Sem botão de TELA CHEIA: o jogo sempre ocupa a tela toda (desktop: exclusiva desde o início;
-    # Web: viewport inteira e tela cheia real pedida no 1º toque/clique — ver _web_fullscreen_once).
+    # Web: viewport inteira; tela cheia pelo botão ao lado do som — ver _setup_screen_mode).
     match_plaque = preload("res://presentation_v019/match_plaque.gd").new()
     match_plaque.name = "MatchPlaque"
     overlay.add_child(match_plaque)
@@ -811,6 +812,12 @@ func _room_joined():
 
 func _room_left():
     if pending_navigation == "quit":
+        if OS.has_feature("web"):
+            # Web: SAIR = sair da tela cheia e voltar para o site (get_tree().quit() só congelava a aba).
+            pending_navigation = ""
+            navigation_confirmed = false
+            screen_mode.leave_to_site()
+            return
         get_tree().quit()
     else:
         open_home()
@@ -890,7 +897,7 @@ func _request_navigation(destination: String):
     elif mode == "local" and game.move_count > 0:
         navigation_dialog.dialog_text = "A partida local será encerrada. Voltar à tela inicial?" if destination == "home" else "A partida local será encerrada. Sair do jogo?"
     else:
-        navigation_dialog.dialog_text = "Sair do FRAIHA Xadrez?"
+        navigation_dialog.dialog_text = "Voltar para o site fraihaxadrez.com?" if OS.has_feature("web") and destination == "quit" else "Sair do FRAIHA Xadrez?"
     navigation_dialog.cancel_button_text = "Continuar jogando" if mode in ["local", "online"] else "Cancelar"
     if mode == "bot": navigation_dialog.cancel_button_text = "Continuar partida"
     var dialog_size = Vector2i(480, 160)
@@ -923,52 +930,44 @@ func _confirm_navigation():
     if mode == "ranked" and ranked.in_match(): ranked.resign()
     if mode == "casual" and casual.in_match(): casual.resign()
     if pending_navigation == "quit":
+        if OS.has_feature("web"):
+            # Web: SAIR = sair da tela cheia e voltar para o site (get_tree().quit() só congelava a aba).
+            pending_navigation = ""
+            navigation_confirmed = false
+            screen_mode.leave_to_site()
+            return
         get_tree().quit()
     else:
         game._new_game()
         open_home()
 
-## Web: tela cheia REAL só pode ser pedida dentro de um gesto do usuário (regra do navegador).
-## - Antes disso o canvas já ocupa 100% da viewport (export: canvas_resize_policy=2).
-## - Pedido ao soltar o 1º clique/toque (ou numa tecla que não seja Esc), na PÁGINA inteira
-##   (documentElement): os campos HTML do login no celular ficam no <body> e sumiriam atrás do canvas.
-## - CAUSA do bug "voltei da tela dos bots e o jogo ficou menor": as páginas internas dizem "ESC também
-##   volta", e no navegador o Esc SEMPRE sai da tela cheia. Correção:
-##     • Chrome/Edge: Keyboard Lock (navigator.keyboard.lock(['Escape'])) enquanto em tela cheia — o Esc
-##       curto chega ao jogo (volta de página) e o navegador passa a sair só com Esc PRESSIONADO por ~2 s
-##       (o jogador continua podendo sair; o próprio navegador avisa).
-##     • Sem Keyboard Lock (Firefox/Safari) ou se a tela cheia cair por qualquer motivo: o canvas continua em
-##       100% da viewport e o próximo clique/toque pede a tela cheia de novo.
-##     • Se o jogador sair de propósito 3 vezes na sessão, o jogo para de insistir.
-## - iPhone (Safari) não tem a API para páginas: fica só a viewport inteira.
-## Nada aqui muda o Window.mode do Godot nem depende de troca de página.
-var _web_fullscreen_off := false   # navegador sem API, ou o jogador recusou várias vezes
-const WEB_FULLSCREEN_JS := """(() => { try { const d = document, e = d.documentElement, w = window;
-    if (!w.__fraihaFs) { w.__fraihaFs = { entered: 0, lost: 0 };
-        const kb = () => navigator.keyboard && navigator.keyboard.lock ? navigator.keyboard : null;
-        const on = () => { const fs = d.fullscreenElement || d.webkitFullscreenElement;
-            if (fs) { w.__fraihaFs.entered++; const k = kb(); if (k) k.lock(['Escape']).catch(() => {}); }
-            else { if (w.__fraihaFs.entered > 0) w.__fraihaFs.lost++; const k = kb(); if (k && k.unlock) k.unlock(); } };
-        d.addEventListener('fullscreenchange', on); d.addEventListener('webkitfullscreenchange', on); }
-    if (d.fullscreenElement || d.webkitFullscreenElement) return 'on';
-    if (w.__fraihaFs.lost >= 3) return 'declined';
-    const f = e.requestFullscreen || e.webkitRequestFullscreen;
-    if (!f) return 'unsupported';
-    const r = f.call(e, { navigationUI: 'hide' });
-    if (r && r.catch) r.catch(() => {});
-    return 'requested'; } catch (err) { return 'error'; } })()"""
-func _web_fullscreen_once(event: InputEvent):
-    if _web_fullscreen_off or not OS.has_feature("web"): return
-    # No SOLTAR do clique/toque: no celular a ativação do usuário só vale a partir do touchend.
-    # Esc não conta como gesto para tela cheia (e é a tecla de sair).
-    var gesture: bool = (event is InputEventMouseButton and not event.pressed) or (event is InputEventScreenTouch and not event.pressed) \
-        or (event is InputEventKey and event.pressed and not event.echo and event.keycode != KEY_ESCAPE)
-    if not gesture: return
-    var r := str(JavaScriptBridge.eval(WEB_FULLSCREEN_JS))
-    if r in ["unsupported", "declined", "error"]: _web_fullscreen_off = true
+## Tela cheia (R29.2): ui_v022/fullscreen_control.gd — botão ao lado do som, Esc sai da tela cheia
+## naturalmente (sem travar a tecla), 1 pedido automático só no 1º clique/toque e nunca mais depois que o
+## jogador sai. Esc com a tela cheia ativa (ou que acabou de tirá-la) não navega: ver EscGuard.
+var screen_mode
+
+func _setup_screen_mode():
+    screen_mode = preload("res://ui_v022/fullscreen_control.gd").new()
+    screen_mode.name = "ScreenMode"
+    screen_mode.stage = self
+    add_child(screen_mode)
+    hub.attach_screen_mode(screen_mode)
+    # Guarda do Esc: último filho da raiz = primeiro a receber _input (antes de páginas, overlays e diálogos).
+    var guard = EscGuard.new()
+    guard.name = "EscGuard"
+    guard.screen_mode = screen_mode
+    get_tree().root.add_child.call_deferred(guard)
+
+class EscGuard extends Node:
+    var screen_mode
+    func _input(event):
+        if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE and screen_mode != null and screen_mode.esc_belongs_to_fullscreen():
+            # Esc em tela cheia = só sair da tela cheia (o navegador já faz; garante caso a tecla chegue ao jogo).
+            if not event.echo: screen_mode.exit()
+            get_viewport().set_input_as_handled()
 
 func _input(event):
-    _web_fullscreen_once(event)
+    if screen_mode != null: screen_mode.auto_on_first_gesture(event)
     if not event is InputEventKey or not event.pressed or event.echo:
         return
     if event.alt_pressed and event.keycode == KEY_ENTER and not OS.has_feature("web"):
