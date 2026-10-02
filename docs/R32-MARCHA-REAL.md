@@ -19,7 +19,7 @@
 
 ## Histórico de partidas
 * Home → **HISTÓRICO DE PARTIDAS** (abaixo de CONHEÇA O FRAIHA) e no celular.
-* Toda partida de xadrez terminada (computador, online, ranqueada, local) fica no aparelho (últimas 60),
+* Toda partida terminada (xadrez: computador, online, ranqueada, local; e Marcha Real) fica no aparelho (últimas 60),
   com filtros e **REVER ANÁLISE** (se já analisada) / **ANALISAR** (usa a cota; Club ilimitado).
 
 ## Perfil
@@ -33,3 +33,24 @@
 ## Migração 0008 (NÃO APLICADA)
 `supabase/migrations/0008_fraiha_marcha_real.sql`: tabela `marcha_usage` + `fraiha_marcha_consume`
 (só service_role). Testada em Postgres local (`tests/server/premium_stack_test.cjs`).
+
+## Auditoria fraiha-dev v2.8 (aplicada na própria R32)
+* **Isolamento:** tudo da Marcha está em `marcha/` (regras, IA, UI, acesso, arte). O xadrez só ganhou
+  a entrada na Home e o histórico comum; Elo/PL/Ranked/bots/regras do xadrez não mudaram.
+* **Motor único:** `rules.apply()` recusa qualquer jogada fora de `legal_moves()` (humano, bot e jogada
+  automática do tempo esgotado passam pela mesma validação). A saída do Pátio agora lista cada peão
+  (antes a UI aceitava um peão que o motor não listava). `RULESET_VERSION = "marcha-real-1"`.
+* **Histórico comum:** todo registro tem `mode_id` (`chess` | `marcha_real`) e `ruleset_version`
+  (`chess-fide-1` | `marcha-real-1`); registros antigos migram para `chess` ao carregar. A Marcha grava
+  vitória, derrota e abandono (dados do modo em `data`: rodadas, coroados, aliado, últimas jogadas).
+  Filtro **MARCHA REAL**; linha da Marcha sem ANALISAR (modo de cartas).
+* **Cota:** com conta, o servidor decide (teste cliente+servidor `tests/marcha_server_client_test.gd`:
+  sem registro no aparelho o servidor continua recusando a 2ª partida). Convidado: aparelho.
+  Web: o dia consumido vai também para o `localStorage` (o user:// do Godot Web só chega ao IndexedDB
+  alguns segundos depois) — F5 1 s após começar não devolve a partida.
+* **Arte × build:** comparação lado a lado com `tela_desktop.png` e `tela_celular.png`; corrigido:
+  placa "Você" usa o retrato Marfim da arte; placas do celular em retrato no estilo da tela_celular.
+* **Toque no celular:** o toque chegava 2× (toque + clique emulado) e devolvia ao salão — corrigido.
+* **Conhecido / não bloqueia:** celular deitado usa o layout do PC escalado (sem arte de referência
+  própria; textos pequenos em telas de 390 px de altura). Tutorial "visto" pode reaparecer se o F5 vier
+  menos de ~3 s depois de fechá-lo (mesma gravação atrasada do user:// do Web).
