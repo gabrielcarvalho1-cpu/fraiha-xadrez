@@ -270,21 +270,19 @@ func _build():
     details.size = DESIGN
     details.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(details)
-    # A arte oficial traz o cartão da conta e a placa da versão desenhados nos cantos de baixo
-    # (o HUD vivo fica por cima deles na Home). Nas páginas internas o HUD vivo some e o painel largo
-    # cobre quase tudo — as pontas que sobravam (círculo da conta, bandeira) viram folhagem da própria arte.
+    # A placa do cartão da conta era desenhada DENTRO da arte (e a camada de detalhes trazia uma cópia antiga
+    # dela, um pouco acima — o "fantasma" atrás de MINHA CONTA). Agora a arte de fundo não tem placa nenhuma
+    # (folhagem no lugar) e a placa é um recorte exato da arte original, desenhado só na Home.
     var art_scale := Vector2(1672.0 / DESIGN.x, 941.0 / DESIGN.y)
-    for spec in [["InnerCornerL", "res://ui_v022/assets/inner_corner_l.png", Vector2(0, 818)], ["InnerCornerR", "res://ui_v022/assets/inner_corner_r.png", Vector2(1554, 832)]]:
-        var patch := TextureRect.new()
-        patch.name = spec[0]
-        patch.texture = load(spec[1])
-        patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        patch.stretch_mode = TextureRect.STRETCH_SCALE
-        patch.position = spec[2] / art_scale
-        patch.size = Vector2(patch.texture.get_size()) / art_scale
-        patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        patch.visible = false
-        canvas.add_child(patch)
+    var plaque := TextureRect.new()
+    plaque.name = "RefAccountPlaque"
+    plaque.texture = preload("res://ui_v022/assets/home_account_plaque.png")
+    plaque.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    plaque.stretch_mode = TextureRect.STRETCH_SCALE
+    plaque.position = Vector2(28, 832) / art_scale
+    plaque.size = Vector2(plaque.texture.get_size()) / art_scale
+    plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    canvas.add_child(plaque)
     # Espírito das águas sobre o lago (abaixo da cachoeira, à esquerda da placa), animado.
     var spirit = preload("res://ui_v022/water_spirit.gd").new()
     spirit.position = Vector2(1258, 642)
@@ -311,11 +309,8 @@ func _build():
     _build_profile()
     pages_pending = preload("res://ui_v022/mobile_layout.gd").active(get_viewport())
     if not pages_pending: _build_pages()
-    # Versão só no rodapé direito, em moldura discreta (o cabeçalho do topo foi removido).
-    _ornate_panel(canvas, Vector2(1400,864), Vector2(250,62)).name = "VersionPanel"
-    var signature = _label(_stack(canvas, Vector2(1414,872), Vector2(222,46)), "Versão %s · Ligas\nMaringá · PR · Brasil" % APP_VERSION, 14, MUTED)
-    signature.name = "VersionLabel"
-    signature.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    # Sem placa de versão na Home (R29): a versão fica no log e no rodapé das Configurações.
+    print("FRAIHA Xadrez versão %s" % APP_VERSION)
     _build_account_card()
     _build_reference_chrome()
     _sync_chrome()
@@ -661,36 +656,122 @@ func _build_pages():
         var cell = _body(stats_grid,ranked.summary(mode),13)
         cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     _refresh_avatars()
-    var settings = _new_page("settings", "CONFIGURAÇÕES", "")
+    _build_settings_page()
+
+## CONFIGURAÇÕES (R29): painel próprio, centralizado e do mesmo sistema das páginas largas
+## (moldura FRAIHA, título dourado, VOLTAR À HOME no rodapé). Uma coluna que cabe inteira em 1600x900
+## sem rolar; no celular a mesma coluna é emprestada pelo mobile_hub (page_scrolls).
+func _build_settings_page():
+    var panel = Control.new()
+    panel.name = "SettingsPage"
+    panel.position = Vector2(476,260)
+    panel.size = Vector2(720,640)
+    panel.mouse_filter = Control.MOUSE_FILTER_STOP
+    canvas.add_child(panel)
+    _frame(panel, Vector2.ZERO, panel.size)
+    var heading = _label(panel, "CONFIGURAÇÕES", 29, GOLD)
+    heading.name = "SettingsHeading"
+    heading.position = Vector2(48,28)
+    heading.size = Vector2(624,44)
+    var scroll = ScrollContainer.new()
+    scroll.name = "PageScroll"
+    scroll.position = Vector2(48,82)
+    scroll.size = Vector2(624,458)
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+    panel.add_child(scroll)
+    var margin = MarginContainer.new()
+    margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.add_child(margin)
+    var settings = VBoxContainer.new()
+    settings.name = "PageContent"
+    settings.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    settings.add_theme_constant_override("separation", 7)
+    margin.add_child(settings)
     # FRAIHA PREMIUM (Fundador + Club) — Monetização V1 em modo de teste.
     var premium_entry = preload("res://monetization/premium_entry.gd").new()
     premium_entry.pressed.connect(func(): open_premium())
     settings.add_child(premium_entry)
-    music_volume_label = _label(settings, "", 19, GOLD)
-    var music_slider = HSlider.new()
-    music_slider.name = "MusicVolume"
-    music_slider.custom_minimum_size.y = 35
-    music_slider.max_value = 100
-    music_slider.step = 1
+    _settings_section(settings, "ÁUDIO")
+    music_volume_label = _label(settings, "", 18, CREAM)
+    var music_slider = _settings_slider(settings, "MusicVolume")
     music_slider.value = round(music_volume*100)
-    settings.add_child(music_slider)
     music_slider.value_changed.connect(_set_music_volume)
     _set_music_volume(music_slider.value,false)
-    volume_label = _label(settings, "", 19, GOLD)
+    volume_label = _label(settings, "", 18, CREAM)
+    var slider = _settings_slider(settings, "EffectsVolume")
+    slider.value = round(volume*100)
+    slider.value_changed.connect(_set_volume)
+    _set_volume(slider.value, false)
+    _settings_section(settings, "PARTIDA")
+    premove_button = _page_button(settings, 1, "", "", _toggle_premove)
+    premove_button.name = "PremoveToggle"
+    # mesma proporção do botão da arte (450x66): esticar deformava o ícone por cima do texto
+    if not preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):
+        premove_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+        premove_button.custom_minimum_size = Vector2(450, 66)
+    _refresh_premove_button()
+    var note = _body(settings, "Preferências salvas automaticamente. O botão de som da tela inicial silencia tudo.", 14)
+    note.name = "SettingsNote"
+    var footer = _button(panel, 6, "VOLTAR À HOME", "ESC também volta", Vector2(48,548), back, Vector2(410,64))
+    footer.name = "SettingsBack"
+    var ver = _label(panel, "FRAIHA Xadrez · versão %s" % APP_VERSION, 13, MUTED)
+    ver.name = "SettingsVersion"
+    ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    ver.position = Vector2(470,568)
+    ver.size = Vector2(202,24)
+    pages["settings"] = panel
+    page_scrolls["settings"] = scroll
+
+## Título de seção: texto dourado pequeno + filete dourado (mesmo vocabulário das molduras).
+func _settings_section(parent: Node, title: String):
+    var gap = Control.new()
+    gap.custom_minimum_size.y = 4
+    parent.add_child(gap)
+    var row = VBoxContainer.new()
+    row.add_theme_constant_override("separation", 3)
+    parent.add_child(row)
+    _label(row, title, 14, GOLD)
+    var line = ColorRect.new()
+    line.color = Color(0.85, 0.71, 0.37, 0.55)
+    line.custom_minimum_size = Vector2(0, 1)
+    line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    row.add_child(line)
+
+## Slider no estilo FRAIHA: trilho verde-escuro com borda dourada, parte preenchida em ouro, botão dourado.
+func _settings_slider(parent: Node, node_name: String) -> HSlider:
     var slider = HSlider.new()
-    slider.name = "EffectsVolume"
-    slider.custom_minimum_size.y = 35
+    slider.name = node_name
+    slider.custom_minimum_size.y = 30
     slider.min_value = 0
     slider.max_value = 100
     slider.step = 1
-    slider.value = round(volume*100)
-    settings.add_child(slider)
-    slider.value_changed.connect(_set_volume)
-    _set_volume(slider.value, false)
-    premove_button = _page_button(settings, 1, "", "", _toggle_premove)
-    premove_button.name = "PremoveToggle"
-    _refresh_premove_button()
-    _body(settings, "As preferências são salvas automaticamente.\nO jogo ocupa a tela inteira automaticamente; o botão de som fica na tela inicial.", 16)
+    slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    var track = StyleBoxFlat.new()
+    track.bg_color = Color("0b1a12")
+    track.border_color = Color(0.85, 0.71, 0.37, 0.7)
+    track.set_border_width_all(1)
+    track.set_corner_radius_all(4)
+    track.content_margin_top = 5
+    track.content_margin_bottom = 5
+    var fill = StyleBoxFlat.new()
+    fill.bg_color = Color("c99a3e")
+    fill.set_corner_radius_all(4)
+    fill.content_margin_top = 5
+    fill.content_margin_bottom = 5
+    slider.add_theme_stylebox_override("slider", track)
+    slider.add_theme_stylebox_override("grabber_area", fill)
+    slider.add_theme_stylebox_override("grabber_area_highlight", fill)
+    var knob = Image.create(22, 22, false, Image.FORMAT_RGBA8)
+    for y in 22:
+        for x in 22:
+            var d = Vector2(x + 0.5, y + 0.5).distance_to(Vector2(11, 11))
+            if d <= 10.5: knob.set_pixel(x, y, Color("f4d58a") if d <= 7.5 else Color("8a6420"))
+    var knob_tex = ImageTexture.create_from_image(knob)
+    slider.add_theme_icon_override("grabber", knob_tex)
+    slider.add_theme_icon_override("grabber_highlight", knob_tex)
+    parent.add_child(slider)
+    return slider
 
 func _choose_difficulty(id: String):
     if BotLadder.is_bot_id(id):
@@ -1073,7 +1154,9 @@ func _draw_presentation_frame():
     var foliage: Texture2D = preload("res://ui_v022/assets/home_side_foliage.png")
     var fs = maxf(full.size.x / foliage.get_width(), full.size.y / foliage.get_height())
     var fr = Rect2((full.size - foliage.get_size() * fs) / 2.0, foliage.get_size() * fs)
-    presentation_frame.draw_texture_rect(foliage, fr, false, Color(0.62, 0.66, 0.6))
+    # Quase sem escurecer: com a barra do navegador visível (antes da tela cheia) a folhagem continua a cena
+    # em vez de parecer uma "moldura" em volta de uma janela menor.
+    presentation_frame.draw_texture_rect(foliage, fr, false, Color(0.86, 0.9, 0.84))
     if false: presentation_frame.draw_texture_rect(_backdrop_for(tex), cover_rect, false, Color(0.5, 0.52, 0.48))
     # Junto à arte: continuação espelhada e suavizada da própria borda (cores casam na emenda),
     # escurecendo para fora. Sem moldura, sem cinza.
@@ -1369,23 +1452,6 @@ func _is_ref_art(texture: Texture2D) -> bool:
     return texture == FOREST_V2
 
 func _build_reference_chrome():
-    # Versão viva sobre o painel do rodapé direito (texto removido da arte; engrenagem e bandeira ficam na arte).
-    var ref_version = Label.new()
-    ref_version.name = "RefVersionLabel"
-    ref_version.text = "Versão %s · Ligas\nMaringá · PR · Brasil" % APP_VERSION
-    ref_version.position = Vector2(1438,861)
-    ref_version.size = Vector2(146,44)
-    ref_version.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    ref_version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    ref_version.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    ref_version.add_theme_font_size_override("font_size", 15)
-    ref_version.add_theme_constant_override("line_spacing", -1)
-    ref_version.add_theme_color_override("font_color", Color("e6e1d0"))
-    ref_version.add_theme_color_override("font_shadow_color", Color(0,0,0,0.55))
-    ref_version.add_theme_constant_override("shadow_offset_y", 1)
-    ref_version.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    canvas.add_child(ref_version)
-    ref_nodes.append(ref_version)
     # Perfil
     var pbtn = TextureButton.new()
     pbtn.name = "RefProfileButton"
@@ -1559,11 +1625,11 @@ func _sync_chrome():
     ref_mode = ref
     if is_instance_valid(presentation_frame): presentation_frame.queue_redraw()
     for n in ref_nodes: n.visible = ref
-    for name in ["ProfilePanel","AccountPanel","VersionPanel"]:
+    for name in ["ProfilePanel","AccountPanel"]:
         var n = canvas.get_node_or_null(name)
         if n != null: n.visible = not ref
-    var ver = canvas.find_child("VersionLabel", true, false)
-    if ver != null: ver.get_parent().get_parent().visible = not ref
+    var plaque = canvas.get_node_or_null("RefAccountPlaque")
+    if plaque != null: plaque.visible = ref
     if not desk_profile.is_empty(): desk_profile.stack.visible = not ref
     for n in ranked_extras: n.visible = not ref
     # Botões: na arte de referência o botão já está desenhado; o nosso vira área de clique transparente.
@@ -1627,16 +1693,11 @@ func _sync_menu_cover():
     # Páginas internas usam o painel largo (y 260 → 900): o HUD de baixo da Home (cartão da conta,
     # versão) fica escondido enquanto a página está aberta — antes os textos vivos atravessavam a moldura.
     var home := page == "main"
-    for n in [account_card, ref_account_avatar, ref_account_frame_host, canvas.get_node_or_null("RefVersionLabel")]:
+    for n in [account_card, ref_account_avatar, ref_account_frame_host, canvas.get_node_or_null("RefAccountPlaque")]:
         if is_instance_valid(n): n.modulate.a = 1.0 if home else 0.0
     if is_instance_valid(account_card): account_card.mouse_filter = Control.MOUSE_FILTER_STOP if home else Control.MOUSE_FILTER_IGNORE
-    for name in ["AccountPanel", "VersionPanel"]:
-        var n = canvas.get_node_or_null(name)
-        if n != null: n.modulate.a = 1.0 if home else 0.0
-    var details = canvas.get_node_or_null("ForestDetails")
-    for name in ["InnerCornerL", "InnerCornerR"]:
-        var n = canvas.get_node_or_null(name)
-        if n != null: n.visible = not home and details != null and details.visible
+    var acct = canvas.get_node_or_null("AccountPanel")
+    if acct != null: acct.modulate.a = 1.0 if home else 0.0
 
 
 # ---------- Conta ligada ao Home: nome público e foto (0004) ----------

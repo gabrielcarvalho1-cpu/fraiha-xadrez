@@ -55,5 +55,19 @@ func run():
     cfg.load(stage.hub.PREFS)
     check(not cfg.has_section_key("video", "fullscreen"), "nenhuma preferência persistente de tela cheia")
     check(stage.has_method("_web_fullscreen_once"), "Web: pedido de tela cheia no 1º gesto (_web_fullscreen_once)")
+    var js: String = stage.WEB_FULLSCREEN_JS
+    check(js.contains("documentElement") and js.contains("requestFullscreen"), "Web: tela cheia da página inteira (documentElement)")
+    check(js.contains("keyboard.lock") or js.contains("k.lock(['Escape'])"), "Web: Keyboard Lock do Esc em tela cheia (Esc curto volta a página sem derrubar a tela cheia)")
+    check(js.contains("lost >= 3") and not js.contains("exitFullscreen"), "Web: re-tenta no próximo gesto se cair; nunca sai da tela cheia por conta própria")
+    # Trocar de página interna NÃO mexe no modo nem no tamanho da janela
+    var win2 = stage.get_window()
+    var mode0 = win2.mode
+    var size0 = win2.size
+    for pg in ["bot", "main", "profile", "settings", "main"]:
+        stage.hub.show_page(pg)
+        await frames(3)
+    stage.open_home()
+    await frames(3)
+    check(win2.mode == mode0 and win2.size == size0, "Home → Bots → Home → Perfil → Configurações → Home: modo/tamanho da janela intactos")
     print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
     quit(failures)

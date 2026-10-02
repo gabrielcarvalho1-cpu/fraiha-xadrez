@@ -72,7 +72,10 @@ func run():
     check(bp.is_defeated("madeira") and bp.status("ferro") == "available" and grants == ["madeira"], "confirmação do servidor: MADEIRA derrotado, FERRO liberado, recompensa 1×")
     check(bp.avatar_unlocked("mage") and not bp.avatar_unlocked("paladin"), "avatar Mago liberado pela vitória confirmada; Paladino continua bloqueado")
     bp.report_victory("madeira", "w", PackedStringArray(SCHOLAR))
-    check(acc.sent.filter(func(m): return m.type == "bot_victory").size() == 1, "repetir a vitória não reenvia")
+    # R29: revanche também é validada pelo servidor (para abrir o painel pós-partida), mas nunca dá recompensa nova
+    check(acc.sent.filter(func(m): return m.type == "bot_victory").size() == 2, "revanche é enviada ao servidor para validar")
+    acc._receive({"type": "bot_progress", "available": true, "defeated": ["madeira"], "new_bot": null})
+    check(grants == ["madeira"], "revanche confirmada (new_bot=null) NÃO repete a recompensa")
 
     # ---------- 2) acct_state SEM o campo bots (estado desconhecido): pergunta antes de decidir ----------
     t = fresh(); acc = t[0]; bp = t[1]; grants = t[2]

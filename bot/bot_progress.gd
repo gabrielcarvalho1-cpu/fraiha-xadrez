@@ -9,6 +9,10 @@ extends Node
 ##     conexão NÃO ganha progresso local: a vitória não é registrada e o jogador é avisado.
 signal changed
 signal reward_unlocked(bot_id: String, reward: Dictionary)
+## TODA vitória confirmada contra um bot da escada (painel pós-partida). fresh=true só na 1ª vitória
+## (junto com reward_unlocked); fresh=false = bot já derrotado antes: sem recompensa nova.
+## Conta: só depois da resposta do servidor (bot_victory → bot_progress). Convidado: local, na hora.
+signal victory_confirmed(bot_id: String, fresh: bool, reward: Dictionary)
 signal notice(text: String)
 
 const Ladder = preload("res://bot/bot_ladder.gd")
@@ -112,10 +116,12 @@ func storage_label() -> String:
 # ---------------------------------------------------------------- vitória
 ## Chamado ao fim de uma partida GANHA contra um bot da escada (xeque-mate do bot).
 func report_victory(bot_id: String, human_color: String, moves: PackedStringArray):
-    if not is_unlocked(bot_id) or is_defeated(bot_id): return
+    if not is_unlocked(bot_id): return
     _sync_key()
     if not is_account():
-        _grant(bot_id)   # convidado: progresso local deste aparelho
+        # convidado: progresso local deste aparelho (bot já derrotado = revanche, sem recompensa)
+        if is_defeated(bot_id): _confirm_replay(bot_id)
+        else: _grant(bot_id)
         return
     if not (account.server_ready and account.socket_open):
         # Conta sem conexão: nada local (senão a vitória "some" quando o servidor responder).
@@ -133,7 +139,8 @@ func report_victory(bot_id: String, human_color: String, moves: PackedStringArra
         _claim(bot_id, human_color, moves)
         return
     # O servidor respondeu explicitamente que NÃO guarda progresso de bots (0006 ausente): fallback local.
-    _grant(bot_id)
+    if is_defeated(bot_id): _confirm_replay(bot_id)
+    else: _grant(bot_id)
 
 func _claim(bot_id: String, human_color: String, moves: PackedStringArray):
     if _pending.has(bot_id): return
@@ -148,6 +155,11 @@ func _grant(bot_id: String):
     _save()
     changed.emit()
     reward_unlocked.emit(bot_id, Ladder.reward(bot_id))
+    victory_confirmed.emit(bot_id, true, Ladder.reward(bot_id))
+
+## Vitória válida contra bot já derrotado: só o painel (nada é gravado, nenhuma recompensa nova).
+func _confirm_replay(bot_id: String):
+    victory_confirmed.emit(bot_id, false, Ladder.reward(bot_id))
 
 func _on_server_progress(data: Dictionary):
     _sync_key()   # corrige a race: o 1º acct_state emite isto ANTES de account.changed
@@ -175,7 +187,17 @@ func _on_server_progress(data: Dictionary):
         if defeated.has(String(id)) and not before.has(String(id)) and String(id) not in confirmed: confirmed.append(String(id))
     for id in confirmed:
         _pending.erase(id)
-        if defeated.has(id) and not before.has(id): reward_unlocked.emit(id, Ladder.reward(id))
+        if defeated.has(id) and not before.has(id):
+            reward_unlocked.emit(id, Ladder.reward(id))
+            victory_confirmed.emit(id, true, Ladder.reward(id))
+    # Revanche (bot que já estava derrotado): a resposta do servidor ao bot_victory chega como
+    # bot_progress com new_bot=null — o servidor refez a partida e aceitou, sem vitória nova.
+    # (acct_state de reconexão não tem "type" e NUNCA confirma revanche.)
+    if String(data.get("type", "")) == "bot_progress":
+        for id in _pending.keys():
+            if defeated.has(String(id)) and before.has(String(id)):
+                _pending.erase(id)
+                _confirm_replay(String(id))
     _resolve_deferred()
 
 ## Vitórias que esperavam a resposta do servidor: envia (servidor com progresso) ou guarda local
@@ -185,8 +207,9 @@ func _resolve_deferred():
     var items := _deferred.duplicate()
     _deferred.clear()
     for id in items:
-        if is_defeated(String(id)) or not is_unlocked(String(id)): continue
+        if not is_unlocked(String(id)): continue
         if server_available: _claim(String(id), String(items[id][0]), items[id][1])
+        elif is_defeated(String(id)): _confirm_replay(String(id))
         else: _grant(String(id))
 
 func _on_server_failed(code: String, message: String, bot_id: String):
@@ -199,6 +222,8 @@ func _on_server_failed(code: String, message: String, bot_id: String):
     _pending.erase(bot_id)
     if code == "not_configured":
         server_available = false
-        _grant(bot_id)   # servidor sem 0006: guarda neste aparelho
+        # servidor sem 0006: guarda neste aparelho
+        if is_defeated(bot_id): _confirm_replay(bot_id)
+        else: _grant(bot_id)
     else:
         notice.emit("Vitória não registrada: " + message)

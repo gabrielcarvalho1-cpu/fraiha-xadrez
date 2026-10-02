@@ -356,6 +356,8 @@ func receive(msg:Dictionary):
         both_connected=bool(msg.white_connected) and bool(msg.black_connected)
         game.cancel_drag()
         game.selected=Vector2i(-1,-1); game.legal_moves.clear()
+        var before_view: Dictionary = game.pieces.duplicate()
+        var prev_count: int = game.move_count
         game.pieces.clear()
         for piece in msg.board:
             game.pieces[Vector2i(int(piece[0]),int(piece[1]))]=String(piece[2])
@@ -365,9 +367,16 @@ func receive(msg:Dictionary):
         game.promotion_pending=bool(msg.promotion_pending)
         game.promotion_color=String(msg.promotion_color)
         game.promotion_cell=cell(msg.promotion_cell)
-        game.last_from=cell(msg.last_from); game.last_to=cell(msg.last_to)
         game.captured_white.assign(msg.captured_white); game.captured_black.assign(msg.captured_black)
         game.move_count=int(msg.move_count)
+        var lf: Vector2i = cell(msg.last_from)
+        var lt: Vector2i = cell(msg.last_to)
+        if int(msg.move_count) == prev_count + 1 and lf != Vector2i(-1,-1):
+            # lance novo: anima; destaque forte quando veio do adversário (só apresentação)
+            game.show_move(before_view, lf, lt, String(game.pieces.get(lt, "")).substr(0,1) != color)
+        else:
+            game.clear_last_move()
+            game.last_from=lf; game.last_to=lt
         message=""
         var votes=msg.restart_votes
         if votes.size()>0:

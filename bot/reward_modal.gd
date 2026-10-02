@@ -20,6 +20,7 @@ const EMERALD := Color("8fe0a0")
 var root: Control
 var avatar_for: Callable   # id -> Texture2D (avatar do hub)
 var shown_bot := ""
+var shown_fresh := true
 var next_bot := ""
 var buttons := {}
 
@@ -36,8 +37,11 @@ static func next_of(bot_id: String) -> String:
 func show_reward(bot_id: String, reward: Dictionary):
     show_progress(bot_id, reward)
 
-func show_progress(bot_id: String, reward: Dictionary):
+## fresh=true: 1ª vitória (próximo bot desbloqueado agora + recompensa nova).
+## fresh=false: revanche contra bot já derrotado (nenhuma recompensa nova; próximo bot já liberado).
+func show_progress(bot_id: String, reward: Dictionary, fresh := true):
     close()
+    shown_fresh = fresh
     shown_bot = bot_id
     next_bot = next_of(bot_id)
     var bot := Ladder.bot(bot_id)
@@ -79,8 +83,8 @@ func show_progress(bot_id: String, reward: Dictionary):
     box.add_theme_constant_override("separation", 6 if short else 10)
     panel.add_child(box)
     var final := next_bot.is_empty()
-    _lab(box, "DESAFIO DAS LIGAS CONCLUÍDO" if final else "VITÓRIA!", 24 if (narrow or short) else 32, GOLD)
-    _lab(box, String(bot.get("name", "BOT")) + " DERROTADO", 18 if narrow else 20, CREAM)
+    _lab(box, ("DESAFIO DAS LIGAS CONCLUÍDO" if fresh else "VITÓRIA!") if final else "VITÓRIA!", 24 if (narrow or short) else 32, GOLD)
+    _lab(box, String(bot.get("name", "BOT")) + (" DERROTADO" if fresh else " DERROTADO NOVAMENTE"), 18 if narrow else 20, CREAM)
     # brasões: derrotado → próximo (ou só o último, coroado)
     var row := HBoxContainer.new()
     row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -96,10 +100,11 @@ func show_progress(bot_id: String, reward: Dictionary):
         row.add_child(arrow)
         var nb := Ladder.bot(next_bot)
         _tex(row, ThemeCatalog.badge_texture(String(nb.get("league", next_bot))), bs, 1.0)
+        var lead := "Próximo adversário desbloqueado:" if fresh else "Próximo adversário:"
         if short:
-            _lab(box, "Próximo adversário desbloqueado: " + String(nb.get("name", "")), 16, EMERALD)
+            _lab(box, lead + " " + String(nb.get("name", "")), 16, EMERALD)
         else:
-            _lab(box, "Próximo adversário desbloqueado:", 15, MUTED)
+            _lab(box, lead, 15, MUTED)
             _lab(box, String(nb.get("name", "")), 22, EMERALD)
     else:
         _lab(box, "Você venceu todos os bots, do MADEIRA ao CHALLENGER.", 15, MUTED)
@@ -116,8 +121,12 @@ func show_progress(bot_id: String, reward: Dictionary):
         # largura explícita: Label com quebra automática dentro de HBox tem largura mínima 0 (texto em coluna)
         words.custom_minimum_size.x = minf(380.0, maxf(160.0, panel.custom_minimum_size.x - 2.0 * m - (64.0 if (narrow or short) else 84.0) - 16.0))
         rrow.add_child(words)
-        _lab(words, "Recompensa", 14, MUTED, HORIZONTAL_ALIGNMENT_LEFT)
-        _lab(words, "Avatar " + Catalog.display_name(aid) + " desbloqueado" + ("" if Catalog.has_art(aid) else " (arte em breve)"), 17, GOLD, HORIZONTAL_ALIGNMENT_LEFT)
+        if fresh:
+            _lab(words, "Recompensa", 14, MUTED, HORIZONTAL_ALIGNMENT_LEFT)
+            _lab(words, "Avatar " + Catalog.display_name(aid) + " desbloqueado" + ("" if Catalog.has_art(aid) else " (arte em breve)"), 17, GOLD, HORIZONTAL_ALIGNMENT_LEFT)
+        else:
+            _lab(words, "Recompensa já conquistada", 14, MUTED, HORIZONTAL_ALIGNMENT_LEFT)
+            _lab(words, "Avatar " + Catalog.display_name(aid) + " · sem recompensa nova", 16, CREAM, HORIZONTAL_ALIGNMENT_LEFT)
     var gap := Control.new()
     gap.custom_minimum_size.y = 4
     box.add_child(gap)
@@ -129,7 +138,8 @@ func show_progress(bot_id: String, reward: Dictionary):
         actions.add_theme_constant_override("separation", 10)
         box.add_child(actions)
     if not final:
-        buttons["advance"] = _button(actions, "AVANÇAR PARA O " + String(Ladder.bot(next_bot).get("name", "")), true, func():
+        var nb_name := String(Ladder.bot(next_bot).get("name", ""))
+        buttons["advance"] = _button(actions, ("AVANÇAR PARA O " + nb_name) if fresh else ("JOGAR PRÓXIMO BOT · " + nb_name), true, func():
             var target := next_bot
             close()
             advance_requested.emit(target))

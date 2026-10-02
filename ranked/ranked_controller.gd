@@ -207,6 +207,8 @@ func _apply_state(msg: Dictionary):
     rules.halfmove = int(p.halfmove)
     rules.ply = int(p.ply)
     if not active: return
+    var before_view: Dictionary = game.pieces.duplicate()
+    var fresh_move: bool = rules.ply == game.move_count + 1
     var last = msg.get("last_move")
     # Efeito de captura só para o lance novo (não ao reconectar).
     if last is Dictionary and rules.ply == game.move_count + 1:
@@ -215,10 +217,21 @@ func _apply_state(msg: Dictionary):
             if captured[0] == "w": game.captured_white.append(captured)
             else: game.captured_black.append(captured)
             game._spawn_capture(game.square_center(Vector2i(int(last.to[0]), int(last.to[1]))), captured)
-    if last is Dictionary:
-        game.last_from = Vector2i(int(last.from[0]), int(last.from[1]))
-        game.last_to = Vector2i(int(last.to[0]), int(last.to[1]))
     game.pieces = rules.board.duplicate()
+    if last is Dictionary:
+        var lf := Vector2i(int(last.from[0]), int(last.from[1]))
+        var lt := Vector2i(int(last.to[0]), int(last.to[1]))
+        if fresh_move:
+            # lance novo recebido do servidor: anima; destaque forte se foi do adversário
+            var mover := String(game.pieces.get(lt, ""))
+            game.show_move(before_view, lf, lt, mover.substr(0, 1) != human_color)
+        else:
+            # reconexão / estado inicial: só marca o último lance, sem animação
+            game.clear_last_move()
+            game.last_from = lf
+            game.last_to = lt
+    else:
+        game.clear_last_move()
     game.turn = rules.turn
     game.move_count = rules.ply
     game.promotion_pending = not promotion_choices.is_empty()

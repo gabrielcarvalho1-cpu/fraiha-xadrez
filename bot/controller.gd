@@ -68,8 +68,7 @@ func restart():
     game.particles.clear()
     game.captured_white.clear()
     game.captured_black.clear()
-    game.last_from = Vector2i(-1,-1)
-    game.last_to = Vector2i(-1,-1)
+    game.clear_last_move()
     game.flash = 0.0
     game.settings_open = false
     game.game_started = true
@@ -150,11 +149,11 @@ func _apply(move: Dictionary) -> bool:
             if code[0] == "w": game.captured_white.append(code)
             else: game.captured_black.append(code)
             game._spawn_capture(game.square_center(square), code)
-    game.last_from = move.from
-    game.last_to = move.to
     thinking = not local_mode and rules.turn != human_color
     think_delay = 0.25
     _sync_view()
+    # Apresentação: anima o lance (o bot e, na partida local, os dois lados recebem o destaque forte).
+    game.show_move(before, move.from, move.to, local_mode or moving_color != human_color)
     return true
 
 func _sync_view():

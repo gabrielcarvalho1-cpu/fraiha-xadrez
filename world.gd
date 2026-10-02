@@ -72,6 +72,24 @@ var premove_from := Vector2i(-1,-1)
 var premove_to := Vector2i(-1,-1)
 var premove_selecting := false
 var check_flash := 0.0
+# ---------- Animação do lance + destaque de origem/destino (SÓ apresentação; regras intactas) ----------
+# Antes o tabuleiro trocava o dicionário `pieces` de uma vez (peça "teletransportava") e o último lance
+# tinha só um tom fraco fixo. Agora show_move() anima a(s) peça(s) que mudaram de casa a partir do
+# tabuleiro ANTERIOR e do já aplicado (o resultado vem das regras: bot, servidor ou partida local).
+const MOVE_ANIM := 0.32          # adversário / bot / remoto
+const OWN_MOVE_ANIM := 0.18      # lance do próprio jogador por clique (arrastar não anima de novo)
+const LAST_MOVE_HOLD := 1.6      # destaque forte do lance recebido
+const LAST_MOVE_FADE := 0.6
+const HL_FROM := Color(1.0, 0.70, 0.22)    # origem: dourado/âmbar suave
+const HL_TO := Color(0.80, 0.95, 0.30)     # destino: dourado-esverdeado, mais forte
+var move_anim := []              # [{code, from: Vector2, to: Vector2, final: String}]
+var move_fades := []             # [{code, at: Vector2}] peças capturadas sumindo
+var move_hidden := {}            # casas cujo conteúdo final só aparece no fim da animação
+var move_anim_t := 1.0
+var move_anim_len := MOVE_ANIM
+var last_move_emph := false      # lance do adversário/remoto: destaque forte que esmaece
+var last_move_age := 99.0
+var _drag_submit := []           # [from, to] do lance que o jogador acabou de soltar arrastando
 const PREMOVE_TINT := Color(0.22,0.52,0.95,0.50)
 # Desktop: engrenagem e reiniciar viram botões do HUD (stage); o tabuleiro só desenha o painel de opções.
 var external_hud := false
@@ -115,8 +133,7 @@ func _new_game():
     captured_white.clear()
     captured_black.clear()
     turn = "w"
-    last_from = Vector2i(-1,-1)
-    last_to = Vector2i(-1,-1)
+    clear_last_move()
     move_count = 0
     status = "BRANCAS JOGAM"
     particles.clear()
@@ -139,6 +156,10 @@ func _process(delta):
     particles = alive
     flash = max(0.0, flash-delta*3.5)
     check_flash = max(0.0, check_flash-delta*1.6)
+    if move_anim_t < 1.0:
+        move_anim_t = minf(1.0, move_anim_t + delta / move_anim_len)
+        if move_anim_t >= 1.0: _finish_move_anim()
+    last_move_age += delta
     _premove_tick()
     # cenário vivo: redesenha continuamente para água, fogo e vegetação
     queue_redraw()
@@ -326,16 +347,17 @@ func _finish_promotion(kind:String):
     _update_game_state()
     queue_redraw()
 
-func _piece(center:Vector2, code:String):
+func _piece(center:Vector2, code:String, alpha := 1.0):
     # V0.12: peças com contraste/volume reforçados e pixelização menos destrutiva.
+    if alpha <= 0.0: return
     if piece_textures.has(code) and piece_textures[code]:
         var tex:Texture2D = piece_textures[code]
         var heights = {"P":46.0,"R":54.0,"N":57.0,"B":60.0,"Q":64.0,"K":66.0}
         var height: float = heights[code.substr(1,1)]
         var size := Vector2(39.0 if code.ends_with("P") else 47.0, height)
         # Uma única sombra neutra; sem glow/outline artificial.
-        draw_ellipse_shadow(center + Vector2(0,26), Vector2(size.x*0.42,3), Color(0.02,0.025,0.015,0.28))
-        draw_texture_rect(tex, Rect2(Vector2(center.x-size.x/2.0, center.y+27.0-size.y), size), false)
+        draw_ellipse_shadow(center + Vector2(0,26), Vector2(size.x*0.42,3), Color(0.02,0.025,0.015,0.28*alpha))
+        draw_texture_rect(tex, Rect2(Vector2(center.x-size.x/2.0, center.y+27.0-size.y), size), false, Color(1,1,1,alpha))
         return
 
 func draw_ellipse_shadow(c:Vector2,r:Vector2,col:Color):
@@ -435,7 +457,7 @@ func _draw():
                 draw_line(r.end-Vector2(TILE,1),r.end-Vector2(0,1),Color(0,0,0,0.21),2)
             # The playable surface belongs to the dedicated forest artwork.
             if c==last_from or c==last_to:
-                draw_rect(r.grow(-3),Color(1.0,0.78,0.20,0.26))
+                _draw_last_move(r, c==last_to)
             if c==premove_from or c==premove_to:
                 draw_rect(r,PREMOVE_TINT)
             if c==check_sq:
@@ -453,12 +475,18 @@ func _draw():
     # Sem letras/números: arena limpa como a referência.
 
     var pre_on := premove_from!=Vector2i(-1,-1) and pieces.has(premove_from)
+    for f in move_fades:
+        _piece(f.at, f.code, 1.0 - _ease_move(move_anim_t))
     for pos in pieces:
         if dragging and pos == drag_origin:
             continue
         if pre_on and (pos == premove_from or pos == premove_to):
             continue
+        if move_hidden.has(pos):
+            continue
         _piece(square_center(pos),pieces[pos])
+    for m in move_anim:
+        _piece(m.from.lerp(m.to, _ease_move(move_anim_t)), m.code)
     if pre_on:
         # A peça já aparece na casa do pré-move (como no Chess.com).
         _piece(square_center(premove_to),pieces[premove_from])
@@ -598,6 +626,7 @@ func _handle_game_input(event):
         elif cell==selected:
             selected=Vector2i(-1,-1); legal_moves.clear()
         elif cell in legal_moves:
+            _drag_submit = [selected, cell] if dragging else []
             if bot != null:
                 bot.request_move(selected,cell)
                 return
@@ -612,9 +641,11 @@ func _handle_game_input(event):
                 else: captured_black.append(victim)
                 _spawn_capture(square_center(cell),victim)
                 did_capture=true
+            var before_local := pieces.duplicate()
             pieces.erase(selected)
             pieces[cell]=moving
             last_from=selected; last_to=cell
+            show_move(before_local, selected, cell, true, dragging)
             selected=Vector2i(-1,-1); legal_moves.clear()
             move_count+=1
             # promotion: stop and ask before the next board interaction
@@ -709,6 +740,89 @@ func _drag_input(event: InputEvent) -> bool:
         queue_redraw()
         return dragging
     return false
+
+## Mostra um lance JÁ aplicado em `pieces`: anima quem mudou de casa (inclui roque e en passant) e
+## destaca origem/destino. `before` = tabuleiro antes do lance. `emphasize` = lance do adversário,
+## do bot ou recebido do servidor (destaque forte que esmaece). Puramente visual: nenhuma regra, nenhum
+## motor — só compara os dois tabuleiros que o jogo já tem.
+func show_move(before: Dictionary, from: Vector2i, to: Vector2i, emphasize: bool, by_drag := false):
+    _finish_move_anim()
+    last_from = from
+    last_to = to
+    last_move_emph = emphasize
+    last_move_age = 0.0
+    if not before.has(from): return
+    var own_drag: bool = by_drag or (_drag_submit.size() == 2 and _drag_submit[0] == from and _drag_submit[1] == to and not emphasize)
+    _drag_submit = []
+    if own_drag: return   # a peça já foi levada com o mouse/dedo até a casa
+    var mover := String(before[from])
+    var color := mover.substr(0, 1)
+    move_anim.append({"code": mover, "from": square_center(from), "to": square_center(to)})
+    move_hidden[to] = true
+    # Outras peças da MESMA cor que mudaram de casa (torre do roque).
+    var left := []
+    var arrived := []
+    for sq in before:
+        if sq == from: continue
+        var code := String(before[sq])
+        if code.substr(0, 1) == color and String(pieces.get(sq, "")) != code: left.append(sq)
+    for sq in pieces:
+        if sq == to: continue
+        var code := String(pieces[sq])
+        if code.substr(0, 1) == color and String(before.get(sq, "")) != code: arrived.append(sq)
+    for a in left:
+        for b in arrived:
+            if String(before[a]) == String(pieces[b]):
+                move_anim.append({"code": String(before[a]), "from": square_center(a), "to": square_center(b)})
+                move_hidden[b] = true
+                arrived.erase(b)
+                break
+    # Peças do adversário que sumiram (captura normal na casa de destino, en passant ao lado):
+    # esmaecem durante o deslocamento, em vez de piscar.
+    for sq in before:
+        var code := String(before[sq])
+        if code.substr(0, 1) != color and String(pieces.get(sq, "")) != code:
+            move_fades.append({"code": code, "at": square_center(sq)})
+    move_anim_len = MOVE_ANIM if emphasize else OWN_MOVE_ANIM
+    move_anim_t = 0.0
+    queue_redraw()
+
+func move_animating() -> bool:
+    return move_anim_t < 1.0
+
+func _finish_move_anim():
+    move_anim.clear()
+    move_fades.clear()
+    move_hidden.clear()
+    move_anim_t = 1.0
+
+## Sem lance anterior (nova partida / reconexão): nenhum destaque antigo fica no tabuleiro.
+func clear_last_move():
+    _finish_move_anim()
+    last_from = Vector2i(-1,-1)
+    last_to = Vector2i(-1,-1)
+    last_move_emph = false
+    last_move_age = 99.0
+
+static func _ease_move(t: float) -> float:
+    # ease-in-out cúbico: sai devagar, desliza e "assenta" na casa
+    return 4.0*t*t*t if t < 0.5 else 1.0 - pow(-2.0*t + 2.0, 3.0) / 2.0
+
+## Origem dourada suave; destino dourado-esverdeado mais forte. Lance do adversário/remoto: forte por
+## LAST_MOVE_HOLD s, esmaece em LAST_MOVE_FADE s (ou logo que o jogador escolhe uma peça) até um tom
+## residual discreto que marca o último lance. Lance próprio: só o tom residual.
+func _draw_last_move(r: Rect2, dest: bool):
+    var base := 0.20 if dest else 0.15
+    var strong := 0.0
+    if last_move_emph:
+        var hold := LAST_MOVE_HOLD if selected == Vector2i(-1,-1) else minf(LAST_MOVE_HOLD, 0.25)
+        strong = 1.0 - clampf((last_move_age - hold) / LAST_MOVE_FADE, 0.0, 1.0)
+    var col: Color = HL_TO if dest else HL_FROM
+    var a := base + strong * (0.28 if dest else 0.22)
+    draw_rect(r.grow(-2), Color(col.r, col.g, col.b, a))
+    # contorno: forte logo após o lance; depois um fio discreto (as casas claras são da cor do dourado)
+    var edge := maxf(strong * (0.85 if dest else 0.65), 0.38 if dest else 0.30)
+    draw_rect(r.grow(-3), Color(col.r * 0.85, col.g * 0.75, col.b * 0.5, edge), false, 3.0 if (dest and strong > 0.5) else 2.0)
 
 func cancel_drag():
     drag_origin = Vector2i(-1,-1)
