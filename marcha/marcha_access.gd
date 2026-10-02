@@ -33,15 +33,29 @@ static func today_local() -> String:
     return Time.get_date_string_from_system()
 
 static func local_played_today(path := LOCAL_FILE) -> bool:
+    if path == LOCAL_FILE and _web_day() == today_local(): return true
     var cfg := ConfigFile.new()
     if cfg.load(path) != OK: return false
     return String(cfg.get_value("daily", "day", "")) == today_local()
 
 static func local_consume(path := LOCAL_FILE):
+    if path == LOCAL_FILE: _web_set_day(today_local())
     var cfg := ConfigFile.new()
     cfg.load(path)
     cfg.set_value("daily", "day", today_local())
     cfg.save(path)
+
+## Web: o user:// (IndexedDB) só é gravado alguns segundos depois; um F5 logo após começar a
+## partida perderia o consumo. O localStorage grava na hora — o dia consumido fica nos dois.
+const WEB_KEY := "fraiha_marcha_daily"
+static func _web_day() -> String:
+    if not OS.has_feature("web"): return ""
+    var v = JavaScriptBridge.eval("(function(){try{return localStorage.getItem('%s')||''}catch(e){return ''}})()" % WEB_KEY, true)
+    return String(v) if v is String else ""
+
+static func _web_set_day(day: String):
+    if not OS.has_feature("web"): return
+    JavaScriptBridge.eval("(function(){try{localStorage.setItem('%s','%s')}catch(e){}})()" % [WEB_KEY, day.json_escape()], true)
 
 static func tutorial_seen() -> bool:
     var cfg := ConfigFile.new()
