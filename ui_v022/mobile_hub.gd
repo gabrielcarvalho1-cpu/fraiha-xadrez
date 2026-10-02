@@ -539,7 +539,7 @@ func _about(content: VBoxContainer):
 ## esticar a grade; em retrato, grades de botões viram 1 coluna e a de avatares 2.
 func _fit_width(portrait: bool):
     for grid in scroll.find_children("*", "GridContainer", true, false):
-        if grid == menu_grid or grid.name == "AvatarGalleryMobile": continue
+        if grid == menu_grid or grid.name in ["AvatarGalleryMobile", "BadgeGalleryMobile"]: continue
         var has_avatars = grid.find_children("*", "TextureButton", true, false).size() > 0
         if portrait: grid.columns = 2 if has_avatars else 1
     for b in scroll.find_children("*", "Button", true, false):
