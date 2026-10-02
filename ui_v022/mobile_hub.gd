@@ -367,6 +367,10 @@ func _fit_club():
 func refresh_fullscreen():
     hub.refresh_fullscreen_button()
 
+func queue_redraw_cards():
+    for card in find_children("*", "", true, false):
+        if card is ProfileCard: card.queue_redraw()
+
 func refresh_club(on: bool):
     if is_instance_valid(club_row): club_row.set_active(on)
     for card in find_children("*", "", true, false):
@@ -610,6 +614,11 @@ class ProfileCard extends Button:
         while fs > 8 and font.get_string_size(hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > 150 * k: fs -= 1
         draw_string_outline(font, (Vector2(1394, 80) - o) * k, hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.6))
         draw_string(font, (Vector2(1394, 80) - o) * k, hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("f4edda"))
+        if hub.is_founder():
+            # Selo Fundador ao lado do nome
+            var nw: float = font.get_string_size(hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+            var bs := 34.0 * k
+            draw_texture_rect(hub.FOUNDER_BADGE_SMALL, Rect2((Vector2(1394, 80) - o) * k + Vector2(nw + 6.0 * k, -bs * 0.78), Vector2(bs, bs)), false)
         draw_string(font, (Vector2(1364, 106) - o) * k, "%s · %d / 100 PL" % [league.display_name, int(data.lp)], HORIZONTAL_ALIGNMENT_LEFT, 190 * k, int(15 * k), Color("f4ce7f"))
         var bar := Rect2((Vector2(1372, 118) - o) * k, Vector2(168 * clampf(float(data.lp) / 100.0, 0.0, 1.0), 6) * k)
         draw_rect(bar, Color("e9c46a"))

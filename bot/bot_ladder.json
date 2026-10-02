@@ -23,7 +23,7 @@
    "fallback": "easy",
    "reward": {
     "type": "avatar",
-    "id": "mage"
+    "id": "madeira_reward"
    },
    "league": "madeira"
   },
@@ -48,7 +48,7 @@
    "fallback": "easy",
    "reward": {
     "type": "avatar",
-    "id": "paladin"
+    "id": "ferro_reward"
    },
    "league": "ferro"
   },

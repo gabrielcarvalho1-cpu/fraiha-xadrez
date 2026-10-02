@@ -70,7 +70,7 @@ func run():
     check(not bp.is_defeated("madeira") and grants.is_empty() and bp.status("ferro") == "locked", "nada é concedido localmente antes da confirmação")
     acc._receive({"type": "bot_progress", "available": true, "defeated": ["madeira"], "new_bot": "madeira"})
     check(bp.is_defeated("madeira") and bp.status("ferro") == "available" and grants == ["madeira"], "confirmação do servidor: MADEIRA derrotado, FERRO liberado, recompensa 1×")
-    check(bp.avatar_unlocked("mage") and not bp.avatar_unlocked("paladin"), "avatar Mago liberado pela vitória confirmada; Paladino continua bloqueado")
+    check(bp.avatar_unlocked("madeira_reward") and not bp.avatar_unlocked("ferro_reward"), "avatar Rei de Madeira liberado pela vitória confirmada; Torre de Ferro continua bloqueada")
     bp.report_victory("madeira", "w", PackedStringArray(SCHOLAR))
     # R29: revanche também é validada pelo servidor (para abrir o painel pós-partida), mas nunca dá recompensa nova
     check(acc.sent.filter(func(m): return m.type == "bot_victory").size() == 2, "revanche é enviada ao servidor para validar")
@@ -147,7 +147,7 @@ func run():
     check(not acc.has_profile(), "(has_profile() fica falso com o socket caído — por isso não é usado para detectar conta)")
     bp.report_victory("madeira", "w", PackedStringArray(SCHOLAR))
     check(not bp.is_defeated("madeira") and grants.is_empty(), "conta + socket caído: vitória NÃO gera _grant local")
-    check(bp.status("ferro") == "locked" and not bp.avatar_unlocked("mage"), "conta + socket caído: FERRO continua bloqueado, sem recompensa")
+    check(bp.status("ferro") == "locked" and not bp.avatar_unlocked("madeira_reward"), "conta + socket caído: FERRO continua bloqueado, sem recompensa")
     check(notes7 == [Progress.OFFLINE_MSG], "conta + socket caído: mensagem clara de falta de conexão")
     check(acc.types().count("bot_victory") == 0, "conta + socket caído: nada enviado")
     # server_ready=false com socket ainda aberto (antes do acct_state)

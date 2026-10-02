@@ -82,7 +82,7 @@ func run():
     check(txt.contains("VITÓRIA!") and txt.contains("BOT MADEIRA DERROTADO"), "painel: VITÓRIA! / BOT MADEIRA DERROTADO")
     check(txt.contains("BOT FERRO") and txt.contains("AVANÇAR PARA O BOT FERRO"), "painel: próximo bot e botão AVANÇAR PARA O BOT FERRO")
     check(txt.contains("VOLTAR PARA O INÍCIO"), "painel: botão VOLTAR PARA O INÍCIO")
-    check(txt.contains("Recompensa") and txt.contains("Mago"), "painel: recompensa (avatar Mago)")
+    check(txt.contains("Recompensa") and txt.contains("Rei de Madeira"), "painel: recompensa (avatar Rei de Madeira)")
     check(modal.buttons.advance.custom_minimum_size.y >= 48 and modal.buttons.home.custom_minimum_size.y >= 48, "botões grandes para toque (>= 48 px)")
     # AVANÇAR
     modal.buttons.advance.pressed.emit()

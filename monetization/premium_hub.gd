@@ -265,7 +265,13 @@ func _hub_card_founder() -> Control:
     var top := HBoxContainer.new()
     top.add_theme_constant_override("separation", 14)
     v.add_child(top)
-    top.add_child(Art.Glyph.new("crown", 64 * k, Art.GOLD, true))
+    var seal := TextureRect.new()
+    seal.name = "FounderCardBadge"
+    seal.texture = preload("res://monetization/art/founder_badge.png")
+    seal.custom_minimum_size = Vector2(96, 96) * maxf(k, 0.8)
+    seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    seal.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    top.add_child(seal)
     var tv := VBoxContainer.new()
     tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     top.add_child(tv)

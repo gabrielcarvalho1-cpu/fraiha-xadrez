@@ -17,7 +17,7 @@ signal notice(text: String)
 
 const Ladder = preload("res://bot/bot_ladder.gd")
 const FILE := "user://bot_progress.cfg"
-const INITIAL_AVATARS := ["warrior", "archer"]
+const INITIAL_AVATARS := ["warrior", "archer", "peao_branco", "peao_negro"]
 const OFFLINE_MSG := "Sem conexão com o servidor. A vitória não pôde ser registrada na sua conta."
 
 var key := "local"             # "local" (convidado) ou user_id da conta

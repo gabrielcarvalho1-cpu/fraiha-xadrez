@@ -92,6 +92,10 @@ var avatar_editor = null        # editor de enquadramento
 var nickname_editor = null      # editor do nome público (página Perfil, desktop)
 var avatar_note: Label = null   # mensagens do avatar (página Perfil, desktop)
 var local_name_box: Control = null
+const FOUNDER_BADGE = preload("res://monetization/art/founder_badge.png")
+const FOUNDER_BADGE_SMALL = preload("res://monetization/art/founder_badge_small.png")
+var founder_row: HBoxContainer
+var ref_founder_badge: TextureRect
 var sound_muted := false        # botão SOM da Home: silencia o bus Master (mesmo sistema de áudio)
 var sound_button: Button
 var volume_label: Label
@@ -622,6 +626,25 @@ func _build_pages():
     profile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     profile.add_theme_constant_override("separation", 10)
     right_holder.add_child(profile)
+    # Selo Fundador (Pacote Fundador): emblema + título; só aparece para quem tem o pacote.
+    founder_row = HBoxContainer.new()
+    founder_row.name = "FounderRow"
+    founder_row.add_theme_constant_override("separation", 12)
+    profile.add_child(founder_row)
+    var seal = TextureRect.new()
+    seal.name = "FounderSeal"
+    seal.texture = FOUNDER_BADGE
+    seal.custom_minimum_size = Vector2(64, 64)
+    seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    seal.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    founder_row.add_child(seal)
+    var seal_words = VBoxContainer.new()
+    seal_words.alignment = BoxContainer.ALIGNMENT_CENTER
+    seal_words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    founder_row.add_child(seal_words)
+    _label(seal_words, "FUNDADOR DO REINO", 18, GOLD)
+    _label(seal_words, "Selo Fundador permanente · Pacote Fundador", 13, MUTED)
+    founder_row.visible = false
     # Nome público da conta (único, troca a cada 30 dias) — servidor decide tudo.
     nickname_editor = preload("res://account/nickname_editor.gd").new()
     profile.add_child(nickname_editor)
@@ -644,6 +667,7 @@ func _build_pages():
         player_name = value.strip_edges()
         if player_name.is_empty(): player_name = "Jogador"
         profile_name.text = player_name
+        refresh_founder()
         _save_preferences()
     )
     _refresh_name_boxes()
@@ -840,6 +864,8 @@ func avatar_texture(id: String = "") -> Texture2D:
         var custom := custom_avatar()
         if custom != null: return custom
         id = avatar_id
+        # Avatar do Fundador sem o pacote ativo (ex.: conta ainda carregando): mostra o Guerreiro sem apagar a escolha.
+        if AvatarCatalog.is_founder_avatar(id) and not is_founder(): id = "warrior"
     if id == "paladin": return ThemeCatalog.texture("res://profile/paladin.png")
     if id == "warrior": return AVATAR
     if id != "archer" and id != "mage":
@@ -850,10 +876,23 @@ func avatar_texture(id: String = "") -> Texture2D:
     var half = atlas.get_width()/2.0
     return _slice(atlas,Rect2(0 if id == "archer" else half,0,half,atlas.get_height()))
 
+## Avatar liberado? Iniciais sempre; recompensas da escada pelo progresso dos bots; o do Fundador pelo
+## Pacote Fundador (entitlements: servidor is_founder ou simulação de dev).
+func avatar_unlocked(id: String) -> bool:
+    if AvatarCatalog.is_founder_avatar(id): return is_founder()
+    return bot_progress == null or bot_progress.avatar_unlocked(id)
+
+func avatar_lock_hint(id: String) -> String:
+    if AvatarCatalog.is_founder_avatar(id): return "Exclusivo do Pacote Fundador"
+    return String(bot_progress.unlock_hint(id)) if bot_progress != null else ""
+
+func is_founder() -> bool:
+    return entitlements != null and entitlements.founder()
+
 func choose_avatar(id: String):
     if id not in AvatarCatalog.ids(): return
-    if bot_progress != null and not bot_progress.avatar_unlocked(id) and id != avatar_id:
-        _avatar_message("Bloqueado · " + bot_progress.unlock_hint(id) + " para liberar este avatar.", true)
+    if not avatar_unlocked(id) and id != avatar_id:
+        _avatar_message("Bloqueado · " + avatar_lock_hint(id) + ".", true)
         return
     if not AvatarCatalog.has_art(id):
         _avatar_message("Avatar conquistado! A arte dele ainda será adicionada ao jogo.", false)
@@ -930,7 +969,7 @@ func _refresh_avatar_detail():
     avatar_detail.pic.material = avatar_gallery.gray_material() if st == "locked" else null
     avatar_detail.title.text = String(e.get("name", id)).to_upper()
     var src := String(e.get("source", ""))
-    avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot"))
+    avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else ("Exclusivo do Pacote Fundador" if src == "founder" else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot")))
     match st:
         "locked":
             avatar_detail.status.text = "BLOQUEADO · " + avatar_gallery.hint(id)
@@ -1395,7 +1434,20 @@ func open_club():
     open_premium("club")
 
 ## Club ativo (real OU simulação) → atualiza a fita da Home e o cartão do jogador.
+## Selo Fundador: cartão da Home (ao lado do nome), Perfil e cartão do celular.
+func refresh_founder():
+    var on := is_founder()
+    if is_instance_valid(founder_row): founder_row.visible = on
+    if is_instance_valid(ref_founder_badge) and not ref_profile.is_empty():
+        var nl: Label = ref_profile.name
+        var f: Font = nl.get_theme_font("font")
+        var w: float = minf(f.get_string_size(nl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, nl.get_theme_font_size("font_size")).x, nl.size.x)
+        ref_founder_badge.position = nl.position + Vector2(w + 6.0, -2.0)
+        ref_founder_badge.visible = on and ref_mode
+    if is_instance_valid(mobile_ui): mobile_ui.queue_redraw_cards()
+
 func refresh_club():
+    refresh_founder()
     var on: bool = entitlements != null and entitlements.club_active()
     if is_instance_valid(club_entry): club_entry.set_active(on)
     if is_instance_valid(mobile_ui) and mobile_ui.has_method("refresh_club"): mobile_ui.refresh_club(on)
@@ -1586,6 +1638,17 @@ func _build_reference_chrome():
     ref_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(ref_badge)
     pbtn.pressed.connect(func(): show_page("profile"))
+    # Selo Fundador ao lado do nome (só para quem tem o Pacote Fundador).
+    ref_founder_badge = TextureRect.new()
+    ref_founder_badge.name = "RefFounderBadge"
+    ref_founder_badge.texture = FOUNDER_BADGE_SMALL
+    ref_founder_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    ref_founder_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    ref_founder_badge.size = Vector2(36, 36)
+    ref_founder_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ref_founder_badge.tooltip_text = "Selo Fundador"
+    ref_founder_badge.visible = false
+    pbtn.add_child(ref_founder_badge)
     pbtn.mouse_entered.connect(func(): name_label.modulate = GOLD)
     pbtn.mouse_exited.connect(func(): name_label.modulate = Color.WHITE)
     ref_profile = {"button": pbtn, "name": name_label, "portrait": portrait}
@@ -1717,6 +1780,7 @@ func _use_profile(ref: bool):
     profile_portrait = src.portrait
     profile_name.text = text
     profile_portrait.texture = avatar_texture()
+    refresh_founder.call_deferred()
     if ref:
         if is_instance_valid(ref_profile_club_host): attach_club_frame(ref_profile_club_host)
         # retratos quadrados preenchem a moldura; o medalhão redondo (Guerreiro) fica centralizado

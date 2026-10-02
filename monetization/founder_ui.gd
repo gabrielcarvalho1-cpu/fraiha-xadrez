@@ -18,7 +18,8 @@ const WHY := [
 
 ## [ícone, título, descrição, estado depois de ativar (TESTE)]
 const BENEFITS := [
-    ["seal", "SELO FUNDADOR PERMANENTE", "Badge especial associado à sua conta.", "now"],
+    ["seal", "SELO FUNDADOR PERMANENTE", "Emblema ao lado do seu nome, no perfil e na tela inicial.", "now"],
+    ["crown", "AVATAR FUNDADOR EXCLUSIVO", "Rei e Rainha dourados — só para Fundadores.", "now"],
     ["scroll", "TÍTULO EXCLUSIVO", "“Fundador do Reino”.", "now"],
     ["frame", "MOLDURA DE PERFIL EXCLUSIVA", "Visual especial reservado aos Fundadores.", "now"],
     ["pawn", "CONJUNTO DE PEÇAS FUNDADOR", "Conjunto exclusivo, fora da progressão do Ranked.", "soon"],
@@ -77,17 +78,16 @@ static func _hero(hub, parent: VBoxContainer, owned: bool):
     var layout: BoxContainer = VBoxContainer.new() if hub.narrow else HBoxContainer.new()
     layout.add_theme_constant_override("separation", int(28 * hub.k))
     f.add_child(layout)
-    # Brasão: coroa sobre o escudo
-    var emblem := VBoxContainer.new()
-    emblem.alignment = BoxContainer.ALIGNMENT_CENTER
-    emblem.add_theme_constant_override("separation", -int(18 * hub.k))
+    # Arte oficial do Pacote Fundador (o mesmo emblema do Selo Fundador do perfil)
+    var emblem := TextureRect.new()
+    emblem.name = "FounderEmblem"
+    emblem.texture = preload("res://monetization/art/founder_badge.png")
+    var es: float = (300.0 if not hub.narrow else 190.0) * hub.k
+    emblem.custom_minimum_size = Vector2(es, es)
+    emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    emblem.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     layout.add_child(emblem)
-    var crown := Art.Glyph.new("crown", (110 if not hub.narrow else 80) * hub.k, Art.GOLD)
-    crown.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-    emblem.add_child(crown)
-    var shield := Art.Glyph.new("shield", (190 if not hub.narrow else 120) * hub.k, Art.GOLD_MID)
-    shield.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-    emblem.add_child(shield)
     var v := VBoxContainer.new()
     v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     v.add_theme_constant_override("separation", int(10 * hub.k))

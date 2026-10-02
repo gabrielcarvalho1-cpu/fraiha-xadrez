@@ -1,4 +1,5 @@
 extends Button
+const BADGE = preload("res://monetization/art/founder_badge_small.png")
 ## Entrada "FRAIHA PREMIUM" dentro de CONFIGURAÇÕES: coroa, moldura dourada, brilho e selo NOVO.
 const Art := preload("res://monetization/premium_art.gd")
 
@@ -40,9 +41,9 @@ func _draw():
     # Brasão com coroa.
     var ib := Rect2(Vector2(14, r.position.y + (r.size.y - 60) / 2.0), Vector2(60, 60))
     var pulse := 0.5 + 0.5 * sin(t * 2.2)
-    draw_circle(ib.get_center(), 30, Color(0.02, 0.05, 0.03))
-    draw_arc(ib.get_center(), 29, 0, TAU, 36, Color(0.95, 0.78, 0.35, 0.7 + 0.3 * pulse), 2.0)
-    Art.icon(self, "crown", ib.grow(-12), Color("f6d27a"))
+    # Emblema oficial do Pacote Fundador (leve pulso de brilho atrás)
+    draw_circle(ib.get_center(), 31, Color(0.95, 0.78, 0.35, 0.10 + 0.12 * pulse))
+    draw_texture_rect(BADGE, ib.grow(4), false)
     # Textos.
     var fx := ib.end.x + 14.0
     var room := size.x - fx - 34.0

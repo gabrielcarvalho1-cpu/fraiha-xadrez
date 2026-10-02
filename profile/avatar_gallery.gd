@@ -56,11 +56,11 @@ func state_of(id: String) -> String:
     return "selected" if hub.avatar_id == id and hub.custom_avatar() == null else "unlocked"
 
 func unlocked(id: String) -> bool:
-    return hub == null or hub.bot_progress == null or hub.bot_progress.avatar_unlocked(id)
+    return hub == null or hub.avatar_unlocked(id)
 
 func hint(id: String) -> String:
-    if hub == null or hub.bot_progress == null: return ""
-    return String(hub.bot_progress.unlock_hint(id))   # "Derrote o BOT X"
+    if hub == null: return ""
+    return String(hub.avatar_lock_hint(id))   # "Derrote o BOT X" | "Exclusivo do Pacote Fundador"
 
 func count_unlocked() -> int:
     var n := 0
