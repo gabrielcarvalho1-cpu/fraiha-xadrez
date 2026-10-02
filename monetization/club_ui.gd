@@ -21,6 +21,7 @@ const BENEFITS := [
     ["seal", "SELO CLUB", "3 ícones e 3 avatares exclusivos de membro.", "DISPONÍVEL"],
     ["brush", "PERSONALIZAÇÃO PREMIUM", "Combine qualquer conjunto de peças conquistado com qualquer cenário; escolha ícone, título e moldura.", "DISPONÍVEL"],
     ["star", "ACESSO ANTECIPADO", "Laboratório: novidades em teste antes do lançamento geral.", "DISPONÍVEL"],
+    ["crown", "MARCHA REAL ILIMITADA", "O novo modo de cartas e corrida sem limite (sem Club: 1 partida por dia).", "DISPONÍVEL"],
     ["tag", "DESCONTO FUTURO NA LOJA", "Condições especiais para membros na futura loja.", "EM BREVE"],
 ]
 

@@ -165,6 +165,18 @@ class MemoryStore {
     this.analysis.set(k, used + 1);
     return { ok: true, used: used + 1 };
   }
+  // ---------- R32 · MARCHA REAL (0008): partidas por dia UTC; Club = ilimitado (decidido no backend) ----------
+  async marchaUsage(userId, day) {
+    this.marcha = this.marcha || new Map();
+    return this.marcha.get(userId + '|' + day) || 0;
+  }
+  async marchaConsume(userId, day, limit) {
+    this.marcha = this.marcha || new Map();
+    const k = userId + '|' + day, used = this.marcha.get(k) || 0;
+    if (used >= limit) return { ok: false, used };
+    this.marcha.set(k, used + 1);
+    return { ok: true, used: used + 1 };
+  }
   // ---------- Escada de bots (0006): 1ª vitória por (conta, bot) ----------
   async getBotProgress(userId) {
     if (this.botProgressDisabled) { const e = new Error('Could not find the table bot_progress'); e.code = 'PGRST205'; throw e; }
@@ -405,6 +417,19 @@ class SupabaseStore {
       if (/42P01|PGRST205|does not exist|Could not find the (table|function)/.test(String(e.code) + ' ' + String(e.message))) return { ok: false, used: 0, not_configured: true };
       throw e;
     }
+  }
+  // ---------- R32 · MARCHA REAL (0008): fraiha_marcha_consume decide no banco. Sem a 0008 → not_configured ----------
+  async marchaUsage(userId, day) {
+    try {
+      const rows = await this.req('/marcha_usage?user_id=eq.' + encodeURIComponent(userId) + '&day=eq.' + day + '&select=used');
+      return rows[0] ? Number(rows[0].used) : 0;
+    } catch (e) { if (SCHEMA_MISSING(e)) return { not_configured: true }; throw e; }
+  }
+  async marchaConsume(userId, day, limit) {
+    try {
+      const used = await this.req('/rpc/fraiha_marcha_consume', { method: 'POST', body: JSON.stringify({ p_user: userId, p_day: day, p_limit: limit }) });
+      return { ok: Number(used) >= 0, used: Math.abs(Number(used)) };
+    } catch (e) { if (SCHEMA_MISSING(e)) return { ok: false, used: 0, not_configured: true }; throw e; }
   }
   // ---------- Amigos (0002_fraiha_social). Todos os ids já validados como UUID pelo serviço. ----------
   // R31: perfis públicos com selo/título/moldura + direitos (embed entitlements, 1:1 por user_id).

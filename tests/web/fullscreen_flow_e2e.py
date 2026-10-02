@@ -19,7 +19,7 @@ STATE = "(() => { const c = document.getElementById('canvas'); return { fs: !!do
 FS_BTN = (465, 47)          # botão de tela cheia (ao lado do som)
 BOT_ITEM = (800, 350)       # JOGAR CONTRA O COMPUTADOR
 BOT_BACK = (240, 812)       # VOLTAR À HOME da página dos bots
-SAIR = (800, 785)
+SAIR = (800, 838)          # R32: SAIR é a 10ª linha do menu
 CONFIRM = (640, 566)        # CONFIRMAR do diálogo
 EMPTY = (1450, 700)         # área sem botão (cenário)
 fails = 0

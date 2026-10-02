@@ -65,6 +65,18 @@ const sql = q => execSync(`${PSQL} -At -c "${q.replace(/"/g, '\\"')}"`).toString
   sql(`update public.entitlements set club_expires_at = now() - interval '1 minute' where user_id='${A}'`);
   const [pa2] = await st.getProfilesByIds([A]);
   check(pa2.badge === '' && pa2.club === false && pa2.founder === true && sql(`select profile_badge from public.profiles where user_id='${A}'`) === 'club_b', 'Club vencido: selo escondido, escolha guardada');
+  // R32 · 0008: Marcha Real (limite diário)
+  const today = new Date().toISOString().slice(0, 10);
+  const c1 = await st.marchaConsume(B, today, 1), c2 = await st.marchaConsume(B, today, 1);
+  check(c1.ok && c1.used === 1 && !c2.ok && c2.used === 1, '0008: fraiha_marcha_consume libera 1 e bloqueia a 2ª no dia');
+  check((await st.marchaUsage(B, today)) === 1, '0008: marcha_usage registra o dia');
+  const mres = await fetch('http://127.0.0.1:' + port + '/rpc/fraiha_marcha_consume', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + jwt({ role: 'authenticated', sub: B }) }, body: JSON.stringify({ p_user: B, p_day: today, p_limit: 99 }) });
+  check(mres.status === 401 || mres.status === 403 || mres.status === 404, '0008: jogador não consegue zerar o próprio limite (%d)'.replace('%d', mres.status));
+  sql('drop function public.fraiha_marcha_consume(uuid, date, integer); drop table public.marcha_usage');
+  sql("notify pgrst, 'reload schema'");
+  await new Promise(res => setTimeout(res, 800));
+  const nc = await st.marchaConsume(B, today, 1);
+  check(nc.not_configured === true, 'sem a 0008: not_configured (o aparelho controla o limite)');
   // 4) servidor novo + banco SEM a 0007: Amigos continua funcionando (cai para as colunas antigas)
   sql('alter table public.profiles drop column profile_badge, drop column profile_title');
   sql("notify pgrst, 'reload schema'");

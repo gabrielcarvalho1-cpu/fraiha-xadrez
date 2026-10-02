@@ -17,6 +17,7 @@ const Cosmetics = require('./accounts/cosmetics');
 const GUEST_TTL_MS = 24 * 3600e3;
 // Análise pós-partida: contas sem Club têm N análises por dia (dia UTC, relógio do servidor).
 const ANALYSIS_FREE_PER_DAY = Number(process.env.FRAIHA_ANALYSIS_FREE_PER_DAY || 3);
+const MARCHA_FREE_PER_DAY = Number(process.env.FRAIHA_MARCHA_FREE_PER_DAY || 1);   // R32: Marcha Real sem Club
 const utcDay = () => new Date().toISOString().slice(0, 10);
 const nextUtcMidnight = () => { const d = new Date(); d.setUTCHours(24, 0, 0, 0); return d.toISOString(); };
 
@@ -241,6 +242,21 @@ class Backend {
         if (!ws.profile) return this.send(ws, { type: 'analysis_state', unlimited: false, used: 0, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight(), guest: true });
         const ent = await this.store.getEntitlements(ws.user.id);
         return this.send(ws, { type: 'analysis_state', ...(await this.analysisSummary(ws.user.id, ent)) });
+      }
+      // ---------- R32 · MARCHA REAL: Club = ilimitado; sem Club = MARCHA_FREE_PER_DAY partidas por dia UTC ----------
+      if (a === 'marcha_status' || a === 'marcha_start') {
+        if (!ws.profile) return this.send(ws, { type: a === 'marcha_start' ? 'marcha_denied' : 'marcha_state', code: 'auth_required', unlimited: false, used: 0, limit: MARCHA_FREE_PER_DAY });
+        const ent = await this.store.getEntitlements(ws.user.id);
+        if (ent.club_active) return this.send(ws, { type: a === 'marcha_start' ? 'marcha_granted' : 'marcha_state', unlimited: true, used: 0, limit: 0 });
+        if (a === 'marcha_status') {
+          const used = await this.store.marchaUsage(ws.user.id, utcDay());
+          if (used && used.not_configured) return this.send(ws, { type: 'marcha_state', code: 'not_configured', unlimited: false });
+          return this.send(ws, { type: 'marcha_state', unlimited: false, used: Number(used) || 0, limit: MARCHA_FREE_PER_DAY, resets_at: nextUtcMidnight() });
+        }
+        const r = await this.store.marchaConsume(ws.user.id, utcDay(), MARCHA_FREE_PER_DAY);
+        if (r.not_configured) return this.send(ws, { type: 'marcha_denied', code: 'not_configured', message: 'Limite diário da Marcha Real ainda não configurado no servidor (migração 0008 pendente).' });
+        if (!r.ok) return this.send(ws, { type: 'marcha_denied', code: 'daily_limit', used: r.used, limit: MARCHA_FREE_PER_DAY, resets_at: nextUtcMidnight(), message: 'Você já jogou sua partida grátis de hoje.' });
+        return this.send(ws, { type: 'marcha_granted', unlimited: false, used: r.used, limit: MARCHA_FREE_PER_DAY, resets_at: nextUtcMidnight() });
       }
       // ---------- DEV: simular direitos no servidor em memória (nunca no Supabase) ----------
       if (a === 'dev_set_entitlements') {

@@ -17,7 +17,10 @@ const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
 const APP_VERSION = "0.31"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
-const FOREST = preload("res://ui_v022/assets/home_forest_v2.png")
+const FOREST = preload("res://ui_v022/assets/home_forest_v3.png")   # R32: menu de 10 linhas (tools/home_menu_10rows.py)
+## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
+const MENU_ROWS := [Vector2(339.3, 47.2), Vector2(392.8, 48.1), Vector2(446.3, 62.4), Vector2(514.0, 49.0), Vector2(569.2, 49.0), Vector2(624.5, 49.0), Vector2(680.6, 49.9), Vector2(737.6, 49.9), Vector2(793.7, 49.0), Vector2(849.9, 49.9)]
+const MENU_SCALE := 0.891
 const FOREST_V2 = FOREST
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
@@ -81,6 +84,11 @@ var avatar_gallery = null       # profile/avatar_gallery.gd (página Perfil, PC)
 var avatar_detail := {}         # área de detalhe do avatar em foco
 var gallery_count: Label
 var inspected_avatar := ""
+var inspected_badge := "auto"   # R32: ícone em foco na aba ÍCONES do Perfil
+var profile_tab := "avatars"    # "avatars" | "icons"
+var badge_gallery = null        # profile/badge_gallery.gd
+var profile_tabs := {}
+var gallery_scrolls := {}
 const AvatarCatalog = preload("res://profile/avatar_catalog.gd")
 var bot_progress = null         # bot/bot_progress.gd — escada de bots e avatares desbloqueados
 var bot_ladder_ui = null        # bot/bot_ladder_ui.gd (página larga do PC)
@@ -279,7 +287,7 @@ func _build():
     # transparente por cima — a arte original fica intacta. Só aparece com a arte oficial.
     var details = TextureRect.new()
     details.name = "ForestDetails"
-    details.texture = preload("res://ui_v022/assets/home_forest_v2_details.png")
+    details.texture = preload("res://ui_v022/assets/home_forest_v3_details.png")
     details.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     details.stretch_mode = TextureRect.STRETCH_SCALE
     details.size = DESIGN
@@ -312,12 +320,14 @@ func _build():
     theme_frame.name = "ThemeMenuFrame"
     theme_frame.hide()
     # JOGAR LOCAL saiu da Home pública; o modo continua disponível internamente (play_local_requested).
-    var titles = ["JOGAR CONTRA O COMPUTADOR", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "AMIGOS", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "SAIR"]
-    var subtitles = ["Treine e evolua seu jogo", "Partida casual · fila automática", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Amigos, mensagens e convites", "Áudio, vídeo e preferências", "Sobre o projeto", "Até a próxima partida!"]
-    var actions = [func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), func(): friends_requested.emit(), func(): show_page("settings"), func(): show_page("about"), func(): quit_requested.emit()]
-    var icons = [1,2,3,3,0,4,5,6]
-    for i in range(8):
-        var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(611,341+i*63), actions[i], Vector2(450,57))
+    # R32: + MARCHA REAL (novo modo) e + HISTÓRICO DE PARTIDAS (abaixo de CONHEÇA O FRAIHA)
+    var titles = ["JOGAR CONTRA O COMPUTADOR", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "MARCHA REAL", "AMIGOS", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "HISTÓRICO DE PARTIDAS", "SAIR"]
+    var subtitles = ["Treine e evolua seu jogo", "Partida casual · fila automática", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Novo modo · cartas e corrida", "Amigos, mensagens e convites", "Áudio, vídeo e preferências", "Sobre o projeto", "Suas partidas e análises", "Até a próxima partida!"]
+    var actions = [func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), open_marcha, func(): friends_requested.emit(), func(): show_page("settings"), func(): show_page("about"), func(): show_page("history"), func(): quit_requested.emit()]
+    var icons = [1,2,3,3,5,0,4,5,5,6]
+    for i in range(titles.size()):
+        var row: Vector2 = MENU_ROWS[i]
+        var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(611, row.x), actions[i], Vector2(450, row.y))
         item.name = "MainAction" + str(i)
         menu_buttons.append(item)
         if titles[i] == "JOGAR RANQUEADO": _feature_ranked(item)
@@ -592,12 +602,14 @@ func _build_pages():
     _build_ranked()
     _build_ranking()
     _build_about_page()
+    _build_history_page()
     var profile_panel = _wide_page("profile","PERFIL DO JOGADOR")
     # GALERIA DE PROGRESSÃO (esquerda): todos os avatares; bloqueados em cinza com o requisito.
     gallery_count = _label(profile_panel, "", 15, GOLD)
     gallery_count.name = "GalleryCount"
-    gallery_count.position = Vector2(44,80)
-    gallery_count.size = Vector2(700,24)
+    gallery_count.position = Vector2(372,76)
+    gallery_count.size = Vector2(380,24)
+    gallery_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     var gscroll = ScrollContainer.new()
     gscroll.name = "AvatarGalleryScroll"
     gscroll.position = Vector2(36,108)
@@ -608,8 +620,34 @@ func _build_pages():
     avatar_gallery.name = "AvatarGallery"
     gscroll.add_child(avatar_gallery)
     avatar_gallery.setup(self, 5, Vector2(132,170))
-    avatar_gallery.picked.connect(choose_avatar)
     avatar_gallery.inspected.connect(_inspect_avatar)
+    # R32: ÍCONES separados dos avatares — aba própria, mesma área, botão APLICAR ÍCONE no detalhe.
+    var bscroll = ScrollContainer.new()
+    bscroll.name = "BadgeGalleryScroll"
+    bscroll.position = gscroll.position
+    bscroll.size = gscroll.size
+    bscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    bscroll.visible = false
+    profile_panel.add_child(bscroll)
+    badge_gallery = load("res://profile/badge_gallery.gd").new()
+    badge_gallery.name = "BadgeGallery"
+    bscroll.add_child(badge_gallery)
+    badge_gallery.setup(self, 5, Vector2(132,170))
+    badge_gallery.inspected.connect(_inspect_badge)
+    gallery_scrolls = {"avatars": gscroll, "icons": bscroll}
+    var tabs = HBoxContainer.new()
+    tabs.name = "ProfileTabs"
+    tabs.position = Vector2(44,70)
+    tabs.size = Vector2(340,34)
+    tabs.add_theme_constant_override("separation", 10)
+    profile_panel.add_child(tabs)
+    for pair in [["avatars", "AVATARES"], ["icons", "ÍCONES"]]:
+        var tab_id: String = pair[0]
+        var tb = _hud_text_button(pair[1], Vector2(150,34))
+        tb.name = "Tab_" + tab_id
+        tb.pressed.connect(func(): set_profile_tab(tab_id))
+        tabs.add_child(tb)
+        profile_tabs[tab_id] = tb
     for id in avatar_gallery.cards: avatar_choices[id] = avatar_gallery.cards[id]
     # Foto própria: escolher arquivo → enquadrar → salvar (512x512). Remover volta ao avatar.
     var photo_row = HBoxContainer.new()
@@ -637,11 +675,11 @@ func _build_pages():
     avatar_note.position = Vector2(44,520)
     avatar_note.size = Vector2(700,20)
     # DETALHE (direita, topo): avatar em foco, nome, origem e status.
-    avatar_detail = _build_avatar_detail(profile_panel, Rect2(790,80,622,170))
+    avatar_detail = _build_avatar_detail(profile_panel, Rect2(790,80,622,206))
     var right_scroll = ScrollContainer.new()
     right_scroll.name = "ProfileInfoScroll"
-    right_scroll.position = Vector2(790,262)
-    right_scroll.size = Vector2(622,282)
+    right_scroll.position = Vector2(790,296)
+    right_scroll.size = Vector2(622,248)
     right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     profile_panel.add_child(right_scroll)
     var right_holder = MarginContainer.new()
@@ -708,7 +746,7 @@ func _build_pages():
     for mode in Ranked.MODES:
         var cell = _body(stats_grid,ranked.summary(mode),13)
         cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    _refresh_avatars()
+    set_profile_tab("avatars")
     _build_settings_page()
 
 ## CONFIGURAÇÕES (R29): painel próprio, centralizado e do mesmo sistema das páginas largas
@@ -987,14 +1025,63 @@ func _build_avatar_detail(parent: Control, r: Rect2) -> Dictionary:
     var origin = _label(words, "", 15, CREAM)
     var status = _label(words, "", 15, MUTED)
     var brief = _label(words, "", 13, MUTED)
-    return {"box": box, "pic": pic, "title": title, "origin": origin, "status": status, "brief": brief}
+    # R32: aplicar é explícito (tocar no cartão só inspeciona)
+    var apply = _hud_text_button("APLICAR AVATAR", Vector2(230,42))
+    apply.name = "ApplyInspected"
+    apply.position = Vector2(r.size.x - 244, r.size.y - 54)
+    apply.size = Vector2(230,42)
+    apply.mouse_filter = Control.MOUSE_FILTER_STOP
+    apply.pressed.connect(apply_inspected)
+    box.add_child(apply)
+    return {"box": box, "pic": pic, "title": title, "origin": origin, "status": status, "brief": brief, "apply": apply}
 
 func _inspect_avatar(id: String):
     inspected_avatar = id
     _refresh_avatar_detail()
 
+func _inspect_badge(id: String):
+    inspected_badge = id
+    _refresh_avatar_detail()
+
+func set_profile_tab(tab: String):
+    profile_tab = tab
+    for k in gallery_scrolls: gallery_scrolls[k].visible = k == tab
+    for k in profile_tabs: profile_tabs[k].modulate = Color.WHITE if k == tab else Color(0.62, 0.66, 0.62)
+    if tab == "icons": inspected_badge = cosmetic_pref("badge")
+    if badge_gallery != null:
+        badge_gallery.focus_id = inspected_badge
+        badge_gallery.update_states()
+    _refresh_avatars()
+
+## R32 · botão APLICAR da área de detalhe: aplica o avatar ou o ícone em foco.
+func apply_inspected() -> bool:
+    if profile_tab == "icons": return apply_badge(inspected_badge)
+    return apply_avatar(inspected_avatar if not inspected_avatar.is_empty() else avatar_id)
+
+func apply_badge(bid: String) -> bool:
+    if true:
+        if not set_cosmetic("badge", bid):
+            _avatar_message("Bloqueado · " + Cosmetics.lock_hint("badge", bid) + ".", true)
+            return false
+        _avatar_message("Ícone aplicado: " + preload("res://profile/badge_gallery.gd").display_name(bid) + ".", false)
+        return true
+    return false
+
+func apply_avatar(id: String) -> bool:
+    if not avatar_unlocked(id) or not AvatarCatalog.has_art(id):
+        _avatar_message("Bloqueado · " + avatar_lock_hint(id) + ".", true)
+        return false
+    var had_photo := custom_avatar() != null
+    if had_photo: remove_custom_avatar()   # avatar e foto não convivem: aplicar o avatar tira a foto
+    choose_avatar(id)
+    _avatar_message("Avatar aplicado: " + AvatarCatalog.display_name(id) + (" (a foto foi removida)." if had_photo else "."), false)
+    return avatar_id == id
+
 func _refresh_avatar_detail():
     if avatar_detail.is_empty() or avatar_gallery == null: return
+    if profile_tab == "icons" and badge_gallery != null:
+        _refresh_badge_detail()
+        return
     var id: String = inspected_avatar if not inspected_avatar.is_empty() else avatar_id
     var e: Dictionary = AvatarCatalog.entry(id)
     var st: String = avatar_gallery.state_of(id)
@@ -1014,9 +1101,37 @@ func _refresh_avatar_detail():
             avatar_detail.status.text = "CONQUISTADO · a arte será adicionada em breve"
             avatar_detail.status.add_theme_color_override("font_color", GOLD)
         _:
-            avatar_detail.status.text = "CONQUISTADO · clique para usar"
+            avatar_detail.status.text = "CONQUISTADO · toque em APLICAR AVATAR"
             avatar_detail.status.add_theme_color_override("font_color", GOLD)
     avatar_detail.brief.text = "" if AvatarCatalog.has_art(id) else "Arte em produção."
+    if avatar_detail.has("apply"):
+        var b: Button = avatar_detail.apply
+        b.text = "EM USO" if st == "selected" else ("BLOQUEADO" if st in ["locked", "no_art_unlocked"] else "APLICAR AVATAR")
+        b.disabled = st != "unlocked"
+
+func _refresh_badge_detail():
+    var id: String = inspected_badge
+    var st: String = badge_gallery.state_of(id)
+    var shown: String = Cosmetics.effective("badge", id, is_founder(), club_active()) if id == "auto" else id
+    avatar_detail.pic.texture = Cosmetics.badge_texture(shown, false)
+    avatar_detail.pic.material = avatar_gallery.gray_material() if st == "locked" else null
+    avatar_detail.title.text = badge_gallery.display_name(id).to_upper()
+    var req := Cosmetics.requirement("badge", id) if id != "auto" else ""
+    avatar_detail.origin.text = "Selo ao lado do seu nome (Home, Perfil, Amigos, chat e partidas)" if req.is_empty() else ("Exclusivo do Pacote Fundador" if req == "founder" else "Exclusivo do Club FRAIHA")
+    match st:
+        "locked":
+            avatar_detail.status.text = "BLOQUEADO · " + badge_gallery.hint(id)
+            avatar_detail.status.add_theme_color_override("font_color", Color("e89a7a"))
+        "selected":
+            avatar_detail.status.text = "EM USO"
+            avatar_detail.status.add_theme_color_override("font_color", Color("49d17a"))
+        _:
+            avatar_detail.status.text = "DISPONÍVEL · toque em APLICAR ÍCONE"
+            avatar_detail.status.add_theme_color_override("font_color", GOLD)
+    avatar_detail.brief.text = "Automático usa o melhor selo que você tem." if id == "auto" else ("Sem selo ao lado do nome." if id.is_empty() else "")
+    var b: Button = avatar_detail.apply
+    b.text = "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR ÍCONE")
+    b.disabled = st != "unlocked"
 
 func _refresh_avatars():
     if is_instance_valid(profile_portrait): profile_portrait.texture = avatar_texture()
@@ -1025,9 +1140,124 @@ func _refresh_avatars():
     _refresh_ref_account()
     if avatar_gallery != null:
         avatar_gallery.update_states()
-        gallery_count.text = "COLEÇÃO DE AVATARES  ·  %d de %d conquistados" % [avatar_gallery.count_unlocked(), avatar_gallery.cards.size()]
+        gallery_count.text = "%d de %d avatares conquistados" % [avatar_gallery.count_unlocked(), avatar_gallery.cards.size()]
+    if badge_gallery != null:
+        badge_gallery.update_states()
+        if profile_tab == "icons": gallery_count.text = "Ícone em uso: " + badge_gallery.display_name(cosmetic_pref("badge"))
     _refresh_avatar_detail()
     if get_parent().has_method("refresh_player_card"): get_parent().refresh_player_card()
+
+# ---------- R32 · HISTÓRICO DE PARTIDAS (todas as partidas terminadas + análise) ----------
+var history_list: VBoxContainer = null
+var history_filter := "all"
+var history_filter_buttons := {}
+const HISTORY_FILTERS := [["all", "TODAS"], ["bot", "COMPUTADOR"], ["casual", "ONLINE"], ["ranked", "RANQUEADAS"], ["local", "LOCAL"]]
+
+func _build_history_page():
+    var panel = _wide_page("history", "HISTÓRICO DE PARTIDAS")
+    var filters = HBoxContainer.new()
+    filters.name = "HistoryFilters"
+    filters.position = Vector2(40, 86)
+    filters.size = Vector2(1370, 40)
+    filters.add_theme_constant_override("separation", 10)
+    panel.add_child(filters)
+    for f in HISTORY_FILTERS:
+        var fid: String = f[0]
+        var b = _hud_text_button(f[1], Vector2(170, 38))
+        b.name = "HistoryFilter_" + fid
+        b.pressed.connect(func():
+            history_filter = fid
+            refresh_history())
+        filters.add_child(b)
+        history_filter_buttons[fid] = b
+    var scroll = ScrollContainer.new()
+    scroll.name = "HistoryScroll"
+    scroll.position = Vector2(40, 136)
+    scroll.size = Vector2(1372, 396)
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    panel.add_child(scroll)
+    preload("res://ui_v022/touch_scroll.gd").attach(scroll)
+    history_list = VBoxContainer.new()
+    history_list.name = "HistoryList"
+    history_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    history_list.add_theme_constant_override("separation", 8)
+    scroll.add_child(history_list)
+
+func refresh_history():
+    if history_list == null: return
+    for k in history_filter_buttons: history_filter_buttons[k].modulate = Color.WHITE if k == history_filter else Color(0.62, 0.66, 0.62)
+    build_history_list(history_list, false)
+
+## Lista do histórico (PC e celular). Cada partida: resultado, modo, adversário, data, lances e
+## REVER ANÁLISE (já analisada) ou ANALISAR (usa a cota; Club = ilimitado).
+func build_history_list(parent: VBoxContainer, compact: bool):
+    for c in parent.get_children():
+        parent.remove_child(c)
+        c.queue_free()
+    var st = get_parent()
+    var mh = st.get("match_history") if st != null else null
+    var list: Array = mh.entries if mh != null else []
+    var shown := 0
+    for e in list:
+        var entry: Dictionary = e
+        if history_filter != "all" and String(entry.get("mode", "")) != history_filter: continue
+        shown += 1
+        parent.add_child(_history_row(entry, compact, st, mh))
+    if shown == 0:
+        var empty = _label(parent, "Nenhuma partida aqui ainda. As partidas terminadas (contra o computador, online, ranqueadas e locais) aparecem neste histórico, prontas para analisar.", 16, MUTED)
+        empty.name = "HistoryEmpty"
+
+func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
+    var MH = preload("res://analysis/match_history.gd")
+    var box = PanelContainer.new()
+    box.name = "HistoryRow"
+    var sb = StyleBoxFlat.new()
+    sb.bg_color = Color(0.03, 0.10, 0.06, 0.92)
+    sb.border_color = Color("8a6a2c")
+    sb.set_border_width_all(2)
+    sb.set_corner_radius_all(6)
+    sb.content_margin_left = 14
+    sb.content_margin_right = 14
+    sb.content_margin_top = 8
+    sb.content_margin_bottom = 8
+    box.add_theme_stylebox_override("panel", sb)
+    var row: BoxContainer = VBoxContainer.new() if compact else HBoxContainer.new()
+    row.add_theme_constant_override("separation", 12)
+    box.add_child(row)
+    var info = VBoxContainer.new()
+    info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    info.add_theme_constant_override("separation", 2)
+    row.add_child(info)
+    var mode := String(e.get("mode", ""))
+    var res := String(e.get("result", ""))
+    var head := "%s  ·  %s" % [MH.result_name(res, mode), MH.mode_name(mode)]
+    var opp := String(e.get("opponent", ""))
+    if not opp.is_empty() and mode != "local": head += "  ·  vs " + opp
+    var col: Color = Color("8fe08a") if res == "win" else (Color("f2a070") if res == "loss" else GOLD)
+    _label(info, head, 18, col).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    var d := Time.get_datetime_dict_from_unix_time(int(e.get("finished_at", e.get("started_at", 0))))
+    var color_txt := "" if String(e.get("color", "")).is_empty() else ("  ·  de " + ("Brancas" if String(e.color) == "w" else "Pretas"))
+    _label(info, "%02d/%02d/%d %02d:%02d  ·  %d lances%s" % [d.day, d.month, d.year, d.hour, d.minute, int(e.get("plies", 0)), color_txt], 14, MUTED)
+    var rec = mh.record_of(e) if mh != null else null
+    var an: Dictionary = st.analysis_entry_for(rec) if st != null and st.has_method("analysis_entry_for") else {}
+    if not an.is_empty():
+        _label(info, "Analisada · precisão %d%%" % int(round(float(an.get("accuracy", 0.0)))), 14, Color("bfe8a8"))
+    var buttons = HBoxContainer.new()
+    buttons.add_theme_constant_override("separation", 10)
+    row.add_child(buttons)
+    var can_review: bool = not an.is_empty() and st.analysis_history != null and st.analysis_history.has_report(an)
+    if can_review:
+        var rv = _hud_text_button("REVER ANÁLISE", Vector2(200, 42))
+        rv.name = "HistoryReview"
+        rv.pressed.connect(func(): st.open_history_report(an))
+        buttons.add_child(rv)
+    var az = _hud_text_button("ANALISAR" if not can_review else "ANALISAR DE NOVO", Vector2(200 if not can_review else 230, 42))
+    az.name = "HistoryAnalyze"
+    az.disabled = rec == null or rec.moves.size() < 2
+    az.tooltip_text = "Usa uma análise da cota do dia (Club: ilimitado)"
+    az.pressed.connect(func(): if rec != null: st.open_analysis_for(rec))
+    buttons.add_child(az)
+    return box
 
 func _build_about_page():
     var panel = _wide_page("about","CONHEÇA O FRAIHA  ·  MUITO MAIS QUE UM XADREZ")
@@ -1320,6 +1550,7 @@ func show_page(id: String):
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
     if id == "ranking": _select_league(selected_league)
     if id == "profile": _refresh_avatars()
+    if id == "history": refresh_history()
     if is_instance_valid(mobile_ui): mobile_ui.show_page(id)
 
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
@@ -1436,12 +1667,13 @@ func _build_web_quit_caption():
     var patch = ColorRect.new()
     patch.name = "WebQuitCaption"
     patch.color = Color8(1, 36, 21)
-    patch.position = Vector2(714, 818)   # coordenadas da arte (DESIGN 1672x941)
-    patch.size = Vector2(290, 24)
+    var sair_row: Vector2 = MENU_ROWS[MENU_ROWS.size() - 1]
+    patch.position = Vector2(714, sair_row.x + 29.0 * MENU_SCALE)   # coordenadas da arte (DESIGN 1672x941)
+    patch.size = Vector2(290, 22)
     patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(patch)
     canvas.move_child(patch, canvas.get_node("MainMenu").get_index())
-    var cap = _label(patch, "Voltar para o site", 16, Color("e8e2d0"))
+    var cap = _label(patch, "Voltar para o site", 14, Color("e8e2d0"))
     cap.position = Vector2(2, 0)
     cap.size = Vector2(236, 24)
     cap.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -1466,6 +1698,15 @@ func open_premium(page_id := "hub"):
 
 func open_club():
     open_premium("club")
+
+## R32 · MARCHA REAL (novo modo; Club ilimitado, sem Club 1 partida por dia).
+var marcha = null
+func open_marcha():
+    if marcha == null:
+        marcha = load("res://marcha/marcha_ui.gd").new()
+        marcha.setup(self, get_parent())
+        get_parent().add_child(marcha)
+    marcha.open()
 
 ## Club ativo (real OU simulação) → atualiza a fita da Home e o cartão do jogador.
 ## Selo Fundador: cartão da Home (ao lado do nome), Perfil e cartão do celular.
@@ -1663,7 +1904,7 @@ func public_cosmetics() -> Dictionary:
 # ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
 # Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo
 # (retrato, nickname, liga/PL, barra, insígnia, texto da conta) e as áreas de clique.
-const REF_MENU_RECT = Rect2(614,336,446,516)
+const REF_MENU_RECT = Rect2(614,336,446,570)
 var ref_nodes: Array = []
 var ref_mode := false
 var desk_profile := {}
@@ -1822,23 +2063,23 @@ func _build_reference_chrome():
     for x in [596.0, 1060.0]:
         var patch = TextureRect.new()
         patch.name = "RefLaurelPatch"
-        patch.texture = _slice(FOREST_V2, Rect2(x, 560, 18, 82))
+        patch.texture = _slice(FOREST_V2, Rect2(x, 600, 18, 76))
         patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         patch.stretch_mode = TextureRect.STRETCH_SCALE
-        patch.position = Vector2(x, 454)
-        patch.size = Vector2(18, 82)
+        patch.position = Vector2(x, 441)
+        patch.size = Vector2(18, 76)
         patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
         ref_menu_cover.add_child(patch)
         patch.top_level = false
-        patch.position = Vector2(x, 454) - ref_menu_cover.position
+        patch.position = Vector2(x, 441) - ref_menu_cover.position
     # Botões do menu: ao passar o mouse / foco o PRÓPRIO botão da arte reluz (mesmos pixels,
     # somando luz nas partes douradas). Nada de caixa por cima nem texto extra.
     var glow_material = ShaderMaterial.new()
     glow_material.shader = preload("res://ui_v022/home_button_glow.gdshader")
     for button in menu_buttons:
         var ranked = title_of(button) == "JOGAR RANQUEADO"
-        var offset = Vector2(-6, -12) if ranked else Vector2(0, -2)
-        var region = Rect2(button.position + offset, button.size + (Vector2(12, 26) if ranked else Vector2(0, 4)))
+        var offset = Vector2(-5, -11) if ranked else Vector2(0, -2)
+        var region = Rect2(button.position + offset, button.size + (Vector2(11, 23) if ranked else Vector2(0, 4)))
         var atlas = AtlasTexture.new()
         atlas.atlas = FOREST
         atlas.region = region
@@ -1859,6 +2100,32 @@ func _build_reference_chrome():
         button.mouse_exited.connect(func(): if ref_mode and not button.has_focus(): hover.hide())
         button.focus_entered.connect(func(): if ref_mode: hover.show())
         button.focus_exited.connect(func(): hover.hide())
+        # R32: linhas novas da arte v3 (moldura sem texto): título, subtítulo e ícone vivos por cima
+        var title := title_of(button)
+        if title in ["MARCHA REAL", "HISTÓRICO DE PARTIDAS"]:
+            var cap = Control.new()
+            cap.name = "RefCaption"
+            cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            cap.size = button.size
+            button.add_child(cap)
+            var t1 = _label(cap, title, 17, Color("f4f1e6"))
+            t1.position = Vector2(103, 3)
+            t1.size = Vector2(300, 24)
+            t1.autowrap_mode = TextServer.AUTOWRAP_OFF
+            var t2 = _label(cap, "Novo modo · cartas e corrida" if title == "MARCHA REAL" else "Suas partidas e análises", 14, Color("e8e2d0"))
+            t2.position = Vector2(103, 25)
+            t2.size = Vector2(300, 20)
+            t2.autowrap_mode = TextServer.AUTOWRAP_OFF
+            if title == "MARCHA REAL":
+                var tag = preload("res://monetization/premium_art.gd").Stamp.new("NOVO", "new", 11)
+                tag.position = Vector2(300, 8)
+                tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                cap.add_child(tag)
+            else:
+                var ic = preload("res://monetization/premium_art.gd").Glyph.new("hourglass", 40, Color("f2c14e"))
+                ic.position = Vector2(34, 4)
+                ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                cap.add_child(ic)
 
 func _sync_chrome():
     var ref = _is_ref_art(canvas.get_node("ForestArtwork").texture)
@@ -1881,6 +2148,8 @@ func _sync_chrome():
         button.texture_pressed = tex
         button.texture_disabled = tex
         if button.get_child_count() > 0 and button.get_child(0) is MarginContainer: button.get_child(0).visible = not ref
+        var rcap = button.get_node_or_null("RefCaption")
+        if rcap != null: rcap.visible = ref
         if ref_hovers.has(button) and not ref: ref_hovers[button].hide()
     # Cartão da conta: arte traz moldura, medalhão e seta; ficam só os textos vivos.
     if is_instance_valid(account_card):

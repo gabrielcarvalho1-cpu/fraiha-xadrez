@@ -1,5 +1,5 @@
 extends SceneTree
-## Home pública: sem JOGAR LOCAL, com AMIGOS, 8 ações sem buraco (desktop e mobile).
+## Home pública: sem JOGAR LOCAL, com AMIGOS, 10 ações sem buraco (R32: + MARCHA REAL e HISTÓRICO DE PARTIDAS).
 var failures = 0
 func check(ok: bool, label: String):
     print("PASS " if ok else "FAIL ", label)
@@ -12,16 +12,17 @@ func run():
     for i in range(3): await process_frame
     var hub = stage.hub
     var titles = hub.menu_buttons.map(func(b): return hub.title_of(b))
-    check(titles == ["JOGAR CONTRA O COMPUTADOR","JOGAR ONLINE","JOGAR RANQUEADO","LIGAS E RANKING","AMIGOS","CONFIGURAÇÕES","CONHEÇA O FRAIHA","SAIR"], "ordem da Home pública: " + str(titles))
+    check(titles == ["JOGAR CONTRA O COMPUTADOR","JOGAR ONLINE","JOGAR RANQUEADO","LIGAS E RANKING","MARCHA REAL","AMIGOS","CONFIGURAÇÕES","CONHEÇA O FRAIHA","HISTÓRICO DE PARTIDAS","SAIR"], "ordem da Home pública: " + str(titles))
     check(not "JOGAR LOCAL" in titles, "JOGAR LOCAL fora da Home")
     for i in range(hub.menu_buttons.size()):
-        check(hub.menu_buttons[i].position == Vector2(611,341+i*63), "sem buraco no layout %d" % i)
+        var row: Vector2 = hub.MENU_ROWS[i]
+        check(hub.menu_buttons[i].position == Vector2(611, row.x) and (i == 0 or row.x - (hub.MENU_ROWS[i - 1].x + hub.MENU_ROWS[i - 1].y) < 12.0), "sem buraco no layout %d" % i)
     var all_text = hub.root.find_children("*","Label",true,false).map(func(l): return l.text)
     check(not all_text.any(func(t): return "Duas pessoas no mesmo computador" in t), "texto do Local fora da Home")
     check(stage.has_method("_start_local"), "modo Local interno preservado")
     var opened = [false]
     hub.friends_requested.connect(func(): opened[0] = true)
-    hub.menu_buttons[4].pressed.emit()
+    hub.menu_buttons[5].pressed.emit()
     check(opened[0], "AMIGOS emite friends_requested")
     if mobile:
         check(is_instance_valid(hub.mobile_ui), "Home mobile ativa")

@@ -6,7 +6,7 @@ extends GridContainer
 ##   • selecionado  → moldura esmeralda com brilho + selo "EM USO"
 ##   • sem arte ainda → silhueta + brasão da liga, "ARTE EM BREVE" (não selecionável)
 ## Desbloqueio vem de hub.bot_progress (derivado da escada; servidor é a autoridade para conta).
-signal picked(id: String)       # clique em avatar conquistado e com arte
+signal picked(id: String)       # (R32) não é mais emitido no clique: aplicar é pelo botão APLICAR AVATAR
 signal inspected(id: String)    # clique em qualquer avatar (para a área de detalhe)
 
 const Catalog = preload("res://profile/avatar_catalog.gd")
@@ -21,6 +21,7 @@ const GRAY_SHADER := "shader_type canvas_item;\nuniform float amount = 1.0;\nvoi
 var hub
 var card_size := Vector2(128, 166)
 var cards := {}
+var focus_id := ""   # R32: avatar em foco (tocado), ainda não aplicado
 static var _gray: Shader
 
 func setup(p_hub, p_columns: int, p_card: Vector2):
@@ -68,9 +69,11 @@ func count_unlocked() -> int:
         if unlocked(id): n += 1
     return n
 
+## R32: tocar num avatar só o coloca em foco (detalhe + botão APLICAR AVATAR); não troca o avatar.
 func _on_card(id: String):
+    focus_id = id
+    update_states()
     inspected.emit(id)
-    if unlocked(id) and Catalog.has_art(id): picked.emit(id)
 
 static func gray_material() -> ShaderMaterial:
     if _gray == null:
@@ -125,6 +128,10 @@ class Card extends Button:
         sb.set_border_width_all(3 if st == "selected" else 2)
         sb.border_color = {"selected": EMERALD, "unlocked": GOLD, "no_art_unlocked": GOLD.darkened(0.2), "locked": Color("3a4038")}[st]
         if lit and st != "locked": sb.border_color = sb.border_color.lightened(0.2)
+        var focused: bool = gallery.focus_id == avatar
+        if focused and st != "selected":
+            sb.border_color = Color("fff0b8")
+            sb.set_border_width_all(3)
         if st == "selected":
             sb.shadow_color = Color(0.3, 0.9, 0.5, 0.45)
             sb.shadow_size = 10

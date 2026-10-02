@@ -47,6 +47,7 @@ var analysis_access            # analysis/analysis_access.gd
 var analysis_ui = null
 var training_ui = null
 var analysis_history           # analysis/analysis_history.gd
+var match_history              # analysis/match_history.gd (R32: todas as partidas terminadas)
 var bot_side_name := "BRANCAS"
 var mobile_status: Label
 var mobile_promotion: PanelContainer
@@ -1212,6 +1213,9 @@ func _setup_analysis():
     analysis_history = preload("res://analysis/analysis_history.gd").new()
     analysis_history.name = "AnalysisHistory"
     add_child(analysis_history)
+    match_history = preload("res://analysis/match_history.gd").new()
+    match_history.name = "MatchHistory"
+    add_child(match_history)
     reward_modal = preload("res://bot/reward_modal.gd").new()
     reward_modal.name = "BotRewardModal"
     reward_modal.avatar_for = func(id): return hub.avatar_texture(id)
@@ -1267,6 +1271,7 @@ func _refresh_analysis_buttons():
 ## Fim de partida: usa o RESULTADO REAL do registro (vencedor comparado com a cor do jogador —
 ## nunca só "brancas"/"pretas"). Partida local (dois humanos) e empates não abrem a tela.
 func _on_match_finished(record):
+    if match_history != null: match_history.add(record)
     if record == null or result_overlay == null: return
     if String(record.human_color).is_empty(): return
     var res := String(record.result)
@@ -1281,12 +1286,26 @@ func _ensure_analysis_ui():
         analysis_ui = preload("res://analysis/analysis_ui.gd").new(analysis_engine, analysis_access, hub)
         add_child(analysis_ui)
         analysis_ui.train_requested.connect(open_training)
-        analysis_ui.analyzer.finished.connect(func(rep): if analysis_history != null: analysis_history.record(recorder.current(), rep, account))
+        analysis_ui.analyzer.finished.connect(func(rep): if analysis_history != null: analysis_history.record(analysis_ui.record, rep, account))
 
 func open_analysis():
     if not analysis_available(): return
     _ensure_analysis_ui()
     analysis_ui.open_for(recorder.current())
+
+## R32 · HISTÓRICO DE PARTIDAS: análise de uma partida guardada (usa a cota; Club = ilimitado).
+func open_analysis_for(rec) -> bool:
+    if rec == null or not preload("res://analysis/fair_play.gd").can_analyze(rec, self) or rec.moves.size() < 2: return false
+    _ensure_analysis_ui()
+    analysis_ui.open_for(rec)
+    return true
+
+## Entrada do histórico de análises (relatório completo) desta partida, se ela já foi analisada.
+func analysis_entry_for(rec) -> Dictionary:
+    if analysis_history == null or rec == null: return {}
+    for e in analysis_history.entries:
+        if int(e.get("played_at", -1)) == int(rec.started_at) and String(e.get("mode", "")) == String(rec.mode): return e
+    return {}
 
 ## CLUB · HISTÓRICO DETALHADO: reabre uma análise guardada (sem gastar cota nem rodar a engine).
 func open_history_report(entry: Dictionary) -> bool:

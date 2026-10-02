@@ -18,6 +18,7 @@ var subtitle: Label
 const Art = preload("res://account/login_art.gd")
 const ROW_RECTS = [Rect2(615,338,444,58), Rect2(615,398,444,59), Rect2(568,443,534,103), Rect2(615,534,444,60), Rect2(615,596,444,60), Rect2(615,659,444,61), Rect2(615,723,444,61), Rect2(615,787,444,61)]
 const CARD_ART = preload("res://ui_v022/assets/home_profile_card.png")
+const MENU_ART = preload("res://ui_v022/assets/home_forest_v2.png")   # recortes das 8 linhas originais (a Home do PC usa a v3)
 const Widgets = preload("res://account/login_widgets.gd")
 
 func setup(owner_hub):
@@ -165,6 +166,11 @@ func _text(parent: Node, text: String, font_size := 18) -> Label:
     parent.add_child(label)
     return label
 
+static func _set_btn(b, t: String):
+    b.text = t
+    if "label" in b: b.label = t
+    b.queue_redraw()
+
 func _button(parent: Node, text: String, action: Callable) -> Button:
     # Botão ornamentado do jogo (moldura dourada com pontas); o texto é desenhado pelo próprio botão.
     var button = Widgets.OrnateButton.new()
@@ -239,7 +245,7 @@ func show_page(id: String):
     profile.visible = id == "main"
     profile.text = hub.player_name + " · PERFIL"
     back_button.visible = id != "main"
-    heading.text = {"main":"FRAIHA XADREZ","bot":"JOGAR CONTRA O COMPUTADOR","bot_side":"ESCOLHA SEU LADO","profile":"PERFIL","ranking":"LIGAS E RANKING","about":"CONHEÇA O FRAIHA","settings":"CONFIGURAÇÕES","ranked":"JOGAR RANQUEADO"}.get(id,"FRAIHA XADREZ")
+    heading.text = {"main":"FRAIHA XADREZ","bot":"JOGAR CONTRA O COMPUTADOR","bot_side":"ESCOLHA SEU LADO","profile":"PERFIL","ranking":"LIGAS E RANKING","about":"CONHEÇA O FRAIHA","settings":"CONFIGURAÇÕES","ranked":"JOGAR RANQUEADO","history":"HISTÓRICO DE PARTIDAS"}.get(id,"FRAIHA XADREZ")
     if hub.page_scrolls.has(id):
         borrowed = hub.page_scrolls[id].get_child(0)
         borrowed_parent = borrowed.get_parent()
@@ -313,20 +319,29 @@ func show_page(id: String):
                 var grid = _grid(content,2)
                 menu_grid = grid
                 # Botões do menu: os mesmos da Home do PC (ícone, título e descrição), recortados da arte.
+                var art_index := 0
                 for i in hub.menu_buttons.size():
                     var source = hub.menu_buttons[i]
                     var row = ArtRow.new()
                     row.text = hub.title_of(source)
-                    # Recorte exato de cada botão na arte (bordas douradas inteiras).
-                    var r: Rect2 = ROW_RECTS[i] if i < ROW_RECTS.size() else Rect2(source.position, source.size)
+                    # Recorte exato de cada botão na arte original (v2, 8 linhas); as 2 linhas novas (R32)
+                    # usam a moldura da própria arte, com título e subtítulo desenhados por cima.
+                    var is_new: bool = row.text in ["MARCHA REAL", "HISTÓRICO DE PARTIDAS"]
+                    var r: Rect2 = ROW_RECTS[art_index] if (not is_new and art_index < ROW_RECTS.size()) else Rect2(source.position, source.size)
+                    if not is_new: art_index += 1
                     if row.text == "JOGAR RANQUEADO":
                         row.art = preload("res://ui_v022/assets/home_ranked_row.png")
                         # corpo do botão na arte: 467 de 538 px; comuns: 444 px → mesma largura visual
                         row.draw_scale = 0.92
                         row.featured = true
+                    elif is_new:
+                        row.art = preload("res://ui_v022/assets/home_row_marcha.png") if row.text == "MARCHA REAL" else preload("res://ui_v022/assets/home_row_blank.png")
+                        row.title_override = row.text
+                        row.subtitle_override = "Novo modo · cartas e corrida" if row.text == "MARCHA REAL" else "Suas partidas e análises"
+                        row.glyph = "" if row.text == "MARCHA REAL" else "hourglass"
                     else:
                         var atlas = AtlasTexture.new()
-                        atlas.atlas = hub.FOREST
+                        atlas.atlas = MENU_ART
                         atlas.region = r
                         row.art = atlas
                     if row.text == "SAIR" and OS.has_feature("web"): row.subtitle_override = "Voltar para o site"
@@ -341,6 +356,14 @@ func show_page(id: String):
             "profile": _profile(content)
             "ranking": _ranking(content)
             "about": _about(content)
+            "history":
+                var hl = VBoxContainer.new()
+                hl.name = "HistoryListMobile"
+                hl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+                hl.add_theme_constant_override("separation", 8)
+                content.add_child(hl)
+                hub.history_filter = "all"
+                hub.build_history_list(hl, true)
     scroll.scroll_vertical = 0
     _fit_width.call_deferred(size.x < 560.0)
     layout()
@@ -405,12 +428,47 @@ func _profile(content: VBoxContainer):
     count.text = "COLEÇÃO DE AVATARES · %d de %d" % [gallery.count_unlocked(), gallery.cards.size()]
     var detail = _text(content, "", 14)
     detail.name = "AvatarDetailMobile"
+    # R32: tocar só seleciona; APLICAR AVATAR troca de verdade.
+    var apply_av = _button(content, "APLICAR AVATAR", func(): pass)
+    apply_av.name = "ApplyAvatarMobile"
+    apply_av.disabled = true
+    var chosen := {"avatar": "", "badge": ""}
     gallery.inspected.connect(func(id):
+        chosen.avatar = id
         var st: String = gallery.state_of(id)
-        detail.text = hub.AvatarCatalog.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + gallery.hint(id) if st == "locked" else ("conquistado · arte em breve" if st == "no_art_unlocked" else "conquistado")))
-    gallery.picked.connect(func(id):
-        hub.choose_avatar(id)
-        gallery.update_states())
+        detail.text = hub.AvatarCatalog.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + gallery.hint(id) if st == "locked" else ("conquistado · arte em breve" if st == "no_art_unlocked" else ("EM USO" if st == "selected" else "toque em APLICAR AVATAR")))
+        apply_av.disabled = st != "unlocked"
+        _set_btn(apply_av, "EM USO" if st == "selected" else ("BLOQUEADO" if st != "unlocked" else "APLICAR AVATAR")))
+    apply_av.pressed.connect(func():
+        if hub.apply_avatar(String(chosen.avatar)):
+            gallery.update_states()
+            apply_av.disabled = true
+            _set_btn(apply_av, "EM USO")
+            detail.text = hub.AvatarCatalog.display_name(String(chosen.avatar)).to_upper() + " · EM USO")
+    # ÍCONE (selo ao lado do nome): separado do avatar.
+    _text(content, "SEU ÍCONE", 16).name = "BadgeTitleMobile"
+    var badges = load("res://profile/badge_gallery.gd").new()
+    badges.name = "BadgeGalleryMobile"
+    badges.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    content.add_child(badges)
+    badges.setup(hub, cols, Vector2(cw, cw + 48.0))
+    var bdetail = _text(content, "", 14)
+    bdetail.name = "BadgeDetailMobile"
+    var apply_bd = _button(content, "APLICAR ÍCONE", func(): pass)
+    apply_bd.name = "ApplyBadgeMobile"
+    apply_bd.disabled = true
+    badges.inspected.connect(func(id):
+        chosen.badge = id
+        var st: String = badges.state_of(id)
+        bdetail.text = badges.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + badges.hint(id) if st == "locked" else ("EM USO" if st == "selected" else "toque em APLICAR ÍCONE"))
+        apply_bd.disabled = st != "unlocked"
+        _set_btn(apply_bd, "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR ÍCONE")))
+    apply_bd.pressed.connect(func():
+        if hub.apply_badge(String(chosen.badge)):
+            badges.update_states()
+            apply_bd.disabled = true
+            _set_btn(apply_bd, "EM USO")
+            bdetail.text = badges.display_name(String(chosen.badge)).to_upper() + " · EM USO")
     # Foto própria (escolher → enquadrar → salvar) e remover.
     var photo_row = HBoxContainer.new()
     photo_row.add_theme_constant_override("separation", 8)
@@ -504,6 +562,8 @@ class ArtRow extends Button:
     # desenhado maior para o corpo do botão ter a mesma largura dos outros.
     var draw_scale := 0.92
     var subtitle_override := ""
+    var title_override := ""   # R32: linhas novas (moldura sem texto)
+    var glyph := ""
     var featured := false   # JOGAR RANQUEADO: mesmo botão dos outros + título dourado e louros
     func _init():
         focus_mode = Control.FOCUS_NONE
@@ -528,6 +588,12 @@ class ArtRow extends Button:
                 var g := r.grow(2.0 + i * 2.0)
                 draw_rect(g, Color(1.0, 0.8, 0.3, 0.07 - i * 0.015), false, 2.0)
         draw_texture_rect(art, r, false)
+        if not title_override.is_empty():
+            var kt := w / 444.0
+            draw_string(get_theme_default_font(), r.position + Vector2(102, 27) * kt, title_override, HORIZONTAL_ALIGNMENT_LEFT, -1, int(round(17 * kt)), Color("f4f1e6"))
+            draw_string(get_theme_default_font(), r.position + Vector2(102, 49) * kt, subtitle_override, HORIZONTAL_ALIGNMENT_LEFT, -1, int(round(13 * kt)), Color("e8e2d0"))
+            if glyph != "": preload("res://monetization/premium_art.gd").icon(self, glyph, Rect2(r.position + Vector2(30, 10) * kt, Vector2(40, 40) * kt), Color("f2c14e"))
+            return
         if not subtitle_override.is_empty():
             # Web: subtítulo da arte ("Até a próxima partida!") trocado por outro texto, no mesmo verde.
             var kk := w / 444.0

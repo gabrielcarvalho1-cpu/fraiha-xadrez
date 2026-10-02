@@ -74,11 +74,13 @@ static func effective(kind: String, pref: String, founder: bool, club: bool) -> 
         return "liga" if kind == "frame" else ""
     return pref
 
+static var _tex_cache := {}
 static func badge_texture(id: String, small := true) -> Texture2D:
     var table: Dictionary = BADGE_ART_SMALL if small else BADGE_ART
     var path := String(table.get(id, ""))
     if path.is_empty() or not ResourceLoader.exists(path): return null
-    return load(path) as Texture2D
+    if not _tex_cache.has(path): _tex_cache[path] = load(path) as Texture2D
+    return _tex_cache[path]
 
 static func title_text(id: String) -> String:
     return String(TITLE_TEXT.get(id, ""))
