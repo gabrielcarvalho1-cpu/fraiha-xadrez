@@ -28,8 +28,8 @@ const LAYOUTS := {
         "xeque": [Vector2(184, 1846), 0.768], "play": Rect2(405, 1805, 630, 82),
         "hint": null, "help": Rect2(470, 22, 60, 60), "menu": Rect2(540, 22, 60, 60),
         "hand": [Vector2(540, 1664), 0.167], "pile": [Vector2(540, 988), 0.18], "clock": [Vector2(540, 661), 0.4355],
-        "reveal": [Vector2(540, 990), 0.25], "mate_clock": [Vector2(540, 700), 0.62], "mate_title": [Vector2(540, 1290), 128],
-        "mate_line": [Vector2(540, 1395), 27],
+        "reveal": [Vector2(540, 960), 0.25], "mate_clock": [Vector2(540, 680), 0.62], "mate_title": [Vector2(540, 1252), 128],
+        "mate_line": [Vector2(540, 1326), 27],
     },
     "landscape": {
         "scene": [0.9924, Vector2(145.4, -125.9)], "board": Rect2(715, 143, 520, 450),
@@ -522,6 +522,7 @@ func _draw_bubble():
     match spec[0]:
         "v": c = Vector2(spec[1].x, float(ui.get_meta("plate_top_%d" % s, spec[1].y - 140)) - h / 2.0 - 4)
         "hc": c = Vector2(Rect2(spec[1]).end.x + w / 2.0 + 10, Rect2(spec[1]).get_center().y)
+        "h": c = Vector2(Rect2(spec[1]).end.x + w / 2.0 + 14, Rect2(spec[1]).position.y + h / 2.0 + 6)   # à direita: acima fica a faixa de turno
         _: c = Vector2(Rect2(spec[1]).get_center().x, Rect2(spec[1]).position.y - h / 2.0 - 6)
     var r := Rect2(c - Vector2(w, h) / 2.0, Vector2(w, h))
     stair(r.grow(3), 3, Color("120a06"))
@@ -786,27 +787,27 @@ func _draw_mate():
 func _draw_tutorial(d: Vector2):
     var portrait: bool = ui.layout == "portrait"
     if portrait:
-        nine(ui.TUTORIAL_BG, Rect2(Vector2.ZERO, d), 120, 1.0)
+        nine(ui.TUTORIAL_BG, Rect2(Vector2.ZERO, d), 120, 0.55)
     else:
         draw_texture_rect(ui.TUTORIAL_BG, Rect2(Vector2.ZERO, d), false)
     var maroon := Color("7d0f1c")
     var ink := Color("2a1a10")
-    var title_pos := Vector2(150, 150) if not portrait else Vector2(70, 150)
+    var title_pos := Vector2(150, 150) if not portrait else Vector2(86, 168)
     text("Como jogar", title_pos, "title", 104 if not portrait else 96, maroon, -1, HORIZONTAL_ALIGNMENT_LEFT, 6, Color("f6ecd2"))
     if not portrait:
         text("Blefe Real", Vector2(0, 124), "ui_sp", 30, Color("5a3a22"), 1768, HORIZONTAL_ALIGNMENT_RIGHT)
         text("blefe de cartas no reino do xadrez", Vector2(0, 157), "ui_sp", 30, Color("5a3a22"), 1768, HORIZONTAL_ALIGNMENT_RIGHT)
     else:
-        text("Blefe Real · blefe de cartas no reino do xadrez", Vector2(72, 204), "ui_sp", 28, Color("5a3a22"))
+        text("Blefe Real · blefe de cartas no reino do xadrez", Vector2(90, 222), "ui_sp", 28, Color("5a3a22"))
     var panels := _tutorial_panels()
     var rects := []
     if not portrait:
         for i in 6: rects.append(Rect2(152 + (i % 3) * 546, 182 + (i / 3) * 366, 524, 344))
     else:
-        for i in 6: rects.append(Rect2(56 + (i % 2) * 492, 236 + (i / 2) * 472, 476, 456))
+        for i in 6: rects.append(Rect2(84 + (i % 2) * 464, 254 + (i / 2) * 470, 448, 450))
     for i in 6: _tutorial_panel(rects[i], i + 1, panels[i], portrait)
-    var foot_y := 975.0 if not portrait else 1700.0
-    var fx := 150.0 if not portrait else 60.0
+    var foot_y := 975.0 if not portrait else 1712.0
+    var fx := 150.0 if not portrait else 90.0
     var parts := ["Como vencer: seja o ", "último jogador com coroa", "."]
     var x := fx
     var ffs := 38 if not portrait else 34
@@ -815,14 +816,14 @@ func _draw_tutorial(d: Vector2):
         x += tw(parts[j], "ui_sp", ffs)
     if ui.tutorial_from_game:
         if not portrait: button_dark(Rect2(1400, 912, 368, 94), "VOLTAR", "tut_back", 48)
-        else: button_dark(Rect2(60, 1760, 960, 100), "VOLTAR À PARTIDA", "tut_back", 46)
+        else: button_dark(Rect2(90, 1752, 900, 96), "VOLTAR À PARTIDA", "tut_back", 46)
     else:
         if not portrait:
             button_dark(Rect2(1120, 914, 254, 92), "VOLTAR", "tut_back", 58)
             button_gold(Rect2(1396, 912, 372, 96), "JOGAR AGORA", "tut_play", true, 58)
         else:
-            button_dark(Rect2(60, 1760, 340, 100), "VOLTAR", "tut_back", 46)
-            button_gold(Rect2(420, 1758, 600, 104), "JOGAR AGORA", "tut_play", true, 48)
+            button_dark(Rect2(90, 1752, 320, 96), "VOLTAR", "tut_back", 50)
+            button_gold(Rect2(430, 1750, 560, 100), "JOGAR AGORA", "tut_play", true, 52)
 
 func _tutorial_panels() -> Array:
     return [
@@ -883,9 +884,9 @@ func _tutorial_art(a: Rect2, kind: String):
         "cards":
             var names := ["rei", "rainha", "cavalo", "peao"]
             for i in 4:
-                var h := a.size.y - 10
+                var h := minf(a.size.y - 10, (a.size.x - 50) / 4.0 / (360.0 / 504.0))
                 var w := h * 360.0 / 504.0
-                draw_texture_rect(ui.cards[names[i]], Rect2(c.x + (i - 1.5) * (w + 10) - w / 2.0, a.position.y + 5, w, h), false)
+                draw_texture_rect(ui.cards[names[i]], Rect2(c.x + (i - 1.5) * (w + 10) - w / 2.0, c.y - h / 2.0, w, h), false)
         "backs":
             var h2 := a.size.y - 16
             tex_center(ui.CARD_BACK, c + Vector2(-110, 0), h2 / 504.0, -0.12)
@@ -896,11 +897,14 @@ func _tutorial_art(a: Rect2, kind: String):
             text("2", Vector2(br.position.x + 16, c.y + 11), "ui", 30, Color("c8102e"))
             text(" × RAINHA", Vector2(br.position.x + 16 + tw("2", "ui", 30), c.y + 11), "ui_sp", 30, Color("2a1505"))
         "xeque":
-            tex_center(ui.xeque_tex["normal"], c + Vector2(-120, 0), 0.42)
-            text("→", Vector2(c.x - 20, c.y + 12), "ui", 40, Color("e8b242"))
-            var h3 := a.size.y - 10
-            draw_texture_rect(ui.cards["rainha"], Rect2(c.x + 20, a.position.y + 5, h3 * 360 / 504.0, h3), false)
-            draw_texture_rect(ui.cards["rei"], Rect2(c.x + 30 + h3 * 360 / 504.0, a.position.y + 5, h3 * 360 / 504.0, h3), false)
+            var h3 := minf(a.size.y - 10, (a.size.x * 0.46) / 2.0 / (360.0 / 504.0))
+            var w3 := h3 * 360.0 / 504.0
+            var x3 := a.end.x - 2 * w3 - 18
+            draw_texture_rect(ui.cards["rainha"], Rect2(x3, c.y - h3 / 2.0, w3, h3), false)
+            draw_texture_rect(ui.cards["rei"], Rect2(x3 + w3 + 8, c.y - h3 / 2.0, w3, h3), false)
+            var bsc := minf(0.42, (x3 - a.position.x - 60) / 380.0)
+            tex_center(ui.xeque_tex["normal"], Vector2(a.position.x + 10 + 216 * bsc, c.y), bsc)
+            text("→", Vector2(x3 - 44, c.y + 12), "ui", 40, Color("e8b242"))
         "clocks":
             var names2 := ["neutro", "perigo", "quase"]
             for i in 3:
