@@ -47,9 +47,8 @@ func run():
         var expected:String = data.arena_path if data.get("free_arena",false) else data.home_path
         check(stage.hub.canvas.get_node("ForestArtwork").texture.resource_path == expected,"Home background " + id)
     check(stage.hub.avatar_texture("paladin") != null,"Paladin loads")
-    check(stage.hub.avatar_choices.size() == 4,"four avatars")
-    for id in stage.hub.avatar_choices:
-        check(stage.hub.avatar_choices[id].get_node("LeagueFrame").league_id == stage.hub.league_profile.data.current_league,"actual league frame " + id)
+    # R29: o Perfil virou galeria (todos os avatares da coleção; cartões sem moldura de liga)
+    check(stage.hub.avatar_choices.size() == preload("res://profile/avatar_catalog.gd").ids().size(),"avatar gallery shows every avatar")
     for page in ["main","ranking","profile"]:
         stage.hub.show_page(page)
         for i in range(4): await process_frame

@@ -134,14 +134,8 @@ func _build_navigation():
     home_button.size = Vector2(196, 54)
     home_button.pressed.connect(return_to_home)
     overlay.add_child(home_button)
-    fullscreen_button = HudButton.make("fullscreen")
-    fullscreen_button.name = "FullscreenButton"
-    fullscreen_button.tooltip_text = "Tela cheia (Alt+Enter)"
-    fullscreen_button.size = Vector2(54, 54)
-    fullscreen_button.pressed.connect(func():
-        toggle_fullscreen()
-        _sync_fullscreen_glyph.call_deferred())
-    overlay.add_child(fullscreen_button)
+    # Sem botão de TELA CHEIA: o jogo sempre ocupa a tela toda (desktop: exclusiva desde o início;
+    # Web: viewport inteira e tela cheia real pedida no 1º toque/clique — ver _web_fullscreen_once).
     match_plaque = preload("res://presentation_v019/match_plaque.gd").new()
     match_plaque.name = "MatchPlaque"
     overlay.add_child(match_plaque)
@@ -350,9 +344,6 @@ func _refresh_desk_hud():
     var in_match = mode in ["local", "online", "bot", "ranked", "casual"] and game.visible
     navigation_dialog.min_size = Vector2i.ZERO if mobile else Vector2i(620, 230)
     game.external_hud = not mobile
-    # Também na Home e suas páginas (Configurações etc.), no canto superior esquerdo.
-    fullscreen_button.visible = (in_match or mode == "home") and not mobile
-    _sync_fullscreen_glyph()
     match_plaque.visible = mode == "bot" and not mobile
     if match_plaque.visible:
         var king = game.piece_textures.get("wK" if bot_side_name == "BRANCAS" else "bK")
@@ -372,8 +363,7 @@ func _refresh_desk_hud():
 func _layout_desk_hud():
     if not is_instance_valid(desk_panel) or MobileLayout.active(get_viewport()): return
     var size = get_viewport_rect().size
-    fullscreen_button.position = Vector2(24, 20)
-    home_button.position = Vector2(88, 20) if fullscreen_button.visible else Vector2(24, 20)
+    home_button.position = Vector2(24, 20)
     home_button.size = Vector2(196, 54)
     if match_plaque.visible:
         match_plaque.position = Vector2((size.x - match_plaque.size.x) / 2.0, 16)
@@ -609,7 +599,7 @@ func _build_mobile_controls(overlay: CanvasLayer):
     mobile_actions.vertical = true
     mobile_actions.add_theme_constant_override("separation", 8)
     overlay.add_child(mobile_actions)
-    for caption in ["Reiniciar", "Marcar", "Analisar", "Música", "Tela cheia"]:
+    for caption in ["Reiniciar", "Marcar", "Analisar", "Música"]:
         var button = Button.new()
         button.text = caption
         button.custom_minimum_size.y = 44
@@ -639,10 +629,6 @@ func _build_mobile_controls(overlay: CanvasLayer):
             button.set_meta("full_text", caption)
             button.set_meta("short_text", "Som")
             button.pressed.connect(func(): get_node("GameAudio").toggle_music())
-        else:
-            button.set_meta("full_text", caption)
-            button.set_meta("short_text", "Tela")
-            button.pressed.connect(toggle_fullscreen)
     mobile_status = Label.new()
     mobile_status.add_theme_font_size_override("font_size", 20)
     mobile_status.add_theme_color_override("font_color", Color("efcf83"))
@@ -800,7 +786,10 @@ func _open_online():
     _clear_selection()
     _refresh_input()
 
+var last_bot_side := "w"
 func _start_bot(difficulty: String, side: String):
+    last_bot_side = side
+    if reward_modal != null: reward_modal.close()
     bot_controller.stop()
     online.cancel_connection()
     hub.hide_hub()
@@ -939,11 +928,40 @@ func _confirm_navigation():
         game._new_game()
         open_home()
 
+## Web: navegadores só permitem tela cheia real dentro de um gesto do usuário. Pede ao soltar o primeiro
+## clique/toque (ou na 1ª tecla); se o navegador ainda não entrou em tela cheia (pedido perdido/recusado), tenta de novo
+## nos próximos gestos (no máximo 5). Depois que entrou uma vez, nunca mais insiste — se o jogador sair
+## (Esc / gesto do navegador), respeita. iPhone (Safari) não tem a API para páginas: continua ocupando a
+## viewport inteira (canvas em 100% da janela).
+## Tela cheia na PÁGINA inteira (documentElement), não só no <canvas>: os campos HTML do login no celular
+## (WebTextField, teclado virtual) ficam no <body> e sumiriam atrás do canvas em tela cheia.
+var _web_fullscreen_asked := false
+var _web_fullscreen_tries := 0
+func _web_fullscreen_once(event: InputEvent):
+    if _web_fullscreen_asked or not OS.has_feature("web"): return
+    # No SOLTAR do clique/toque: no celular a ativação do usuário só vale a partir do touchend, e pedir no
+    # toque inicial redimensionava a tela entre o aperto e a soltura (o 1º toque podia "errar" o botão).
+    var gesture: bool = (event is InputEventMouseButton and not event.pressed) or (event is InputEventScreenTouch and not event.pressed) or (event is InputEventKey and event.pressed)
+    if not gesture: return
+    _web_fullscreen_tries += 1
+    var r := str(JavaScriptBridge.eval("""(() => { try { const d = document, e = d.documentElement;
+        if (!window.__fraihaFs) { window.__fraihaFs = 1;
+            const on = () => { if (d.fullscreenElement || d.webkitFullscreenElement) window.__fraihaFsEntered = true; };
+            d.addEventListener('fullscreenchange', on); d.addEventListener('webkitfullscreenchange', on); }
+        if (window.__fraihaFsEntered || d.fullscreenElement || d.webkitFullscreenElement) return 'done';
+        const f = e.requestFullscreen || e.webkitRequestFullscreen;
+        if (!f) return 'unsupported';
+        const r = f.call(e, { navigationUI: 'hide' });
+        if (r && r.catch) r.catch(() => {});
+        return 'requested'; } catch (err) { return 'error'; } })()"""))
+    if r in ["done", "unsupported", "error"] or _web_fullscreen_tries >= 5: _web_fullscreen_asked = true
+
 func _input(event):
+    _web_fullscreen_once(event)
     if not event is InputEventKey or not event.pressed or event.echo:
         return
-    if event.alt_pressed and event.keycode == KEY_ENTER:
-        toggle_fullscreen()
+    if event.alt_pressed and event.keycode == KEY_ENTER and not OS.has_feature("web"):
+        toggle_fullscreen()   # atalho de desktop (sem botão e sem preferência salva)
         get_viewport().set_input_as_handled()
     elif event.keycode == KEY_ESCAPE:
         if navigation_dialog.visible:
@@ -1187,11 +1205,22 @@ func _setup_analysis():
     reward_modal.name = "BotRewardModal"
     reward_modal.avatar_for = func(id): return hub.avatar_texture(id)
     add_child(reward_modal)
+    reward_modal.advance_requested.connect(func(next_id): _start_bot(next_id, last_bot_side))
+    reward_modal.replay_requested.connect(func(bid): _start_bot(bid, last_bot_side))
+    reward_modal.home_requested.connect(open_home)
     if hub.bot_progress != null:
-        hub.bot_progress.reward_unlocked.connect(func(bid, rw):
-            await get_tree().create_timer(1.6).timeout   # depois da animação de VITÓRIA
-            reward_modal.show_reward(bid, rw))
-        hub.bot_progress.notice.connect(func(t): if result_overlay != null and result_overlay.has_method("toast"): result_overlay.toast(t) else: print("BOT PROGRESS: ", t))
+        # Só vitória CONFIRMADA dispara reward_unlocked (R28). O painel espera a animação de VITÓRIA terminar.
+        hub.bot_progress.reward_unlocked.connect(func(bid, rw): _after_result_overlay(func(): reward_modal.show_progress(bid, rw)))
+        hub.bot_progress.notice.connect(func(t):
+            print("BOT PROGRESS: ", t)
+            _after_result_overlay(func(): reward_modal.show_error(t)))
+
+## Executa `action` quando a animação de VITÓRIA/DERROTA sair da tela (ou já, se não estiver aberta).
+func _after_result_overlay(action: Callable):
+    # espera a animação de VITÓRIA terminar (inclusive o fade de saída) antes de abrir o painel
+    if result_overlay != null and (result_overlay.is_showing() or result_overlay.visible):
+        await result_overlay.dismissed
+    action.call()
 
 ## MARCAR PARA REVISAR: só grava o índice do lance. Nenhuma engine roda aqui.
 func mark_for_review():

@@ -76,8 +76,11 @@ var premove_button: TextureButton
 var premium = null   # FRAIHA PREMIUM (Monetização V1, simulação)
 var monetization_state = null   # flags dev_mock_* (simulação)
 var entitlements = null         # direitos (servidor + simulação) — única leitura para a interface
-var avatar_captions := {}
-const AVATAR_CAPTIONS := {"warrior":"GUERREIRO","archer":"ARQUEIRA","mage":"MAGO","paladin":"PALADINO"}
+var avatar_gallery = null       # profile/avatar_gallery.gd (página Perfil, PC)
+var avatar_detail := {}         # área de detalhe do avatar em foco
+var gallery_count: Label
+var inspected_avatar := ""
+const AvatarCatalog = preload("res://profile/avatar_catalog.gd")
 var bot_progress = null         # bot/bot_progress.gd — escada de bots e avatares desbloqueados
 var bot_ladder_ui = null        # bot/bot_ladder_ui.gd (página larga do PC)
 const BotLadder = preload("res://bot/bot_ladder.gd")
@@ -89,10 +92,10 @@ var avatar_editor = null        # editor de enquadramento
 var nickname_editor = null      # editor do nome público (página Perfil, desktop)
 var avatar_note: Label = null   # mensagens do avatar (página Perfil, desktop)
 var local_name_box: Control = null
-var fullscreen := true
+var sound_muted := false        # botão SOM da Home: silencia o bus Master (mesmo sistema de áudio)
+var sound_button: Button
 var volume_label: Label
 var music_volume_label: Label
-var display_label: Label
 var account_caption := "ENTRAR / CRIAR CONTA"
 var account_card: TextureButton
 var account_card_title: Label
@@ -107,7 +110,7 @@ func _ready():
             AudioServer.add_bus()
             AudioServer.set_bus_name(AudioServer.bus_count-1,bus_name)
     AudioServer.set_bus_volume_db(0,0)
-    AudioServer.set_bus_mute(0,false)
+    AudioServer.set_bus_mute(0, sound_muted)   # botão SOM da Home (preferência "audio/muted")
     league_profile.load_profile()
     ranked.load_local()
     avatar_store = load("res://profile/avatar_store.gd").new()
@@ -267,6 +270,21 @@ func _build():
     details.size = DESIGN
     details.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(details)
+    # A arte oficial traz o cartão da conta e a placa da versão desenhados nos cantos de baixo
+    # (o HUD vivo fica por cima deles na Home). Nas páginas internas o HUD vivo some e o painel largo
+    # cobre quase tudo — as pontas que sobravam (círculo da conta, bandeira) viram folhagem da própria arte.
+    var art_scale := Vector2(1672.0 / DESIGN.x, 941.0 / DESIGN.y)
+    for spec in [["InnerCornerL", "res://ui_v022/assets/inner_corner_l.png", Vector2(0, 818)], ["InnerCornerR", "res://ui_v022/assets/inner_corner_r.png", Vector2(1554, 832)]]:
+        var patch := TextureRect.new()
+        patch.name = spec[0]
+        patch.texture = load(spec[1])
+        patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        patch.stretch_mode = TextureRect.STRETCH_SCALE
+        patch.position = spec[2] / art_scale
+        patch.size = Vector2(patch.texture.get_size()) / art_scale
+        patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        patch.visible = false
+        canvas.add_child(patch)
     # Espírito das águas sobre o lago (abaixo da cachoeira, à esquerda da placa), animado.
     var spirit = preload("res://ui_v022/water_spirit.gd").new()
     spirit.position = Vector2(1258, 642)
@@ -556,57 +574,59 @@ func _build_pages():
     _build_ranking()
     _build_about_page()
     var profile_panel = _wide_page("profile","PERFIL DO JOGADOR")
-    var portraits = GridContainer.new()
-    portraits.columns = 2
-    portraits.position = Vector2(85,80)
-    portraits.add_theme_constant_override("h_separation",50)
-    portraits.add_theme_constant_override("v_separation",8)
-    profile_panel.add_child(portraits)
-    for id in ["warrior","archer","mage","paladin"]:
-        var option = VBoxContainer.new()
-        portraits.add_child(option)
-        var portrait_button = TextureButton.new()
-        portrait_button.custom_minimum_size = Vector2(155,155)
-        portrait_button.ignore_texture_size = true
-        portrait_button.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-        portrait_button.texture_normal = avatar_texture(id)
-        portrait_button.set_meta("no_club_frame", true)
-        portrait_button.pressed.connect(func(): choose_avatar(id))
-        option.add_child(portrait_button)
-        attach_league_frame(portrait_button)
-        var caption = _label(option,AVATAR_CAPTIONS[id],18,GOLD)
-        caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        avatar_captions[id] = caption
-        avatar_choices[id] = portrait_button
-    var hint = _label(profile_panel,"Escolha um avatar ou use a sua foto. A moldura representa a liga do perfil.",15)
-    hint.position = Vector2(45,452)
-    hint.size = Vector2(640,24)
+    # GALERIA DE PROGRESSÃO (esquerda): todos os avatares; bloqueados em cinza com o requisito.
+    gallery_count = _label(profile_panel, "", 15, GOLD)
+    gallery_count.name = "GalleryCount"
+    gallery_count.position = Vector2(44,80)
+    gallery_count.size = Vector2(700,24)
+    var gscroll = ScrollContainer.new()
+    gscroll.name = "AvatarGalleryScroll"
+    gscroll.position = Vector2(36,108)
+    gscroll.size = Vector2(716,356)
+    gscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    profile_panel.add_child(gscroll)
+    avatar_gallery = load("res://profile/avatar_gallery.gd").new()
+    avatar_gallery.name = "AvatarGallery"
+    gscroll.add_child(avatar_gallery)
+    avatar_gallery.setup(self, 5, Vector2(132,170))
+    avatar_gallery.picked.connect(choose_avatar)
+    avatar_gallery.inspected.connect(_inspect_avatar)
+    for id in avatar_gallery.cards: avatar_choices[id] = avatar_gallery.cards[id]
     # Foto própria: escolher arquivo → enquadrar → salvar (512x512). Remover volta ao avatar.
     var photo_row = HBoxContainer.new()
     photo_row.name = "PhotoRow"
-    photo_row.position = Vector2(45,482)
-    photo_row.size = Vector2(640,46)
+    photo_row.position = Vector2(44,474)
+    photo_row.size = Vector2(700,44)
     photo_row.add_theme_constant_override("separation", 12)
     profile_panel.add_child(photo_row)
-    var change_photo = Button.new()
+    var change_photo = _hud_text_button("ALTERAR FOTO", Vector2(200,44))
     change_photo.name = "ChangePhoto"
-    change_photo.text = "ALTERAR FOTO"
-    change_photo.custom_minimum_size = Vector2(190, 46)
-    change_photo.add_theme_font_size_override("font_size", 17)
     change_photo.pressed.connect(pick_photo)
     photo_row.add_child(change_photo)
-    var remove_photo = Button.new()
+    var remove_photo = _hud_text_button("REMOVER FOTO", Vector2(200,44))
     remove_photo.name = "RemovePhoto"
-    remove_photo.text = "REMOVER FOTO"
-    remove_photo.custom_minimum_size = Vector2(180, 46)
-    remove_photo.add_theme_font_size_override("font_size", 17)
     remove_photo.pressed.connect(remove_custom_avatar)
     photo_row.add_child(remove_photo)
     avatar_note = _label(profile_panel, "", 13, MUTED)
     avatar_note.name = "AvatarNote"
-    avatar_note.position = Vector2(45,528)
-    avatar_note.size = Vector2(640,20)
-    var profile = _stack(profile_panel,Vector2(745,115),Vector2(640,480),Vector4.ZERO,10)
+    avatar_note.position = Vector2(44,520)
+    avatar_note.size = Vector2(700,20)
+    # DETALHE (direita, topo): avatar em foco, nome, origem e status.
+    avatar_detail = _build_avatar_detail(profile_panel, Rect2(790,80,622,170))
+    var right_scroll = ScrollContainer.new()
+    right_scroll.name = "ProfileInfoScroll"
+    right_scroll.position = Vector2(790,262)
+    right_scroll.size = Vector2(622,282)
+    right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    profile_panel.add_child(right_scroll)
+    var right_holder = MarginContainer.new()
+    right_holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    right_holder.add_theme_constant_override("margin_right", 10)
+    right_scroll.add_child(right_holder)
+    var profile = VBoxContainer.new()
+    profile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    profile.add_theme_constant_override("separation", 10)
+    right_holder.add_child(profile)
     # Nome público da conta (único, troca a cada 30 dias) — servidor decide tudo.
     nickname_editor = preload("res://account/nickname_editor.gd").new()
     profile.add_child(nickname_editor)
@@ -670,10 +690,7 @@ func _build_pages():
     premove_button = _page_button(settings, 1, "", "", _toggle_premove)
     premove_button.name = "PremoveToggle"
     _refresh_premove_button()
-    _page_button(settings, 1, "TELA CHEIA", "Alternar janela / tela cheia", _toggle_fullscreen)
-    display_label = _label(settings, "", 17, MUTED)
-    _body(settings, "As preferências são salvas automaticamente.\nAlt + Enter também alterna a tela.", 16)
-    _refresh_display_label()
+    _body(settings, "As preferências são salvas automaticamente.\nO jogo ocupa a tela inteira automaticamente; o botão de som fica na tela inicial.", 16)
 
 func _choose_difficulty(id: String):
     if BotLadder.is_bot_id(id):
@@ -744,40 +761,124 @@ func avatar_texture(id: String = "") -> Texture2D:
         id = avatar_id
     if id == "paladin": return ThemeCatalog.texture("res://profile/paladin.png")
     if id == "warrior": return AVATAR
+    if id != "archer" and id != "mage":
+        # Recompensas da escada: arte em profile/avatars/<id>.png quando existir.
+        return ThemeCatalog.texture(AvatarCatalog.art_path(id)) if AvatarCatalog.has_art(id) else null
     var atlas = ThemeCatalog.texture("res://cosmetics/v025/avatars.png")
     if atlas == null: return AVATAR
     var half = atlas.get_width()/2.0
     return _slice(atlas,Rect2(0 if id == "archer" else half,0,half,atlas.get_height()))
 
 func choose_avatar(id: String):
-    if id not in ["warrior","archer","mage","paladin"]: return
+    if id not in AvatarCatalog.ids(): return
     if bot_progress != null and not bot_progress.avatar_unlocked(id) and id != avatar_id:
         _avatar_message("Bloqueado · " + bot_progress.unlock_hint(id) + " para liberar este avatar.", true)
         return
+    if not AvatarCatalog.has_art(id):
+        _avatar_message("Avatar conquistado! A arte dele ainda será adicionada ao jogo.", false)
+        return
     avatar_id = id
+    inspected_avatar = id
     _refresh_avatars()
     _save_preferences()
+
+## Botão de texto no estilo do HUD (verde profundo + moldura dourada).
+func _hud_text_button(caption: String, min_size: Vector2) -> Button:
+    var b = Button.new()
+    b.text = caption
+    b.custom_minimum_size = min_size
+    b.focus_mode = Control.FOCUS_ALL
+    b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    b.add_theme_font_size_override("font_size", 16)
+    var states = {"normal": [Color("12301c"), Color("b8913f")], "hover": [Color("1d4a2b"), Color("f0c45c")], "pressed": [Color("0a1d11"), Color("f0c45c")], "focus": [Color("1d4a2b"), Color("f0c45c")]}
+    for st in states:
+        var sb = StyleBoxFlat.new()
+        sb.bg_color = states[st][0]
+        sb.border_color = states[st][1]
+        sb.set_border_width_all(2)
+        sb.set_corner_radius_all(4)
+        sb.shadow_color = Color(0,0,0,0.45)
+        sb.shadow_size = 3
+        if st == "pressed": sb.content_margin_top = 3
+        b.add_theme_stylebox_override(st, sb)
+    b.add_theme_color_override("font_color", Color("f6d27a"))
+    b.add_theme_color_override("font_hover_color", Color("ffe6a0"))
+    b.add_theme_color_override("font_pressed_color", Color("ffe6a0"))
+    b.add_theme_color_override("font_focus_color", Color("ffe6a0"))
+    return b
+
+## Área de detalhe da galeria: retrato grande + nome + origem + status do avatar em foco.
+func _build_avatar_detail(parent: Control, r: Rect2) -> Dictionary:
+    var box = Panel.new()
+    box.name = "AvatarDetail"
+    box.position = r.position
+    box.size = r.size
+    var sb = StyleBoxFlat.new()
+    sb.bg_color = Color(0.03,0.09,0.05,0.85)
+    sb.border_color = Color("8a6a2c")
+    sb.set_border_width_all(2)
+    sb.set_corner_radius_all(6)
+    box.add_theme_stylebox_override("panel", sb)
+    box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(box)
+    var pic = TextureRect.new()
+    pic.name = "DetailPortrait"
+    pic.position = Vector2(12,12)
+    pic.size = Vector2(r.size.y - 24, r.size.y - 24)
+    pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    box.add_child(pic)
+    var words = _stack(box, Vector2(r.size.y + 4, 14), Vector2(r.size.x - r.size.y - 16, r.size.y - 24), Vector4.ZERO, 4)
+    var title = _label(words, "", 24, GOLD)
+    var origin = _label(words, "", 15, CREAM)
+    var status = _label(words, "", 15, MUTED)
+    var brief = _label(words, "", 13, MUTED)
+    return {"box": box, "pic": pic, "title": title, "origin": origin, "status": status, "brief": brief}
+
+func _inspect_avatar(id: String):
+    inspected_avatar = id
+    _refresh_avatar_detail()
+
+func _refresh_avatar_detail():
+    if avatar_detail.is_empty() or avatar_gallery == null: return
+    var id: String = inspected_avatar if not inspected_avatar.is_empty() else avatar_id
+    var e: Dictionary = AvatarCatalog.entry(id)
+    var st: String = avatar_gallery.state_of(id)
+    avatar_detail.pic.texture = avatar_texture(id) if AvatarCatalog.has_art(id) else null
+    avatar_detail.pic.material = avatar_gallery.gray_material() if st == "locked" else null
+    avatar_detail.title.text = String(e.get("name", id)).to_upper()
+    var src := String(e.get("source", ""))
+    avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot"))
+    match st:
+        "locked":
+            avatar_detail.status.text = "BLOQUEADO · " + avatar_gallery.hint(id)
+            avatar_detail.status.add_theme_color_override("font_color", Color("e89a7a"))
+        "selected":
+            avatar_detail.status.text = "EM USO no seu perfil"
+            avatar_detail.status.add_theme_color_override("font_color", Color("49d17a"))
+        "no_art_unlocked":
+            avatar_detail.status.text = "CONQUISTADO · a arte será adicionada em breve"
+            avatar_detail.status.add_theme_color_override("font_color", GOLD)
+        _:
+            avatar_detail.status.text = "CONQUISTADO · clique para usar"
+            avatar_detail.status.add_theme_color_override("font_color", GOLD)
+    avatar_detail.brief.text = "" if AvatarCatalog.has_art(id) else "Arte em produção."
 
 func _refresh_avatars():
     if is_instance_valid(profile_portrait): profile_portrait.texture = avatar_texture()
     if is_instance_valid(profile_portrait): attach_league_frame(profile_portrait)
     if ref_mode and not ref_profile.is_empty(): _use_profile(true)
     _refresh_ref_account()
-    for id in avatar_choices:
-        attach_league_frame(avatar_choices[id])
-        var unlocked: bool = bot_progress == null or bot_progress.avatar_unlocked(id)
-        avatar_choices[id].self_modulate = Color.WHITE if id == avatar_id else (Color(0.60,0.65,0.63) if unlocked else Color(0.22,0.24,0.24))
-        avatar_choices[id].tooltip_text = "" if unlocked else "Bloqueado · " + bot_progress.unlock_hint(id)
-        var cap = avatar_captions.get(id)
-        if is_instance_valid(cap):
-            cap.text = AVATAR_CAPTIONS[id] if unlocked else "BLOQUEADO"
-            cap.add_theme_font_size_override("font_size", 18 if unlocked else 15)
-            cap.add_theme_color_override("font_color", GOLD if unlocked else MUTED)
+    if avatar_gallery != null:
+        avatar_gallery.update_states()
+        gallery_count.text = "COLEÇÃO DE AVATARES  ·  %d de %d conquistados" % [avatar_gallery.count_unlocked(), avatar_gallery.cards.size()]
+    _refresh_avatar_detail()
     if get_parent().has_method("refresh_player_card"): get_parent().refresh_player_card()
 
 func _build_about_page():
     var panel = _wide_page("about","CONHEÇA O FRAIHA  ·  MUITO MAIS QUE UM XADREZ")
-    var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. Alt+Enter alterna tela cheia. Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
+    var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
     var navigation = _stack(panel,Vector2(38,108),Vector2(390,418),Vector4.ZERO,4)
     var details = _stack(panel,Vector2(482,117),Vector2(870,392),Vector4.ZERO,22)
     about_title = _label(details,"",27,GOLD)
@@ -1062,7 +1163,6 @@ func show_page(id: String):
         pages[key].visible = key == id
     _sync_menu_cover()
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
-    if is_instance_valid(display_label): _refresh_display_label()
     if id == "ranking": _select_league(selected_league)
     if id == "profile": _refresh_avatars()
     if is_instance_valid(mobile_ui): mobile_ui.show_page(id)
@@ -1076,6 +1176,7 @@ func apply_theme(texture: Texture2D, theme_id: String = "wood"):
         var spirit = canvas.get_node_or_null("WaterSpirit")
         if spirit != null: spirit.visible = _is_ref_art(texture)
         _sync_chrome()
+        _sync_menu_cover()
         var logo = canvas.get_node_or_null("ThemeLogo")
         var needs_logo = ThemeCatalog.get_theme(theme_id).get("free_arena",false)
         if logo == null and needs_logo:
@@ -1135,11 +1236,22 @@ func _osd():
         add_child(volume_osd)
     return volume_osd
 
-func _toggle_fullscreen():
-    get_parent().toggle_fullscreen()
-    fullscreen = get_window().mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]
+## SOM da Home: liga/desliga todo o áudio (bus Master). Volumes de música/efeitos ficam como estão.
+func toggle_sound():
+    set_sound_muted(not sound_muted)
+
+func set_sound_muted(value: bool):
+    sound_muted = value
+    AudioServer.set_bus_mute(0, sound_muted)
     _save_preferences()
-    _refresh_display_label()
+    _refresh_sound_button()
+    if is_instance_valid(mobile_ui) and mobile_ui.has_method("refresh_sound"): mobile_ui.refresh_sound()
+
+func _refresh_sound_button():
+    if not is_instance_valid(sound_button): return
+    sound_button.glyph = "sound_off" if sound_muted else "sound_on"
+    sound_button.tooltip_text = "Som desligado · clique para ligar" if sound_muted else "Som ligado · clique para silenciar"
+    sound_button.queue_redraw()
 
 func open_premium(page_id := "hub"):
     if premium == null:
@@ -1172,19 +1284,16 @@ func _refresh_premove_button():
     (labels.get_child(0) as Label).text = title
     (labels.get_child(1) as Label).text = sub
 
-func _refresh_display_label():
-    display_label.text = "Modo atual: " + ("tela cheia" if get_window().mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN] else "janela")
-
 func _load_preferences():
     var config = ConfigFile.new()
     if config.load(PREFS) != OK: return
     player_name = String(config.get_value("profile","name","Jogador")).left(20)
     avatar_id = String(config.get_value("profile","avatar","warrior"))
-    if avatar_id not in ["warrior","archer","mage","paladin"]: avatar_id = "warrior"
+    if avatar_id not in AvatarCatalog.ids() or not AvatarCatalog.has_art(avatar_id): avatar_id = "warrior"
     volume = clampf(float(config.get_value("audio","volume",0.8)),0,1)
     music_volume = clampf(float(config.get_value("audio","music_volume",0.65)),0,1)
     premove_enabled = bool(config.get_value("game","premove",true))
-    fullscreen = true
+    sound_muted = bool(config.get_value("audio","muted",false))
 
 func _save_preferences():
     var config = ConfigFile.new()
@@ -1192,7 +1301,7 @@ func _save_preferences():
     config.set_value("profile","avatar",avatar_id)
     config.set_value("audio","volume",volume)
     config.set_value("audio","music_volume",music_volume)
-    config.set_value("video","fullscreen",fullscreen)
+    config.set_value("audio","muted",sound_muted)
     config.set_value("game","premove",premove_enabled)
     config.save(PREFS)
 
@@ -1289,13 +1398,21 @@ func _build_reference_chrome():
     canvas.add_child(pbtn)
     ref_nodes.append(pbtn)
     # CLUB FRAIHA: fita pendurada no cartão de perfil (entrada própria, fora de Configurações).
+    # Canto superior esquerdo do HUD (antes ficava pendurado no cartão de perfil e invadia as páginas).
     club_entry = preload("res://monetization/club_home_entry.gd").new()
-    club_entry.position = Vector2(1282, 240)
-    club_entry.size = Vector2(310, 50)
+    club_entry.position = Vector2(22, 16)
+    club_entry.size = Vector2(330, 62)
     club_entry.pressed.connect(open_club)
     canvas.add_child(club_entry)
     ref_nodes.append(club_entry)
     refresh_club()
+    sound_button = preload("res://ui_v022/hud_button.gd").make("sound_on")
+    sound_button.name = "SoundButton"
+    sound_button.size = Vector2(62, 62)
+    sound_button.position = Vector2(364, 16)
+    sound_button.pressed.connect(toggle_sound)
+    canvas.add_child(sound_button)
+    _refresh_sound_button()
     var clip = Control.new()
     clip.name = "RefPortraitClip"
     clip.clip_contents = true
@@ -1507,6 +1624,19 @@ func _refresh_ref_account():
 
 func _sync_menu_cover():
     if is_instance_valid(ref_menu_cover): ref_menu_cover.visible = ref_mode and page != "main"
+    # Páginas internas usam o painel largo (y 260 → 900): o HUD de baixo da Home (cartão da conta,
+    # versão) fica escondido enquanto a página está aberta — antes os textos vivos atravessavam a moldura.
+    var home := page == "main"
+    for n in [account_card, ref_account_avatar, ref_account_frame_host, canvas.get_node_or_null("RefVersionLabel")]:
+        if is_instance_valid(n): n.modulate.a = 1.0 if home else 0.0
+    if is_instance_valid(account_card): account_card.mouse_filter = Control.MOUSE_FILTER_STOP if home else Control.MOUSE_FILTER_IGNORE
+    for name in ["AccountPanel", "VersionPanel"]:
+        var n = canvas.get_node_or_null(name)
+        if n != null: n.modulate.a = 1.0 if home else 0.0
+    var details = canvas.get_node_or_null("ForestDetails")
+    for name in ["InnerCornerL", "InnerCornerR"]:
+        var n = canvas.get_node_or_null(name)
+        if n != null: n.visible = not home and details != null and details.visible
 
 
 # ---------- Conta ligada ao Home: nome público e foto (0004) ----------

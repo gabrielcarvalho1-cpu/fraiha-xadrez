@@ -58,15 +58,15 @@
    "title": "O Escudeiro",
    "description": "Joga de forma razoável e pune erros grosseiros.",
    "engine": {
-    "skill": 1,
+    "skill": 0,
     "go": {
      "depth": 3
     },
-    "multipv": 4,
-    "random_chance": 0.06,
+    "multipv": 5,
+    "random_chance": 0.12,
     "error": {
-     "chance": 0.2,
-     "max_loss": 220
+     "chance": 0.24,
+     "max_loss": 260
     }
    },
    "think_ms": 550,

@@ -128,6 +128,7 @@ func layout():
         # Title on its own row; profile/back as a full-width touch bar below it.
         heading.position = Vector2(8,4)
         heading.size = Vector2(size.x-16,34)
+        _fit_heading(size.x - 16)
         for bar in [profile, back_button]:
             bar.position = Vector2(8,42)
             bar.size = Vector2(size.x-16,46)
@@ -136,12 +137,23 @@ func layout():
         return
     heading.position = Vector2(8,7)
     heading.size = Vector2(maxf(120,size.x-275),36)
+    _fit_heading(maxf(120,size.x-275))
     profile.position = Vector2(size.x-242,0)
     profile.size = Vector2(234,46)
     back_button.position = Vector2(size.x-166,0)
     back_button.size = Vector2(158,46)
     scroll.position = Vector2(8,54)
     scroll.size = Vector2(size.x-16,maxf(60,size.y-58))
+
+## Título das páginas internas em UMA linha: reduz a fonte até caber (antes quebrava em duas linhas e a
+## segunda ficava embaixo do VOLTAR no retrato — ex.: "JOGAR CONTRA O COMPUTADOR").
+func _fit_heading(room: float):
+    heading.autowrap_mode = TextServer.AUTOWRAP_OFF
+    heading.clip_text = true
+    var f: Font = heading.get_theme_font("font")
+    var fs := 22
+    while fs > 13 and f.get_string_size(heading.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > room - 4.0: fs -= 1
+    heading.add_theme_font_size_override("font_size", fs)
 
 func _text(parent: Node, text: String, font_size := 18) -> Label:
     var label = Label.new()
@@ -254,24 +266,42 @@ func show_page(id: String):
                 ladder.setup(hub.bot_progress, cols, Vector2(0, 150), true)
                 ladder.challenge.connect(func(bid): hub._choose_difficulty(bid))
             "main":
-                # Cartão do jogador recortado da própria arte do PC, com dados vivos por cima.
+                # HUD do topo: CLUB FRAIHA no canto superior esquerdo + botão SOM à direita.
                 var head_gap = Control.new()
                 head_gap.custom_minimum_size.y = 6
                 content.add_child(head_gap)
+                var top_row = HBoxContainer.new()
+                top_row.name = "MobileTopHud"
+                top_row.add_theme_constant_override("separation", 10)
+                content.add_child(top_row)
+                club_row = load("res://monetization/club_home_entry.gd").new()
+                club_row.name = "ClubHomeEntryMobile"
+                club_row.compact = true
+                club_row.custom_minimum_size.y = 54
+                club_row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+                club_row.pressed.connect(func(): hub.open_club())
+                top_row.add_child(club_row)
+                refresh_club(hub.entitlements != null and hub.entitlements.club_active())
+                # Canto superior esquerdo com largura de selo (no paisagem não vira uma faixa de ponta a ponta).
+                var hud_spacer = Control.new()
+                hud_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+                hud_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                top_row.add_child(hud_spacer)
+                # largura a partir da tela (não da própria linha: isso realimentava e estourava a largura)
+                _fit_club()
+                if not resized.is_connected(_fit_club): resized.connect(_fit_club)
+                sound_button = preload("res://ui_v022/hud_button.gd").make("sound_on")
+                sound_button.name = "SoundButtonMobile"
+                sound_button.custom_minimum_size = Vector2(54, 54)
+                sound_button.pressed.connect(func(): hub.toggle_sound())
+                top_row.add_child(sound_button)
+                refresh_sound()
+                # Cartão do jogador recortado da própria arte do PC, com dados vivos por cima.
                 var card = ProfileCard.new()
                 card.hub = hub
                 card.text = hub.player_name + " · PERFIL"
                 card.pressed.connect(func(): hub.show_page("profile"))
                 content.add_child(card)
-                # CLUB FRAIHA: linha própria, separada do menu.
-                club_row = load("res://monetization/club_home_entry.gd").new()
-                club_row.name = "ClubHomeEntryMobile"
-                club_row.compact = true
-                club_row.custom_minimum_size.y = 50
-                club_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-                club_row.pressed.connect(func(): hub.open_club())
-                content.add_child(club_row)
-                refresh_club(hub.entitlements != null and hub.entitlements.club_active())
                 if hub.has_signal("account_requested"):
                     _button(content,hub.account_caption,func(): hub.account_requested.emit()).custom_minimum_size.y = 50
                 var grid = _grid(content,2)
@@ -309,12 +339,22 @@ func show_page(id: String):
     layout()
 
 var club_row = null
+var sound_button: Button = null
 var avatar_note: Label = null
+
+func refresh_sound():
+    if not is_instance_valid(sound_button): return
+    sound_button.glyph = "sound_off" if hub.sound_muted else "sound_on"
+    sound_button.tooltip_text = "Som desligado" if hub.sound_muted else "Som ligado"
+    sound_button.queue_redraw()
 
 func avatar_message(text: String, is_error: bool):
     if is_instance_valid(avatar_note):
         avatar_note.text = text
         avatar_note.add_theme_color_override("font_color", Color("ff9d86") if is_error else Color("c9c2a8"))
+
+func _fit_club():
+    if is_instance_valid(club_row): club_row.custom_minimum_size.x = clampf(size.x - 40.0 - 64.0, 200.0, 380.0)
 
 func refresh_club(on: bool):
     if is_instance_valid(club_row): club_row.set_active(on)
@@ -337,25 +377,25 @@ func _touch_content(node: Node):
     for child in node.get_children(): _touch_content(child)
 
 func _profile(content: VBoxContainer):
-    var avatars = _grid(content,4)
-    for id in ["warrior","archer","mage","paladin"]:
-        var avatar_id: String = id
-        var box = VBoxContainer.new()
-        box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        avatars.add_child(box)
-        var portrait = TextureButton.new()
-        portrait.texture_normal = hub.avatar_texture(id)
-        portrait.ignore_texture_size = true
-        portrait.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-        portrait.custom_minimum_size = Vector2(100,100)
-        portrait.pressed.connect(func():
-            hub.choose_avatar(avatar_id)
-            show_page.call_deferred("profile")
-        )
-        portrait.set_meta("no_club_frame", true)
-        box.add_child(portrait)
-        hub.attach_league_frame(portrait)
-        _text(box,{"warrior":"Guerreiro","archer":"Arqueira","mage":"Mago","paladin":"Paladino"}[id]+(" · atual" if hub.avatar_id == id else ""),16).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    # GALERIA DE PROGRESSÃO: todos os avatares; bloqueados em cinza com o requisito (mesma do PC).
+    var count = _text(content, "", 16)
+    count.name = "GalleryCountMobile"
+    var gallery = load("res://profile/avatar_gallery.gd").new()
+    gallery.name = "AvatarGalleryMobile"
+    gallery.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    content.add_child(gallery)
+    var cols := 5 if size.x > size.y else 3
+    var cw := floorf((size.x - 40.0 - 10.0 * (cols - 1)) / cols)
+    gallery.setup(hub, cols, Vector2(cw, cw + 48.0))
+    count.text = "COLEÇÃO DE AVATARES · %d de %d" % [gallery.count_unlocked(), gallery.cards.size()]
+    var detail = _text(content, "", 14)
+    detail.name = "AvatarDetailMobile"
+    gallery.inspected.connect(func(id):
+        var st: String = gallery.state_of(id)
+        detail.text = hub.AvatarCatalog.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + gallery.hint(id) if st == "locked" else ("conquistado · arte em breve" if st == "no_art_unlocked" else "conquistado")))
+    gallery.picked.connect(func(id):
+        hub.choose_avatar(id)
+        gallery.update_states())
     # Foto própria (escolher → enquadrar → salvar) e remover.
     var photo_row = HBoxContainer.new()
     photo_row.add_theme_constant_override("separation", 8)
@@ -423,7 +463,7 @@ func _about(content: VBoxContainer):
 ## esticar a grade; em retrato, grades de botões viram 1 coluna e a de avatares 2.
 func _fit_width(portrait: bool):
     for grid in scroll.find_children("*", "GridContainer", true, false):
-        if grid == menu_grid: continue
+        if grid == menu_grid or grid.name == "AvatarGalleryMobile": continue
         var has_avatars = grid.find_children("*", "TextureButton", true, false).size() > 0
         if portrait: grid.columns = 2 if has_avatars else 1
     for b in scroll.find_children("*", "Button", true, false):

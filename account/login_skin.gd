@@ -23,6 +23,17 @@ class Field extends Control:
     var secret := false
     const LEFT := 134.0      # início do texto (coords do recorte 738 x 120)
     const RIGHT := 60.0
+    ## O painel de login é desenhado em escala (arte de 738 px ocupa ~430 px na tela). Fonte comum é
+    ## rasterizada no tamanho nominal e reduzida sem mipmaps: traços finos somem ("SENHA" → "SLNIIA").
+    ## Cópia em MSDF (campo de distância) fica nítida em qualquer escala. Não altera o .import.
+    static var _msdf: FontFile
+    static func field_font() -> FontFile:
+        if _msdf == null:
+            _msdf = (preload("res://account/fonts/Cinzel-SemiBold.woff") as FontFile).duplicate()
+            _msdf.multichannel_signed_distance_field = true
+            _msdf.msdf_pixel_range = 8
+            _msdf.msdf_size = 48
+        return _msdf
     func _init():
         custom_minimum_size = Vector2(738, 120)
         mouse_filter = Control.MOUSE_FILTER_PASS
@@ -39,7 +50,7 @@ class Field extends Control:
         var flat := StyleBoxEmpty.new()
         for s in ["normal", "focus", "read_only"]: line.add_theme_stylebox_override(s, flat)
         line.add_theme_font_size_override("font_size", 32)
-        line.add_theme_font_override("font", preload("res://account/fonts/Cinzel-SemiBold.woff"))
+        line.add_theme_font_override("font", field_font())
         line.add_theme_color_override("font_color", CREAM)
         line.add_theme_color_override("font_placeholder_color", PLACEHOLDER)
         line.add_theme_color_override("caret_color", GOLD)

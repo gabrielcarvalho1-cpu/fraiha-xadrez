@@ -1,5 +1,6 @@
 extends SceneTree
-## Tela cheia no desktop: exclusiva por padrão; TELA CHEIA e Alt+Enter alternam janela <-> exclusiva.
+## Tela cheia no desktop: exclusiva por padrão; Alt+Enter (só desktop) alterna janela <-> exclusiva.
+## Sem botão/opção TELA CHEIA (R29). Web: tela cheia real pedida no 1º gesto do jogador.
 ## Web continua com janela (mode.web=0). Rodar com janela real: xvfb-run ... -s tests/fullscreen_mode_test.gd
 var failures = 0
 func check(ok: bool, label: String):
@@ -36,11 +37,23 @@ func run():
         Input.parse_input_event(alt)
         await frames(5)
         check(win.mode == Window.MODE_EXCLUSIVE_FULLSCREEN, "Alt+Enter: janela -> exclusiva")
-        stage.hub._toggle_fullscreen()
-        await frames(5)
-        check(win.mode == Window.MODE_WINDOWED and not stage.hub.fullscreen, "botão TELA CHEIA da Home: volta para janela e atualiza o estado")
-        stage.hub._toggle_fullscreen()
-        await frames(5)
-        check(win.mode == Window.MODE_EXCLUSIVE_FULLSCREEN and stage.hub.fullscreen, "botão TELA CHEIA da Home: volta para exclusiva")
+    # R29: não existe mais opção/botão de TELA CHEIA (o jogo sempre usa a área máxima).
+    var found := []
+    for n in stage.find_children("*", "", true, false):
+        if n is Button and String(n.text).to_lower().contains("tela cheia"): found.append(n.get_path())
+        if String(n.name) == "FullscreenButton": found.append(n.get_path())
+    check(found.is_empty(), "nenhum botão TELA CHEIA / FullscreenButton na árvore %s" % [found])
+    check(not stage.hub.has_method("_toggle_fullscreen") and stage.hub.get("fullscreen") == null, "Configurações sem opção de tela cheia (sem estado no hub)")
+    stage.hub.show_page("settings")
+    await frames(3)
+    var settings_text := ""
+    for n in stage.hub.pages.settings.find_children("*", "", true, false):
+        if n is Button or n is Label: settings_text += String(n.text) + "\n"
+    check(not settings_text.to_upper().contains("TELA CHEIA:"), "página Configurações não mostra TELA CHEIA")
+    stage.hub._save_preferences()
+    var cfg := ConfigFile.new()
+    cfg.load(stage.hub.PREFS)
+    check(not cfg.has_section_key("video", "fullscreen"), "nenhuma preferência persistente de tela cheia")
+    check(stage.has_method("_web_fullscreen_once"), "Web: pedido de tela cheia no 1º gesto (_web_fullscreen_once)")
     print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
     quit(failures)

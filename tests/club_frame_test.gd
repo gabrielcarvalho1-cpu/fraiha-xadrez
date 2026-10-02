@@ -47,7 +47,7 @@ func run():
     hub.show_page("profile")
     for i in 2: await process_frame
     check(frames_on(hub) >= 1 or mobile, "moldura Club no Perfil")
-    var choices = hub.find_children("*", "TextureButton", true, false).filter(func(b): return b.has_meta("no_club_frame"))
+    var choices = hub.find_children("*", "BaseButton", true, false).filter(func(b): return b.has_meta("no_club_frame"))
     check(choices.size() > 0 and choices.all(func(b): return b.get_node_or_null("ClubFrame") == null), "avatares de escolha não recebem a moldura")
     hub.show_page("main")
     stage._start_bot("easy", "w")

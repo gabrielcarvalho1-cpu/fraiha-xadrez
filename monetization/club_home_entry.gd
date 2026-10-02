@@ -1,6 +1,6 @@
 extends Button
-## Entrada do CLUB FRAIHA na Home: fita de OURO maciço pendurada no cartão de perfil (desktop)
-## ou linha própria no menu do celular. Separada dos botões do menu; abre direto a página do Club.
+## Entrada do CLUB FRAIHA na Home: placa de OURO maciço no canto superior esquerdo do HUD (desktop)
+## ou no topo do menu do celular. Separada dos botões do menu; abre direto a página do Club.
 ## Inativo: "CLUB FRAIHA · Jogue. Analise. Evolua."   Ativo: "CLUB ATIVO · Análises ilimitadas".
 ## Visual: moldura dourada metálica (gradiente + bisel), interior verde profundo, medalhão com
 ## coroa, brilho percorrendo o ouro e, quando ativo, selo dourado com ✓ e faíscas.
@@ -39,6 +39,9 @@ func _process(delta):
 func _notification(what):
     if what in [NOTIFICATION_MOUSE_ENTER, NOTIFICATION_MOUSE_EXIT, NOTIFICATION_FOCUS_ENTER, NOTIFICATION_FOCUS_EXIT]: queue_redraw()
 
+func _gui_input(event):
+    if event is InputEventMouseButton or event is InputEventScreenTouch: queue_redraw()
+
 static func gold_at(k: float, lit := false) -> Color:
     k = clampf(k, 0.0, 1.0)
     for i in range(GOLD_STOPS.size() - 1):
@@ -63,6 +66,8 @@ static func span(w: float, h: float, notch: float, y: float) -> Vector2:
 
 func _draw():
     var lit := is_hovered() or has_focus()
+    var down := button_pressed or (is_hovered() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))
+    if down: draw_set_transform(Vector2(0, 2))   # pressionado: a placa "afunda" 2 px
     var w := size.x
     var h := size.y
     var notch := minf(h * 0.42, 15.0)
@@ -74,8 +79,9 @@ func _draw():
             var g := 3.0 + i * 3.0
             var a := (0.16 - i * 0.045) * (0.6 + 0.4 * pulse)
             _draw_shifted(ribbon(w + g * 2.0, h + g * 2.0, notch + g * 0.4, 0.0), Vector2(-g, -g), Color(1.0, 0.86, 0.45, a))
-    # sombra
-    _draw_shifted(ribbon(w, h, notch, 0.0), Vector2(0, 3), Color(0, 0, 0, 0.5))
+    # sombra + contorno escuro externo (descola a placa do fundo da floresta)
+    _draw_shifted(ribbon(w, h, notch, 0.0), Vector2(0, 0 if down else 4), Color(0, 0, 0, 0.55))
+    _draw_shifted(ribbon(w + 4.0, h + 4.0, notch + 1.0, 0.0), Vector2(-2, -2), Color("2a1a05"))
     # ouro maciço: faixas horizontais com gradiente metálico
     var y := 0.0
     while y < h:
@@ -107,6 +113,11 @@ func _draw():
     # brilho que percorre o ouro
     var x := fmod(t * (150.0 if active else 95.0), w + 220.0) - 110.0
     draw_colored_polygon(PackedVector2Array([Vector2(x, 0), Vector2(x + 34, 0), Vector2(x + 10, h), Vector2(x - 24, h)]), Color(1, 0.97, 0.8, 0.16 if active else 0.10))
+    # cravos dourados nas pontas da placa
+    for tip in [Vector2(border * 0.9, h / 2.0), Vector2(w - border * 0.9, h / 2.0)]:
+        draw_colored_polygon(PackedVector2Array([tip + Vector2(0, -4), tip + Vector2(4, 0), tip + Vector2(0, 4), tip + Vector2(-4, 0)]), Color("fff3cf"))
+        draw_colored_polygon(PackedVector2Array([tip + Vector2(0, -2), tip + Vector2(2, 0), tip + Vector2(0, 2), tip + Vector2(-2, 0)]), Color("8f6a22"))
+    if down: draw_rect(Rect2(0, 0, w, h), Color(0, 0, 0, 0.12))
     # medalhão com coroa (esquerda)
     var ms := h - border * 2.0 - 2.0
     var mc := Vector2(notch + border + ms / 2.0 - 2.0, h / 2.0)
@@ -118,6 +129,12 @@ func _draw():
     if active:
         draw_circle(mc, ms * 0.36, Color(1.0, 0.85, 0.4, 0.10 + 0.14 * pulse))
     Art.icon(self, "crown", Rect2(mc - Vector2(ms, ms) * 0.31, Vector2(ms, ms) * 0.62), Color("ffe6a0"))
+    # ramos de louro em volta do medalhão
+    for side in [-1.0, 1.0]:
+        for i in 4:
+            var ang := deg_to_rad(110.0 + i * 24.0) if side < 0 else deg_to_rad(70.0 - i * 24.0)
+            var lp := mc + Vector2(cos(ang), sin(ang)) * (ms / 2.0 + 1.0)
+            draw_circle(lp, 1.8, Color("d8b35a"))
     # textos
     var fx := mc.x + ms / 2.0 + 8.0
     var right_pad := notch + border + (h * 0.55 + 10.0 if active else 6.0)

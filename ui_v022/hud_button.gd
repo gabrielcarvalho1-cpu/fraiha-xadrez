@@ -1,7 +1,7 @@
 extends Button
 ## Botão do HUD da partida no estilo FRAIHA: fundo verde-escuro, moldura dourada, cravos nos
 ## cantos e ícone desenhado em pixel (sem depender de fonte com símbolos).
-## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart". hint: tecla (ex.: "ESC").
+## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off". hint: tecla (ex.: "ESC").
 const GOLD := Color("f4ce7f")
 const GOLD_DIM := Color("b99555")
 const INK := Color("0b150f")
@@ -106,6 +106,19 @@ func _draw():
             # Lupa: ANALISAR PARTIDA (só depois do fim).
             draw_arc(center + Vector2(-r * 0.2, -r * 0.2), r * 0.62, 0, TAU, 24, col, w * 1.2)
             draw_line(center + Vector2(r * 0.3, r * 0.3), center + Vector2(r * 0.95, r * 0.95), col, w * 1.8)
+        "sound_on", "sound_off":
+            # Alto-falante (corpo + cone); ligado: ondas; desligado: X vermelho-ferrugem.
+            var o := center + Vector2(-r * 0.55, 0)
+            draw_rect(Rect2(o + Vector2(-r * 0.55, -r * 0.38), Vector2(r * 0.5, r * 0.76)), col)
+            draw_colored_polygon(PackedVector2Array([o + Vector2(-0.1 * r, -r * 0.38), o + Vector2(r * 0.55, -r * 0.95), o + Vector2(r * 0.55, r * 0.95), o + Vector2(-0.1 * r, r * 0.38)]), col)
+            if glyph == "sound_on":
+                for k in [0.55, 0.95]:
+                    draw_arc(o + Vector2(r * 0.6, 0), r * k, deg_to_rad(-45), deg_to_rad(45), 10, col, w)
+            else:
+                var x := o + Vector2(r * 1.15, 0)
+                var xc := Color("e07a5f") if not disabled else col
+                draw_line(x + Vector2(-r * 0.38, -r * 0.38), x + Vector2(r * 0.38, r * 0.38), xc, w * 1.2)
+                draw_line(x + Vector2(-r * 0.38, r * 0.38), x + Vector2(r * 0.38, -r * 0.38), xc, w * 1.2)
         "restart":
             draw_arc(center, r * 0.85, deg_to_rad(-70), deg_to_rad(220), 20, col, w)
             var end := center + Vector2(cos(deg_to_rad(-70)), sin(deg_to_rad(-70))) * r * 0.85
