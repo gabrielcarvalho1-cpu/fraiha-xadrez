@@ -118,7 +118,7 @@ class Invites {
       if (this.openOf(me)) return this.fail(ws, 'Você já tem um convite pendente.', 'pending_exists', { invite: this.view(this.openOf(me)) });
       if (this.openOf(other)) return this.fail(ws, 'Este amigo já tem um convite pendente.', 'target_busy');
       const p = ws.profile;
-      const inv = { id: crypto.randomUUID(), from: { user_id: me, nickname: p.nickname, avatar_id: p.avatar_id }, to: { user_id: other, nickname: peer.nickname, avatar_id: peer.avatar_id },
+      const inv = { id: crypto.randomUUID(), from: { user_id: me, nickname: p.nickname, avatar_id: (ws.identity && ws.identity.avatar) || p.avatar_id, badge: (ws.identity && ws.identity.badge) || '' }, to: { user_id: other, nickname: peer.nickname, avatar_id: peer.avatar_id, badge: peer.badge || '' },
         mode, created: now, expires: now + TTL_MS, status: 'pending' };
       this.invites.set(inv.id, inv); this.byUser.set(me, inv.id); this.byUser.set(other, inv.id);
       this.toUser(me, { type: 'invite_sent', invite: { ...this.view(inv, now), role: 'sender' } });
@@ -172,7 +172,7 @@ class Invites {
     const entry = (u, since) => {
       const socks = this.sockets(u.user_id);
       casual.sockets.set(u.user_id, socks[socks.length - 1]);
-      return { userId: u.user_id, nickname: u.nickname, avatar: u.avatar_id, stats: null, since };
+      return { userId: u.user_id, nickname: u.nickname, avatar: u.avatar_id, badge: u.badge || '', stats: null, since };
     };
     let match;
     try { match = casual.startMatch(inv.mode, entry(inv.from, inv.created), entry(inv.to, inv.created + 1)); }

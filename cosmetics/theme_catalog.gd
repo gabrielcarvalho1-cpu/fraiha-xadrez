@@ -14,8 +14,17 @@ const THEME_DATA = {
     "diamante": {"id":"diamante", "name":"Diamante", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/diamante_arena.png", "pieces_path":"res://cosmetics/v029/diamante_pieces.png", "unlock_league":"diamante", "board_palette":[Color("e4edfa"),Color("426185")], "rim":Color("9fe7ff"), "music_path":"res://music_v026/silver.mp3", "description":"Cidadela cristalina suspensa entre nuvens e cascatas.", "free_arena":true},
     "mestre": {"id":"mestre", "name":"Mestre", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/mestre_arena.png", "pieces_path":"res://cosmetics/v029/mestre_pieces.png", "unlock_league":"mestre", "board_palette":[Color("dccbaa"),Color("51435f")], "rim":Color("cdaae8"), "music_path":"res://music_v026/iron.mp3", "description":"Academia do xadrez, bibliotecas e tradição dos mestres.", "free_arena":true},
     "grande_mestre": {"id":"grande_mestre", "name":"Grão-Mestre", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/grande_mestre_arena.png", "pieces_path":"res://cosmetics/v029/grande_mestre_pieces.png", "unlock_league":"grande_mestre", "board_palette":[Color("e3c99b"),Color("542b37")], "rim":Color("efbd67"), "music_path":"res://music_v026/gold.mp3", "description":"Salão imperial, mármore e insígnias da elite máxima.", "free_arena":true},
-    "challenger": {"id":"challenger", "name":"Challenger", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/challenger_arena.png", "pieces_path":"res://cosmetics/v029/challenger_pieces.png", "unlock_league":"challenger", "board_palette":[Color("d8eafa"),Color("243751")], "rim":Color("ffd476"), "music_path":"res://music_v026/gold.mp3", "description":"Santuário mítico, ilhas celestes e relíquias lendárias.", "free_arena":true}
+    "challenger": {"id":"challenger", "name":"Challenger", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v029/challenger_arena.png", "pieces_path":"res://cosmetics/v029/challenger_pieces.png", "unlock_league":"challenger", "board_palette":[Color("d8eafa"),Color("243751")], "rim":Color("ffd476"), "music_path":"res://music_v026/gold.mp3", "description":"Santuário mítico, ilhas celestes e relíquias lendárias.", "free_arena":true},
+    # R31 · EXCLUSIVOS (fora da progressão do Ranked; só cosméticos, nunca vantagem):
+    #   "exclusive":"founder" → Pacote Fundador · "exclusive":"club" → Club FRAIHA ativo.
+    "fundador": {"id":"fundador", "name":"Universo Fundador", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v031/fundador_arena.png", "pieces_path":"res://cosmetics/v031/fundador_pieces.png", "unlock_league":"", "exclusive":"founder", "board_palette":[Color("ead6a4"),Color("2a2118")], "rim":Color("ffd36b"), "music_path":"res://music_v026/gold.mp3", "description":"Salão do Reino em obsidiana e ouro, reservado aos Fundadores.", "free_arena":true},
+    "club": {"id":"club", "name":"Academia Club", "home_path":"res://ui_v022/assets/home_forest.png", "arena_path":"res://cosmetics/v031/club_arena.png", "pieces_path":"res://cosmetics/v031/club_pieces.png", "unlock_league":"", "exclusive":"club", "board_palette":[Color("e7dcc0"),Color("1f5a43")], "rim":Color("7fe0b0"), "music_path":"res://music_v026/wood.mp3", "description":"Academia esmeralda do Club FRAIHA: estudo, tradição e evolução.", "free_arena":true}
 }
+const EXCLUSIVE_IDS := ["fundador", "club"]
+
+## "" (liga) | "founder" | "club"
+static func exclusive_of(id: String) -> String:
+    return String(THEME_DATA.get(id, {}).get("exclusive", ""))
 
 static func themes() -> Array:
     var result := []

@@ -22,17 +22,18 @@ const BENEFITS := [
     ["crown", "AVATAR FUNDADOR EXCLUSIVO", "Rei e Rainha dourados — só para Fundadores.", "now"],
     ["scroll", "TÍTULO EXCLUSIVO", "“Fundador do Reino”.", "now"],
     ["frame", "MOLDURA DE PERFIL EXCLUSIVA", "Visual especial reservado aos Fundadores.", "now"],
-    ["pawn", "CONJUNTO DE PEÇAS FUNDADOR", "Conjunto exclusivo, fora da progressão do Ranked.", "soon"],
-    ["castle", "UNIVERSO FUNDADOR", "Cenário e tabuleiro exclusivos, fora das ligas.", "soon"],
+    ["pawn", "CONJUNTO DE PEÇAS FUNDADOR", "Peças de marfim dourado e obsidiana, fora da progressão do Ranked.", "now"],
+    ["castle", "UNIVERSO FUNDADOR", "Salão do Reino em obsidiana e ouro, com tabuleiro próprio.", "now"],
     ["chat", "COMUNIDADE DOS FUNDADORES", "Grupo exclusivo dos Fundadores no WhatsApp.", "now"],
-    ["hourglass", "ACESSO ANTECIPADO", "Teste algumas novidades antes do lançamento geral.", "soon"],
-    ["megaphone", "DESTAQUE SOCIAL", "Futuramente no perfil, na lista de Amigos, no chat e em outras áreas sociais.", "soon"],
+    ["hourglass", "ACESSO ANTECIPADO", "Laboratório: novidades em teste antes do lançamento geral.", "now"],
+    ["megaphone", "DESTAQUE SOCIAL", "Seu selo aparece para os outros jogadores: Amigos, chat, convites e partidas.", "now"],
     ["calendar", "30 DIAS DE CLUB FRAIHA", "Um mês de Club FRAIHA incluso no Pacote Fundador.", "trial"],
 ]
 
 static func build(hub, parent: VBoxContainer):
-    var owned: bool = hub.state.founder_view()
-    _hero(hub, parent, owned)
+    var owned: bool = hub.founder_owned()
+    var real: bool = hub.founder_real()
+    _hero(hub, parent, owned, real)
     if owned: _reward(hub, parent)
     # O reino começa aqui (conceito)
     var c: VBoxContainer = hub.section(parent, "O REINO COMEÇA AQUI", "crown", "founder")
@@ -56,8 +57,8 @@ static func build(hub, parent: VBoxContainer):
         var tone := "soon"
         if owned:
             match item[3]:
-                "now": tag = "LIBERADO · TESTE"; tone = "ok"
-                "trial": tag = "%d DIAS DE CLUB · BENEFÍCIO FUNDADOR · SIMULAÇÃO" % Catalog.FOUNDER_CLUB_DAYS; tone = "ok"
+                "now": tag = "LIBERADO" if real else "LIBERADO · TESTE"; tone = "ok"
+                "trial": tag = ("%d DIAS DE CLUB INCLUSOS" if real else "%d DIAS DE CLUB · BENEFÍCIO FUNDADOR · SIMULAÇÃO") % Catalog.FOUNDER_CLUB_DAYS; tone = "ok"
                 _: tag = "EM BREVE"
         elif item[3] == "trial":
             tag = "BENEFÍCIO FUTURO"
@@ -70,7 +71,7 @@ static func build(hub, parent: VBoxContainer):
         again.pressed.connect(func(): hub.open_payment("founder"))
         parent.add_child(again)
 
-static func _hero(hub, parent: VBoxContainer, owned: bool):
+static func _hero(hub, parent: VBoxContainer, owned: bool, real := false):
     var f := Art.Frame.new("founder", int(30 * hub.k))
     f.name = "FounderHero"
     f.glow = true
@@ -108,7 +109,12 @@ static func _hero(hub, parent: VBoxContainer, owned: bool):
         var big := Art.label(v, "FUNDADOR FRAIHA", hub.fs(34), Color("fff1c0"), Art.FONT_BOLD)
         big.name = "FounderOwnedTitle"
         Art.label(v, "Você faz parte de quem esteve aqui desde o começo.", hub.fs(22), Art.CREAM)
-        Art.label(v, "Estado de desenvolvimento (simulação): nenhuma compra real foi feita.", hub.fs(15), Color("f2a070"))
+        if not real: Art.label(v, "Estado de desenvolvimento (simulação): nenhuma compra real foi feita.", hub.fs(15), Color("f2a070"))
+        var pz := Art.Cta.new("PERSONALIZAR (ÍCONE, MOLDURA, UNIVERSO, PEÇAS)", "gold", 58 * maxf(hub.k, 0.85), int(18 * maxf(hub.k, 0.85)))
+        pz.name = "FounderPersonalize"
+        pz.icon_kind = "brush"
+        pz.pressed.connect(func(): hub.show_page("personalize"))
+        v.add_child(pz)
     else:
         v.add_child(hub.price_block("founder", false))
         var pay := HFlowContainer.new()

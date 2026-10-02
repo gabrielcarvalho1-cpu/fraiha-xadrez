@@ -12,6 +12,7 @@ const { Invites } = require('./social/invites');
 const { Presence } = require('./social/presence');
 const { Payments } = require('./payments/service');
 const { BotService } = require('./bots/service');
+const Cosmetics = require('./accounts/cosmetics');
 
 const GUEST_TTL_MS = 24 * 3600e3;
 // Análise pós-partida: contas sem Club têm N análises por dia (dia UTC, relógio do servidor).
@@ -109,12 +110,14 @@ class Backend {
     const analysis = profile ? await this.analysisSummary(u.id, entitlements) : null;
     const bots = profile && this.bots ? await this.bots.summary(u.id) : null;
     ws.profile = profile;
-    if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: profile.avatar_id, guest: false }); }
+    const look = profile ? Cosmetics.effective(profile, entitlements) : null;
+    if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: look.avatar_id, badge: look.badge, title: look.title, guest: false }); }
     // nickname_next_change_at: calculado pelo SERVIDOR (cooldown de 30 dias); o cliente só exibe.
     const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile) } : null;
     this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,
       needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind,
       entitlements: entitlements ? { is_founder: !!entitlements.is_founder, club_active: !!entitlements.club_active, club_expires_at: entitlements.club_expires_at || null } : null,
+      cosmetics: look ? { avatar_id: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame } : null,
       analysis, bots });
   }
   // Convidado: identidade só em memória, recuperável pelo token (reconexão ao Casual).
@@ -244,6 +247,24 @@ class Backend {
         if (this.kind !== 'dev' || !ws.profile) return this.fail(ws, 'Só no servidor de desenvolvimento.', { code: 'dev_only' });
         await this.store.setEntitlements(ws.user.id, { is_founder: !!m.is_founder, club_active: !!m.club_active, club_expires_at: m.club_expires_at || null });
         return this.state(ws);
+      }
+      // ---------- R31: identidade cosmética (avatar, ícone, título, moldura) — servidor revalida pelos direitos ----------
+      if (a === 'acct_set_cosmetics') {
+        if (!ws.profile) return this.fail(ws, 'Crie seu perfil primeiro.', { code: 'profile_missing' });
+        const now = Date.now();
+        if (ws.cosmeticsAt && now - ws.cosmeticsAt < 800) return this.send(ws, { type: 'acct_cosmetics_error', code: 'rate_limited', message: 'Aguarde um instante.' });
+        ws.cosmeticsAt = now;
+        const ent = await this.store.getEntitlements(ws.user.id);
+        let defeated = null;
+        if (m.avatar_id !== undefined && this.bots) { const b = await this.bots.summary(ws.user.id); defeated = b.available ? b.defeated : null; }
+        const v = Cosmetics.validate(m, ent, defeated);
+        if (v.error) return this.send(ws, { type: 'acct_cosmetics_error', code: v.code, field: v.field || '', message: v.error });
+        const r = await this.store.setCosmetics(ws.user.id, v.values);
+        if (r.error) return this.send(ws, { type: 'acct_cosmetics_error', code: r.code || 'profile_error', message: r.error });
+        await this.state(ws);
+        this.presenceChanged(ws.user.id);
+        const look = Cosmetics.effective(r.profile, ent);
+        return this.send(ws, { type: 'acct_cosmetics_saved', avatar_id: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame, partial: !!r.partial });
       }
       // ---------- Nome público (0004) ----------
       if (a === 'acct_check_nickname') {

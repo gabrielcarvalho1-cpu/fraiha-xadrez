@@ -14,6 +14,9 @@ signal avatar_failed(code: String, message: String)   # upload/remoção recusad
 signal entitlements_changed(data: Dictionary)
 signal bot_progress_changed(data: Dictionary)   # {available, defeated:[ids], new_bot}
 signal bot_progress_failed(code: String, message: String, bot_id: String)
+signal cosmetics_state(data: Dictionary)      # R31: {avatar_id, badge, title, frame} vindos do acct_state
+signal cosmetics_saved(data: Dictionary)
+signal cosmetics_failed(code: String, message: String, field: String)
 
 const SESSION_FILE = "user://account_session.cfg"
 const GUEST_FILE = "user://guest_session.cfg"
@@ -348,6 +351,14 @@ static func nickname_error(nick: String) -> String:
     return ""
 
 # ---------- Nome público (0004) ----------
+## R31: avatar, ícone, título e moldura da conta (o servidor revalida pelos direitos).
+func set_cosmetics(data: Dictionary) -> bool:
+    if not has_profile(): return false
+    var msg := {"type": "acct_set_cosmetics"}
+    for k in ["avatar_id", "badge", "title", "frame"]:
+        if data.has(k): msg[k] = String(data[k])
+    return _send(msg)
+
 func check_nickname(nick: String) -> bool:
     return _send({"type": "acct_check_nickname", "nickname": clean_nickname(nick)})
 
@@ -434,6 +445,7 @@ func _receive(msg: Dictionary):
         persistent_backend = bool(msg.get("persistent", false))
         if msg.get("entitlements") is Dictionary: entitlements_changed.emit(msg.entitlements)
         if msg.get("bots") is Dictionary: bot_progress_changed.emit((msg.bots as Dictionary).merged({"new_bot": null}))
+        if msg.get("cosmetics") is Dictionary: cosmetics_state.emit(msg.cosmetics)
         if needs_nickname and not pending_nickname.is_empty():
             var nick = pending_nickname
             pending_nickname = ""
@@ -460,6 +472,10 @@ func _receive(msg: Dictionary):
     elif type == "acct_avatar_saved":
         var url = msg.get("avatar_url")
         avatar_saved.emit(String(url) if url != null else "")
+    elif type == "acct_cosmetics_saved":
+        cosmetics_saved.emit(msg)
+    elif type == "acct_cosmetics_error":
+        cosmetics_failed.emit(String(msg.get("code", "")), String(msg.get("message", "")), String(msg.get("field", "")))
     elif type == "acct_entitlements":
         entitlements_changed.emit(msg.get("entitlements", {}) if msg.get("entitlements") is Dictionary else {})
     elif type == "bot_progress":

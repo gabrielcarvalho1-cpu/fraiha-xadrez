@@ -10,11 +10,12 @@ signal ranked_requested
 signal account_requested
 signal friends_requested
 signal premove_changed(enabled: bool)
+signal cosmetics_changed   # R31: ícone/título/moldura/avatar mudaram (a conta sincroniza com o servidor)
 
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
-const APP_VERSION = "0.30"
+const APP_VERSION = "0.31"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
 const FOREST = preload("res://ui_v022/assets/home_forest_v2.png")
 const FOREST_V2 = FOREST
@@ -96,6 +97,16 @@ const FOUNDER_BADGE = preload("res://monetization/art/founder_badge.png")
 const FOUNDER_BADGE_SMALL = preload("res://monetization/art/founder_badge_small.png")
 var founder_row: HBoxContainer
 var ref_founder_badge: TextureRect
+const Cosmetics = preload("res://profile/premium_cosmetics.gd")
+## R31 · Identidade premium: preferências ("auto" = melhor item que o jogador possui).
+var badge_pref := "auto"
+var title_pref := "auto"
+var frame_pref := ""
+var lab_coords := false         # LABORATÓRIO (acesso antecipado): coordenadas no tabuleiro
+var founder_seal: TextureRect
+var desk_badge: TextureRect
+var founder_title_label: Label
+var founder_sub_label: Label
 var sound_muted := false        # botão SOM da Home: silencia o bus Master (mesmo sistema de áudio)
 var sound_button: Button
 var volume_label: Label
@@ -367,6 +378,15 @@ func _build_profile():
     var quote = _label(profile, "“O xadrez é a ginástica da inteligência.” — Blaise Pascal", 12, MUTED)
     quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     desk_profile = {"button": profile_button, "name": profile_name, "portrait": portrait, "stack": profile.get_parent()}
+    # R31: ícone escolhido ao lado do nome também no cartão sem a arte de referência.
+    desk_badge = TextureRect.new()
+    desk_badge.name = "DeskBadge"
+    desk_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    desk_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    desk_badge.size = Vector2(30, 30)
+    desk_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    desk_badge.visible = false
+    profile_button.add_child(desk_badge)
 
 ## Moldura ornamental FRAIHA (verde escuro + dourado): borda dupla, cantos e losangos, tudo dentro do retângulo.
 func _ornate_panel(parent: Node, pos: Vector2, dimensions: Vector2, fill := Color(0.043,0.094,0.067,0.95)) -> Control:
@@ -606,6 +626,12 @@ func _build_pages():
     remove_photo.name = "RemovePhoto"
     remove_photo.pressed.connect(remove_custom_avatar)
     photo_row.add_child(remove_photo)
+    # R31: ícone, título, moldura, universo e peças exclusivos (Fundador / Club).
+    var personalize = _hud_text_button("PERSONALIZAR", Vector2(240,44))
+    personalize.name = "OpenPersonalize"
+    personalize.tooltip_text = "Ícone, título, moldura, universo e peças"
+    personalize.pressed.connect(func(): open_premium("personalize"))
+    photo_row.add_child(personalize)
     avatar_note = _label(profile_panel, "", 13, MUTED)
     avatar_note.name = "AvatarNote"
     avatar_note.position = Vector2(44,520)
@@ -633,6 +659,7 @@ func _build_pages():
     profile.add_child(founder_row)
     var seal = TextureRect.new()
     seal.name = "FounderSeal"
+    founder_seal = seal
     seal.texture = FOUNDER_BADGE
     seal.custom_minimum_size = Vector2(64, 64)
     seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -642,8 +669,10 @@ func _build_pages():
     seal_words.alignment = BoxContainer.ALIGNMENT_CENTER
     seal_words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     founder_row.add_child(seal_words)
-    _label(seal_words, "FUNDADOR DO REINO", 18, GOLD)
-    _label(seal_words, "Selo Fundador permanente · Pacote Fundador", 13, MUTED)
+    founder_title_label = _label(seal_words, "FUNDADOR DO REINO", 18, GOLD)
+    founder_title_label.name = "IdentityTitle"
+    founder_sub_label = _label(seal_words, "Selo Fundador permanente · Pacote Fundador", 13, MUTED)
+    founder_sub_label.name = "IdentitySub"
     founder_row.visible = false
     # Nome público da conta (único, troca a cada 30 dias) — servidor decide tudo.
     nickname_editor = preload("res://account/nickname_editor.gd").new()
@@ -866,6 +895,7 @@ func avatar_texture(id: String = "") -> Texture2D:
         id = avatar_id
         # Avatar do Fundador sem o pacote ativo (ex.: conta ainda carregando): mostra o Guerreiro sem apagar a escolha.
         if AvatarCatalog.is_founder_avatar(id) and not is_founder(): id = "warrior"
+        if AvatarCatalog.is_club_avatar(id) and not club_active(): id = "warrior"
     if id == "paladin": return ThemeCatalog.texture("res://profile/paladin.png")
     if id == "warrior": return AVATAR
     if id != "archer" and id != "mage":
@@ -880,10 +910,12 @@ func avatar_texture(id: String = "") -> Texture2D:
 ## Pacote Fundador (entitlements: servidor is_founder ou simulação de dev).
 func avatar_unlocked(id: String) -> bool:
     if AvatarCatalog.is_founder_avatar(id): return is_founder()
+    if AvatarCatalog.is_club_avatar(id): return club_active()
     return bot_progress == null or bot_progress.avatar_unlocked(id)
 
 func avatar_lock_hint(id: String) -> String:
     if AvatarCatalog.is_founder_avatar(id): return "Exclusivo do Pacote Fundador"
+    if AvatarCatalog.is_club_avatar(id): return "Exclusivo do Club FRAIHA"
     return String(bot_progress.unlock_hint(id)) if bot_progress != null else ""
 
 func is_founder() -> bool:
@@ -901,6 +933,7 @@ func choose_avatar(id: String):
     inspected_avatar = id
     _refresh_avatars()
     _save_preferences()
+    cosmetics_changed.emit()
 
 ## Botão de texto no estilo do HUD (verde profundo + moldura dourada).
 func _hud_text_button(caption: String, min_size: Vector2) -> Button:
@@ -969,7 +1002,7 @@ func _refresh_avatar_detail():
     avatar_detail.pic.material = avatar_gallery.gray_material() if st == "locked" else null
     avatar_detail.title.text = String(e.get("name", id)).to_upper()
     var src := String(e.get("source", ""))
-    avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else ("Exclusivo do Pacote Fundador" if src == "founder" else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot")))
+    avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else ("Exclusivo do Pacote Fundador" if src == "founder" else ("Exclusivo do Club FRAIHA" if src == "club" else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot"))))
     match st:
         "locked":
             avatar_detail.status.text = "BLOQUEADO · " + avatar_gallery.hint(id)
@@ -1427,6 +1460,7 @@ func _refresh_sound_button():
 func open_premium(page_id := "hub"):
     if premium == null:
         premium = load("res://monetization/premium_hub.gd").new(monetization_state)
+        premium.main_hub = self
         add_child(premium)
     premium.open(page_id)
 
@@ -1436,8 +1470,29 @@ func open_club():
 ## Club ativo (real OU simulação) → atualiza a fita da Home e o cartão do jogador.
 ## Selo Fundador: cartão da Home (ao lado do nome), Perfil e cartão do celular.
 func refresh_founder():
-    var on := is_founder()
-    if is_instance_valid(founder_row): founder_row.visible = on
+    var badge := current_badge()
+    var title := current_title()
+    var on := not badge.is_empty() or not title.is_empty()
+    if is_instance_valid(founder_row):
+        founder_row.visible = on
+        founder_seal.texture = Cosmetics.badge_texture(badge, false)
+        founder_seal.visible = founder_seal.texture != null
+        founder_title_label.text = (Cosmetics.title_text(title) if not title.is_empty() else String(Cosmetics.BADGE_NAMES.get(badge, ""))).to_upper()
+        var parts: Array = []
+        if not badge.is_empty(): parts.append(String(Cosmetics.BADGE_NAMES.get(badge, "")))
+        parts.append("Pacote Fundador" if is_founder() else "Club FRAIHA")
+        founder_sub_label.text = " · ".join(parts)
+    if is_instance_valid(ref_founder_badge):
+        ref_founder_badge.texture = Cosmetics.badge_texture(badge)
+        ref_founder_badge.tooltip_text = String(Cosmetics.BADGE_NAMES.get(badge, "")) + ("  ·  " + Cosmetics.title_text(title) if not title.is_empty() else "")
+    on = not badge.is_empty()
+    if is_instance_valid(desk_badge) and not desk_profile.is_empty():
+        var dl: Label = desk_profile.name
+        var df: Font = dl.get_theme_font("font")
+        var dw: float = minf(df.get_string_size(dl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, dl.get_theme_font_size("font_size")).x, 200.0)
+        desk_badge.texture = Cosmetics.badge_texture(badge)
+        desk_badge.position = Vector2(106.0 + dw + 6.0, 2.0)
+        desk_badge.visible = on and not ref_mode
     if is_instance_valid(ref_founder_badge) and not ref_profile.is_empty():
         var nl: Label = ref_profile.name
         var f: Font = nl.get_theme_font("font")
@@ -1452,6 +1507,7 @@ func refresh_club():
     if is_instance_valid(club_entry): club_entry.set_active(on)
     if is_instance_valid(mobile_ui) and mobile_ui.has_method("refresh_club"): mobile_ui.refresh_club(on)
     _refresh_avatars()   # molduras (Home, Perfil, cartão do jogador)
+    _apply_lab()
 
 func _toggle_premove():
     premove_enabled = not premove_enabled
@@ -1478,6 +1534,10 @@ func _load_preferences():
     music_volume = clampf(float(config.get_value("audio","music_volume",0.65)),0,1)
     premove_enabled = bool(config.get_value("game","premove",true))
     sound_muted = bool(config.get_value("audio","muted",false))
+    badge_pref = String(config.get_value("profile","badge","auto"))
+    title_pref = String(config.get_value("profile","title","auto"))
+    frame_pref = String(config.get_value("profile","frame",""))
+    lab_coords = bool(config.get_value("lab","coordinates",false))
 
 func _save_preferences():
     var config = ConfigFile.new()
@@ -1487,6 +1547,10 @@ func _save_preferences():
     config.set_value("audio","music_volume",music_volume)
     config.set_value("audio","muted",sound_muted)
     config.set_value("game","premove",premove_enabled)
+    config.set_value("profile","badge",badge_pref)
+    config.set_value("profile","title",title_pref)
+    config.set_value("profile","frame",frame_pref)
+    config.set_value("lab","coordinates",lab_coords)
     config.save(PREFS)
 
 func _build_ranked():
@@ -1516,7 +1580,8 @@ func attach_league_frame(portrait: Control):
 ## Moldura CLUB por cima de qualquer retrato (só com Club ativo: servidor ou simulação).
 func attach_club_frame(portrait: Control, round_shape := false, compact := false):
     if portrait.has_meta("no_club_frame"): return   # avatares de escolha no Perfil não recebem a moldura
-    var on: bool = club_active()
+    var fr := current_frame()
+    var on: bool = fr != "liga"
     var frame = portrait.get_node_or_null("ClubFrame")
     if not on:
         if frame != null: frame.visible = false
@@ -1524,6 +1589,7 @@ func attach_club_frame(portrait: Control, round_shape := false, compact := false
     if frame == null:
         frame = preload("res://monetization/club_frame.gd").new()
         portrait.add_child(frame)
+    frame.style = fr
     frame.round_shape = round_shape
     frame.compact = compact or portrait.size.x < 60.0
     frame.visible = true
@@ -1531,6 +1597,68 @@ func attach_club_frame(portrait: Control, round_shape := false, compact := false
 
 func club_active() -> bool:
     return entitlements != null and entitlements.club_active()
+
+# ---------- R31 · Identidade premium (ícone, título, moldura) ----------
+func current_badge() -> String:
+    return Cosmetics.effective("badge", badge_pref, is_founder(), club_active())
+
+func current_title() -> String:
+    return Cosmetics.effective("title", title_pref, is_founder(), club_active())
+
+func current_frame() -> String:
+    return Cosmetics.effective("frame", frame_pref, is_founder(), club_active())
+
+func current_badge_texture(small := true) -> Texture2D:
+    return Cosmetics.badge_texture(current_badge(), small)
+
+## kind: "badge" | "title" | "frame". id "auto" volta ao automático. Bloqueado → false (nada muda).
+func set_cosmetic(kind: String, id: String) -> bool:
+    var options: Array = Cosmetics.BADGES if kind == "badge" else (Cosmetics.TITLES if kind == "title" else Cosmetics.FRAMES)
+    if id != "auto" and id not in options: return false
+    if id != "auto" and not Cosmetics.allowed(kind, id, is_founder(), club_active()): return false
+    match kind:
+        "badge": badge_pref = id
+        "title": title_pref = id
+        _: frame_pref = id
+    _save_preferences()
+    refresh_club()
+    cosmetics_changed.emit()
+    return true
+
+func cosmetic_pref(kind: String) -> String:
+    match kind:
+        "badge": return badge_pref
+        "title": return title_pref
+    return frame_pref if not frame_pref.is_empty() else "auto"
+
+## LABORATÓRIO · acesso antecipado (Fundador ou Club): novidades em teste antes do lançamento geral.
+func early_access() -> bool:
+    return is_founder() or club_active()
+
+func lab_coordinates_on() -> bool:
+    return lab_coords and early_access()
+
+func set_lab_coordinates(on: bool) -> bool:
+    if on and not early_access(): return false
+    lab_coords = on
+    _save_preferences()
+    _apply_lab()
+    return true
+
+func _apply_lab():
+    var st = get_parent()
+    if st != null and st.get("game") != null:
+        st.game.show_coordinates = lab_coordinates_on()
+        st.game.queue_redraw()
+
+## O que o servidor recebe (acct_set_cosmetics): itens EFETIVOS, já respeitando os direitos atuais.
+## Usa só os direitos REAIS (servidor): a simulação dev_mock_* nunca vai para a conta.
+func public_cosmetics() -> Dictionary:
+    var f: bool = entitlements != null and bool(entitlements.real.is_founder)
+    var c: bool = entitlements != null and bool(entitlements.real.club_active)
+    var av := avatar_id
+    if not avatar_unlocked(av) or (AvatarCatalog.is_founder_avatar(av) and not f) or (AvatarCatalog.is_club_avatar(av) and not c): av = "warrior"
+    return {"avatar_id": av, "badge": Cosmetics.effective("badge", badge_pref, f, c), "title": Cosmetics.effective("title", title_pref, f, c), "frame": Cosmetics.effective("frame", frame_pref, f, c)}
 
 # ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
 # Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo
@@ -1830,7 +1958,70 @@ func bind_account(acc):
     acc.avatar_failed.connect(func(_code, msg):
         _avatar_message("A foto ficou salva neste aparelho, mas a conta não a recebeu: " + msg, true))
     acc.entitlements_changed.connect(func(data): if entitlements != null: entitlements.apply_server(data))
+    # R31: identidade (avatar, ícone, título, moldura) sincronizada com a conta — agrupa mudanças em 1,2 s.
+    _cosmetics_timer = Timer.new()
+    _cosmetics_timer.name = "CosmeticsSync"
+    _cosmetics_timer.one_shot = true
+    _cosmetics_timer.wait_time = 1.2
+    add_child(_cosmetics_timer)
+    _cosmetics_timer.timeout.connect(_push_cosmetics)
+    cosmetics_changed.connect(func(): if account != null and account.has_profile(): _cosmetics_timer.start())
+    if entitlements != null: entitlements.changed.connect(func(): if _cosmetics_differ(): _cosmetics_timer.start())
+    acc.cosmetics_state.connect(_on_server_cosmetics)
+    acc.cosmetics_failed.connect(func(code, _msg, field):
+        _last_pushed = {}
+        if code == "rate_limited": _cosmetics_timer.start()
+        elif field == "avatar_id" and not _cosmetics_skip_avatar:
+            _cosmetics_skip_avatar = true   # avatar recusado (ex.: escada sem tabela no servidor): manda o resto
+            _cosmetics_timer.start())
     _on_account_changed()
+
+var _cosmetics_timer: Timer
+var _cosmetics_skip_avatar := false
+var _cosmetics_adopted := {}   # contas cuja escolha do servidor já foi aplicada nesta sessão
+var _last_pushed := {}
+var _server_look := {}         # último {avatar_id, badge, title, frame} informado pelo servidor
+
+func _cosmetics_differ() -> bool:
+    if account == null or not account.has_profile() or _server_look.is_empty(): return false
+    var mine := public_cosmetics()
+    for k in mine:
+        if k == "avatar_id" and _cosmetics_skip_avatar: continue
+        if String(mine[k]) != String(_server_look.get(k, "")): return true
+    return false
+
+func _push_cosmetics():
+    if account == null or not account.has_profile(): return
+    if not _server_look.is_empty() and not _cosmetics_differ(): return
+    var data := public_cosmetics()
+    if _cosmetics_skip_avatar: data.erase("avatar_id")
+    if data == _last_pushed: return   # mesmo pedido já enviado (ex.: servidor sem a 0007 guarda só o avatar)
+    _last_pushed = data
+    account.set_cosmetics(data)
+
+const COSMETICS_SYNC := "user://cosmetics_sync.cfg"
+## 1º login desta conta NESTE aparelho: a escolha local vai para a conta (preserva o avatar de antes).
+## Logins seguintes: a escolha da conta vem para o aparelho (troca feita em outro aparelho).
+func _on_server_cosmetics(data: Dictionary):
+    if account == null: return
+    _server_look = data.duplicate()
+    var uid := String(account.user_id)
+    if uid.is_empty() or _cosmetics_adopted.has(uid): return
+    _cosmetics_adopted[uid] = true
+    var cfg := ConfigFile.new()
+    cfg.load(COSMETICS_SYNC)
+    if not bool(cfg.get_value("synced", uid, false)):
+        cfg.set_value("synced", uid, true)
+        cfg.save(COSMETICS_SYNC)
+        if is_instance_valid(_cosmetics_timer): _cosmetics_timer.start()
+        return
+    var av := String(data.get("avatar_id", ""))
+    if av in AvatarCatalog.ids() and AvatarCatalog.has_art(av): avatar_id = av
+    if not String(data.get("badge", "")).is_empty(): badge_pref = String(data.badge)
+    if not String(data.get("title", "")).is_empty(): title_pref = String(data.title)
+    if String(data.get("frame", "liga")) != "liga": frame_pref = String(data.frame)
+    _save_preferences()
+    refresh_club()
 
 var _server_avatar_url := ""   # última URL informada pelo servidor nesta sessão (por conta)
 var _avatar_resent := {}       # contas para as quais a foto local já foi reenviada nesta sessão

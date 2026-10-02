@@ -12,6 +12,22 @@ var t := 0.0
 var round_shape := false   # true no medalhão redondo (cartão da conta)
 var compact := false       # retratos pequenos: moldura mais fina, sem coroa
 var fill_parent := true    # false: quem cria posiciona/dimensiona manualmente
+## R31: "club" (ouro maciço, medalhão esmeralda) | "fundador" (obsidiana e ouro, medalhão negro).
+const FOUNDER_SEAL := preload("res://monetization/art/founder_badge_small.png")
+var style := "club":
+    set(v):
+        style = v
+        queue_redraw()
+
+## Cor da faixa na posição k (0 = borda externa, 1 = interna).
+func band_color(k: float) -> Color:
+    if style != "fundador": return Ribbon.gold_at(0.08 + k * 0.84)
+    if k < 0.22: return Ribbon.gold_at(0.15 + k * 2.0)
+    if k > 0.8: return Ribbon.gold_at(0.35 + (k - 0.8) * 2.0)
+    return Color("1b150e").lerp(Color("3a2c1a"), absf(k - 0.5) * 2.0)
+
+func medallion_color() -> Color:
+    return Color("140d06") if style == "fundador" else Color("0b2416")
 
 func _init():
     name = "ClubFrame"
@@ -48,8 +64,7 @@ func _draw():
     var n := int(ceil(b))
     for i in n:
         var k := float(i) / maxf(1.0, n - 1)
-        var c := Ribbon.gold_at(0.08 + k * 0.84)
-        draw_rect(rect.grow(-float(i) - 0.5), c, false, 1.2)
+        draw_rect(rect.grow(-float(i) - 0.5), band_color(k), false, 1.2)
     draw_rect(rect, Color("5a3d10"), false, 1.0)                     # aresta externa escura
     draw_rect(rect.grow(-b), Color("3a2608"), false, 1.0)            # aresta interna escura
     draw_rect(rect.grow(-b - 1.5), Color(gold.r, gold.g, gold.b, 0.55), false, 1.0)   # filete claro interno
@@ -69,8 +84,8 @@ func _draw():
         var o := cc + Vector2(dirx, diry) * b * 0.5
         Art.diamond(self, o, ds + 1.5, Color("5a3d10"))
         Art.diamond(self, o, ds, gold)
-        Art.diamond(self, o, ds * 0.5, Color("c99a45"))
-        Art.diamond(self, o, ds * 0.2, Color("fff3cf"))
+        Art.diamond(self, o, ds * 0.5, Color("1b150e") if style == "fundador" else Color("c99a45"))
+        Art.diamond(self, o, ds * 0.22, Color("d8423a") if style == "fundador" else Color("fff3cf"))
         Art.diamond(self, o + Vector2(dirx * ds * 2.2, 0), ds * 0.45, gold)
         Art.diamond(self, o + Vector2(0, diry * ds * 2.2), ds * 0.45, gold)
     # meio das arestas laterais e inferior
@@ -84,10 +99,13 @@ func _draw():
         draw_circle(cc + Vector2(0, 2), cs * 0.62 + 2.0, Color(0, 0, 0, 0.45))
         for i in 4:
             draw_circle(cc, cs * 0.62 + 1.5 - i * 1.3, Ribbon.gold_at(0.1 + i * 0.25))
-        draw_circle(cc, cs * 0.62 - 4.0, Color("0b2416"))
+        draw_circle(cc, cs * 0.62 - 4.0, medallion_color())
         draw_arc(cc, cs * 0.62 - 4.0, 0, TAU, 32, Color(gold.r, gold.g, gold.b, 0.6), 1.0)
         draw_circle(cc, cs * 0.45, Color(1.0, 0.85, 0.4, 0.08 + 0.12 * pulse))
-        Art.icon(self, "crown", Rect2(cc - Vector2(cs, cs) * 0.36, Vector2(cs, cs) * 0.72), Color("ffe6a0"))
+        if style == "fundador":
+            draw_texture_rect(FOUNDER_SEAL, Rect2(cc - Vector2(cs, cs) * 0.5, Vector2(cs, cs)), false)
+        else:
+            Art.icon(self, "crown", Rect2(cc - Vector2(cs, cs) * 0.36, Vector2(cs, cs) * 0.72), Color("ffe6a0"))
         # faíscas discretas
         for i in 4:
             var a := 0.5 + 0.5 * sin(t * 1.9 + i * 1.6)
@@ -104,7 +122,7 @@ func _draw_round(w: float, h: float, b: float, pulse: float, gold: Color):
     var n := int(ceil(b))
     for i in n:
         var k := float(i) / maxf(1.0, n - 1)
-        draw_arc(c, r - float(i) - 0.5, 0, TAU, 96, Ribbon.gold_at(0.08 + k * 0.84), 1.4)
+        draw_arc(c, r - float(i) - 0.5, 0, TAU, 96, band_color(k), 1.4)
     draw_arc(c, r, 0, TAU, 96, Color("5a3d10"), 1.0)
     draw_arc(c, r - b, 0, TAU, 96, Color("3a2608"), 1.0)
     draw_arc(c, r - b - 1.5, 0, TAU, 96, Color(gold.r, gold.g, gold.b, 0.55), 1.0)
@@ -124,7 +142,7 @@ func _draw_round(w: float, h: float, b: float, pulse: float, gold: Color):
         var cc := Vector2(c.x, -cs * 0.1)
         for i in 4:
             draw_circle(cc, cs * 0.62 + 1.5 - i * 1.3, Ribbon.gold_at(0.1 + i * 0.25))
-        draw_circle(cc, cs * 0.62 - 4.0, Color("0b2416"))
+        draw_circle(cc, cs * 0.62 - 4.0, medallion_color())
         Art.icon(self, "crown", Rect2(cc - Vector2(cs, cs) * 0.36, Vector2(cs, cs) * 0.72), Color("ffe6a0"))
 
 static func _perimeter_point(rect: Rect2, d: float) -> Vector2:

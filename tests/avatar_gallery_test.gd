@@ -34,8 +34,9 @@ func run():
     check(tail == rewards, "recompensas na ordem da escada (IDs do bot_ladder.json)")
     check(rewards[0] == "madeira_reward" and rewards[1] == "ferro_reward" and rewards[10] == "challenger_reward", "R30: 11 artes novas das ligas (Madeira → Challenger)")
     check(not ("mage" in ids) and not ("paladin" in ids), "Mago/Paladino saíram da coleção")
-    check(ids[ids.size() - 1] == "fundador", "avatar Fundador no fim da coleção")
-    check(ids.size() == 4 + Ladder.ids().size() + 1, "todos os avatares aparecem (%d)" % ids.size())
+    check(ids[ids.size() - 4] == "fundador", "avatar Fundador depois da escada")
+    check(Array(ids).slice(ids.size() - 3) == ["club_avatar_a", "club_avatar_b", "club_avatar_c"], "R31: 3 avatares do Club no fim da coleção")
+    check(ids.size() == 4 + Ladder.ids().size() + 1 + 3, "todos os avatares aparecem (%d)" % ids.size())
     check(Catalog.missing_art().is_empty(), "todas as artes presentes (nenhum 'ARTE EM BREVE')")
     print("INFO arte ausente: ", Catalog.missing_art())
 

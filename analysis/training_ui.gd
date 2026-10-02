@@ -35,14 +35,24 @@ func _ready():
     get_viewport().size_changed.connect(_relayout)
     visible = false
 
-func open_for(p_report: Dictionary):
+## CLUB · TREINE MEUS ERROS / TREINO PERSONALIZADO: exercícios vindos de várias partidas do histórico
+## (cada item é um lance do relatório, com fen_before/best/win_*; "move_no" = número do lance original).
+func open_exercises(moves: Array, max_count := 10):
+    var list: Array = []
+    for i in moves.size():
+        var m: Dictionary = moves[i].duplicate(true)
+        m["ply"] = i
+        list.append(m)
+    open_for({"human_color": "", "moves": list}, max_count)
+
+func open_for(p_report: Dictionary, max_count := 8):
     report = p_report
     var human: String = String(report.human_color)
     exercises.clear()
     for cls in Config.TRAIN_CLASSES:
         for m in report.moves:
             if m.class == cls and (human == "" or m.color == human) and m.ply not in exercises: exercises.append(m.ply)
-    exercises = exercises.slice(0, 8)
+    exercises = exercises.slice(0, max_count)
     exercises.sort()
     index = 0
     solved = 0
@@ -134,7 +144,7 @@ func _show_exercise():
     var t := Art.label(hv, "EXERCÍCIO %d DE %d" % [index + 1, exercises.size()], 22, Art.GOLD, Art.FONT_BOLD)
     t.name = "ExerciseTitle"
     Art.label(hv, "ENCONTRE UMA CONTINUAÇÃO MELHOR.", 18, Art.CREAM, Art.FONT_SEMI)
-    Art.label(hv, "Na partida você jogou %s. Lance %d · %s jogam." % [m.san, ply / 2 + 1, "Brancas" if m.color == "w" else "Pretas"], 14, Art.MUTED)
+    Art.label(hv, "Na partida você jogou %s. Lance %d · %s jogam." % [m.san, int(m.get("move_no", ply / 2 + 1)), "Brancas" if m.color == "w" else "Pretas"], 14, Art.MUTED)
     var row: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
     row.add_theme_constant_override("separation", 18)
     column.add_child(row)
@@ -212,6 +222,7 @@ func _on_move(mv: Dictionary):
     status.text = "Você jogou %s." % san
     if ok:
         solved += 1
+        preload("res://analysis/club_insights.gd").add_training_solved(1)   # Desafio Club "TREINO EM DIA"
         var nb := Art.Cta.new("PRÓXIMO EXERCÍCIO" if index + 1 < exercises.size() else "CONCLUIR", "green", 46, 15)
         nb.name = "NextBtn"
         nb.pressed.connect(_next)

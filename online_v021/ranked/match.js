@@ -71,7 +71,7 @@ class RankedMatch {
       white_league_after: r.w.stats.league, black_league_after: r.b.stats.league, moves: this.pos.history.join(' ') };
   }
   publicPlayer(c) {
-    const p = this.players[c], out = { nickname: p.nickname, avatar_id: p.avatar, connected: p.connected };
+    const p = this.players[c], out = { nickname: p.nickname, avatar_id: p.avatar, badge: p.badge || '', connected: p.connected };
     if (this.rated) { out.league = p.stats.league; out.pl = p.stats.pl; }
     return out;
   }

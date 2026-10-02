@@ -11,11 +11,17 @@ const Gateway := preload("res://monetization/payment_gateway.gd")
 const FounderUI := preload("res://monetization/founder_ui.gd")
 const ClubUI := preload("res://monetization/club_ui.gd")
 const PaymentUI := preload("res://monetization/payment_mock_ui.gd")
+const PersonalizeUI := preload("res://monetization/personalize_ui.gd")
+const MyClubUI := preload("res://monetization/my_club_ui.gd")
 const Mobile := preload("res://ui_v022/mobile_layout.gd")
 
 var state
 var gateway
 var page := "hub"
+var entry_page := "hub"   # página por onde o jogador entrou (VOLTAR nela fecha, se veio do Perfil/Club)
+var url_opener: Callable   # testes: substitui OS.shell_open
+var last_opened_url := ""
+var main_hub = null       # ui_v022/main_hub.gd (direitos reais, identidade, histórico do Club)
 var root: Control
 var backdrop: Control
 var sparkles: Control
@@ -45,6 +51,7 @@ func _ready():
 
 # ---------------------------------------------------------------- navegação
 func open(page_id := "hub"):
+    entry_page = page_id
     visible = true
     root.visible = true
     show_page(page_id)
@@ -61,6 +68,8 @@ func is_open() -> bool:
 func back():
     if modal != null:
         close_modal()
+    elif page == entry_page and page in ["personalize", "myclub"]:
+        close()
     elif page != "hub":
         show_page("hub")
     else:
@@ -202,7 +211,9 @@ func _set_crumbs():
     var parts := ["CONFIGURAÇÕES", "FRAIHA PREMIUM"]
     if page == "founder": parts.append("PACOTE FUNDADOR")
     elif page == "club": parts.append("CLUB FRAIHA")
-    if narrow: parts = [{"hub": "PREMIUM", "founder": "FUNDADOR", "club": "CLUB"}.get(page, "PREMIUM")]
+    elif page == "personalize": parts.append("PERSONALIZAÇÃO")
+    elif page == "myclub": parts.append("MEU CLUB")
+    if narrow: parts = [{"hub": "PREMIUM", "founder": "FUNDADOR", "club": "CLUB", "personalize": "PERSONALIZAR", "myclub": "MEU CLUB"}.get(page, "PREMIUM")]
     for i in parts.size():
         if i > 0: crumbs.add_child(Art.Glyph.new("star", 12, Color(0.79, 0.6, 0.27, 0.8)))
         var last := i == parts.size() - 1
@@ -224,6 +235,8 @@ func _rebuild():
     match page:
         "founder": FounderUI.build(self, column)
         "club": ClubUI.build(self, column)
+        "personalize": PersonalizeUI.build(self, column)
+        "myclub": MyClubUI.build(self, column)
         _: _build_hub(column)
     if Catalog.dev_tools_enabled(): _dev_tools(column)
     var tail := Control.new()
@@ -253,6 +266,22 @@ func _build_hub(parent: VBoxContainer):
     parent.add_child(cards)
     cards.add_child(_hub_card_founder())
     cards.add_child(_hub_card_club())
+    # R31: atalhos para o que o jogador já tem
+    var quick: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
+    quick.add_theme_constant_override("separation", 16)
+    parent.add_child(quick)
+    var pz := Art.Cta.new("PERSONALIZAÇÃO", "gold", 58 * maxf(k, 0.85), int(20 * maxf(k, 0.85)))
+    pz.name = "OpenPersonalize"
+    pz.icon_kind = "brush"
+    pz.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    pz.pressed.connect(func(): show_page("personalize"))
+    quick.add_child(pz)
+    var mc := Art.Cta.new("MEU CLUB · DESEMPENHO", "green", 58 * maxf(k, 0.85), int(20 * maxf(k, 0.85)))
+    mc.name = "OpenMyClub"
+    mc.icon_kind = "chart"
+    mc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    mc.pressed.connect(func(): show_page("myclub"))
+    quick.add_child(mc)
 
 func _hub_card_founder() -> Control:
     var f := Art.Frame.new("founder", int(26 * k))
@@ -277,8 +306,8 @@ func _hub_card_founder() -> Control:
     top.add_child(tv)
     tv.add_child(Art.Stamp.new("EDIÇÃO DE LANÇAMENTO", "new", int(13 * maxf(k, 0.9))))
     Art.label(tv, "PACOTE FUNDADOR FRAIHA", fs(32), Art.GOLD, Art.FONT_BOLD)
-    if state.founder_view():
-        v.add_child(status_badge("FUNDADOR DO REINO · ATIVO (TESTE)"))
+    if founder_owned():
+        v.add_child(status_badge("FUNDADOR DO REINO · ATIVO" + (" (TESTE)" if not founder_real() else "")))
     v.add_child(price_block("founder", false))
     Art.label(v, "Faça parte de quem ajudou a construir o reino desde o início.", fs(20), Art.CREAM)
     var chips := HFlowContainer.new()
@@ -314,7 +343,9 @@ func _hub_card_club() -> Control:
     tv.add_child(Art.Stamp.new("ASSINATURA MENSAL", "info", int(13 * maxf(k, 0.9))))
     Art.label(tv, "CLUB FRAIHA", fs(32), Art.GOLD, Art.FONT_BOLD)
     Art.label(v, "JOGUE.  ENTENDA.  EVOLUA.", fs(22), Color("bfe8a8"), Art.FONT_BOLD)
-    if state.club_subscription_view():
+    if club_real():
+        v.add_child(status_badge("CLUB FRAIHA ATIVO"))
+    elif state.club_subscription_view():
         v.add_child(status_badge("CLUB FRAIHA ATIVO (TESTE)"))
     elif state.founder_trial_view():
         v.add_child(status_badge("%d DIAS DE CLUB · BENEFÍCIO FUNDADOR · SIMULAÇÃO" % Catalog.FOUNDER_CLUB_DAYS))
@@ -328,6 +359,22 @@ func _hub_card_club() -> Control:
     cta.pressed.connect(func(): show_page("club"))
     v.add_child(cta)
     return f
+
+# ---------------------------------------------------------------- direitos (servidor OU simulação)
+func founder_owned() -> bool:
+    if main_hub != null: return main_hub.is_founder()
+    return state.founder_view()
+
+func club_owned() -> bool:
+    if main_hub != null: return main_hub.club_active()
+    return state.club_subscription_view() or state.founder_trial_view()
+
+## Direito confirmado pelo SERVIDOR (não simulação).
+func founder_real() -> bool:
+    return main_hub != null and main_hub.entitlements != null and bool(main_hub.entitlements.real.is_founder)
+
+func club_real() -> bool:
+    return main_hub != null and main_hub.entitlements != null and bool(main_hub.entitlements.real.club_active)
 
 # ---------------------------------------------------------------- ferramentas DEV
 func _dev_tools(parent: VBoxContainer):
@@ -543,6 +590,8 @@ func _celebrate():
 func open_founder_group():
     var url := String(Catalog.FOUNDER_WHATSAPP_URL).strip_edges()
     if url.begins_with("https://"):
-        OS.shell_open(url)
+        last_opened_url = url
+        if url_opener.is_valid(): url_opener.call(url)
+        else: OS.shell_open(url)
         return
     open_confirm("COMUNIDADE DOS FUNDADORES", "Grupo dos Fundadores ainda não configurado.\n\nSeu acesso já está garantido e o link será disponibilizado aqui.", "", "ENTENDI", Callable())

@@ -95,9 +95,9 @@ func _ready():
     audio.name = "GameAudio"
     add_child(audio)
     if hub.has_signal("theme_preview_requested"):
-        hub.theme_preview_requested.connect(theme_manager.apply_theme)
+        hub.theme_preview_requested.connect(theme_manager.choose_theme)
     if hub.has_signal("piece_set_requested"):
-        hub.piece_set_requested.connect(theme_manager.apply_piece_set)
+        hub.piece_set_requested.connect(theme_manager.choose_piece_set)
     _setup_account()
     # Vida sutil no cenário (fogo, água, vaga-lumes, pássaros); só apresentação.
     var ambient = preload("res://presentation_v019/ambient_life.gd").new()
@@ -411,6 +411,7 @@ func _setup_account():
     ranked_ui = preload("res://ranked/ranked_ui.gd").new()
     ranked_ui.name = "RankedUI"
     add_child(ranked_ui)
+    ranked_ui.hub = hub
     ranked_ui.setup(account, ranked)
     ranked_ui.back_requested.connect(open_home)
     ranked_ui.play_requested.connect(_back_to_ranked_lobby)
@@ -1275,14 +1276,35 @@ func _on_match_finished(record):
     if res == "win" and String(record.mode) == "bot" and not String(bot_controller.bot_id).is_empty() and "MATE" in String(record.result_reason) and String(record.start_fen).is_empty():
         if hub.bot_progress != null: hub.bot_progress.report_victory(String(bot_controller.bot_id), String(record.human_color), PackedStringArray(record.moves))
 
-func open_analysis():
-    if not analysis_available(): return
+func _ensure_analysis_ui():
     if analysis_ui == null:
         analysis_ui = preload("res://analysis/analysis_ui.gd").new(analysis_engine, analysis_access, hub)
         add_child(analysis_ui)
         analysis_ui.train_requested.connect(open_training)
         analysis_ui.analyzer.finished.connect(func(rep): if analysis_history != null: analysis_history.record(recorder.current(), rep, account))
+
+func open_analysis():
+    if not analysis_available(): return
+    _ensure_analysis_ui()
     analysis_ui.open_for(recorder.current())
+
+## CLUB · HISTÓRICO DETALHADO: reabre uma análise guardada (sem gastar cota nem rodar a engine).
+func open_history_report(entry: Dictionary) -> bool:
+    if analysis_history == null: return false
+    var full: Dictionary = analysis_history.load_report(entry)
+    if full.is_empty(): return false
+    _ensure_analysis_ui()
+    analysis_ui.open_report(full.record, full.report)
+    return true
+
+## CLUB · TREINE MEUS ERROS / TREINO PERSONALIZADO com posições de várias partidas.
+func open_training_moves(moves: Array) -> bool:
+    if moves.is_empty(): return false
+    if training_ui == null:
+        training_ui = preload("res://analysis/training_ui.gd").new(analysis_engine)
+        add_child(training_ui)
+    training_ui.open_exercises(moves)
+    return true
 
 func open_training(report: Dictionary):
     if training_ui == null:

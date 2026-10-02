@@ -13,6 +13,8 @@ const Ladder = preload("res://bot/bot_ladder.gd")
 const ART_DIR := "res://profile/avatars/"
 const INITIAL := ["warrior", "archer", "peao_branco", "peao_negro"]   # gratuitos (todo jogador)
 const FOUNDER := "fundador"
+## R31 · Club FRAIHA: 3 avatares exclusivos de quem tem o Club ativo (entitlements.club_active()).
+const CLUB := ["club_avatar_a", "club_avatar_b", "club_avatar_c"]
 
 const NAMES := {
     "warrior": "Guerreiro", "archer": "Arqueira", "mage": "Mago", "paladin": "Paladino",
@@ -23,6 +25,7 @@ const NAMES := {
     "mestre_reward": "Cavaleiro Mestre", "grande_mestre_reward": "Rei Grão-Mestre",
     "challenger_reward": "O Desafiante",
     "fundador": "Fundador do Reino",
+    "club_avatar_a": "Rainha Erudita", "club_avatar_b": "Bispo Estrategista", "club_avatar_c": "Cavaleiro Esmeralda",
     "peao_branco": "Peão Branco", "peao_negro": "Peão Negro",
 }
 const FIXED_ART := {
@@ -31,7 +34,7 @@ const FIXED_ART := {
 }
 
 ## Todos os avatares, na ordem da coleção: iniciais, recompensas na ordem da escada e o do Fundador.
-## Cada item: {id, name, source ("initial" | bot_id | "founder"), league}
+## Cada item: {id, name, source ("initial" | bot_id | "founder" | "club"), league}
 static func entries() -> Array:
     var out: Array = []
     for id in INITIAL: out.append({"id": id, "name": NAMES.get(id, id), "source": "initial", "league": ""})
@@ -41,6 +44,7 @@ static func entries() -> Array:
         var id := String(r.get("id", ""))
         out.append({"id": id, "name": NAMES.get(id, "Avatar " + String(b.get("name", "")).replace("BOT ", "")), "source": String(b.id), "league": String(b.get("league", b.id))})
     out.append({"id": FOUNDER, "name": NAMES[FOUNDER], "source": "founder", "league": ""})
+    for id in CLUB: out.append({"id": id, "name": NAMES[id], "source": "club", "league": ""})
     return out
 
 static func ids() -> PackedStringArray:
@@ -58,6 +62,9 @@ static func display_name(id: String) -> String:
 
 static func is_founder_avatar(id: String) -> bool:
     return id == FOUNDER
+
+static func is_club_avatar(id: String) -> bool:
+    return id in CLUB
 
 ## Caminho da arte de um avatar.
 static func art_path(id: String) -> String:

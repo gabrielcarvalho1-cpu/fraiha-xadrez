@@ -13,6 +13,7 @@ var iron_arena: Sprite2D
 # Desbloqueio visual: maior liga já alcançada no Ranked (0 = Madeira). Convidado = 0.
 var unlock_index := 0
 var saved_theme := "wood"
+var saved_piece_set := ""      # R31: conjunto de peças escolhido ("" = o do cenário)
 
 func setup(presentation: Node):
     stage = presentation
@@ -29,8 +30,55 @@ func setup(presentation: Node):
     config.load("user://visual_theme.cfg")
     var initial = String(config.get_value("visual","theme","wood"))
     saved_theme = initial if Catalog.THEME_DATA.has(initial) else "wood"
+    saved_piece_set = String(config.get_value("visual","pieces",""))
     # Até a conta confirmar os desbloqueios, abre sempre em Madeira (sem apagar a escolha salva).
     apply_theme(saved_theme if is_unlocked(saved_theme) else "wood", false)
+    if hub != null and hub.get("entitlements") != null and hub.entitlements.has_signal("changed"):
+        hub.entitlements.changed.connect(revalidate)
+    _restore_piece_set()
+
+## Direitos mudaram (Club venceu, Fundador confirmado…): reaplica a escolha salva se liberada,
+## ou cai para Madeira / peças do cenário sem apagar a preferência.
+func revalidate():
+    if is_unlocked(saved_theme):
+        if saved_theme != active_theme: apply_theme(saved_theme, false)
+    elif not is_unlocked(active_theme): apply_theme("wood", false)
+    _restore_piece_set()
+
+func _restore_piece_set():
+    if not saved_piece_set.is_empty() and saved_piece_set != active_piece_set and is_unlocked(saved_piece_set):
+        apply_piece_set(saved_piece_set, false)
+    elif not is_unlocked(active_piece_set):
+        apply_piece_set(active_theme, false)
+
+func _write_config():
+    var config = ConfigFile.new()
+    config.set_value("visual","theme",saved_theme)
+    config.set_value("visual","pieces",saved_piece_set)
+    config.save("user://visual_theme.cfg")
+
+## Escolha do jogador: cenário + tabuleiro. Pelas Ligas (keep_pieces=false) as peças voltam a
+## acompanhar o cenário, como antes; na Personalização o conjunto escolhido é mantido.
+func choose_theme(theme_id: String, keep_pieces := false) -> bool:
+    if not is_unlocked(theme_id) or not Catalog.THEME_DATA.has(theme_id): return false
+    if not keep_pieces and not saved_piece_set.is_empty():
+        saved_piece_set = ""
+        _write_config()
+    if not apply_theme(theme_id): return false
+    if not keep_pieces and active_piece_set != theme_id: apply_piece_set(theme_id, false)
+    _restore_piece_set()
+    return true
+
+## Escolha do jogador: conjunto de peças independente do cenário ("" = acompanha o cenário).
+func choose_piece_set(piece_set_id: String) -> bool:
+    if piece_set_id.is_empty():
+        saved_piece_set = ""
+        _write_config()
+        return apply_piece_set(active_theme, false)
+    if not apply_piece_set(piece_set_id, false): return false
+    saved_piece_set = piece_set_id
+    _write_config()
+    return true
 
 static func league_index_for_theme(theme_id: String) -> int:
     for i in range(LeagueCatalog.IDS.size()):
@@ -39,6 +87,10 @@ static func league_index_for_theme(theme_id: String) -> int:
 
 func is_unlocked(theme_id: String) -> bool:
     if theme_id == "wood" or theme_id == "classic": return true
+    # R31: universos/peças exclusivos vêm dos direitos (Fundador / Club), não da liga.
+    match Catalog.exclusive_of(theme_id):
+        "founder": return hub != null and hub.has_method("is_founder") and hub.is_founder()
+        "club": return hub != null and hub.has_method("club_active") and hub.club_active()
     return league_index_for_theme(theme_id) <= unlock_index
 
 ## index = maior highest_league entre os 4 modos Ranked; confirmed = estado da conta já conhecido.
@@ -63,16 +115,15 @@ func apply_theme(theme_id: String, persist := true) -> bool:
     active_theme = theme_id
     if persist:
         saved_theme = theme_id
-        var config = ConfigFile.new()
-        config.set_value("visual","theme",theme_id)
-        config.save("user://visual_theme.cfg")
+        _write_config()
     if hub.has_method("apply_theme") and home_texture != null:
         hub.apply_theme(home_texture,theme_id)
     game.set_visual_theme(theme_id)
     stage.forest.visible = theme_id == "wood"
     iron_arena.texture = arena_texture if theme_id != "wood" else null
     iron_arena.visible = theme_id != "wood"
-    apply_piece_set(theme_id)
+    if saved_piece_set.is_empty() or not is_unlocked(saved_piece_set): apply_piece_set(theme_id, false)
+    else: apply_piece_set(saved_piece_set, false)
     stage._layout()
     theme_changed.emit(active_theme,active_piece_set)
     return true
@@ -80,7 +131,7 @@ func apply_theme(theme_id: String, persist := true) -> bool:
 func persist_changed(theme_id: String, persist: bool) -> bool:
     return persist and saved_theme != theme_id
 
-func apply_piece_set(piece_set_id: String) -> bool:
+func apply_piece_set(piece_set_id: String, _from_player := true) -> bool:
     if piece_set_id != "classic" and not Catalog.THEME_DATA.has(piece_set_id): return false
     if not is_unlocked(piece_set_id): return false
     var textures = classic_pieces if piece_set_id == "classic" else Catalog.piece_textures(piece_set_id)

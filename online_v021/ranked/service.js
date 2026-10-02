@@ -33,7 +33,7 @@ class Ranked {
       if (this.busyElsewhere(uid)) return this.fail(ws, 'Você já está em outra partida ou fila.', 'busy');
       const enqueue = stats => {
         const id = ws.identity || { nickname: ws.profile.nickname, avatar: ws.profile.avatar_id };
-        const entry = { userId: uid, nickname: id.nickname, avatar: id.avatar, stats, since: this.now() };
+        const entry = { userId: uid, nickname: id.nickname, avatar: id.avatar, badge: id.badge || '', stats, since: this.now() };
         if (!this.mm.enqueue(mode, entry)) return this.fail(ws, 'Você já está na fila.', 'already_queued');
         const out = { type: this.p + 'queued', mode, mode_name: this.modes[mode].name };
         if (stats) { out.league = stats.league; out.pl = stats.pl; }
@@ -84,7 +84,7 @@ class Ranked {
     // Servidor sorteia as cores. FRAIHA_TEST_FIXED_COLORS=1 (só testes): quem entrou primeiro joga de Brancas.
     const flip = process.env.FRAIHA_TEST_FIXED_COLORS === '1' ? (a.since || 0) <= (b.since || 0) : Math.random() < 0.5;
     const [w, bl] = flip ? [a, b] : [b, a];
-    const seat = e => ({ userId: e.userId, nickname: e.nickname, avatar: e.avatar, stats: e.stats, connected: true, leftAt: 0 });
+    const seat = e => ({ userId: e.userId, nickname: e.nickname, avatar: e.avatar, badge: e.badge || '', stats: e.stats, connected: true, leftAt: 0 });
     const match = new RankedMatch({ mode, white: seat(w), black: seat(bl), now, cfg: this.cfg, rated: this.rated, prefix: this.kind });
     this.matches.set(match.id, match); this.byUser.set(w.userId, match.id); this.byUser.set(bl.userId, match.id);
     for (const c of ['w', 'b']) {

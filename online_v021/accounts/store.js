@@ -8,7 +8,17 @@ const NICK_RE = /^[A-Za-z0-9_]{3,20}$/;
 const NICK_MIN = 3, NICK_MAX = 20;
 const NICK_COOLDOWN_MS = 30 * 24 * 3600e3;   // troca de nome: 30 dias (relógio do servidor/banco)
 const RESERVED = ['admin', 'fraiha', 'moderador', 'suporte', 'system', 'convidado', 'jogador', 'club', 'fundador'];
-const AVATARS = ['warrior', 'archer', 'mage', 'paladin'];
+const Cosmetics = require('./cosmetics');
+// Avatares aceitos na criação do perfil (gratuitos + antigos). Os demais só por acct_set_cosmetics.
+const AVATARS = [...Cosmetics.FREE_AVATARS, ...Cosmetics.LEGACY_AVATARS];
+const FOUNDER_CLUB_DAYS = 30;          // Pacote Fundador inclui 30 dias de Club
+const CLUB_MONTH_DAYS = 30;
+// Novo vencimento do Club: soma `days` ao que ainda resta (nunca perde dias já pagos).
+const extendClub = (expiresAt, days, now = Date.now()) => {
+  const base = expiresAt && new Date(expiresAt).getTime() > now ? new Date(expiresAt).getTime() : now;
+  return new Date(base + days * 86400e3).toISOString();
+};
+const SCHEMA_MISSING = e => /42P01|42703|PGRST200|PGRST204|PGRST205|does not exist|Could not find/.test(String(e && e.code) + ' ' + String(e && e.message));
 // Remove espaços, caracteres invisíveis, de controle e bidi; normaliza (NFKC) antes de validar.
 const INVISIBLE_RE = /[\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFF]/g;
 function cleanNickname(value) {
@@ -27,7 +37,13 @@ const nextNickChange = p => {
   return new Date(new Date(p.nickname_changed_at).getTime() + NICK_COOLDOWN_MS).toISOString();
 };
 const emptyStats = () => ({ league: 0, pl: 0, matches: 0, wins: 0, losses: 0, draws: 0, highest_league: 0 });
-const pub = p => ({ user_id: p.user_id, nickname: p.nickname, avatar_id: p.avatar_id, avatar_url: p.avatar_url || null });
+// Perfil público (Amigos, busca, convites, DM). R31: + selo/título/moldura e flags de Fundador/Club
+// (Destaque social) — sempre já filtrados pelos direitos ATIVOS da conta.
+const pub = (p, ent) => {
+  const c = Cosmetics.effective(p, ent || p.entitlements || null);
+  return { user_id: p.user_id, nickname: p.nickname, avatar_id: c.avatar_id, avatar_url: p.avatar_url || null,
+    badge: c.badge, title: c.title, frame: c.frame, founder: c.founder, club: c.club };
+};
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fullStats = rows => { const out = {}; for (const m of MODES) out[m] = { ...emptyStats(), ...(rows[m] || {}) }; return out; };
 
@@ -91,6 +107,50 @@ class MemoryStore {
     this.entitlements.set(userId, { ...(this.entitlements.get(userId) || {}), ...patch });
     return this.getEntitlements(userId);
   }
+  // ---------- R31: liberar direitos depois de pagamento confirmado (mesma regra da função 0007) ----------
+  async grantEntitlement(userId, productId, source) {
+    this.entitlements = this.entitlements || new Map();
+    const e = { ...(this.entitlements.get(userId) || {}) }, now = new Date().toISOString();
+    if (productId === 'founder') {
+      e.is_founder = true; e.founder_since = e.founder_since || now;
+      e.club_expires_at = extendClub(e.club_active ? e.club_expires_at : null, FOUNDER_CLUB_DAYS);
+      e.club_active = true; e.club_source = e.club_source && e.club_source !== 'founder_bonus' ? e.club_source : 'founder_bonus';
+    } else if (productId === 'club_monthly') {
+      e.club_expires_at = extendClub(e.club_active ? e.club_expires_at : null, CLUB_MONTH_DAYS);
+      e.club_active = true; e.club_source = String(source || 'manual');
+    } else return null;
+    e.updated_at = now;
+    this.entitlements.set(userId, e);
+    return this.getEntitlements(userId);
+  }
+  // ---------- R31: pagamentos (em memória só para desenvolvimento/testes) ----------
+  async createPayment(row) {
+    this.payments = this.payments || [];
+    const p = { payment_id: require('crypto').randomUUID(), created_at: new Date().toISOString(), paid_at: null, ...row };
+    this.payments.push(p); return { ...p };
+  }
+  async getPayment(provider, ref) {
+    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref);
+    return p ? { ...p } : null;
+  }
+  // Só a transição pending → (paid|failed|…) conta: repetir o webhook não libera duas vezes.
+  async markPayment(provider, ref, status) {
+    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === 'pending');
+    if (!p) return null;
+    p.status = status; if (status === 'paid') p.paid_at = new Date().toISOString();
+    return { ...p };
+  }
+  // ---------- R31: identidade cosmética (avatar, selo, título, moldura) ----------
+  async setCosmetics(userId, v) {
+    const p = this.profiles.get(userId);
+    if (!p) return { error: 'Perfil não encontrado.', code: 'profile_missing' };
+    if (v.avatar_id !== undefined) p.avatar_id = v.avatar_id;
+    if (v.badge !== undefined) p.profile_badge = v.badge;
+    if (v.title !== undefined) p.profile_title = v.title;
+    if (v.frame !== undefined) p.profile_frame = v.frame;
+    p.updated_at = new Date().toISOString();
+    return { profile: p };
+  }
   // ---------- Cota de análise (0005): N por dia UTC; Club = ilimitado ----------
   async analysisUsage(userId, day) {
     this.analysis = this.analysis || new Map();
@@ -140,10 +200,11 @@ class MemoryStore {
   // ---------- Amigos (0002_fraiha_social) ----------
   async searchProfiles(query, limit = 20) {
     const q = query.toLowerCase(), out = [];
-    for (const p of this.profiles.values()) if (p.nickname.toLowerCase().includes(q)) out.push(pub(p));
+    for (const p of this.profiles.values()) if (p.nickname.toLowerCase().includes(q)) out.push(pub(p, this._ent(p.user_id)));
     return out.sort((a, b) => a.nickname.localeCompare(b.nickname)).slice(0, limit);
   }
-  async getProfilesByIds(ids) { return ids.map(id => this.profiles.get(id)).filter(Boolean).map(pub); }
+  async getProfilesByIds(ids) { return ids.map(id => this.profiles.get(id)).filter(Boolean).map(p => pub(p, this._ent(p.user_id))); }
+  _ent(uid) { return this.entitlements ? this.entitlements.get(uid) || null : null; }
   async getRelations(uid) {
     const s = this.social, r = { friends: [], sent: [], received: [], blocked: [], blockedBy: [] };
     for (const k of s.requests) { const [f, t] = k.split('|'); if (f === uid) r.sent.push(t); if (t === uid) r.received.push(f); }
@@ -269,6 +330,46 @@ class SupabaseStore {
     }
   }
   async setEntitlements() { throw new Error('entitlements só mudam pelo webhook de pagamento'); }
+  // ---------- R31: direitos liberados pelo backend (função fraiha_grant_entitlement, migração 0007) ----------
+  async grantEntitlement(userId, productId, source) {
+    await this.req('/rpc/fraiha_grant_entitlement', { method: 'POST', body: JSON.stringify({ p_user: userId, p_product: productId, p_source: String(source || 'manual') }) });
+    return this.getEntitlements(userId);
+  }
+  // ---------- R31: pagamentos (tabela payments, 0005; índice único provider+provider_ref na 0007) ----------
+  async createPayment(row) {
+    const rows = await this.req('/payments', { method: 'POST', headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ user_id: row.user_id, product_id: row.product_id, method: row.method, provider: row.provider, provider_ref: row.provider_ref, amount_cents: row.amount_cents, status: 'pending' }) });
+    return rows[0];
+  }
+  async getPayment(provider, ref) {
+    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&select=payment_id,user_id,product_id,status,paid_at&limit=1');
+    return rows[0] || null;
+  }
+  async markPayment(provider, ref, status) {
+    const patch = { status }; if (status === 'paid') patch.paid_at = new Date().toISOString();
+    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.pending&select=payment_id,user_id,product_id,status',
+      { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) });
+    return rows[0] || null;
+  }
+  // ---------- R31: identidade cosmética. Sem a 0007 (colunas profile_badge/profile_title) só o avatar é salvo. ----------
+  async setCosmetics(userId, v) {
+    const body = {};
+    if (v.avatar_id !== undefined) body.avatar_id = v.avatar_id;
+    if (v.frame !== undefined) body.profile_frame = v.frame;
+    const extra = {};
+    if (v.badge !== undefined) extra.profile_badge = v.badge;
+    if (v.title !== undefined) extra.profile_title = v.title;
+    const path = '/profiles?user_id=eq.' + encodeURIComponent(userId) + '&select=*';
+    try {
+      const rows = await this.req(path, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ ...body, ...extra }) });
+      return { profile: rows[0] };
+    } catch (e) {
+      if (!SCHEMA_MISSING(e) || !Object.keys(extra).length) throw e;
+      if (!Object.keys(body).length) return { error: 'Ícone e título ainda não configurados no servidor (migração 0007 pendente).', code: 'not_configured' };
+      const rows = await this.req(path, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
+      return { profile: rows[0], partial: true };
+    }
+  }
   // ---------- Escada de bots (0006). Sem a tabela → erro PGRST205/42P01 (tratado como "não configurado"). ----------
   async getBotProgress(userId) {
     return await this.req('/bot_progress?user_id=eq.' + encodeURIComponent(userId) + '&select=bot_id,defeated_at&order=defeated_at.asc');
@@ -306,13 +407,29 @@ class SupabaseStore {
     }
   }
   // ---------- Amigos (0002_fraiha_social). Todos os ids já validados como UUID pelo serviço. ----------
+  // R31: perfis públicos com selo/título/moldura + direitos (embed entitlements, 1:1 por user_id).
+  // Sem a migração 0007 (ou sem 0005) cai para as colunas antigas e tenta de novo em 5 minutos.
+  async _publicProfiles(filter) {
+    const base = 'user_id,nickname,avatar_id,avatar_url';
+    if (!this.richUntil || Date.now() > this.richUntil) {
+      try {
+        const rows = await this.req('/profiles?' + filter.replace('{cols}', base + ',profile_frame,profile_badge,profile_title,entitlements(is_founder,club_active,club_expires_at)'));
+        this.richUntil = 0;
+        return rows.map(p => pub(p, Array.isArray(p.entitlements) ? p.entitlements[0] : p.entitlements));
+      } catch (e) {
+        if (!SCHEMA_MISSING(e)) throw e;
+        this.richUntil = Date.now() + 5 * 60e3;
+      }
+    }
+    return (await this.req('/profiles?' + filter.replace('{cols}', base))).map(p => pub(p, null));
+  }
   async searchProfiles(query, limit = 20) {
-    return this.req('/profiles?nickname=ilike.' + encodeURIComponent('*' + query + '*') + '&select=user_id,nickname,avatar_id,avatar_url&order=nickname.asc&limit=' + limit);
+    return this._publicProfiles('nickname=ilike.' + encodeURIComponent('*' + query + '*') + '&select={cols}&order=nickname.asc&limit=' + limit);
   }
   async getProfilesByIds(ids) {
     const ok = ids.filter(id => UUID_RE.test(id));
     if (!ok.length) return [];
-    return this.req('/profiles?user_id=in.(' + ok.join(',') + ')&select=user_id,nickname,avatar_id,avatar_url');
+    return this._publicProfiles('user_id=in.(' + ok.join(',') + ')&select={cols}');
   }
   async getRelations(uid) {
     const u = encodeURIComponent(uid), r = { friends: [], sent: [], received: [], blocked: [], blockedBy: [] };
@@ -363,4 +480,4 @@ class SupabaseStore {
 }
 const DM_COLS = 'id,sender_id,recipient_id,body,created_at,read_at';
 
-module.exports = { MemoryStore, SupabaseStore, validateNickname, cleanNickname, nextNickChange, NICK_COOLDOWN_MS, MODES, AVATARS, emptyStats, UUID_RE };
+module.exports = { MemoryStore, SupabaseStore, validateNickname, cleanNickname, nextNickChange, NICK_COOLDOWN_MS, MODES, AVATARS, emptyStats, UUID_RE, pub, extendClub, FOUNDER_CLUB_DAYS };

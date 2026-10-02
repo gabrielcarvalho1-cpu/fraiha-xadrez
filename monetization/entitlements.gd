@@ -25,7 +25,8 @@ func apply_server(data: Dictionary):
     real = {
         "is_founder": bool(data.get("is_founder", false)),
         "club_active": bool(data.get("club_active", false)),
-        "club_expires_at": String(data.get("club_expires_at", "")),
+        # o servidor manda null quando não há Club: String(null) quebrava e o direito não era aplicado
+        "club_expires_at": "" if data.get("club_expires_at") == null else str(data.get("club_expires_at")),
     }
     real_known = true
     changed.emit()

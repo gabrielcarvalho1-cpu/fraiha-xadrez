@@ -11,6 +11,8 @@ var arena_bg: Texture2D
 var piece_textures := {}
 var visual_theme := "wood"
 var board_palette := [Color("a8aca5"),Color("364955")]
+## R31 · LABORATÓRIO (acesso antecipado Fundador/Club): letras e números nas casas da borda.
+var show_coordinates := false
 
 func board_flipped() -> bool:
     if bot != null: return bot.human_color == "b"
@@ -472,7 +474,8 @@ func _draw():
             if c==selected:
                 draw_rect(r.grow(-4),Color("#f3d25c"),false,5)
 
-    # Sem letras/números: arena limpa como a referência.
+    # Sem letras/números: arena limpa como a referência (exceto no LABORATÓRIO, opcional).
+    if show_coordinates: _draw_coordinates()
 
     var pre_on := premove_from!=Vector2i(-1,-1) and pieces.has(premove_from)
     for f in move_fades:
@@ -811,6 +814,20 @@ static func _ease_move(t: float) -> float:
 ## Origem dourada suave; destino dourado-esverdeado mais forte. Lance do adversário/remoto: forte por
 ## LAST_MOVE_HOLD s, esmaece em LAST_MOVE_FADE s (ou logo que o jogador escolhe uma peça) até um tom
 ## residual discreto que marca o último lance. Lance próprio: só o tom residual.
+func _draw_coordinates():
+    var font := ThemeDB.fallback_font
+    var fsz := int(TILE * 0.2)
+    for i in range(8):
+        # colunas (a–h) na fileira de baixo da tela; fileiras (1–8) na coluna da esquerda
+        var file_cell := Vector2i(i, 7) if not board_flipped() else Vector2i(7 - i, 0)
+        var fr := Rect2(ORIGIN + Vector2(display_cell(file_cell)) * TILE, Vector2(TILE, TILE))
+        var ink: Color = board_palette[(file_cell.x + file_cell.y) % 2 ^ 1] if visual_theme != "wood" else Color(0.1, 0.12, 0.08, 0.85)
+        draw_string(font, fr.end - Vector2(TILE * 0.2, TILE * 0.06), "abcdefgh"[file_cell.x], HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(ink, 0.9))
+        var rank_cell := Vector2i(0, i) if not board_flipped() else Vector2i(7, 7 - i)
+        var rr := Rect2(ORIGIN + Vector2(display_cell(rank_cell)) * TILE, Vector2(TILE, TILE))
+        var ink2: Color = board_palette[(rank_cell.x + rank_cell.y) % 2 ^ 1] if visual_theme != "wood" else Color(0.1, 0.12, 0.08, 0.85)
+        draw_string(font, rr.position + Vector2(TILE * 0.06, TILE * 0.24), str(8 - rank_cell.y), HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(ink2, 0.9))
+
 func _draw_last_move(r: Rect2, dest: bool):
     var base := 0.20 if dest else 0.15
     var strong := 0.0

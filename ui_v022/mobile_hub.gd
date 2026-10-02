@@ -421,6 +421,9 @@ func _profile(content: VBoxContainer):
     var remove_photo = _button(photo_row, "REMOVER FOTO", func(): hub.remove_custom_avatar())
     remove_photo.name = "RemovePhoto"
     remove_photo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    # R31: ícone, título, moldura, universo e peças (Fundador / Club).
+    var personalize = _button(content, "PERSONALIZAR · ÍCONE, MOLDURA, UNIVERSO", func(): hub.open_premium("personalize"))
+    personalize.name = "OpenPersonalizeMobile"
     avatar_note = _text(content, "", 14)
     avatar_note.name = "AvatarNote"
     # Nome público da conta (único, 30 dias) — mesmo editor do PC.
@@ -597,13 +600,15 @@ class ProfileCard extends Button:
             draw_texture_rect(av, Rect2(pr.position + (pr.size - d) / 2.0, d), false)
         # Moldura CLUB (benefício do Club) por cima do retrato, no mesmo recorte.
         var cf = get_node_or_null("ClubFrame")
-        if hub.club_active():
+        var fr: String = hub.current_frame()
+        if fr != "liga":
             if cf == null:
                 cf = load("res://monetization/club_frame.gd").new()
                 cf.compact = true
                 cf.fill_parent = false
                 add_child(cf)
             cf.visible = true
+            cf.style = fr
             cf.position = pr.position
             cf.size = pr.size
         elif cf != null: cf.visible = false
@@ -614,11 +619,12 @@ class ProfileCard extends Button:
         while fs > 8 and font.get_string_size(hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > 150 * k: fs -= 1
         draw_string_outline(font, (Vector2(1394, 80) - o) * k, hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0, 0, 0, 0.6))
         draw_string(font, (Vector2(1394, 80) - o) * k, hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("f4edda"))
-        if hub.is_founder():
-            # Selo Fundador ao lado do nome
+        var seal: Texture2D = hub.current_badge_texture()
+        if seal != null:
+            # Ícone escolhido (Selo Fundador / Selo Club) ao lado do nome
             var nw: float = font.get_string_size(hub.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
             var bs := 34.0 * k
-            draw_texture_rect(hub.FOUNDER_BADGE_SMALL, Rect2((Vector2(1394, 80) - o) * k + Vector2(nw + 6.0 * k, -bs * 0.78), Vector2(bs, bs)), false)
+            draw_texture_rect(seal, Rect2((Vector2(1394, 80) - o) * k + Vector2(nw + 6.0 * k, -bs * 0.78), Vector2(bs, bs)), false)
         draw_string(font, (Vector2(1364, 106) - o) * k, "%s · %d / 100 PL" % [league.display_name, int(data.lp)], HORIZONTAL_ALIGNMENT_LEFT, 190 * k, int(15 * k), Color("f4ce7f"))
         var bar := Rect2((Vector2(1372, 118) - o) * k, Vector2(168 * clampf(float(data.lp) / 100.0, 0.0, 1.0), 6) * k)
         draw_rect(bar, Color("e9c46a"))

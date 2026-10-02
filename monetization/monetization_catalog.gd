@@ -44,7 +44,7 @@ static func enabled_methods() -> Array:
 const FOUNDER_LIMIT := 100
 ## Link do grupo de WhatsApp dos Fundadores. Vazio = ainda não configurado
 ## (o botão mostra um aviso em vez de abrir um link inventado).
-const FOUNDER_WHATSAPP_URL := ""
+const FOUNDER_WHATSAPP_URL := "https://chat.whatsapp.com/DAsWxKiLOO8F37YJGSwhLc"
 ## Benefício do Fundador: dias de Club inclusos (na V1 apenas simulado).
 const FOUNDER_CLUB_DAYS := 30
 

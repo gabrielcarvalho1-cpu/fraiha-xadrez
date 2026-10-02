@@ -1,7 +1,8 @@
 extends RefCounted
 ## CLUB FRAIHA — página da assinatura mensal (treinamento + análise + evolução).
-## Estado exibido vem SOMENTE de dev_mock_club / dev_mock_founder_club_trial (simulação).
-## Club NÃO inclui grupo de WhatsApp nesta fase. Nada aqui dá vantagem no Ranked.
+## Estado: servidor (entitlements reais) ou simulação (dev_mock_club / dev_mock_founder_club_trial).
+## R31: os benefícios estão no ar (MEU CLUB, PERSONALIZAÇÃO, avatares/ícones/universo Club).
+## Club NÃO inclui grupo de WhatsApp. Nada aqui dá vantagem no Ranked.
 const Art := preload("res://monetization/premium_art.gd")
 const Catalog := preload("res://monetization/monetization_catalog.gd")
 
@@ -9,21 +10,22 @@ const CONCEPT := "O Club FRAIHA transforma suas partidas em aprendizado.\n\nAnal
 
 ## [ícone, título, descrição, selo]
 const BENEFITS := [
-    ["magnifier", "ANÁLISE AVANÇADA DE PARTIDAS", "Erros, imprecisões, melhores jogadas, oportunidades perdidas e momentos críticos.", "EM DESENVOLVIMENTO"],
-    ["target", "TREINE MEUS ERROS", "Posições problemáticas das suas partidas viram exercícios personalizados.", "EM DESENVOLVIMENTO"],
-    ["sword", "TREINO PERSONALIZADO", "Sugestões conforme suas dificuldades: tática, abertura, meio-jogo e finais.", "EM DESENVOLVIMENTO"],
-    ["chart", "ESTATÍSTICAS AVANÇADAS", "Evolução por período, ritmo e cor; sequências, precisão, pontos fortes e fracos.", "EM DESENVOLVIMENTO"],
-    ["scroll", "RELATÓRIO SEMANAL", "Um resumo da sua semana com o ponto a melhorar e o treino recomendado.", "EM DESENVOLVIMENTO"],
-    ["hourglass", "HISTÓRICO DETALHADO", "Todas as suas partidas organizadas para rever quando quiser.", "EM DESENVOLVIMENTO"],
-    ["trophy", "DESAFIOS CLUB", "Desafios periódicos exclusivos para membros.", "EM BREVE"],
-    ["gem", "COSMÉTICOS CLUB", "Itens visuais exclusivos — sem efeito no jogo.", "EM BREVE"],
-    ["seal", "SELO CLUB", "Identificação de membro do Club.", "EM BREVE"],
-    ["brush", "PERSONALIZAÇÃO PREMIUM", "Mais opções para deixar o FRAIHA com a sua cara.", "EM BREVE"],
-    ["star", "ACESSO ANTECIPADO", "Experimente novidades antes do lançamento geral.", "EM BREVE"],
+    ["magnifier", "ANÁLISE AVANÇADA DE PARTIDAS", "Análises ilimitadas: erros, imprecisões, melhores jogadas, oportunidades perdidas e momentos críticos.", "DISPONÍVEL"],
+    ["target", "TREINE MEUS ERROS", "Os erros de TODAS as suas análises recentes viram exercícios.", "DISPONÍVEL"],
+    ["sword", "TREINO PERSONALIZADO", "Treino focado na fase do jogo em que você mais erra: abertura, meio-jogo ou final.", "DISPONÍVEL"],
+    ["chart", "ESTATÍSTICAS AVANÇADAS", "Precisão por modo, cor e fase; tendência, pontos fortes e fracos.", "DISPONÍVEL"],
+    ["scroll", "RELATÓRIO SEMANAL", "Sua semana real: partidas, vitórias, precisão, ponto a melhorar e treino recomendado.", "DISPONÍVEL"],
+    ["hourglass", "HISTÓRICO DETALHADO", "Suas partidas analisadas organizadas para rever quando quiser.", "DISPONÍVEL"],
+    ["trophy", "DESAFIOS CLUB", "Desafios semanais exclusivos, acompanhados automaticamente.", "DISPONÍVEL"],
+    ["gem", "COSMÉTICOS CLUB", "Universo Academia Club e peças esmeralda — sem efeito no jogo.", "DISPONÍVEL"],
+    ["seal", "SELO CLUB", "3 ícones e 3 avatares exclusivos de membro.", "DISPONÍVEL"],
+    ["brush", "PERSONALIZAÇÃO PREMIUM", "Combine qualquer conjunto de peças conquistado com qualquer cenário; escolha ícone, título e moldura.", "DISPONÍVEL"],
+    ["star", "ACESSO ANTECIPADO", "Laboratório: novidades em teste antes do lançamento geral.", "DISPONÍVEL"],
     ["tag", "DESCONTO FUTURO NA LOJA", "Condições especiais para membros na futura loja.", "EM BREVE"],
 ]
 
 static func active_view(hub) -> String:
+    if hub.has_method("club_real") and hub.club_real(): return "server"
     if hub.state.club_subscription_view(): return "subscription"
     if hub.state.founder_trial_view(): return "trial"
     return ""
@@ -33,14 +35,16 @@ static func build(hub, parent: VBoxContainer):
     _hero(hub, parent, active)
     var c: VBoxContainer = hub.section(parent, "JOGUE. ENTENDA. EVOLUA.", "book", "club")
     Art.label(c, CONCEPT, hub.fs(19), Art.CREAM)
-    _weekly_report(hub, parent)
+    if active.is_empty() or hub.main_hub == null: _weekly_report(hub, parent)
+    else: preload("res://monetization/my_club_ui.gd").weekly(hub, parent)
     var b: VBoxContainer = hub.section(parent, "BENEFÍCIOS DO CLUB", "star", "club")
     var g: GridContainer = hub.grid(b, hub.columns_for(3))
     for item in BENEFITS:
         var tag: String = item[3]
-        var tone := "soon"
+        var tone := "ok" if tag == "DISPONÍVEL" else "soon"
         if not active.is_empty() and tag == "EM BREVE":
             tag = "INCLUSO · EM BREVE"
+        elif not active.is_empty(): tag = "INCLUSO · " + tag
         hub.benefit_card(g, item[0], item[1], item[2], tag, tone, "dark")
     b.add_child(hub.fair_play_note())
     _yearly(hub, parent)
@@ -79,9 +83,30 @@ static func _hero(hub, parent: VBoxContainer, active: String):
     t.add_theme_constant_override("outline_size", 8)
     t.add_theme_color_override("font_outline_color", Color(0.05, 0.12, 0.05, 0.95))
     Art.label(v, "JOGUE.  ENTENDA.  EVOLUA.", hub.fs(26), Color("bfe8a8"), Art.FONT_BOLD)
+    if not active.is_empty():
+        var go := HFlowContainer.new()
+        go.add_theme_constant_override("h_separation", 12)
+        go.add_theme_constant_override("v_separation", 10)
+        v.add_child(go)
+        var mc := Art.Cta.new("ABRIR MEU CLUB", "green", 58 * maxf(hub.k, 0.85), int(20 * maxf(hub.k, 0.85)))
+        mc.name = "ClubOpenMyClub"
+        mc.icon_kind = "chart"
+        mc.pressed.connect(func(): hub.show_page("myclub"))
+        go.add_child(mc)
+        var pz := Art.Cta.new("PERSONALIZAR", "gold", 58 * maxf(hub.k, 0.85), int(20 * maxf(hub.k, 0.85)))
+        pz.name = "ClubPersonalize"
+        pz.icon_kind = "brush"
+        pz.pressed.connect(func(): hub.show_page("personalize"))
+        go.add_child(pz)
+    if active == "server":
+        v.add_child(hub.status_badge("CLUB FRAIHA ATIVO"))
+        var exp := String(hub.main_hub.entitlements.club_expires_at()) if hub.main_hub != null else ""
+        var on := Art.label(v, "Todos os recursos do Club estão liberados na sua conta." + ("  Válido até %s." % exp.substr(0, 10) if not exp.is_empty() else ""), hub.fs(19), Art.CREAM)
+        on.name = "ClubActiveText"
+        return
     if active == "subscription":
         v.add_child(hub.status_badge("CLUB FRAIHA ATIVO"))
-        var on := Art.label(v, "Sua assinatura de teste está ativa. Os recursos do Club aparecem aqui conforme forem lançados.", hub.fs(19), Art.CREAM)
+        var on := Art.label(v, "Sua assinatura de teste está ativa. Todos os recursos do Club estão liberados.", hub.fs(19), Art.CREAM)
         on.name = "ClubActiveText"
         Art.label(v, "Estado de desenvolvimento (simulação): nenhuma cobrança real.", hub.fs(15), Color("f2a070"))
         if Catalog.dev_tools_enabled():

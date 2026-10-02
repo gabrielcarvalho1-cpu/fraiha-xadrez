@@ -315,9 +315,31 @@ func _avatar(parent: Node, id: String, px: int) -> TextureRect:
     t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    if avatar_for.is_valid(): t.texture = avatar_for.call(id if id in ["warrior", "archer", "mage", "paladin"] else "warrior")
+    var known: bool = id in ["warrior", "archer", "mage", "paladin"] or (id in AvatarCatalog.ids() and AvatarCatalog.has_art(id))
+    if avatar_for.is_valid(): t.texture = avatar_for.call(id if known else "warrior")
     parent.add_child(t)
     return t
+
+## R31 · DESTAQUE SOCIAL: selo (Fundador / Club) que o servidor já filtrou pelos direitos ativos.
+const AvatarCatalog = preload("res://profile/avatar_catalog.gd")
+const Cosmetics = preload("res://profile/premium_cosmetics.gd")
+func _seal(parent: Node, p: Dictionary, px: int) -> TextureRect:
+    var id := Cosmetics.public_badge(p)
+    if id.is_empty(): return null
+    var t = TextureRect.new()
+    t.name = "SocialBadge"
+    t.texture = Cosmetics.badge_texture(id, px <= 48)
+    t.custom_minimum_size = Vector2(px, px)
+    t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    t.tooltip_text = String(Cosmetics.BADGE_NAMES.get(id, ""))
+    t.mouse_filter = Control.MOUSE_FILTER_PASS
+    parent.add_child(t)
+    return t
+
+static func _peer(uid: String, peer: Dictionary) -> Dictionary:
+    return {"user_id": uid, "nickname": String(peer.get("nickname", "")), "avatar_id": String(peer.get("avatar_id", "warrior")), "badge": String(peer.get("badge", "")), "title": String(peer.get("title", ""))}
 
 func _section(title: String, count: int):
     var l = _label(box, "%s (%d)" % [title, count], 15, GOLD)
@@ -334,6 +356,7 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
     row.set_meta("user_id", String(p.get("user_id", "")))
     box.add_child(row)
     _avatar(row, String(p.get("avatar_id", "warrior")), 40)
+    _seal(row, p, 28)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     col.add_theme_constant_override("separation", 0)
@@ -478,8 +501,14 @@ func _build_profile(narrow: bool):
     var info = VBoxContainer.new()
     info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     top.add_child(info)
-    var nick = _label(info, String(profile.get("nickname", "")), 24, Color("f4edda"), narrow)
+    var nick_row = HBoxContainer.new()
+    nick_row.add_theme_constant_override("separation", 8)
+    info.add_child(nick_row)
+    var nick = _label(nick_row, String(profile.get("nickname", "")), 24, Color("f4edda"), narrow)
     nick.name = "ProfileNickname"
+    _seal(nick_row, profile, 44)
+    var ttl := Cosmetics.title_text(String(profile.get("title", "")))
+    if not ttl.is_empty(): _label(info, ttl.to_upper(), 15, GOLD, narrow).name = "ProfileTitle"
     var pres = String(profile.get("presence", ""))
     if not pres.is_empty():   # o servidor só envia presença de amigos
         var pinfo = PRESENCE.get(pres, PRESENCE["offline"])
@@ -591,7 +620,7 @@ func _is_mine(m: Dictionary, peer_id: String) -> bool:
 
 func open_dm(uid: String, peer: Dictionary = {}, back_to := "list"):
     dm_id = uid
-    dm_peer = {"user_id": uid, "nickname": String(peer.get("nickname", "")), "avatar_id": String(peer.get("avatar_id", "warrior"))}
+    dm_peer = _peer(uid, peer)
     dm_messages = []
     dm_has_more = false
     dm_can_send = false
@@ -697,6 +726,7 @@ func _build_dm():
     head.add_theme_constant_override("separation", 10)
     box.add_child(head)
     _avatar(head, String(dm_peer.get("avatar_id", "warrior")), 44)
+    _seal(head, dm_peer, 30)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     head.add_child(col)
@@ -797,7 +827,7 @@ func _dm_scroll_end():
 
 # ---------- Convite para partida Casual ----------
 func open_invite(uid: String, peer: Dictionary):
-    invite_peer = {"user_id": uid, "nickname": String(peer.get("nickname", "")), "avatar_id": String(peer.get("avatar_id", "warrior"))}
+    invite_peer = _peer(uid, peer)
     invite_sending = false
     _show("invite_pick")
 
@@ -826,6 +856,7 @@ func _build_invite_pick():
     head.add_theme_constant_override("separation", 10)
     box.add_child(head)
     _avatar(head, String(invite_peer.get("avatar_id", "warrior")), 44)
+    _seal(head, invite_peer, 30)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     head.add_child(col)

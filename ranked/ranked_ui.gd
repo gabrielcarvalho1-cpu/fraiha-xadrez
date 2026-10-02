@@ -13,6 +13,8 @@ const MODES = [["ranked_3min", "RELÂMPAGO", 3], ["ranked_5min", "RÁPIDA", 5], 
 const CASUAL_MODES = [["casual_3min", "RELÂMPAGO", 3], ["casual_5min", "RÁPIDA", 5], ["casual_10min", "NORMAL", 10], ["casual_20min", "CONVENCIONAL", 20]]
 const LEAGUES = ["Madeira","Ferro","Bronze","Prata","Ouro","Platina","Esmeralda","Diamante","Mestre","Grande Mestre","Challenger"]
 const GOLD = Color("f4ce7f")
+const Cosmetics = preload("res://profile/premium_cosmetics.gd")
+var hub = null   # main_hub (meu selo na faixa "Você")
 var account
 var controller
 var dim: ColorRect
@@ -122,6 +124,16 @@ func _make_strip() -> Dictionary:
     var row = HBoxContainer.new()
     row.add_theme_constant_override("separation", 8)
     bg.add_child(row)
+    # R31 · Destaque social: selo (Fundador / Club) do jogador, já filtrado pelo servidor.
+    var seal = TextureRect.new()
+    seal.name = "StripBadge"
+    seal.custom_minimum_size = Vector2(26, 26)
+    seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    seal.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    seal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    seal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    seal.visible = false
+    row.add_child(seal)
     var name = Label.new()
     name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     name.clip_text = true
@@ -132,7 +144,7 @@ func _make_strip() -> Dictionary:
     clock.custom_minimum_size.x = 96
     row.add_child(clock)
     hud.add_child(bg)
-    return {"bg": bg, "name": name, "clock": clock, "style": style}
+    return {"bg": bg, "name": name, "clock": clock, "style": style, "seal": seal, "seal_id": ""}
 
 # ---------- Painéis ----------
 func open_modes():
@@ -459,6 +471,11 @@ func _refresh_strips():
         if pair[1] != me and not bool(info.get("connected", true)): who += " (reconectando…)"
         if rated(): strip.name.text = ("%s\n%s %d" if two_line else "%s · %s %d") % [who, LEAGUES[clampi(int(info.get("league", 0)), 0, 10)], int(info.get("pl", 0))]
         else: strip.name.text = ("%s\nCasual" if two_line else "%s") % who
+        var bid: String = Cosmetics.public_badge(info) if pair[1] != me else (String(hub.current_badge()) if hub != null and hub.has_method("current_badge") else "")
+        if bid != strip.seal_id:
+            strip.seal_id = bid
+            strip.seal.texture = Cosmetics.badge_texture(bid)
+        strip.seal.visible = strip.seal.texture != null
         var running = controller.status == "playing" and controller.clock.active == pair[1]
         strip.clock.show_time(controller.clock.remaining_ms(pair[1]), running)
         strip.style.border_color = Color("e5c37c") if running else Color("5d6b58")

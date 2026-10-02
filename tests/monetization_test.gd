@@ -68,7 +68,7 @@ func run():
     check(Catalog.PAYMENT_MODE == "mock", "modo de pagamento = mock")
     check(Catalog.enabled_methods() == ["pix", "card"], "PIX é o primeiro método")
     check(Catalog.FOUNDER_LIMIT == 100, "FOUNDER_LIMIT = 100")
-    check(Catalog.FOUNDER_WHATSAPP_URL == "", "URL do WhatsApp vazia (não inventada)")
+    check(Catalog.FOUNDER_WHATSAPP_URL == "https://chat.whatsapp.com/DAsWxKiLOO8F37YJGSwhLc", "R31: link oficial do grupo dos Fundadores")
     check(Catalog.planned_price("founder") == "R$ 49,90" and Catalog.planned_price("club_monthly") == "R$ 19,90", "preços planejados 49,90 / 19,90")
     check(Catalog.charge_price("founder") == "R$ 0,00" and Catalog.charge_price("club_monthly") == "R$ 0,00", "preço de teste R$ 0,00")
 
@@ -134,8 +134,8 @@ func run():
     check(node("FounderOwnedTitle") != null and node("BecomeFounder") == null, "página muda para FUNDADOR FRAIHA")
     check(node("FounderReward") != null and node("JoinFounderGroup") != null, "recompensa: botão do grupo aparece depois")
     check(StateScript.new(TEST_PATH).dev_mock_founder, "Fundador persiste ao reabrir")
-    check(press("JoinFounderGroup") and "ainda não configurado" in String(node("ConfirmBody").text), "WhatsApp sem URL mostra aviso")
-    press("ConfirmOk")
+    pr.url_opener = func(_u): pass
+    check(press("JoinFounderGroup") and pr.last_opened_url == Catalog.FOUNDER_WHATSAPP_URL, "R31: botão abre o grupo de WhatsApp dos Fundadores")
     await settle()
     check(press("ResetMonetization") and press("ConfirmOk"), "resetar monetização de teste")
     await settle()
