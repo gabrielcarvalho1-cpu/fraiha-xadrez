@@ -680,8 +680,9 @@ class TableView extends Control:
         var g = ui.g
         var lit: bool = g != null and g.turn == seat and ui.mode == "game"
         panel(r, lit or (seat == 0 and not ui.portrait), ui.PANEL)
-        var ps := r.size.y - 22.0
-        var pr := Rect2(r.position + Vector2(11, 11), Vector2(ps, ps))
+        var narrow: bool = ui.portrait and r.size.x < 300.0
+        var ps := r.size.y - (32.0 if narrow else 22.0)
+        var pr := Rect2(r.position + (Vector2(10, 13) if narrow else Vector2(11, 11)), Vector2(ps, ps))
         var tex: Texture2D
         if seat == 0:
             # "Você": retrato Marfim da referência
@@ -690,26 +691,49 @@ class TableView extends Control:
                 draw_texture_rect(ui.my_portrait, pr.grow(-ps * 0.075), false)
         else:
             draw_texture_rect(ui.portraits[ui.BOTS[seat].portrait], pr, false)
-        var x := pr.end.x + 12.0
+        var x := pr.end.x + (10.0 if narrow else 12.0)
+        # placas estreitas (celular em retrato): a referência usa letras e marcadores menores
+        var sc := 0.8 if r.size.x < 300.0 else 1.0
+        var avail := r.end.x - x - 10.0
         var nm: String = ui.names[seat]
-        var nfs := fit(nm, "bold", 30, r.end.x - x - (92.0 if seat == 2 else 12.0))
-        text(nm, Vector2(x, r.position.y + 40), "bold", nfs, ui.CREAM)
+        var nfs := fit(nm, "bold", 27 if narrow else 30, avail - (92.0 if seat == 2 else 0.0))
+        text(nm, Vector2(x, r.position.y + (36.0 if ui.portrait else 40.0)), "bold", nfs, ui.CREAM)
         if seat == 2:
             var tw := text_w("ALIADO", "bold_sp", 15) + 16
             var tr := Rect2(Vector2(x + text_w(nm, "bold", nfs) + 12, r.position.y + 20), Vector2(tw, 24))
             draw_rect(tr, Color("f0c44c"))
             text("ALIADO", Vector2(tr.position.x, tr.position.y + 18), "bold_sp", 15, Color("1c1405"), tr.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-        diamond(Vector2(x + 9, r.position.y + 61), 8, ui.KINGDOM_COLOR[seat], seat != 2)
-        if seat == 2: diamond(Vector2(x + 9, r.position.y + 61), 8, ui.KINGDOM_COLOR[seat], false)
-        text(ui.KINGDOM_LABEL[seat], Vector2(x + 22, r.position.y + 69), "semi_sp2", 20, ui.KINGDOM_COLOR[seat])
-        # cartas na mão (versos) e peões ainda no Pátio
         var n: int = g.hands[seat].size() if g != null else 4
+        var home: int = g.in_home(seat) if g != null else 4
+        if ui.portrait:
+            # celular em retrato (tela_celular): losango cheio com contorno dourado, nome do reino sem
+            # espaçamento largo, versos de carta sobrepostos e bolinhas maiores
+            var kyp := r.position.y + 58.0
+            if seat != 2: diamond(Vector2(x + 10, kyp), 10, ui.KINGDOM_COLOR[seat])
+            diamond(Vector2(x + 10, kyp), 10, Color("d9b45e"), false)
+            var klp: String = ui.KINGDOM_LABEL[seat]
+            text(klp, Vector2(x + 26, kyp + 9), "bold", fit(klp, "bold", 25, avail - 26), ui.KINGDOM_COLOR[seat].lightened(0.25))
+            for c in n:
+                var crp := Rect2(Vector2(x + c * 14, r.position.y + 72), Vector2(24, 33))
+                if ui.card_back != null: draw_texture_rect(ui.card_back, crp, false)
+                draw_rect(crp, Color(0, 0, 0, 0.5), false, 1.0)
+            var dxp := x + (maxi(n, 1) - 1) * 14 + 24 + 23
+            for d in 4:
+                var cp := Vector2(dxp + d * 19, r.position.y + 89)
+                if d < home: draw_circle(cp, 6.0, ui.KINGDOM_DOT[seat])
+                draw_arc(cp, 6.0, 0, TAU, 20, Color("cfd3cf") if d >= home else Color(1, 1, 1, 0.6), 1.5)
+            return
+        var ky := r.position.y + 61.0
+        diamond(Vector2(x + 9, ky), 8, ui.KINGDOM_COLOR[seat], seat != 2)
+        if seat == 2: diamond(Vector2(x + 9, ky), 8, ui.KINGDOM_COLOR[seat], false)
+        var kl: String = ui.KINGDOM_LABEL[seat]
+        text(kl, Vector2(x + 22, ky + 8), "semi_sp2", fit(kl, "semi_sp2", 20, avail - 22), ui.KINGDOM_COLOR[seat])
+        # cartas na mão (versos) e peões ainda no Pátio
         for c in n:
             var cr := Rect2(Vector2(x + c * 17, r.position.y + 84), Vector2(16, 24))
             draw_rect(cr, Color("1c4a35"))
             draw_rect(cr, Color("b8892f"), false, 1.0)
             diamond(cr.get_center(), 3, Color("d9b45e"))
-        var home: int = g.in_home(seat) if g != null else 4
         var dx := x + maxf(n, 3) * 17 + 18
         for d in 4:
             var c := Vector2(dx + d * 21, r.position.y + 96)
