@@ -16,8 +16,10 @@ const INITIAL_AVATARS := ["warrior", "archer"]
 var key := "local"             # "local" (convidado) ou user_id da conta
 var defeated := {}             # bot_id -> unix (1ª vitória)
 var server_available := false  # conta com progresso no servidor (0006)
+var server_known := false      # já chegou resposta do servidor (bots) para ESTA conta?
 var account                    # account/account_service.gd
 var _pending := {}             # bot_id aguardando confirmação do servidor
+var _deferred := {}            # vitória à espera de saber se o servidor tem progresso (bot_id -> [cor, lances])
 
 func setup(acc):
     account = acc
@@ -28,11 +30,20 @@ func setup(acc):
     _on_account_changed()
 
 func _on_account_changed():
+    _sync_key()
+
+## Chave atual a partir da conta. Chamada no `changed` E no início de _on_server_progress:
+## a ordem dos sinais do account_service (bot_progress_changed antes de changed) não importa.
+func _sync_key():
     var k := "local"
     if account != null and account.has_profile() and not String(account.user_id).is_empty(): k = String(account.user_id)
     if k != key or defeated.is_empty():
+        if k != key:
+            # outra conta (ou saiu): o que se sabia do servidor era da conta anterior
+            server_available = false
+            server_known = false
+            _deferred.clear()
         key = k
-        if key == "local": server_available = false
         _load()
         changed.emit()
 
@@ -95,14 +106,30 @@ func storage_label() -> String:
 ## Chamado ao fim de uma partida GANHA contra um bot da escada (xeque-mate do bot).
 func report_victory(bot_id: String, human_color: String, moves: PackedStringArray):
     if not is_unlocked(bot_id) or is_defeated(bot_id): return
+    _sync_key()
     var logged: bool = account != null and account.has_profile() and key != "local"
-    if logged and server_available and account.server_ready:
-        _pending[bot_id] = true
-        if not account.claim_bot_victory(bot_id, human_color, moves):
-            _pending.erase(bot_id)
-            notice.emit("Sem conexão com o servidor: a vitória não foi registrada na conta.")
-        return
+    if logged and account.server_ready:
+        if not server_known:
+            # Ainda não se sabe se o servidor guarda o progresso: pergunta UMA vez antes de decidir.
+            # Nunca concede local por causa de um estado temporário (era assim que a vitória se perdia).
+            if _deferred.has(bot_id): return
+            _deferred[bot_id] = [human_color, moves]
+            if not account.send_server({"type": "bot_progress"}):
+                _deferred.erase(bot_id)
+                notice.emit("Sem conexão com o servidor: a vitória não foi registrada na conta.")
+            return
+        if server_available:
+            _claim(bot_id, human_color, moves)
+            return
+        # servidor respondeu que NÃO tem progresso de bots (0006 ausente): fallback local previsto
     _grant(bot_id)
+
+func _claim(bot_id: String, human_color: String, moves: PackedStringArray):
+    if _pending.has(bot_id): return
+    _pending[bot_id] = true
+    if not account.claim_bot_victory(bot_id, human_color, moves):
+        _pending.erase(bot_id)
+        notice.emit("Sem conexão com o servidor: a vitória não foi registrada na conta.")
 
 func _grant(bot_id: String):
     if is_defeated(bot_id): return
@@ -112,10 +139,13 @@ func _grant(bot_id: String):
     reward_unlocked.emit(bot_id, Ladder.reward(bot_id))
 
 func _on_server_progress(data: Dictionary):
+    _sync_key()   # corrige a race: o 1º acct_state emite isto ANTES de account.changed
     if key == "local": return
+    server_known = true
     server_available = bool(data.get("available", false))
     if not server_available:
         changed.emit()
+        _resolve_deferred()
         return
     var list: Array = data.get("defeated", [])
     var before := defeated.duplicate()
@@ -128,8 +158,25 @@ func _on_server_progress(data: Dictionary):
     if nb != null and not String(nb).is_empty():
         _pending.erase(String(nb))
         reward_unlocked.emit(String(nb), Ladder.reward(String(nb)))
+    _resolve_deferred()
+
+## Vitórias que esperavam a resposta do servidor: envia (servidor com progresso) ou guarda local
+## (servidor confirmou que não tem). Cada uma é tratada uma única vez.
+func _resolve_deferred():
+    if _deferred.is_empty(): return
+    var items := _deferred.duplicate()
+    _deferred.clear()
+    for id in items:
+        if is_defeated(String(id)) or not is_unlocked(String(id)): continue
+        if server_available: _claim(String(id), String(items[id][0]), items[id][1])
+        else: _grant(String(id))
 
 func _on_server_failed(code: String, message: String, bot_id: String):
+    if bot_id.is_empty() and not _deferred.is_empty():
+        # a consulta de progresso falhou (ex.: sessão caiu): não concede local, só avisa
+        _deferred.clear()
+        notice.emit("Vitória não registrada: " + message)
+        return
     if not _pending.has(bot_id): return
     _pending.erase(bot_id)
     if code == "not_configured":
