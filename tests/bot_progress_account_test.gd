@@ -28,15 +28,24 @@ func fresh(logged := true):
     var acc := FakeAccount.new()
     acc.set_process(false)
     root.add_child(acc)
-    if logged:
-        acc.access_token = "tok"
-        acc.user_id = "u-123"
     var bp = Progress.new()
     root.add_child(bp)
     bp.setup(acc)
+    if logged:
+        # Identidade preenchida SEM emitir changed: o BotProgress ainda está em key="local" quando o
+        # 1º acct_state chegar (pior caso da race original).
+        acc.access_token = "tok"
+        acc.user_id = "u-123"
+        acc.socket_open = true
     var grants: Array = []
     bp.reward_unlocked.connect(func(b, _r): grants.append(b))
     return [acc, bp, grants]
+
+## Queda do socket exatamente como o account_service faz em _process (STATE_CLOSED).
+func drop(acc):
+    acc.socket_open = false
+    acc.server_ready = false
+    acc.changed.emit()
 
 func state(acc, bots):
     var msg := {"type": "acct_state", "user_id": "u-123", "profile": {"nickname": "Teste"}, "ranked": {}, "persistent": true}
@@ -124,6 +133,73 @@ func run():
     state(acc, {"available": true, "defeated": []})
     acc._clear_session()
     check(bp.key == "local" and not bp.server_available and not bp.server_known, "logout: volta a local e esquece o estado do servidor")
+
+    # ---------- 7) CONTA sem conexão: nada local ----------
+    t = fresh(); acc = t[0]; bp = t[1]; grants = t[2]
+    state(acc, {"available": true, "defeated": []})
+    var notes7: Array = []
+    bp.notice.connect(func(n): notes7.append(n))
+    drop(acc)
+    check(bp.is_account() and bp.key == "u-123", "socket caiu: continua sendo CONTA (key = user_id, não vira convidado)")
+    check(not acc.has_profile(), "(has_profile() fica falso com o socket caído — por isso não é usado para detectar conta)")
+    bp.report_victory("madeira", "w", PackedStringArray(SCHOLAR))
+    check(not bp.is_defeated("madeira") and grants.is_empty(), "conta + socket caído: vitória NÃO gera _grant local")
+    check(bp.status("ferro") == "locked" and not bp.avatar_unlocked("mage"), "conta + socket caído: FERRO continua bloqueado, sem recompensa")
+    check(notes7 == [Progress.OFFLINE_MSG], "conta + socket caído: mensagem clara de falta de conexão")
+    check(acc.types().count("bot_victory") == 0, "conta + socket caído: nada enviado")
+    # server_ready=false com socket ainda aberto (antes do acct_state)
+    t = fresh(); acc = t[0]; bp = t[1]; grants = t[2]
+    state(acc, {"available": true, "defeated": ["madeira"]})
+    acc.server_ready = false
+    bp.report_victory("ferro", "w", PackedStringArray(SCHOLAR))
+    check(not bp.is_defeated("ferro") and grants.is_empty() and acc.types().count("bot_victory") == 0, "conta + server_ready=false: nada local, nada enviado")
+    check(bp.is_defeated("madeira") and bp.status("ferro") == "available", "conta sem conexão: progresso existente preservado (MADEIRA derrotado, FERRO disponível)")
+    # conta autenticada que nunca conectou (socket nunca abriu)
+    t = fresh(); acc = t[0]; bp = t[1]; grants = t[2]
+    acc.socket_open = false
+    acc.changed.emit()
+    check(bp.is_account() and bp.key == "u-123", "conta autenticada sem nenhum acct_state ainda: é conta, não convidado")
+    bp.report_victory("madeira", "w", PackedStringArray(SCHOLAR))
+    check(not bp.is_defeated("madeira") and grants.is_empty(), "conta sem servidor desde o início: sem _grant local")
+    # available=false explícito continua com fallback (conectado)
+    t = fresh(); acc = t[0]; bp = t[1]; grants = t[2]
+    state(acc, {"available": false, "defeated": []})
+    bp.report_victory("madeira", "w", PackedStringArray(SCHOLAR))
+    check(bp.is_defeated("madeira") and grants == ["madeira"], "available=false explícito (conectado): fallback local mantido")
+
+    # ---------- 8) reconexão: sem recompensa fantasma ----------
+    t = fresh(); acc = t[0]; bp = t[1]; grants = t[2]
+    state(acc, {"available": true, "defeated": []})
+    drop(acc)
+    bp.report_victory("madeira", "w", PackedStringArray(SCHOLAR))
+    acc.socket_open = true
+    state(acc, {"available": true, "defeated": []})
+    check(not bp.is_defeated("madeira") and grants.is_empty(), "reconexão depois de vitória offline: nenhuma recompensa fantasma")
+    # vitória enviada, socket caiu antes da resposta; servidor TINHA gravado → reconexão mostra a recompensa 1×
+    t = fresh(); acc = t[0]; bp = t[1]; grants = t[2]
+    state(acc, {"available": true, "defeated": []})
+    bp.report_victory("madeira", "w", PackedStringArray(SCHOLAR))
+    check(acc.types().count("bot_victory") == 1 and grants.is_empty(), "vitória enviada; resposta ainda não chegou")
+    drop(acc)
+    check(not bp.is_defeated("madeira") and grants.is_empty(), "socket caiu antes da resposta: nada concedido")
+    acc.socket_open = true
+    state(acc, {"available": true, "defeated": ["madeira"]})
+    check(bp.is_defeated("madeira") and grants == ["madeira"], "reconexão: servidor confirma pela lista → recompensa 1×")
+    state(acc, {"available": true, "defeated": ["madeira"]})
+    check(grants == ["madeira"], "novo acct_state não repete a recompensa")
+    # servidor NÃO gravou: reconexão não concede
+    t = fresh(); acc = t[0]; bp = t[1]; grants = t[2]
+    state(acc, {"available": true, "defeated": []})
+    bp.report_victory("madeira", "w", PackedStringArray(SCHOLAR))
+    drop(acc)
+    acc.socket_open = true
+    state(acc, {"available": true, "defeated": []})
+    check(not bp.is_defeated("madeira") and grants.is_empty(), "servidor não gravou: reconexão não concede nada")
+    # bot que já estava derrotado no servidor não gera recompensa
+    t = fresh(); acc = t[0]; bp = t[1]; grants = t[2]
+    state(acc, {"available": true, "defeated": ["madeira"]})
+    state(acc, {"available": true, "defeated": ["madeira"], "new_bot": "madeira"})
+    check(grants.is_empty(), "bot já derrotado antes: sem recompensa repetida")
 
     print("BOT_PROGRESS_ACCOUNT_CHECKS=%d FAILURES=%d" % [checks, failures])
     print("RESULT " + ("OK" if failures == 0 else "FAIL"))

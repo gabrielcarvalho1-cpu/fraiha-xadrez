@@ -5,6 +5,8 @@ extends Node
 ##     (online_v021/bots/service.js refaz a partida). Aparece em qualquer aparelho da conta.
 ##   • Convidado, ou servidor sem 0006: progresso LOCAL deste aparelho (user://bot_progress.cfg),
 ##     separado por conta. Nunca é enviado depois como "prova" — o servidor só aceita partidas.
+##   • Conta = sessão autenticada (access_token + user_id), mesmo com o socket caído. Conta sem
+##     conexão NÃO ganha progresso local: a vitória não é registrada e o jogador é avisado.
 signal changed
 signal reward_unlocked(bot_id: String, reward: Dictionary)
 signal notice(text: String)
@@ -12,6 +14,7 @@ signal notice(text: String)
 const Ladder = preload("res://bot/bot_ladder.gd")
 const FILE := "user://bot_progress.cfg"
 const INITIAL_AVATARS := ["warrior", "archer"]
+const OFFLINE_MSG := "Sem conexão com o servidor. A vitória não pôde ser registrada na sua conta."
 
 var key := "local"             # "local" (convidado) ou user_id da conta
 var defeated := {}             # bot_id -> unix (1ª vitória)
@@ -34,9 +37,13 @@ func _on_account_changed():
 
 ## Chave atual a partir da conta. Chamada no `changed` E no início de _on_server_progress:
 ## a ordem dos sinais do account_service (bot_progress_changed antes de changed) não importa.
+## Há uma conta autenticada? Baseado na IDENTIDADE (sessão + user_id), não em has_profile():
+## has_profile() fica falso quando o socket cai, e a conta não pode "virar convidado" por isso.
+func is_account() -> bool:
+    return account != null and account.signed_in()
+
 func _sync_key():
-    var k := "local"
-    if account != null and account.has_profile() and not String(account.user_id).is_empty(): k = String(account.user_id)
+    var k := String(account.user_id) if is_account() else "local"
     if k != key or defeated.is_empty():
         if k != key:
             # outra conta (ou saiu): o que se sabia do servidor era da conta anterior
@@ -107,21 +114,25 @@ func storage_label() -> String:
 func report_victory(bot_id: String, human_color: String, moves: PackedStringArray):
     if not is_unlocked(bot_id) or is_defeated(bot_id): return
     _sync_key()
-    var logged: bool = account != null and account.has_profile() and key != "local"
-    if logged and account.server_ready:
-        if not server_known:
-            # Ainda não se sabe se o servidor guarda o progresso: pergunta UMA vez antes de decidir.
-            # Nunca concede local por causa de um estado temporário (era assim que a vitória se perdia).
-            if _deferred.has(bot_id): return
-            _deferred[bot_id] = [human_color, moves]
-            if not account.send_server({"type": "bot_progress"}):
-                _deferred.erase(bot_id)
-                notice.emit("Sem conexão com o servidor: a vitória não foi registrada na conta.")
-            return
-        if server_available:
-            _claim(bot_id, human_color, moves)
-            return
-        # servidor respondeu que NÃO tem progresso de bots (0006 ausente): fallback local previsto
+    if not is_account():
+        _grant(bot_id)   # convidado: progresso local deste aparelho
+        return
+    if not (account.server_ready and account.socket_open):
+        # Conta sem conexão: nada local (senão a vitória "some" quando o servidor responder).
+        notice.emit(OFFLINE_MSG)
+        return
+    if not server_known:
+        # Ainda não se sabe se o servidor guarda o progresso: pergunta UMA vez antes de decidir.
+        if _deferred.has(bot_id): return
+        _deferred[bot_id] = [human_color, moves]
+        if not account.send_server({"type": "bot_progress"}):
+            _deferred.erase(bot_id)
+            notice.emit(OFFLINE_MSG)
+        return
+    if server_available:
+        _claim(bot_id, human_color, moves)
+        return
+    # O servidor respondeu explicitamente que NÃO guarda progresso de bots (0006 ausente): fallback local.
     _grant(bot_id)
 
 func _claim(bot_id: String, human_color: String, moves: PackedStringArray):
@@ -129,7 +140,7 @@ func _claim(bot_id: String, human_color: String, moves: PackedStringArray):
     _pending[bot_id] = true
     if not account.claim_bot_victory(bot_id, human_color, moves):
         _pending.erase(bot_id)
-        notice.emit("Sem conexão com o servidor: a vitória não foi registrada na conta.")
+        notice.emit(OFFLINE_MSG)
 
 func _grant(bot_id: String):
     if is_defeated(bot_id): return
@@ -154,10 +165,17 @@ func _on_server_progress(data: Dictionary):
         if Ladder.is_bot_id(String(id)): defeated[String(id)] = int(before.get(String(id), Time.get_unix_time_from_system()))
     _save()
     changed.emit()
+    # Recompensa só para vitória CONFIRMADA pelo servidor e ainda não mostrada nesta sessão:
+    # new_bot (resposta ao bot_victory) ou um envio pendente que aparece na lista depois de uma
+    # reconexão (a resposta se perdeu com o socket). Nunca para bots que já estavam derrotados.
+    var confirmed: Array = []
     var nb = data.get("new_bot")
-    if nb != null and not String(nb).is_empty():
-        _pending.erase(String(nb))
-        reward_unlocked.emit(String(nb), Ladder.reward(String(nb)))
+    if nb != null and not String(nb).is_empty(): confirmed.append(String(nb))
+    for id in _pending.keys():
+        if defeated.has(String(id)) and not before.has(String(id)) and String(id) not in confirmed: confirmed.append(String(id))
+    for id in confirmed:
+        _pending.erase(id)
+        if defeated.has(id) and not before.has(id): reward_unlocked.emit(id, Ladder.reward(id))
     _resolve_deferred()
 
 ## Vitórias que esperavam a resposta do servidor: envia (servidor com progresso) ou guarda local
