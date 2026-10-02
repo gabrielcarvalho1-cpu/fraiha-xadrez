@@ -52,6 +52,14 @@ func run():
     await frames(3)
     check(ui.mode == "game" and ui.g != null and ui.g.hands[0].size() == 4, "partida começa com 4 cartas na mão")
     check(Access.local_played_today(), "partida grátis do dia consumida (aparelho)")
+    # celular: o mesmo toque chega 2× (toque + clique emulado) → o 2º não pode voltar ao lobby
+    var g0 = ui.g
+    ui._on_hit("lobby_play")
+    await frames(2)
+    ui._redraw()
+    check(ui.hits.is_empty(), "áreas de toque antigas somem até o próximo desenho")
+    await frames(2)
+    check(ui.mode == "game" and ui.g == g0, "2º toque em JOGAR AGORA durante a partida é ignorado")
     # jogada humana: força uma mão conhecida
     var g = ui.g
     g.turn = 0

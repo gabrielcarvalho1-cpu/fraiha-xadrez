@@ -163,12 +163,15 @@ func _relayout():
     _redraw()
 
 func _redraw():
+    # As áreas de toque da moldura anterior deixam de valer até o próximo desenho
+    # (um 2º toque logo após JOGAR AGORA não pode cair no botão do lobby que já sumiu).
+    hits.clear()
     if view != null: view.queue_redraw()
 
 # ---------------------------------------------------------------- partida
 var _starting := false
 func start_game():
-    if _starting: return
+    if _starting or mode == "game": return
     _starting = true
     var ok: bool = await access.request_start()
     _starting = false
@@ -542,6 +545,8 @@ const TUTORIAL := [
 
 # ================================================================= desenho
 class TableView extends Control:
+    # No celular o toque já chega também como clique emulado: tratar os dois = jogada dupla.
+    static var EMULATED_MOUSE: bool = bool(ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch", true))
     var ui
     var tex_cache := {}
     func _init():
@@ -549,7 +554,7 @@ class TableView extends Control:
     func _gui_input(event):
         var pos := Vector2.INF
         if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT: pos = event.position
-        elif event is InputEventScreenTouch and event.pressed: pos = event.position
+        elif event is InputEventScreenTouch and event.pressed and not EMULATED_MOUSE: pos = event.position
         if pos == Vector2.INF: return
         accept_event()
         ui.on_press((pos - ui.origin) / ui.k)
