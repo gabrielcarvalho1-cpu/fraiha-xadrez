@@ -374,7 +374,7 @@ func cancel():
 func help_line() -> String:
     if g == null: return ""
     if mode != "game": return ""
-    if g.turn != 0: return "Vez de " + String(names[g.turn])
+    if g.turn != 0: return "Seu aliado está jogando…" if g.turn == 2 else "Adversário pensando…"
     if sel_card < 0:
         return "Sem jogada: escolha uma carta para descartar" if not g.has_any_move(0) else "Escolha uma carta"
     var rank: String = g.hands[0][sel_card]
