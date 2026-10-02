@@ -324,9 +324,9 @@ func show_page(id: String):
                     var source = hub.menu_buttons[i]
                     var row = ArtRow.new()
                     row.text = hub.title_of(source)
-                    # Recorte exato de cada botão na arte original (v2, 8 linhas); as 2 linhas novas (R32)
+                    # Recorte exato de cada botão na arte original (v2, 8 linhas); as linhas novas (R32/R33)
                     # usam a moldura da própria arte, com título e subtítulo desenhados por cima.
-                    var is_new: bool = row.text in ["MARCHA REAL", "HISTÓRICO DE PARTIDAS"]
+                    var is_new: bool = row.text in ["MARCHA REAL", "BLEFE REAL", "HISTÓRICO DE PARTIDAS"]
                     var r: Rect2 = ROW_RECTS[art_index] if (not is_new and art_index < ROW_RECTS.size()) else Rect2(source.position, source.size)
                     if not is_new: art_index += 1
                     if row.text == "JOGAR RANQUEADO":
@@ -335,10 +335,10 @@ func show_page(id: String):
                         row.draw_scale = 0.92
                         row.featured = true
                     elif is_new:
-                        row.art = preload("res://ui_v022/assets/home_row_marcha.png") if row.text == "MARCHA REAL" else preload("res://ui_v022/assets/home_row_blank.png")
+                        row.art = {"MARCHA REAL": preload("res://ui_v022/assets/home_row_marcha.png"), "BLEFE REAL": preload("res://ui_v022/assets/home_row_blefe.png")}.get(row.text, preload("res://ui_v022/assets/home_row_blank.png"))
                         row.title_override = row.text
-                        row.subtitle_override = "Novo modo · cartas e corrida" if row.text == "MARCHA REAL" else "Suas partidas e análises"
-                        row.glyph = "" if row.text == "MARCHA REAL" else "hourglass"
+                        row.subtitle_override = {"MARCHA REAL": "Novo modo · cartas e corrida", "BLEFE REAL": "Novo modo · blefe de cartas"}.get(row.text, "Suas partidas e análises")
+                        row.glyph = "hourglass" if row.text == "HISTÓRICO DE PARTIDAS" else ""
                     else:
                         var atlas = AtlasTexture.new()
                         atlas.atlas = MENU_ART

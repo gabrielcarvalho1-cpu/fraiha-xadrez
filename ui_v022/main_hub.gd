@@ -15,12 +15,12 @@ signal cosmetics_changed   # R31: ícone/título/moldura/avatar mudaram (a conta
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
-const APP_VERSION = "0.32"
+const APP_VERSION = "0.33"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
-const FOREST = preload("res://ui_v022/assets/home_forest_v3.png")   # R32: menu de 10 linhas (tools/home_menu_10rows.py)
+const FOREST = preload("res://ui_v022/assets/home_forest_v4.png")   # R33: menu de 11 linhas (tools/home_menu_11rows.py)
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
-const MENU_ROWS := [Vector2(339.3, 47.2), Vector2(392.8, 48.1), Vector2(446.3, 62.4), Vector2(514.0, 49.0), Vector2(569.2, 49.0), Vector2(624.5, 49.0), Vector2(680.6, 49.9), Vector2(737.6, 49.9), Vector2(793.7, 49.0), Vector2(849.9, 49.9)]
-const MENU_SCALE := 0.891
+const MENU_ROWS := [Vector2(338.9, 43.1), Vector2(387.6, 43.9), Vector2(436.4, 56.9), Vector2(498.1, 44.7), Vector2(548.5, 44.7), Vector2(598.9, 44.7), Vector2(649.2, 44.7), Vector2(700.4, 45.5), Vector2(752.4, 45.5), Vector2(803.6, 44.7), Vector2(854.8, 45.5)]
+const MENU_SCALE := 0.8125
 const FOREST_V2 = FOREST
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
@@ -321,10 +321,11 @@ func _build():
     theme_frame.hide()
     # JOGAR LOCAL saiu da Home pública; o modo continua disponível internamente (play_local_requested).
     # R32: + MARCHA REAL (novo modo) e + HISTÓRICO DE PARTIDAS (abaixo de CONHEÇA O FRAIHA)
-    var titles = ["JOGAR CONTRA O COMPUTADOR", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "MARCHA REAL", "AMIGOS", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "HISTÓRICO DE PARTIDAS", "SAIR"]
-    var subtitles = ["Treine e evolua seu jogo", "Partida casual · fila automática", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Novo modo · cartas e corrida", "Amigos, mensagens e convites", "Áudio, vídeo e preferências", "Sobre o projeto", "Suas partidas e análises", "Até a próxima partida!"]
-    var actions = [func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), open_marcha, func(): friends_requested.emit(), func(): show_page("settings"), func(): show_page("about"), func(): show_page("history"), func(): quit_requested.emit()]
-    var icons = [1,2,3,3,5,0,4,5,5,6]
+    # R33: + BLEFE REAL (novo modo de blefe de cartas), logo abaixo da MARCHA REAL
+    var titles = ["JOGAR CONTRA O COMPUTADOR", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "MARCHA REAL", "BLEFE REAL", "AMIGOS", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "HISTÓRICO DE PARTIDAS", "SAIR"]
+    var subtitles = ["Treine e evolua seu jogo", "Partida casual · fila automática", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Novo modo · cartas e corrida", "Novo modo · blefe de cartas", "Amigos, mensagens e convites", "Áudio, vídeo e preferências", "Sobre o projeto", "Suas partidas e análises", "Até a próxima partida!"]
+    var actions = [func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), open_marcha, open_blefe, func(): friends_requested.emit(), func(): show_page("settings"), func(): show_page("about"), func(): show_page("history"), func(): quit_requested.emit()]
+    var icons = [1,2,3,3,5,5,0,4,5,5,6]
     for i in range(titles.size()):
         var row: Vector2 = MENU_ROWS[i]
         var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(611, row.x), actions[i], Vector2(450, row.y))
@@ -1151,7 +1152,7 @@ func _refresh_avatars():
 var history_list: VBoxContainer = null
 var history_filter := "all"
 var history_filter_buttons := {}
-const HISTORY_FILTERS := [["all", "TODAS"], ["bot", "COMPUTADOR"], ["casual", "ONLINE"], ["ranked", "RANQUEADAS"], ["local", "LOCAL"], ["marcha", "MARCHA REAL"]]
+const HISTORY_FILTERS := [["all", "TODAS"], ["bot", "COMPUTADOR"], ["casual", "ONLINE"], ["ranked", "RANQUEADAS"], ["local", "LOCAL"], ["marcha", "MARCHA REAL"], ["blefe", "BLEFE REAL"]]
 
 func _build_history_page():
     var panel = _wide_page("history", "HISTÓRICO DE PARTIDAS")
@@ -1204,7 +1205,7 @@ func build_history_list(parent: VBoxContainer, compact: bool):
         shown += 1
         parent.add_child(_history_row(entry, compact, st, mh))
     if shown == 0:
-        var empty = _label(parent, "Nenhuma partida aqui ainda. As partidas terminadas (contra o computador, online, ranqueadas, locais e da Marcha Real) aparecem neste histórico; as de xadrez ficam prontas para analisar.", 16, MUTED)
+        var empty = _label(parent, "Nenhuma partida aqui ainda. As partidas terminadas (contra o computador, online, ranqueadas, locais, da Marcha Real e do Blefe Real) aparecem neste histórico; as de xadrez ficam prontas para analisar.", 16, MUTED)
         empty.name = "HistoryEmpty"
 
 func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
@@ -1239,6 +1240,11 @@ func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
         _label(info, head, 18, colm).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
         var dm := Time.get_datetime_dict_from_unix_time(int(e.get("finished_at", e.get("started_at", 0))))
         var data: Dictionary = e.get("data", {}) if e.get("data") is Dictionary else {}
+        if String(e.get("mode_id", "")) == "blefe_real":
+            var dur := int(e.get("duration_s", 0))
+            _label(info, "%02d/%02d/%d %02d:%02d  ·  %d rodadas  ·  %dº de %d  ·  %d:%02d min" % [dm.day, dm.month, dm.year, dm.hour, dm.minute, int(data.get("rounds", e.get("plies", 0))), int(e.get("placement", 0)), int(e.get("players", 4)), dur / 60, dur % 60], 14, MUTED).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            _label(info, "Modo de blefe · sem análise de lances", 14, MUTED)
+            return box
         var cr: Array = data.get("crowned", [0, 0])
         var ally := String(e.get("ally", ""))
         _label(info, "%02d/%02d/%d %02d:%02d  ·  %d jogadas  ·  coroados %d x %d%s" % [dm.day, dm.month, dm.year, dm.hour, dm.minute, int(e.get("plies", 0)), int(cr[0]) if cr.size() > 0 else 0, int(cr[1]) if cr.size() > 1 else 0, ("  ·  aliado " + ally) if not ally.is_empty() else ""], 14, MUTED).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1713,6 +1719,14 @@ func open_club():
 
 ## R32 · MARCHA REAL (novo modo; Club ilimitado, sem Club 1 partida por dia).
 var marcha = null
+var blefe = null
+func open_blefe():
+    if blefe == null:
+        blefe = load("res://blefe/blefe_ui.gd").new()
+        blefe.setup(self, get_parent())
+        get_parent().add_child(blefe)
+    blefe.open()
+
 func open_marcha():
     if marcha == null:
         marcha = load("res://marcha/marcha_ui.gd").new()
@@ -2078,12 +2092,12 @@ func _build_reference_chrome():
         patch.texture = _slice(FOREST_V2, Rect2(x, 600, 18, 76))
         patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         patch.stretch_mode = TextureRect.STRETCH_SCALE
-        patch.position = Vector2(x, 441)
-        patch.size = Vector2(18, 76)
+        patch.position = Vector2(x, MENU_ROWS[2].x - 5.3)
+        patch.size = Vector2(18, 76.0 * MENU_SCALE / 0.891)
         patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
         ref_menu_cover.add_child(patch)
         patch.top_level = false
-        patch.position = Vector2(x, 441) - ref_menu_cover.position
+        patch.position = Vector2(x, MENU_ROWS[2].x - 5.3) - ref_menu_cover.position
     # Botões do menu: ao passar o mouse / foco o PRÓPRIO botão da arte reluz (mesmos pixels,
     # somando luz nas partes douradas). Nada de caixa por cima nem texto extra.
     var glow_material = ShaderMaterial.new()
@@ -2114,28 +2128,28 @@ func _build_reference_chrome():
         button.focus_exited.connect(func(): hover.hide())
         # R32: linhas novas da arte v3 (moldura sem texto): título, subtítulo e ícone vivos por cima
         var title := title_of(button)
-        if title in ["MARCHA REAL", "HISTÓRICO DE PARTIDAS"]:
+        if title in ["MARCHA REAL", "BLEFE REAL", "HISTÓRICO DE PARTIDAS"]:
             var cap = Control.new()
             cap.name = "RefCaption"
             cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
             cap.size = button.size
             button.add_child(cap)
-            var t1 = _label(cap, title, 17, Color("f4f1e6"))
-            t1.position = Vector2(103, 3)
+            var t1 = _label(cap, title, 16, Color("f4f1e6"))
+            t1.position = Vector2(103, 1)
             t1.size = Vector2(300, 24)
             t1.autowrap_mode = TextServer.AUTOWRAP_OFF
-            var t2 = _label(cap, "Novo modo · cartas e corrida" if title == "MARCHA REAL" else "Suas partidas e análises", 14, Color("e8e2d0"))
-            t2.position = Vector2(103, 25)
+            var t2 = _label(cap, {"MARCHA REAL": "Novo modo · cartas e corrida", "BLEFE REAL": "Novo modo · blefe de cartas"}.get(title, "Suas partidas e análises"), 13, Color("e8e2d0"))
+            t2.position = Vector2(103, 22)
             t2.size = Vector2(300, 20)
             t2.autowrap_mode = TextServer.AUTOWRAP_OFF
-            if title == "MARCHA REAL":
+            if title in ["MARCHA REAL", "BLEFE REAL"]:
                 var tag = preload("res://monetization/premium_art.gd").Stamp.new("NOVO", "new", 11)
-                tag.position = Vector2(300, 8)
+                tag.position = Vector2(300, 6)
                 tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
                 cap.add_child(tag)
             else:
-                var ic = preload("res://monetization/premium_art.gd").Glyph.new("hourglass", 40, Color("f2c14e"))
-                ic.position = Vector2(34, 4)
+                var ic = preload("res://monetization/premium_art.gd").Glyph.new("hourglass", 36, Color("f2c14e"))
+                ic.position = Vector2(36, 4)
                 ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
                 cap.add_child(ic)
 
