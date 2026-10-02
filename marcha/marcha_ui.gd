@@ -75,6 +75,9 @@ var hits: Array = []              # áreas de toque desta moldura: [{"rect","id"
 var gate_info := {}               # resultado do acesso (Club / grátis do dia)
 var t := 0.0
 var started_at := 0
+var started_unix := 0
+var plays := 0
+var recorded := false
 
 func _init():
     layer = 64
@@ -140,7 +143,9 @@ func is_open() -> bool:
     return visible
 
 func _refresh_my_portrait():
-    my_portrait = hub.avatar_texture() if hub != null and hub.has_method("avatar_texture") else null
+    # A arte aprovada (tela_desktop/tela_celular) mostra o retrato do reino Marfim para "Você":
+    # a placa segue a referência, sem trocar pelo avatar do perfil.
+    my_portrait = null
     if hub != null and String(hub.get("player_name")) != "": names[0] = "Você"
 
 func _input(event):
@@ -187,6 +192,9 @@ func start_game():
     mode = "game"
     menu_open = false
     started_at = Time.get_ticks_msec()
+    started_unix = int(Time.get_unix_time_from_system())
+    plays = 0
+    recorded = false
     _clear_selection()
     _begin_turn()
 
@@ -215,6 +223,15 @@ func _begin_turn():
 func _play(seat: int, mv: Dictionary):
     busy = true
     var events: Array = g.apply(seat, mv)
+    if events.is_empty():
+        # recusada pelo motor de regras (a mesma validação do bot): nada muda
+        busy = false
+        if seat == 0:
+            _flash("Jogada inválida.")
+            _redraw()
+        else: _begin_turn()
+        return
+    plays += 1
     _clear_selection()
     await _animate(events)
     busy = false
@@ -228,7 +245,22 @@ func _play(seat: int, mv: Dictionary):
 func _finish():
     mode = "over"
     busy = false
+    _record_history("win" if g.winner == 0 else "loss")
     _redraw()
+
+## Histórico comum (o mesmo das partidas de xadrez), com mode_id e versão das regras.
+func _record_history(result: String) -> Dictionary:
+    if g == null or recorded or started_unix <= 0: return {}
+    var mh = stage.get("match_history") if stage != null else null
+    if mh == null or not mh.has_method("add_entry"): return {}
+    recorded = true
+    return mh.add_entry({
+        "mode_id": "marcha_real", "ruleset_version": Rules.RULESET_VERSION, "mode": "marcha",
+        "result": result, "reason": "abandono" if result == "abandon" else "coroação",
+        "player": "Você", "ally": String(g.names[2]), "opponent": "%s e %s" % [g.names[1], g.names[3]],
+        "started_at": started_unix, "finished_at": int(Time.get_unix_time_from_system()), "plies": plays,
+        "data": {"rounds": g.round_no, "crowned": [g.team_crowned(0), g.team_crowned(1)], "seat": 0, "log": g.log.slice(-12)},
+    })
 
 func _process(delta):
     if not visible: return
@@ -487,6 +519,7 @@ func _on_hit(id: String):
             tut_page = 0
         "menu_quit":
             menu_open = false
+            if mode == "game": _record_history("abandon")
             mode = "lobby"
             g = null
             access.refresh()
@@ -651,7 +684,7 @@ class TableView extends Control:
         var pr := Rect2(r.position + Vector2(11, 11), Vector2(ps, ps))
         var tex: Texture2D
         if seat == 0:
-            # "Você": a moldura cor de marfim da referência com o SEU avatar dentro
+            # "Você": retrato Marfim da referência
             draw_texture_rect(ui.portraits.voce, pr, false)
             if ui.my_portrait != null:
                 draw_texture_rect(ui.my_portrait, pr.grow(-ps * 0.075), false)

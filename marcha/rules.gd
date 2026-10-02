@@ -20,6 +20,8 @@ extends RefCounted
 ##   • Quem coroou os 4 peões passa a jogar com os peões do aliado.
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
+## Versão das regras gravada no histórico (mudou regra → muda a versão).
+const RULESET_VERSION := "marcha-real-1"
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -181,8 +183,7 @@ func legal_moves(seat: int, card_idx: int) -> Array:
     var who := controlled(seat)
     match rank:
         "A", "K":
-            var ex := _exit_move(who)
-            if not ex.is_empty():
+            for ex in _exit_moves(who):
                 ex.card = card_idx
                 ex.rank = rank
                 out.append(ex)
@@ -212,13 +213,15 @@ func legal_moves(seat: int, card_idx: int) -> Array:
             out.append_array(_forward_moves(who, card_idx, rank, STEPS[rank]))
     return out
 
-func _exit_move(who: int) -> Dictionary:
+## Uma saída por peão do Pátio (o jogador escolhe qual; para as regras são equivalentes).
+func _exit_moves(who: int) -> Array:
+    var out := []
     var gate := Layout.gate_index(who)
     var o := occupant(gate)
-    if not o.is_empty() and o[0] == who: return {}
+    if not o.is_empty() and o[0] == who: return out
     for i in 4:
-        if pawns[who][i].zone == "home": return {"kind": "exit", "pawn": [who, i]}
-    return {}
+        if pawns[who][i].zone == "home": out.append({"kind": "exit", "pawn": [who, i]})
+    return out
 
 func _forward_moves(who: int, card_idx: int, rank: String, steps: int) -> Array:
     var out := []
@@ -247,6 +250,27 @@ func _split_moves(who: int, card_idx: int) -> Array:
                     out.append({"card": card_idx, "rank": "7", "kind": "split", "parts": [{"pawn": [who, i], "steps": a}, {"pawn": [who, j], "steps": 7 - a}]})
     return out
 
+## A jogada é uma das devolvidas por legal_moves (ou descarte quando não existe nenhuma jogada).
+func is_legal(seat: int, mv: Dictionary) -> bool:
+    if seat < 0 or seat > 3 or winner >= 0: return false
+    var c := int(mv.get("card", -1))
+    if c < 0 or c >= hands[seat].size(): return false
+    if String(mv.get("kind", "")) == "discard": return not has_any_move(seat)
+    var key := _move_key(mv)
+    for m in legal_moves(seat, c):
+        if _move_key(m) == key: return true
+    return false
+
+static func _move_key(mv: Dictionary) -> String:
+    var parts := []
+    for p in mv.get("parts", []): parts.append([_ints(p.get("pawn", [])), int(p.get("steps", 0))])
+    return JSON.stringify([String(mv.get("kind", "")), int(mv.get("card", -1)), _ints(mv.get("pawn", [])), int(mv.get("steps", 0)), _ints(mv.get("target", [])), parts])
+
+static func _ints(a) -> Array:
+    var out := []
+    for x in a: out.append(int(x))
+    return out
+
 func has_any_move(seat: int) -> bool:
     for c in hands[seat].size():
         if not legal_moves(seat, c).is_empty(): return true
@@ -256,6 +280,8 @@ func has_any_move(seat: int) -> bool:
 ## Aplica e devolve eventos para a animação: [{"type":"move","pawn","path"}, {"type":"capture","pawn"},
 ## {"type":"exit","pawn"}, {"type":"swap",...}, {"type":"crown","pawn"}, {"type":"discard","rank"}]
 func apply(seat: int, mv: Dictionary) -> Array:
+    # Mesmo motor e mesma validação para humano e bots: jogada fora da lista legal é recusada.
+    if not is_legal(seat, mv): return []
     var ev := []
     var rank: String = hands[seat][int(mv.card)]
     hands[seat].remove_at(int(mv.card))

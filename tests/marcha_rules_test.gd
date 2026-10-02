@@ -29,7 +29,13 @@ func _initialize():
     check(g.hands[0].size() == 4 and g.deck.size() == 52 - 16, "4 cartas para cada reino; baralho de 52")
     g.hands[0] = ["A", "10", "4", "J"]
     var mv := g.legal_moves(0, 0)
-    check(mv.size() == 1 and mv[0].kind == "exit", "Ás com todos no Pátio: só sair")
+    check(mv.size() == 4 and mv.all(func(m): return m.kind == "exit"), "Ás com todos no Pátio: só sair (qualquer um dos 4 peões)")
+    # motor único: a mesma validação vale para humano e bot
+    check(g.is_legal(0, mv[2]), "saída escolhida pelo jogador é jogada legal")
+    var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
+    check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
+    check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
+    check(String(g.RULESET_VERSION) == "marcha-real-1", "versão das regras para o histórico")
     check(g.legal_moves(0, 1).is_empty(), "10 com todos no Pátio: nenhuma jogada")
     g.apply(0, mv[0])
     check(g.pawns[0][0].zone == "track" and g.pawns[0][0].pos == 0, "peão sai para o próprio Portão")

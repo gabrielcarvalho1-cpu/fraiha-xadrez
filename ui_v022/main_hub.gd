@@ -1151,7 +1151,7 @@ func _refresh_avatars():
 var history_list: VBoxContainer = null
 var history_filter := "all"
 var history_filter_buttons := {}
-const HISTORY_FILTERS := [["all", "TODAS"], ["bot", "COMPUTADOR"], ["casual", "ONLINE"], ["ranked", "RANQUEADAS"], ["local", "LOCAL"]]
+const HISTORY_FILTERS := [["all", "TODAS"], ["bot", "COMPUTADOR"], ["casual", "ONLINE"], ["ranked", "RANQUEADAS"], ["local", "LOCAL"], ["marcha", "MARCHA REAL"]]
 
 func _build_history_page():
     var panel = _wide_page("history", "HISTÓRICO DE PARTIDAS")
@@ -1204,7 +1204,7 @@ func build_history_list(parent: VBoxContainer, compact: bool):
         shown += 1
         parent.add_child(_history_row(entry, compact, st, mh))
     if shown == 0:
-        var empty = _label(parent, "Nenhuma partida aqui ainda. As partidas terminadas (contra o computador, online, ranqueadas e locais) aparecem neste histórico, prontas para analisar.", 16, MUTED)
+        var empty = _label(parent, "Nenhuma partida aqui ainda. As partidas terminadas (contra o computador, online, ranqueadas, locais e da Marcha Real) aparecem neste histórico; as de xadrez ficam prontas para analisar.", 16, MUTED)
         empty.name = "HistoryEmpty"
 
 func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
@@ -1232,6 +1232,18 @@ func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
     var res := String(e.get("result", ""))
     var head := "%s  ·  %s" % [MH.result_name(res, mode), MH.mode_name(mode)]
     var opp := String(e.get("opponent", ""))
+    if String(e.get("mode_id", MH.CHESS_MODE_ID)) != MH.CHESS_MODE_ID:
+        # modo especial (Marcha Real): sem lances de xadrez → sem análise; mostra o placar do modo
+        if not opp.is_empty(): head += "  ·  vs " + opp
+        var colm: Color = Color("8fe08a") if res == "win" else (Color("f2a070") if res in ["loss", "abandon"] else GOLD)
+        _label(info, head, 18, colm).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        var dm := Time.get_datetime_dict_from_unix_time(int(e.get("finished_at", e.get("started_at", 0))))
+        var data: Dictionary = e.get("data", {}) if e.get("data") is Dictionary else {}
+        var cr: Array = data.get("crowned", [0, 0])
+        var ally := String(e.get("ally", ""))
+        _label(info, "%02d/%02d/%d %02d:%02d  ·  %d jogadas  ·  coroados %d x %d%s" % [dm.day, dm.month, dm.year, dm.hour, dm.minute, int(e.get("plies", 0)), int(cr[0]) if cr.size() > 0 else 0, int(cr[1]) if cr.size() > 1 else 0, ("  ·  aliado " + ally) if not ally.is_empty() else ""], 14, MUTED).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        _label(info, "Modo de cartas · sem análise de lances", 14, MUTED)
+        return box
     if not opp.is_empty() and mode != "local": head += "  ·  vs " + opp
     var col: Color = Color("8fe08a") if res == "win" else (Color("f2a070") if res == "loss" else GOLD)
     _label(info, head, 18, col).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
