@@ -14,6 +14,23 @@ var iron_arena: Sprite2D
 var unlock_index := 0
 var saved_theme := "wood"
 var saved_piece_set := ""      # R31: conjunto de peças escolhido ("" = o do cenário)
+## R37.3 · CONFERÊNCIA VISUAL (endereço com ?conferir=ligas, ou --conferir-ligas no PC): todos os cenários
+## e peças das ligas abrem para olhar, só nesta sessão. Nada é salvo nem liberado na conta.
+var review_all := false
+
+static func review_requested() -> bool:
+    if "--conferir-ligas" in OS.get_cmdline_user_args(): return true
+    if OS.has_feature("web"):
+        var q = JavaScriptBridge.eval("String(window.location.search || '')")
+        return q is String and String(q).contains("conferir=ligas")
+    return false
+
+func truly_unlocked(theme_id: String) -> bool:
+    var keep := review_all
+    review_all = false
+    var ok := is_unlocked(theme_id)
+    review_all = keep
+    return ok
 
 func setup(presentation: Node):
     stage = presentation
@@ -61,7 +78,7 @@ func _write_config():
 ## acompanhar o cenário, como antes; na Personalização o conjunto escolhido é mantido.
 func choose_theme(theme_id: String, keep_pieces := false) -> bool:
     if not is_unlocked(theme_id) or not Catalog.THEME_DATA.has(theme_id): return false
-    if not keep_pieces and not saved_piece_set.is_empty():
+    if not keep_pieces and not saved_piece_set.is_empty() and truly_unlocked(theme_id):
         saved_piece_set = ""
         _write_config()
     if not apply_theme(theme_id): return false
@@ -76,6 +93,7 @@ func choose_piece_set(piece_set_id: String) -> bool:
         _write_config()
         return apply_piece_set(active_theme, false)
     if not apply_piece_set(piece_set_id, false): return false
+    if not truly_unlocked(piece_set_id): return true        # conferência: só olha, não salva
     saved_piece_set = piece_set_id
     _write_config()
     return true
@@ -87,6 +105,7 @@ static func league_index_for_theme(theme_id: String) -> int:
 
 func is_unlocked(theme_id: String) -> bool:
     if theme_id == "wood" or theme_id == "classic": return true
+    if review_all and Catalog.THEME_DATA.has(theme_id) and Catalog.exclusive_of(theme_id).is_empty(): return true
     # R31: universos/peças exclusivos vêm dos direitos (Fundador / Club), não da liga.
     match Catalog.exclusive_of(theme_id):
         "founder": return hub != null and hub.has_method("is_founder") and hub.is_founder()
@@ -113,7 +132,7 @@ func apply_theme(theme_id: String, persist := true) -> bool:
     # A partial asset import must never replace the working scene with a blank.
     if theme_id != "wood" and (home_texture == null or arena_texture == null): return false
     active_theme = theme_id
-    if persist:
+    if persist and truly_unlocked(theme_id):
         saved_theme = theme_id
         _write_config()
     if hub.has_method("apply_theme") and home_texture != null:

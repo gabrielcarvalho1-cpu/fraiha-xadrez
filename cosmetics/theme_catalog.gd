@@ -48,7 +48,9 @@ static func texture(path: String) -> Texture2D:
 static func piece_textures(id: String) -> Dictionary:
     if piece_cache.has(id): return piece_cache[id]
     var result := {}
-    if id == "classic":
+    # R37.3 · Madeira (1ª liga e partida contra bots): as peças são as do tabuleiro da floresta — as mesmas
+    # do conjunto clássico (marfim e ardósia em pixel art), fiel à referência aprovada pelo dono.
+    if id == "classic" or id == "wood":
         piece_cache.clear()
         for color in ["w","b"]:
             for kind in PIECE_ORDER:

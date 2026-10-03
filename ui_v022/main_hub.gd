@@ -1365,6 +1365,11 @@ func _build_ranking():
     league_scene_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     league_scene_preview.custom_minimum_size = Vector2(226,132)
     row.add_child(league_scene_preview)
+    # R37.3 · passar o mouse no cenário: zoom suave no tabuleiro (ver melhor a arte); tirar: volta
+    league_scene_preview.mouse_filter = Control.MOUSE_FILTER_STOP
+    league_scene_preview.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    league_scene_preview.mouse_entered.connect(func(): _zoom_preview(true))
+    league_scene_preview.mouse_exited.connect(func(): _zoom_preview(false))
     var pieces_grid = GridContainer.new()
     pieces_grid.columns = 3
     pieces_grid.add_theme_constant_override("h_separation",12)
@@ -1384,14 +1389,25 @@ func _build_ranking():
     note.position = Vector2(895,568)
     note.size = Vector2(510,44)
 
+var review_all := false   # R37.3 · conferência visual (theme_manager.review_all): todas as ligas para olhar
 func league_unlocked(id: String) -> bool:
-    return LeagueCatalog.index_of(id) <= ranked_unlock_index
+    return review_all or LeagueCatalog.index_of(id) <= ranked_unlock_index
 
 func set_ranked_unlock(index: int):
     ranked_unlock_index = index
     for key in league_status_labels:
         if is_instance_valid(league_status_labels[key]):
-            league_status_labels[key].text = "DISPONÍVEL" if league_unlocked(key) else "BLOQUEADA"
+            league_status_labels[key].text = ("CONFERIR" if review_all and LeagueCatalog.index_of(key) > ranked_unlock_index else "DISPONÍVEL") if league_unlocked(key) else "BLOQUEADA"
+
+var _preview_tween: Tween
+const PREVIEW_ZOOM := 2.1
+func _zoom_preview(on: bool):
+    if not is_instance_valid(league_scene_preview): return
+    league_scene_preview.pivot_offset = league_scene_preview.size / 2.0
+    league_scene_preview.z_index = 20 if on else 0
+    if _preview_tween != null and _preview_tween.is_valid(): _preview_tween.kill()
+    _preview_tween = create_tween()
+    _preview_tween.tween_property(league_scene_preview, "scale", Vector2.ONE * (PREVIEW_ZOOM if on else 1.0), 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 func _select_league(id: String):
     selected_league = id
@@ -1402,7 +1418,7 @@ func _select_league(id: String):
     league_detail_badge.texture = ThemeCatalog.badge_texture(id)
     var theme: String = entry.environment_theme
     var available = ThemeCatalog.THEME_DATA.has(theme)
-    var description = "Floresta, equilíbrio e o começo da sua jornada.\nRecompensas: cenário natural, tabuleiro e peças de madeira." if id == "madeira" else "Fortaleza, montanhas e forjas.\nRecompensas: arena de pedra, tabuleiro de aço e peças de ferro."
+    var description = "Floresta, equilíbrio e o começo da sua jornada.\nRecompensas: cenário natural, tabuleiro de grama e terra e peças de marfim e ardósia." if id == "madeira" else "Fortaleza, montanhas e forjas.\nRecompensas: arena de pedra, tabuleiro de aço e peças de ferro."
     if id == "bronze": description = "Conquista, prestígio e novos horizontes.\nRecompensas: cidadela ao pôr do sol, tabuleiro e peças de bronze."
     elif id == "prata": description = "Elegância, conhecimento e novos desafios.\nRecompensas: palácio de mármore, tabuleiro e peças de prata."
     elif id == "ouro": description = "Maestria, poder e grandes vitórias.\nRecompensas: reino dourado, tabuleiro real e peças de ouro."

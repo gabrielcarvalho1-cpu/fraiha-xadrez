@@ -34,6 +34,11 @@ var desk_portrait: TextureRect
 var desk_name: Label
 var desk_side: Label
 var desk_gear: Button
+var desk_music: Button       # R37.3
+var desk_fx: Button
+var mobile_music: Button
+var mobile_fx: Button
+const ModeSound := preload("res://ui_v022/mode_sound.gd")
 var desk_restart: Button
 var desk_mark: Button          # MARCAR PARA REVISAR (sem engine; só guarda o lance)
 var desk_analyze: Button       # ANALISAR PARTIDA (só depois do fim)
@@ -97,6 +102,10 @@ func _ready():
     var audio = preload("res://audio_v025/game_audio.gd").new()
     audio.name = "GameAudio"
     add_child(audio)
+    if theme_manager.review_requested():
+        theme_manager.review_all = true
+        hub.review_all = true
+        print("CONFERÊNCIA VISUAL: todas as ligas abertas só para olhar (nada é salvo)")
     if hub.has_signal("theme_preview_requested"):
         hub.theme_preview_requested.connect(theme_manager.choose_theme)
     if hub.has_signal("piece_set_requested"):
@@ -277,6 +286,25 @@ func _build_desk_panel(overlay: CanvasLayer):
     desk_gear.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     desk_gear.pressed.connect(func(): game.toggle_settings())
     tools.add_child(desk_gear)
+    # R37.3 · MÚSICA e EFEITOS também na partida de xadrez (bots, casual, ranked): desligam só um dos dois
+    for kind in ["music", "fx"]:
+        var sb := HudButton.make("sound_on")
+        sb.name = "DeskMusic" if kind == "music" else "DeskEffects"
+        sb.glyph = ""
+        sb.tooltip_text = "Música: ligar / desligar" if kind == "music" else "Efeitos sonoros: ligar / desligar"
+        sb.custom_minimum_size = Vector2(54, 54)
+        sb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+        sb.pressed.connect(func():
+            if kind == "music": ModeSound.toggle_music(hub)
+            else: ModeSound.toggle_effects(hub)
+            sb.queue_redraw())
+        sb.draw.connect(func():
+            var off: bool = ModeSound.music_muted(hub) if kind == "music" else ModeSound.effects_muted(hub)
+            var r := Rect2(Vector2.ZERO, sb.size).grow(-8)
+            ModeSound.glyph(sb, r, kind, off, Color("f4ce7f")))
+        tools.add_child(sb)
+        if kind == "music": desk_music = sb
+        else: desk_fx = sb
 
 ## Visual medieval da confirmação (sair/abandonar): painel verde, moldura dourada, título
 ## em Cinzel e botões verde/ouro. Só aparência; as ações continuam as mesmas.
@@ -616,7 +644,7 @@ func _build_mobile_controls(overlay: CanvasLayer):
     mobile_actions.vertical = true
     mobile_actions.add_theme_constant_override("separation", 8)
     overlay.add_child(mobile_actions)
-    for caption in ["Reiniciar", "Marcar", "Analisar", "Música"]:
+    for caption in ["Reiniciar", "Marcar", "Analisar", "Música", "Efeitos"]:
         var button = Button.new()
         button.text = caption
         button.custom_minimum_size.y = 44
@@ -643,9 +671,12 @@ func _build_mobile_controls(overlay: CanvasLayer):
                 game._new_game()
                 game.queue_redraw())
         elif caption == "Música":
-            button.set_meta("full_text", caption)
-            button.set_meta("short_text", "Som")
-            button.pressed.connect(func(): get_node("GameAudio").toggle_music())
+            # R37.3 · MÚSICA e EFEITOS separados (a mesma preferência do jogo inteiro)
+            button.pressed.connect(func(): ModeSound.toggle_music(hub))
+            mobile_music = button
+        elif caption == "Efeitos":
+            button.pressed.connect(func(): ModeSound.toggle_effects(hub))
+            mobile_fx = button
     mobile_status = Label.new()
     mobile_status.add_theme_font_size_override("font_size", 20)
     mobile_status.add_theme_color_override("font_color", Color("efcf83"))
@@ -690,6 +721,12 @@ func _process(_delta):
     var mobile = MobileLayout.active(get_viewport())
     var playing = mode in ["local", "online", "bot", "ranked", "casual"]
     mobile_actions.visible = mobile and playing
+    if is_instance_valid(mobile_music):
+        mobile_music.text = "Música: " + ("NÃO" if ModeSound.music_muted(hub) else "SIM")
+        mobile_fx.text = "Efeitos: " + ("NÃO" if ModeSound.effects_muted(hub) else "SIM")
+    if is_instance_valid(desk_music) and desk_panel.visible:
+        desk_music.queue_redraw()
+        desk_fx.queue_redraw()
     # Online has its own server-side rematch; a local reset would desync the room.
     mobile_restart.visible = mode != "online" and not (mode == "ranked" and not ranked.in_match()) and not (mode == "casual" and not casual.in_match())
     mobile_restart.text = "Desistir" if mode in ["ranked", "casual"] else "Reiniciar"
