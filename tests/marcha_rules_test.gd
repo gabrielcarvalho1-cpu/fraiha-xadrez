@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-3", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-4", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
     var h1: int = g.hands[1].size()
@@ -143,5 +143,36 @@ func _initialize():
                 "swap":
                     if int(m.pawn[0]) != 2: only_ally = false
     check(only_ally, "fase de ajuda: as cartas movem só o aliado (5 mexe qualquer cor; J troca o aliado)")
+    # ---------- R37 · Ás: sair / 11 / 1;  Rei: só sai da base ----------
+    var r7 = Rules.new()
+    r7.setup(37)
+    r7.pawns[0][0] = {"zone": "track", "pos": 5}
+    r7.hands[0] = ["A", "K"]
+    var am: Array = r7.legal_moves(0, 0)
+    check(am.any(func(m): return m.kind == "exit") and am.any(func(m): return m.kind == "move" and int(m.steps) == 11) and am.any(func(m): return m.kind == "move" and int(m.steps) == 1), "R37: Ás tem 3 funções (sair, andar 11, andar 1)")
+    var km: Array = r7.legal_moves(0, 1)
+    check(not km.is_empty() and km.all(func(m): return m.kind == "exit"), "R37: Rei só tira peão da base (nunca anda)")
+    for i in 4: r7.pawns[0][i] = {"zone": "track", "pos": 5 + i * 3}
+    check(r7.legal_moves(0, 1).is_empty(), "R37: Rei sem peão na base não tem jogada")
+    var ev1: Array = r7.apply(0, r7.legal_moves(0, 0).filter(func(m): return int(m.steps) == 1)[0])
+    check(not ev1.is_empty() and r7.pawns[0][0].pos == 6, "R37: Ás anda 1 casa")
+    # peão no PRÓPRIO Portão trava quem vem atrás (de qualquer reino, com qualquer carta que anda)
+    var gb = Rules.new()
+    gb.setup(41)
+    gb.pawns[2][0] = {"zone": "track", "pos": Layout.gate_index(2)}
+    gb.pawns[0][0] = {"zone": "track", "pos": Layout.gate_index(2) - 3}
+    gb.pawns[1][0] = {"zone": "track", "pos": Layout.gate_index(2) - 2}
+    var blocked := true
+    for rk in ["Q", "10", "9", "8", "6", "5", "3", "A"]:
+        gb.hands[0] = [rk]
+        for m in gb.legal_moves(0, 0):
+            if m.kind == "move" and m.pawn == [0, 0] and int(m.steps) >= 3: blocked = false
+            if m.kind == "move" and m.pawn == [1, 0] and int(m.steps) >= 2: blocked = false
+    gb.hands[0] = ["7"]
+    for m in gb.legal_moves(0, 0):
+        for part in m.parts:
+            if part.pawn == [0, 0] and int(part.steps) >= 3: blocked = false
+    check(blocked, "Portão: peão liberado parado na própria casa inicial trava todos que estão atrás (nem passa, nem cai)")
+    check(gb.forward_path(0, 0, 2).ok, "Portão: dá para andar até a casa de antes")
     print("RESULT %d/%d" % [checks - failures, checks], " OK" if failures == 0 else " FALHAS=%d" % failures)
     quit(failures)

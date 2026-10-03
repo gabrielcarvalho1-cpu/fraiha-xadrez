@@ -6,7 +6,7 @@ extends RefCounted
 ## → Entrada do Salão → Salão do Trono (4 casas). Peão no Salão = coroado.
 ##
 ## Cartas (vale o valor; o naipe é só a ilustração):
-##   A  sai do pátio OU anda 11          K  sai do pátio OU anda 13          Q  anda 12
+##   A  sai do pátio OU anda 11 OU anda 1          K  SÓ sai do pátio (R37: não anda)          Q  anda 12
 ##   J  troca de lugar com outra peça    9/8/6/3/2  anda N   10 anda 10 ou faz o próximo descartar               7  divide 7 casas entre até 2 peças
 ##   5  anda 5 com QUALQUER peça da mesa (segue o caminho do dono)          4  só volta 4 casas
 ## Regras da mesa:
@@ -24,7 +24,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-3"   # R35: peão inimigo na Entrada tranca o Salão
+const RULESET_VERSION := "marcha-real-4"   # R37: Ás anda 11 OU 1 (ou sai); Rei só tira peão do Pátio
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -33,8 +33,10 @@ const RANKS := ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"
 const SUIT_OF := {"A": "copas", "K": "espadas", "Q": "copas", "J": "ouros", "10": "paus", "9": "ouros", "8": "espadas",
     "7": "paus", "6": "copas", "5": "ouros", "4": "paus", "3": "copas", "2": "espadas"}
 const SUIT_NAME := {"copas": "Copas", "espadas": "Espadas", "ouros": "Ouros", "paus": "Paus"}
-const STEPS := {"A": 11, "K": 13, "Q": 12, "10": 10, "9": 9, "8": 8, "7": 7, "6": 6, "5": 5, "4": -4, "3": 3, "2": 2}
+const STEPS := {"A": 11, "Q": 12, "10": 10, "9": 9, "8": 8, "7": 7, "6": 6, "5": 5, "4": -4, "3": 3, "2": 2}
 const HAND := 4
+## R37 · o Ás tem 3 funções: sair do Pátio, andar 11 ou andar 1.
+const ACE_STEPS := [11, 1]
 
 ## pawns[seat][i] = {"zone": "home"|"track"|"lane", "pos": int}  (track: índice absoluto 0..75; lane: 0..3)
 var pawns: Array = []
@@ -197,7 +199,8 @@ func legal_moves(seat: int, card_idx: int) -> Array:
                 ex.card = card_idx
                 ex.rank = rank
                 out.append(ex)
-            out.append_array(_forward_moves(who, card_idx, rank, STEPS[rank]))
+            if rank == "A":     # R37: o Rei só tira peão do Pátio; o Ás também anda 11 ou 1
+                for n in ACE_STEPS: out.append_array(_forward_moves(who, card_idx, rank, n))
         "4":
             for i in 4:
                 if pawns[who][i].zone == "track" and backward_path(who, i, 4).ok:

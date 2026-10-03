@@ -20,8 +20,9 @@ const SFX := {
     "crown": preload("res://marcha/audio/coroa.wav"), "your_turn": preload("res://marcha/audio/sua_vez.wav"),
     "victory": preload("res://marcha/audio/vitoria.wav"), "defeat": preload("res://marcha/audio/derrota.wav"),
     "arrive": preload("res://marcha/audio/chegada.wav"), "victory_final": preload("res://marcha/audio/vitoria_final.wav"),
+    "promote": preload("res://marcha/audio/promocao_dama.wav"),     # R37: fanfarra da chegada (vira DAMA)
 }
-const SFX_DB := {"arrive": -6.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0}
+const SFX_DB := {"promote": -3.0, "arrive": -6.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0}
 
 const BOARD := preload("res://marcha/art/board.png")
 const BG := preload("res://marcha/art/table_bg.png")
@@ -45,7 +46,12 @@ const TURN_MS := 30000
 const BOT_DELAY := 0.95
 const SWAP_MIN := 1.0             # R35.1: troca do J leva de 1,0 a 2,4 s (+0,7 s de brilho)
 const SWAP_MAX := 2.4
-const STEP_TIME := 0.18           # R35: 0,18 s por casa (antes 0,11 — rápido demais para acompanhar)
+const STEP_TIME := 0.26           # R37: 0,26 s por casa, em pulinho suave (antes 0,18 em saltos secos)
+const HOP_H := 22.0               # R37: altura do pulinho entre casas (coordenadas do tabuleiro)
+const EXIT_TIME := 0.55           # R37: saída da base em arco
+const CAPTURE_TIME := 0.5         # R37: o peão abatido some devagar
+const CROWN_WAIT := 1.2           # R37: chegada ao Salão (vira DAMA + fanfarra)
+## Espelho no servidor: online_v021/modes/party.js (T.stepMs/exitMs/captureMs/crownMs) — conferido em tests/server/marcha_sync_test.cjs
 ## Bots da mesa (nomes e retratos da tela de referência).
 const BOTS := {1: {"name": "ReiDoBlitz", "portrait": "rei_do_blitz"}, 2: {"name": "Lady Torre", "portrait": "lady_torre"}, 3: {"name": "Cavalo_Louco", "portrait": "cavalo_louco"}}
 const PAWN_SCALE := 0.24          # peão PNG (211x279) sobre a casa da arte 1600x1600
@@ -92,9 +98,11 @@ var anim := {}                    # [seat,i] -> posição desenhada (coordenadas
 var anim_alpha := {}
 var choice_open := false         # R35.1 · caixa "o que você quer fazer?" (cartas de 2 funções: A e 10)
 var card_mode := ""               # função escolhida: "" | "move" | "exit" | "burn"
+var ace_steps := 0                # R37 · Ás: 11 ou 1 (0 = ainda não escolhido)
+var five_seat := -1               # R37 · 5: de que cor é a peça que vai andar (-1 = ainda não escolhida)
 var swap_glow: Array = []         # R35.1 · as duas peças da troca (J) brilham durante a animação
 var celebs: Array = []            # R35 · festa de chegada ao Salão: [{"p": Vector2 (tabuleiro), "t", "seat"}]
-const CELEB_T := 1.7
+const CELEB_T := 2.2
 var over_t := 0.0                 # R35 · tempo desde o fim (animação da vitória final)
 var flash := ""                   # aviso curto (ex.: "Sem jogada: descarte uma carta")
 var flash_t := 0.0
@@ -110,16 +118,26 @@ func _init():
     layer = 64
     name = "MarchaReal"
 
+static func _mipmapped(tex: Texture2D) -> Texture2D:
+    if tex == null: return tex
+    var img := tex.get_image()
+    if img == null: return tex
+    if img.is_compressed(): img.decompress()
+    img.generate_mipmaps()
+    return ImageTexture.create_from_image(img)
+
 func setup(p_hub, p_stage):
     hub = p_hub
     stage = p_stage
 
 func _ready():
-    for r in CARD_FILES: cards[r] = load("res://marcha/art/cards/" + CARD_FILES[r] + ".png")
+    # R37 · cartas com mipmaps (a arte de 500×700 aparece bem menor na mão: sem mipmaps as letras
+    # "serrilham" e ficam ilegíveis). Feito aqui para não depender das opções de importação.
+    for r in CARD_FILES: cards[r] = _mipmapped(load("res://marcha/art/cards/" + CARD_FILES[r] + ".png"))
     card_back = load("res://marcha/art/cards/carta_verso.png")
     for s in 4:
         pawn_tex[s] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + ".png")
-        pawn_tex[s + 10] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + "_promovido.png")
+        pawn_tex[s + 10] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + "_dama.png")   # R37: no Salão o peão vira DAMA
     for key in ["lady_torre", "rei_do_blitz", "cavalo_louco", "voce"]: portraits[key] = load("res://marcha/art/portraits/" + key + ".png")
     for pair in [["title", FONT_TITLE, 0], ["bold", FONT_BOLD, 0], ["semi", FONT_SEMI, 0], ["bold_sp", FONT_BOLD, 3], ["semi_sp", FONT_SEMI, 3], ["semi_sp2", FONT_SEMI, 5]]:
         var fv := FontVariation.new()
@@ -255,8 +273,15 @@ func _begin_turn():
         _cue("your_turn")              # aviso sonoro: é a sua vez
         if not g.has_any_move(0): _flash("Sem jogada possível: escolha uma carta para descartar.")
 
+func _snap_origin():
+    _origin = {}
+    if g == null: return
+    for s in 4:
+        for i in 4: _origin[_key([s, i])] = (g.pawns[s][i] as Dictionary).duplicate()
+
 func _play(seat: int, mv: Dictionary):
     busy = true
+    _snap_origin()
     var events: Array = g.apply(seat, mv)
     if events.is_empty():
         # recusada pelo motor de regras (a mesma validação do bot): nada muda
@@ -284,7 +309,22 @@ func _finish():
     over_t = 0.0
     _cue("victory_final" if g.winner == 0 else "defeat")
     _record_history("win" if g.winner == 0 else "loss")
+    _show_result_overlay(g.winner == 0)
     _redraw()
+
+## R37 · a MESMA tela de VITÓRIA / DERROTA da partida contra bot (GameResultOverlay da stage), por cima
+## da mesa; o painel de fim da Marcha (placar, JOGAR NOVAMENTE) aparece quando ela sai da tela.
+var overlay_wait := false
+func _show_result_overlay(won: bool):
+    var ov = stage.get("result_overlay") if stage != null else null
+    if ov == null or not ov.has_method("show_result") or overlay_wait: return
+    overlay_wait = true
+    ov.layer = layer + 1
+    ov.show_result("victory" if won else "defeat")
+    await ov.dismissed
+    ov.layer = 60
+    overlay_wait = false
+    over_t = 0.0
 
 ## Histórico comum (o mesmo das partidas de xadrez), com mode_id e versão das regras.
 func _record_history(result: String) -> Dictionary:
@@ -306,7 +346,7 @@ func _process(delta):
     t += delta
     for c in celebs: c.t += delta
     celebs = celebs.filter(func(c): return c.t < CELEB_T)
-    if mode == "over": over_t += delta
+    if mode == "over" and not overlay_wait: over_t += delta
     if flash_t > 0.0:
         flash_t -= delta
         if flash_t <= 0.0: flash = ""
@@ -337,8 +377,63 @@ func _clear_selection():
     pending = {}
     choice_open = false
     card_mode = ""
+    ace_steps = 0
+    five_seat = -1
 
+## Jogadas da carta escolhida, já filtradas pela função escolhida na caixa (Ás: sair / 11 / 1; 5: a cor).
 func my_moves() -> Array:
+    if g == null or sel_card < 0: return []
+    var mv: Array = g.legal_moves(0, sel_card)
+    if card_mode == "exit": mv = mv.filter(func(m): return m.kind == "exit")
+    elif card_mode == "move" and ace_steps > 0: mv = mv.filter(func(m): return m.kind == "move" and int(m.steps) == ace_steps)
+    if five_seat >= 0: mv = mv.filter(func(m): return int(m.pawn[0]) == five_seat)
+    return mv
+
+## R37 · ABATER / CHEGADA: peões da OUTRA dupla que esta jogada manda de volta à base (simulada no próprio motor).
+## Devolve {"enemy": [[s,i]...], "ally": [[s,i]...]}. Guardado por estado da mesa (não recalcula a cada quadro).
+var _cap_cache := {}
+func captures_of(mv: Dictionary) -> Dictionary:
+    if g == null or mv.is_empty() or String(mv.get("kind", "")) in ["discard", "burn"]: return {"enemy": [], "ally": [], "crown": []}
+    var key := JSON.stringify([g.pawns, g.hands[0], Rules._move_key(mv)])
+    if _cap_cache.has(key): return _cap_cache[key]
+    if _cap_cache.size() > 400: _cap_cache.clear()
+    var sim = g.clone()
+    var out := {"enemy": [], "ally": [], "crown": []}
+    for e in sim.apply(0, mv):
+        if String(e.type) == "crown" and Rules.team_of(int(e.pawn[0])) == Rules.team_of(0): out.crown.append(e.pawn)
+        if String(e.type) != "capture": continue
+        var w: Array = e.pawn
+        out["enemy" if Rules.team_of(int(w[0])) != Rules.team_of(0) else "ally"].append(w)
+    _cap_cache[key] = out
+    return out
+
+## Avisos da mão (por carta): {c: {"capture": bool, "crown": bool}}. Calculado uma vez por estado da mesa.
+var _hand_flags_key := ""
+var _hand_flags := {}
+func _flags(c: int) -> Dictionary:
+    if g == null or g.turn != 0 or c < 0 or c >= g.hands[0].size(): return {}
+    var key := JSON.stringify([g.pawns, g.hands[0], g.turn, g.round_no])
+    if key != _hand_flags_key:
+        _hand_flags_key = key
+        _hand_flags = {}
+        for k in g.hands[0].size():
+            var f := {"capture": false, "crown": false}
+            for m in g.legal_moves(0, k):
+                var o := captures_of(m)
+                if not o.enemy.is_empty(): f.capture = true
+                if not o.crown.is_empty(): f.crown = true
+            _hand_flags[k] = f
+    return _hand_flags.get(c, {})
+
+## Esta carta da mão tem alguma jogada que ABATE um peão adversário?
+func card_can_capture(c: int) -> bool:
+    return bool(_flags(c).get("capture", false))
+
+## Esta carta leva algum peão da sua dupla para dentro do Salão (as 4 vagas da chegada)?
+func card_can_crown(c: int) -> bool:
+    return bool(_flags(c).get("crown", false))
+
+func all_moves() -> Array:
     if g == null or sel_card < 0: return []
     return g.legal_moves(0, sel_card)
 
@@ -354,26 +449,66 @@ func pick_card(i: int):
         # uma ação só possível → já fica pronta (ex.: A/K sem peão na pista = sair do Pátio;
         # carta que só um peão pode jogar). Só se escolhe peão quando há mais de uma opção.
         var opts := _options(my_moves())
-        if not two_choices().is_empty(): choice_open = true     # A e 10: primeiro escolhe a função
+        var ch := two_choices()
+        var able := ch.filter(func(o): return bool(o[3]))
+        if able.size() >= 2: choice_open = true          # A, 5 e 10: primeiro escolhe a função / a cor
+        elif able.size() == 1:
+            # R37 · só uma função (ou uma cor) é possível: ela já é ativada sozinha
+            choice_open = true
+            choose_function(String(able[0][0]))
+            if pending.is_empty() and card_mode == "exit":
+                for m in my_moves(): if m.kind == "exit": pending = m
         elif not sole_pawn().is_empty(): _auto_sole_pawn()
         elif opts.size() == 1: pending = opts.values()[0]
     _redraw()
 
-## R35.1 · A e 10 têm duas funções: quando as duas são possíveis, abre a caixa de escolha.
-## Devolve [[id, texto do botão, texto menor]] ou [] (uma função só → segue direto).
+## Caixa de escolha das cartas com mais de uma função. Devolve [[id, texto do botão, texto menor, possível?]]
+## ou [] (segue direto). R37: o Ás tem 3 funções (sair do Pátio / andar 11 / andar 1) e o 5 pergunta de que
+## cor é a peça que vai andar. A caixa só abre quando 2 ou mais opções são possíveis (as impossíveis ficam
+## apagadas com o motivo); com uma só, ela é ativada direto (pick_card).
 func two_choices() -> Array:
     if g == null or sel_card < 0 or sel_card >= g.hands[0].size(): return []
     var rank: String = g.hands[0][sel_card]
-    var mv := my_moves()
+    var mv := all_moves()
+    if mv.is_empty(): return []
     if rank == "10" and mv.any(func(m): return m.kind == "burn") and mv.any(func(m): return m.kind == "move"):
-        return [["move", "ANDAR 10 CASAS", "um peão seu avança 10"], ["burn", "%s PERDE A VEZ" % String(names[g.burn_target(0)]).to_upper(), "ele descarta 1 carta da mão (sorteada)"]]
-    if rank == "A" and mv.any(func(m): return m.kind == "exit") and mv.any(func(m): return m.kind == "move"):
-        return [["exit", "TIRAR UMA PEÇA NOVA", "um peão sai do Pátio para o Portão"], ["move", "ANDAR 11 CASAS", "um peão seu avança 11"]]
+        return [["move", "ANDAR 10 CASAS", "um peão seu avança 10", true], ["burn", "%s PERDE A VEZ" % String(names[g.burn_target(0)]).to_upper(), "ele descarta 1 carta da mão (sorteada)", true]]
+    if rank == "A":
+        var can_exit := mv.any(func(m): return m.kind == "exit")
+        var can11 := mv.any(func(m): return m.kind == "move" and int(m.steps) == 11)
+        var can1 := mv.any(func(m): return m.kind == "move" and int(m.steps) == 1)
+        var who: int = g.controlled(0)
+        var exit_why := "um peão sai da base para o Portão" if can_exit else ("nenhum peão na base" if g.in_home(who) == 0 else "o seu Portão está ocupado")
+        return [["exit", "TIRAR UM PEÃO DA BASE", exit_why, can_exit],
+            ["move11", "ANDAR 11 CASAS", "um peão seu avança 11" if can11 else "nenhum peão pode andar 11", can11],
+            ["move1", "ANDAR 1 CASA", "um peão seu avança 1" if can1 else "nenhum peão pode andar 1", can1]]
+    if rank == "5":
+        var out := []
+        for s in 4:
+            var n := mv.filter(func(m): return int(m.pawn[0]) == s).size()
+            var label := String(Rules.KINGDOMS[s]).to_upper() + (" (VOCÊ)" if s == 0 else (" (ALIADO)" if s == 2 else ""))
+            out.append(["seat%d" % s, label, ("%d peça(s) pode(m) andar 5" % n) if n > 0 else "nenhuma peça desta cor pode andar 5", n > 0])
+        return out
     return []
+
+## Título da caixa de escolha.
+func choice_title() -> String:
+    if g == null or sel_card < 0 or sel_card >= g.hands[0].size(): return ""
+    return "VOCÊ QUER MOVER QUAL PEÇA?" if g.hands[0][sel_card] == "5" else "O QUE VOCÊ QUER FAZER?"
 
 func choose_function(kind: String):
     if not choice_open: return
+    for o in two_choices():
+        if String(o[0]) == kind and not bool(o[3]): return        # opção apagada: não faz nada
     choice_open = false
+    if kind.begins_with("seat"):
+        five_seat = int(kind.substr(4))
+        _auto_sole_pawn()
+        _redraw()
+        return
+    if kind in ["move11", "move1"]:
+        ace_steps = 11 if kind == "move11" else 1
+        kind = "move"
     card_mode = kind
     match kind:
         "burn": pick_burn()
@@ -437,7 +572,7 @@ func pick_burn():
 func candidate_pawns() -> Array:
     var out := []
     if g == null or sel_card < 0 or g.turn != 0 or busy or choice_open: return out
-    if card_mode in ["burn", "exit"]: return out
+    if card_mode == "burn": return out
     var mv := my_moves()
     var rank: String = g.hands[0][sel_card]
     if rank == "J" and not sel_pawn.is_empty():
@@ -551,8 +686,10 @@ func help_line() -> String:
     if choice_open: return head + " · escolha o que fazer"
     match rank:
         "A", "K":
-            if not pending.is_empty() and pending.kind == "exit": return head + " · seu peão sai do pátio"
-            return head + " · sai do pátio ou anda %d casas" % Rules.STEPS[rank]
+            if not pending.is_empty() and pending.kind == "exit": return head + " · seu peão sai da base"
+            if rank == "K": return head + " · tira um peão da base"
+            if ace_steps > 0: return head + " · anda %d casa%s: toque no peão" % [ace_steps, "s" if ace_steps > 1 else ""]
+            return head + " · sai da base, anda 11 ou anda 1"
         "J":
             if not pending.is_empty(): return head + " · troca pronta: toque em JOGAR CARTA"
             if sel_pawn.is_empty(): return head + " · 1º toque no SEU peão que vai trocar"
@@ -563,24 +700,36 @@ func help_line() -> String:
         "7":
             if split_first > 0 and split_first < 7: return head + " · %d casas + %d casas: escolha o 2º peão" % [split_first, 7 - split_first]
             return head + " · até 2 peças dividem 7 casas"
-        "5": return head + " · qualquer peça anda 5 casas"
+        "5":
+            if five_seat >= 0: return head + " · toque na peça %s que vai andar 5" % String(Rules.KINGDOMS[five_seat]).to_upper()
+            return head + " · qualquer peça anda 5 casas"
         "4": return head + " · seu peão volta 4 casas"
     return head + " · seu peão avança %d casas" % int(Rules.STEPS.get(rank, 0))
 
 # ---------------------------------------------------------------- animação
 func _animate(events: Array):
+    # R37 · peão que vai ser ABATIDO fica na casa dele até o atacante chegar (só então some)
+    for e in events:
+        if String(e.type) == "capture":
+            var ck := _key(e.pawn)
+            if _origin.has(ck) and String(_origin[ck].zone) != "home": anim[ck] = _cell_of(int(e.pawn[0]), _origin[ck])
     for e in events:
         match String(e.type):
             "move":
                 var w: Array = e.pawn
                 var key := _key(w)
                 var si := 0
+                # R37 · cada casa é um pulinho suave (sobe e desce em arco, com aceleração e freio)
+                var from: Vector2 = pawn_point(w[0], w[1]) if not anim.has(key) else anim[key]
+                if not anim.has(key) and e.path.size() > 0:
+                    from = _cell_of(w[0], _prev_cell(w, e))
                 for step in e.path:
+                    var to: Vector2 = _cell_of(w[0], step)
                     _cue("step", 0.92 + 0.04 * (si % 4))
                     si += 1
-                    anim[key] = _cell_of(w[0], step)
-                    _redraw()
-                    await get_tree().create_timer(STEP_TIME).timeout
+                    await _tween_hop(key, from, to, STEP_TIME, HOP_H)
+                    from = to
+                if e.path.size() > 0: _origin[key] = e.path[e.path.size() - 1]
                 anim.erase(key)
             "exit":
                 _cue("exit")
@@ -588,19 +737,17 @@ func _animate(events: Array):
                 var key := _key(w)
                 var a: Vector2 = Layout.home_center(w[0])
                 var b: Vector2 = Layout.track_cell(Layout.gate_index(w[0]))
-                for i in range(1, 7):
-                    anim[key] = a.lerp(b, i / 6.0)
-                    _redraw()
-                    await get_tree().create_timer(0.035).timeout
+                await _tween_hop(key, a, b, EXIT_TIME, 60.0)
                 anim.erase(key)
             "capture":
                 _cue("capture")
                 var key := _key(e.pawn)
-                for i in range(6):
-                    anim_alpha[key] = 1.0 - i / 6.0
+                for i in range(10):
+                    anim_alpha[key] = 1.0 - i / 10.0
                     _redraw()
-                    await get_tree().create_timer(0.05).timeout
+                    await get_tree().create_timer(CAPTURE_TIME / 10.0).timeout
                 anim_alpha.erase(key)
+                anim.erase(key)
             "burn":
                 _cue("discard")
                 if int(e.seat) == 0: _flash("%s te fez descartar %s." % [names[g.turn], Rules.card_label(String(e.rank))])
@@ -609,10 +756,10 @@ func _animate(events: Array):
             "crown":
                 # R35 · peão chegou às 4 casas do Salão: som de vitória + coroa estourando na casa
                 var w: Array = e.pawn
-                _cue("arrive")
+                _cue("promote")
                 celebs.append({"p": _cell_of(w[0], g.pawns[w[0]][w[1]]), "t": 0.0, "seat": int(w[0])})
                 _redraw()
-                await get_tree().create_timer(0.55).timeout
+                await get_tree().create_timer(CROWN_WAIT).timeout
             "swap":
                 # R35.1 · troca (J): as duas peças brilham e cruzam o tabuleiro em arco, no ritmo do andar
                 var a: Array = e.pawn
@@ -648,6 +795,28 @@ func _animate(events: Array):
                 _redraw()
                 await get_tree().create_timer(0.18).timeout
     anim.clear()
+    _origin = {}
+    _redraw()
+
+## Onde o peão estava antes desta jogada (a casa anterior ao 1º passo). O motor já moveu o peão;
+## para o "move", a origem é a posição de antes: guardada em _origin pelo _play (ou a 1ª casa do caminho).
+var _origin := {}
+func _prev_cell(w: Array, e: Dictionary) -> Dictionary:
+    var k := _key(w)
+    if _origin.has(k): return _origin[k]
+    return e.path[0]
+
+## Pulinho suave de uma casa para outra: posição com aceleração e freio (smoothstep) e arco (seno).
+func _tween_hop(key: String, a: Vector2, b: Vector2, dur: float, h: float):
+    var tt := 0.0
+    while tt < dur:
+        await get_tree().process_frame
+        tt += get_process_delta_time()
+        var f := clampf(tt / dur, 0.0, 1.0)
+        var ee := f * f * (3.0 - 2.0 * f)
+        anim[key] = a.lerp(b, ee) + Vector2(0, -h * sin(PI * f))
+        _redraw()
+    anim[key] = b
     _redraw()
 
 static func _key(w: Array) -> String:
@@ -765,17 +934,17 @@ func card_rect(i: int, n: int) -> Rect2:
 # ---------------------------------------------------------------- tutorial
 const TUTORIAL := [
     {"title": "BEM-VINDO À MARCHA REAL", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png",
-        "text": "Quatro reinos disputam uma corrida de peões ao redor da mesa de pedra. Você joga com o MARFIM (embaixo) ao lado do aliado ÔNIX (em cima), contra RUBI e ESMERALDA.\n\nCada peão que chega ao fim do caminho é COROADO, como na promoção do xadrez."},
+        "text": "Quatro reinos disputam uma corrida de peões ao redor da mesa de pedra. Você joga com o MARFIM (embaixo) ao lado do aliado ÔNIX (em cima), contra RUBI e ESMERALDA.\n\nCada peão que chega ao fim do caminho vira DAMA, como na promoção do xadrez."},
     {"title": "O CAMINHO", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "marks": true,
         "text": "1 PÁTIO: onde seus 4 peões começam.\n2 PORTÃO: a casa de saída, com a seta do sentido.\n3 MURALHA: a trilha de 76 casas, no sentido horário.\n4 ENTRADA DO SALÃO: a casa com aro na sua cor.\n5 SALÃO DO TRONO: 4 casas; quem entra é coroado."},
     {"title": "AS CARTAS", "img": "res://marcha/art/tutorial/cartas_todas.png",
-        "text": "Na sua vez você joga UMA carta da mão (4 cartas por rodada). A carta diz o que fazer na faixa de ação e na frase embaixo da ilustração: A e K tiram um peão do Pátio (ou andam 11 / 13), Q anda 12, 10, 9, 8, 6, 3 e 2 andam o número."},
+        "text": "Na sua vez você joga UMA carta da mão (4 cartas por rodada). A carta diz o que fazer na faixa de ação e na frase embaixo da ilustração: K tira um peão da base. A tira um peão da base, anda 11 ou anda 1 (você escolhe). Q anda 12; 10, 9, 8, 6, 3 e 2 andam o número. Carta com ABATER derruba um adversário; com CHEGADA leva um peão ao Salão."},
     {"title": "CARTAS ESPECIAIS", "img": "res://marcha/art/simbolos_de_acao.png",
-        "text": "J troca seu peão de lugar com outra peça.\n7 divide as 7 casas entre até 2 peões seus.\n5 move QUALQUER peça da mesa 5 casas.\n-4 só volta 4 casas (logo depois do Portão, volta para perto da Entrada do Salão).\nSem jogada possível: descarte uma carta."},
+        "text": "J troca seu peão de lugar com outra peça.\n7 divide as 7 casas entre até 2 peões seus.\n5 move QUALQUER peça da mesa 5 casas: escolha a cor e toque na peça.\n-4 só volta 4 casas (logo depois do Portão, volta para perto da Entrada do Salão).\nSem jogada possível: descarte uma carta."},
     {"title": "CAPTURA E PROTEÇÃO", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png",
-        "text": "Cair na casa de outro peão manda esse peão de volta ao Pátio (cuidado: vale até para o aliado).\n\nPeão parado no PRÓPRIO Portão protege a casa: ninguém passa por cima nem cai nela."},
+        "text": "Cair na casa de outro peão manda esse peão de volta ao Pátio (cuidado: vale até para o aliado).\n\nPeão parado no PRÓPRIO Portão (escudo) bloqueia a casa: ninguém passa por cima nem cai nela — trava todos que vêm atrás."},
     {"title": "COROAÇÃO E VITÓRIA", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png",
-        "text": "Na Entrada do Salão o peão entra no Salão do Trono e ganha a coroa — o número de casas precisa caber.\n\nQuem coroar os 4 peões passa a jogar com os peões do aliado. Vence a dupla que coroar os 8."},
+        "text": "Na Entrada do Salão o peão entra no Salão do Trono e vira DAMA — o número de casas precisa caber.\n\nQuem coroar os 4 peões passa a jogar com os peões do aliado. Vence a dupla que coroar os 8."},
     {"title": "COMO JOGAR NA TELA", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png",
         "text": "1 Toque numa carta da mão: ela sobe e a linha de ajuda diz o que ela faz.\n2 Toque num peão com aro dourado: o caminho aparece em pontos de ouro.\n3 Toque em JOGAR CARTA. CANCELAR desfaz a escolha.\nVocê tem 30 segundos por vez."},
 ]
@@ -807,7 +976,7 @@ class TableView extends Control:
         match ui.mode:
             "lobby": _draw_lobby()
             "game", "over": _draw_game()
-        if ui.mode == "over": _draw_over()
+        if ui.mode == "over" and not ui.overlay_wait: _draw_over()
         if ui.choice_open and ui.mode == "game" and not ui.menu_open: _draw_choice()
         if ui.menu_open: _draw_menu()
         if ui.tut_page >= 0: _draw_tutorial()
@@ -815,7 +984,8 @@ class TableView extends Control:
         draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
     # ------------------------------------------------------------ primitivas
-    func text(s: String, pos: Vector2, font_key: String, fs: int, col: Color, width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT):
+    func text(s: String, pos: Vector2, font_key: String, fs: int, col: Color, width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT, outline := 0, ocol := Color.BLACK):
+        if outline > 0: draw_string_outline(ui.fonts[font_key], pos, s, align, width, fs, outline, ocol)
         draw_string(ui.fonts[font_key], pos, s, align, width, fs, col)
     func text_w(s: String, font_key: String, fs: int) -> float:
         return ui.fonts[font_key].get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
@@ -982,11 +1152,28 @@ class TableView extends Control:
         var pd: Dictionary = ui.pending
         if not pd.is_empty() and not ui.busy and g.turn == 0:
             _collect_path(g, pd, dots, dest)
-        for p in dots: draw_circle(p, 7.0, Color("f1c24f"))
+        # R37 · todas as casas que a peça vai andar ficam coloridas (numeradas) e o destino brilha;
+        # se o destino tem peão adversário: ABATER (vermelho); peão do aliado: CUIDADO.
+        var caps: Dictionary = ui.captures_of(pd) if not pd.is_empty() and not ui.busy and g.turn == 0 else {"enemy": [], "ally": [], "crown": []}
+        var pul2 := 0.5 + 0.5 * sin(ui.t * 6.0)
+        for j in dots.size():
+            var p: Vector2 = dots[j]
+            draw_circle(p, 19.0, Color(1.0, 0.8, 0.28, 0.42))
+            draw_arc(p, 19.0, 0, TAU, 28, Color(1.0, 0.92, 0.6, 0.9), 2.0)
+            text(str(j + 1), Vector2(p.x - 20, p.y + 8), "bold", 22, Color("3a2404"), 40, HORIZONTAL_ALIGNMENT_CENTER)
         for p in dest:
-            draw_circle(p, 24.0, Color(1.0, 0.82, 0.3, 0.35))
-            draw_circle(p, 19.0, Color("f3c757"))
-            draw_arc(p, 19.0, 0, TAU, 32, Color("fff2c2"), 2.0)
+            var hit_enemy := false
+            var hit_ally := false
+            for w in caps.enemy: if ui.pawn_point(w[0], w[1]).distance_to(p) < 6.0: hit_enemy = true
+            for w in caps.ally: if ui.pawn_point(w[0], w[1]).distance_to(p) < 6.0: hit_ally = true
+            var col := Color("e8323a") if hit_enemy else (Color("ff9a2e") if hit_ally else Color("f3c757"))
+            draw_circle(p, 30.0 + 4.0 * pul2, Color(col.r, col.g, col.b, 0.30))
+            draw_circle(p, 23.0, Color(col.r, col.g, col.b, 0.85))
+            draw_arc(p, 23.0, 0, TAU, 36, Color("fff2c2"), 3.0)
+            if dots.size() > 0 and not hit_enemy and not hit_ally:
+                text(str(dots.size() + 1), Vector2(p.x - 22, p.y + 9), "bold", 26, Color("3a2404"), 44, HORIZONTAL_ALIGNMENT_CENTER)
+            if hit_enemy or hit_ally: _tag(p + Vector2(0, -118), "ABATER!" if hit_enemy else "CUIDADO: ALIADO", col)
+            elif not caps.crown.is_empty() and p == dest[dest.size() - 1]: _tag(p + Vector2(0, -118), "CHEGADA!", Color("2f9e57"))
         # peões (de cima para baixo, para a base de baixo ficar na frente)
         var order: Array = []
         for st in 4:
@@ -1014,6 +1201,21 @@ class TableView extends Control:
             var sz: Vector2 = tx.get_size() * ui.PAWN_SCALE
             var rr := Rect2(Vector2(c.x - sz.x / 2.0, c.y + ui.PAWN_BASE - sz.y - lift), sz)
             draw_texture_rect(tx, rr, false, Color(1, 1, 1, alpha))
+            var pw: Dictionary = g.pawns[w[0]][w[1]]
+            if pw.zone == "track" and int(pw.pos) == ui.Layout.gate_index(w[0]) and not ui.anim.has(key):
+                # R37 · peão no PRÓPRIO Portão: escudo — bloqueia a casa (ninguém passa nem cai nela)
+                var sc2 := c + Vector2(26, -14)
+                var col2: Color = ui.KINGDOM_COLOR[int(w[0])]
+                var sh := PackedVector2Array([sc2 + Vector2(-15, -16), sc2 + Vector2(15, -16), sc2 + Vector2(15, 3), sc2 + Vector2(0, 19), sc2 + Vector2(-15, 3)])
+                draw_colored_polygon(sh, Color("2a1a05"))
+                var sh2 := PackedVector2Array()
+                for v in sh: sh2.append(sc2 + (v - sc2) * 0.78)
+                draw_colored_polygon(sh2, col2)
+                var sh3 := sh.duplicate()
+                sh3.append(sh[0])
+                draw_polyline(sh3, Color("f3c757"), 2.5)
+                draw_rect(Rect2(sc2 + Vector2(-4, -3), Vector2(8, 7)), Color("f3c757"))
+                draw_arc(sc2 + Vector2(0, -3), 3.5, PI, TAU, 8, Color("f3c757"), 2.0)
         _draw_celebs()
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
 
@@ -1049,8 +1251,20 @@ class TableView extends Control:
             # texto subindo
             var ty := p.y - (70.0 + 50.0 * ease) * z
             var ta := clampf(fade * 1.6, 0.0, 1.0)
-            text("COROADO!", Vector2(p.x - 300 + 4, ty + 4), "title", 76, Color(0.1, 0.05, 0.0, 0.7 * ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
-            text("COROADO!", Vector2(p.x - 300, ty), "title", 76, Color(1.0, 0.86, 0.36, ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
+            text("VIROU DAMA!", Vector2(p.x - 300 + 4, ty + 4), "title", 76, Color(0.1, 0.05, 0.0, 0.7 * ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
+            text("VIROU DAMA!", Vector2(p.x - 300, ty), "title", 76, Color(1.0, 0.86, 0.36, ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
+
+    ## Etiqueta (ABATER / CUIDADO) presa acima de uma casa do tabuleiro, pulsando.
+    func _tag(p: Vector2, label: String, col: Color):
+        var fs := 46
+        var w := text_w(label, "bold_sp", fs) + 44.0
+        var sc := 1.0 + 0.06 * sin(ui.t * 7.0)
+        var r := Rect2(p - Vector2(w, 66) * sc / 2.0, Vector2(w, 66) * sc)
+        draw_colored_polygon(PackedVector2Array([Vector2(p.x - 10, r.end.y - 1), Vector2(p.x + 10, r.end.y - 1), Vector2(p.x, r.end.y + 14)]), col.darkened(0.25))
+        draw_rect(r.grow(3), Color(0.12, 0.02, 0.02, 0.85))
+        draw_rect(r, col.darkened(0.15))
+        draw_rect(r.grow(-3), Color(1, 0.9, 0.8, 0.5), false, 1.5)
+        text(label, Vector2(r.position.x, r.get_center().y + fs * 0.36), "bold_sp", fs, Color.WHITE, r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4, Color(0.2, 0.0, 0.0))
 
     func _collect_path(g, mv: Dictionary, dots: Array, dest: Array):
         var parts := []
@@ -1091,6 +1305,19 @@ class TableView extends Control:
             if selected:
                 for gl in 5: draw_rect(local.grow(3 + gl * 3), Color(1.0, 0.8, 0.3, 0.22 - gl * 0.04), false, 3.0)
             draw_texture_rect(ui.cards[hand[i]], local, false, Color.WHITE if (g.turn == 0 or selected) else Color(0.85, 0.85, 0.85))
+            if ui.mode == "game" and not ui.busy:
+                # R37 · avisos da carta: ABATER (derruba peão adversário) e CHEGADA (entra no Salão)
+                var tags := []
+                if ui.card_can_capture(i): tags.append(["ABATER", Color("c4161f")])
+                if ui.card_can_crown(i): tags.append(["CHEGADA", Color("23824a")])
+                var pz := 0.5 + 0.5 * sin(ui.t * 6.0)
+                for ti in tags.size():
+                    var br := Rect2(local.position.x + 8, local.position.y - 16 + ti * 38, local.size.x - 16, 34)
+                    var tc: Color = tags[ti][1]
+                    draw_rect(br.grow(2 + pz * 2), Color(tc.r, tc.g, tc.b, 0.35))
+                    draw_rect(br, tc)
+                    draw_rect(br.grow(-2), Color(1, 0.92, 0.8, 0.6), false, 1.5)
+                    text(String(tags[ti][0]), Vector2(br.position.x, br.get_center().y + 9), "bold_sp", 24, Color.WHITE, br.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3, tc.darkened(0.7))
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
             ui.hits.append({"rect": r, "id": "card_%d" % i})
 
@@ -1397,15 +1624,24 @@ class TableView extends Control:
         _shade()
         var d: Vector2 = ui.design
         var w := 820.0 if not ui.portrait else 960.0
-        var r := Rect2(d.x / 2.0 - w / 2.0, d.y / 2.0 - 250, w, 500)
+        var hgt := 250.0 + opts.size() * 112.0
+        var r := Rect2(d.x / 2.0 - w / 2.0, d.y / 2.0 - hgt / 2.0, w, hgt)
         panel(r, true)
         var rank: String = ui.g.hands[0][ui.sel_card]
         text(ui.Rules.card_label(rank).to_upper(), Vector2(r.position.x, r.position.y + 70), "title", 44, Color("ffd770"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-        text("O QUE VOCÊ QUER FAZER?", Vector2(r.position.x, r.position.y + 118), "semi_sp", 26, ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+        text(ui.choice_title(), Vector2(r.position.x, r.position.y + 118), "semi_sp", 26, ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
         for i in opts.size():
-            var br := Rect2(r.position.x + 50, r.position.y + 150 + i * 120, r.size.x - 100, 96)
-            gold_button(Rect2(br.position, Vector2(br.size.x, 66)), String(opts[i][1]), 34, "choice_" + String(opts[i][0]))
-            text(String(opts[i][2]), Vector2(br.position.x, br.position.y + 92), "semi", 22, Color("d9c79a"), br.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+            var br := Rect2(r.position.x + 50, r.position.y + 146 + i * 112, r.size.x - 100, 96)
+            var able: bool = bool(opts[i][3])
+            var bb := Rect2(br.position, Vector2(br.size.x, 62))
+            gold_button(bb, String(opts[i][1]), 32, "choice_" + String(opts[i][0]), able)
+            var oid := String(opts[i][0])
+            if oid.begins_with("seat"):
+                # 5: peão da cor, à esquerda do botão
+                var tx: Texture2D = ui.pawn_tex[int(oid.substr(4))]
+                var ps := tx.get_size() * (54.0 / tx.get_size().y)
+                draw_texture_rect(tx, Rect2(bb.position + Vector2(18, 4), ps), false, Color(1, 1, 1, 1.0 if able else 0.45))
+            text(String(opts[i][2]), Vector2(br.position.x, br.position.y + 88), "semi", 21, Color("d9c79a") if able else Color("8f8a78"), br.size.x, HORIZONTAL_ALIGNMENT_CENTER)
         dark_button(Rect2(r.position.x + 50, r.end.y - 80, r.size.x - 100, 56), "CANCELAR", 26, "choice_cancel")
 
     func _draw_flash():
@@ -1516,6 +1752,7 @@ func _run_event(msg: Dictionary):
             waiting_server = false
             var mv: Dictionary = msg.get("move", {})
             _clear_selection()
+            _snap_origin()          # R37: posições de antes (a animação sai daqui, em pulinhos)
             _apply_snapshot(snap)
             plays += 1
             _cue("discard" if String(mv.get("kind", "")) == "discard" else "card")

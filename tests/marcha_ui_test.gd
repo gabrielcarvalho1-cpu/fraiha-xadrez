@@ -82,7 +82,7 @@ func run():
     check(ui.candidate_pawns().size() == 4, "Ás: os 4 peões do Pátio ficam com aro dourado")
     ui.pick_pawn([0, 2])
     check(not ui.pending.is_empty() and ui.pending.kind == "exit", "tocar num peão do Pátio prepara SAIR")
-    check(ui.help_line().contains("SAI DO PÁTIO") or ui.help_line().to_upper().contains("SAI DO PÁTIO"), "linha de ajuda explica a carta")
+    check(ui.help_line().to_upper().contains("SAI DA BASE"), "linha de ajuda explica a carta")
     # 10: duas funções
     var keep_hand: Array = g.hands[0].duplicate()
     var keep_pawns: Array = g.pawns.duplicate(true)
@@ -107,12 +107,53 @@ func run():
     g.hands[0] = ["A", "3", "8", "2"]
     ui.pick_card(0)
     var ace: Array = ui.two_choices()
-    check(ui.choice_open and ace.size() == 2 and String(ace[0][1]).contains("PEÇA NOVA") and String(ace[1][1]).contains("11"), "Ás com as duas funções: caixa TIRAR UMA PEÇA NOVA / ANDAR 11")
+    check(ui.choice_open and ace.size() == 3 and String(ace[0][1]).contains("DA BASE") and String(ace[1][1]).contains("11") and String(ace[2][1]).contains("1 CASA") and ace.all(func(o): return bool(o[3])), "R37: Ás com as 3 funções: caixa TIRAR DA BASE / ANDAR 11 / ANDAR 1")
     ui._on_hit("choice_exit")
-    check(not ui.pending.is_empty() and ui.pending.kind == "exit", "TIRAR UMA PEÇA NOVA: saída do Pátio pronta")
+    check(not ui.pending.is_empty() and ui.pending.kind == "exit", "TIRAR DA BASE: saída pronta")
     ui.pick_card(0)
-    ui._on_hit("choice_move")
+    ui._on_hit("choice_move11")
     check(not ui.pending.is_empty() and ui.pending.kind == "move" and int(ui.pending.steps) == 11 and ui.pending.pawn == [0, 0], "ANDAR 11: só os peões da pista contam (peça única já escolhida)")
+    ui.pick_card(0)
+    ui._on_hit("choice_move1")
+    check(not ui.pending.is_empty() and ui.pending.kind == "move" and int(ui.pending.steps) == 1 and ui.pending.pawn == [0, 0], "R37: ANDAR 1 CASA")
+    # Ás: uma função só possível (todos na pista, sem nada na base) mas 11 travado → anda 1 sozinho
+    var keep_ace: Array = g.pawns.duplicate(true)
+    for i in 4: g.pawns[0][i] = {"zone": "track", "pos": 3 + i * 20}
+    g.pawns[0][0] = {"zone": "track", "pos": 70}      # 11 passaria do fundo do Salão; 1 cabe
+    for i in range(1, 4): g.pawns[0][i] = {"zone": "lane", "pos": i}
+    ui.pick_card(0)
+    var a1: Array = ui.two_choices().filter(func(o): return bool(o[3]))
+    check(a1.size() == 1 and not ui.choice_open and not ui.pending.is_empty() and int(ui.pending.get("steps", 0)) == 1, "R37: Ás com só ANDAR 1 possível: ativa sozinho, sem caixa")
+    g.pawns = keep_ace
+    # Rei: só tira da base, sem tocar em peão
+    g.hands[0] = ["K", "3", "8", "2"]
+    ui.pick_card(0)
+    check(not ui.choice_open and not ui.pending.is_empty() and ui.pending.kind == "exit" and ui.help_line().contains("base"), "R37: Rei tira peão da base direto (sem escolher peão)")
+    # 5: escolhe a cor e depois a peça
+    g.pawns[1][0] = {"zone": "track", "pos": 30}
+    g.pawns[2][0] = {"zone": "track", "pos": 50}
+    g.hands[0] = ["5", "3", "8", "2"]
+    ui.pick_card(0)
+    var five: Array = ui.two_choices()
+    check(ui.choice_open and five.size() == 4 and ui.choice_title().contains("QUAL PEÇA"), "R37: 5 pergunta \"você quer mover qual peça?\" com as 4 cores")
+    ui._on_hit("choice_seat1")
+    check(not ui.choice_open and ui.five_seat == 1 and not ui.pending.is_empty() and ui.pending.pawn == [1, 0], "R37: escolheu RUBI → a peça Rubi (única) já fica pronta para andar 5")
+    ui._clear_selection()
+    # ABATER e CHEGADA na mão e no caminho
+    var keep_ab: Array = g.pawns.duplicate(true)
+    g.pawns[0][0] = {"zone": "track", "pos": 20}
+    g.pawns[1][0] = {"zone": "track", "pos": 23}      # Rubi 3 casas à frente
+    g.pawns[0][1] = {"zone": "track", "pos": 72}      # 2 casas antes da Entrada (74): 3 casas entra no Salão
+    g.hands[0] = ["3", "8", "9", "Q"]
+    check(ui.card_can_capture(0) and not ui.card_can_capture(1), "R37: carta 3 marcada ABATER (derruba o Rubi); 8 não")
+    check(ui.card_can_crown(0), "R37: carta 3 marcada CHEGADA (leva peão ao Salão)")
+    ui.pick_card(0)
+    ui.pick_pawn([0, 0])
+    var cp: Dictionary = ui.captures_of(ui.pending)
+    check(cp.enemy == [[1, 0]] and cp.ally.is_empty(), "R37: caminho do 3 avisa ABATER no peão Rubi")
+    g.pawns = keep_ab
+    ui._clear_selection()
+    g.hands[0] = ["A", "3", "8", "2"]
     # Ás sem peão na pista: uma função só → sem caixa
     g.pawns[0][0] = {"zone": "home", "pos": 0}
     ui.pick_card(0)
@@ -206,7 +247,7 @@ func run():
     ui._on_hit("menu_quit")
     await frames(3)
     var mq: Array = stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real")
-    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-3" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
+    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-4" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
     var again: bool = await ui.access.request_start()
     check(not again, "sem Club: 2ª partida no mesmo dia bloqueada")
     hub.entitlements.apply_server({"is_founder": false, "club_active": true, "club_expires_at": "2099-01-01T00:00:00Z"})
@@ -219,6 +260,10 @@ func run():
     ui._finish()
     var mw: Array = stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real" and String(e.result) == "win")
     check(ui.mode == "over" and mw.size() == 1 and mw[0].get("data") is Dictionary and mw[0].data.has("crowned"), "Marcha terminada (vitória) entra no histórico com os dados do modo")
+    check(stage.result_overlay.is_showing() and stage.result_overlay.result == "victory" and stage.result_overlay.layer > ui.layer and ui.overlay_wait, "R37: vitória da Marcha usa a MESMA tela de VITÓRIA da partida contra bot, por cima da mesa")
+    stage.result_overlay.hide_result()
+    await frames(40)
+    check(not ui.overlay_wait and stage.result_overlay.layer == 60, "R37: depois da tela de VITÓRIA vem o painel da Marcha")
     ui._finish()
     check(stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real").size() == 2, "fim reportado 2× não duplica")
     hub.entitlements.clear_server()

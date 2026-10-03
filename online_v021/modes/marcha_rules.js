@@ -5,11 +5,12 @@
 // Mudou regra no .gd → muda aqui também e regenera o fixture (tools/marcha_parity_fixture.gd).
 const { rngFrom } = require('./rng');
 
-const RULESET_VERSION = 'marcha-real-3';
+const RULESET_VERSION = 'marcha-real-4';   // R37: Ás anda 11 OU 1 (ou sai); Rei só tira peão do Pátio
 const TRACK = 76;
 const ARM = 19;
 const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
-const STEPS = { A: 11, K: 13, Q: 12, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': -4, '3': 3, '2': 2 };
+const ACE_STEPS = [11, 1];
+const STEPS = { A: 11, Q: 12, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': -4, '3': 3, '2': 2 };
 const HAND = 4;
 const posmod = (a, n) => ((a % n) + n) % n;
 const gateIndex = seat => seat * ARM;
@@ -103,7 +104,7 @@ class Marcha {
     switch (rank) {
       case 'A': case 'K':
         for (const ex of this.exitMoves(who)) out.push({ ...ex, card: cardIdx, rank });
-        out.push(...this.forwardMoves(who, cardIdx, rank, STEPS[rank]));
+        if (rank === 'A') for (const n of ACE_STEPS) out.push(...this.forwardMoves(who, cardIdx, rank, n));
         break;
       case '4':
         for (let i = 0; i < 4; i++) if (this.pawns[who][i].zone === 'track' && this.backwardPath(who, i, 4).ok) out.push({ card: cardIdx, rank, kind: 'back', pawn: [who, i], steps: 4 });
