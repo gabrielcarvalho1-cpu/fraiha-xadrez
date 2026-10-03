@@ -51,7 +51,8 @@ const HOP_H := 22.0               # R37: altura do pulinho entre casas (coordena
 const EXIT_TIME := 0.55           # R37: saída da base em arco
 const CAPTURE_TIME := 0.5         # R37: o peão abatido some devagar
 const CROWN_WAIT := 1.2           # R37: chegada ao Salão (vira DAMA + fanfarra)
-## Espelho no servidor: online_v021/modes/party.js (T.stepMs/exitMs/captureMs/crownMs) — conferido em tests/server/marcha_sync_test.cjs
+const CARD_FLY := 0.45            # R37.3: a carta jogada voa da mão (ou da placa do bot) até o centro da mesa
+## Espelho no servidor: online_v021/modes/party.js (T.stepMs/exitMs/captureMs/crownMs/cardFlyMs) — conferido em tests/server/marcha_sync_test.cjs
 ## Bots da mesa (nomes e retratos da tela de referência).
 const BOTS := {1: {"name": "ReiDoBlitz", "portrait": "rei_do_blitz"}, 2: {"name": "Lady Torre", "portrait": "lady_torre"}, 3: {"name": "Cavalo_Louco", "portrait": "cavalo_louco"}}
 const PAWN_SCALE := 0.24          # peão PNG (211x279) sobre a casa da arte 1600x1600
@@ -100,6 +101,8 @@ var choice_open := false         # R35.1 · caixa "o que você quer fazer?" (car
 var card_mode := ""               # função escolhida: "" | "move" | "exit" | "burn"
 var ace_steps := 0                # R37 · Ás: 11 ou 1 (0 = ainda não escolhido)
 var five_seat := -1               # R37 · 5: de que cor é a peça que vai andar (-1 = ainda não escolhida)
+var flies: Array = []             # R37.3 · cartas voando até a mesa: [{"rank", "from": Rect2 (tela de referência), "t", "idx"}]
+var pile: Array = []              # R37.3 · monte da mesa: [{"rank", "dead": bool}] — "dead" = descartada sem jogada (cor apagada)
 var swap_glow: Array = []         # R35.1 · as duas peças da troca (J) brilham durante a animação
 var celebs: Array = []            # R35 · festa de chegada ao Salão: [{"p": Vector2 (tabuleiro), "t", "seat"}]
 const CELEB_T := 2.2
@@ -229,6 +232,7 @@ func start_game():
         return
     online = false
     names = DEFAULT_NAMES.duplicate()
+    pile = []
     g = Rules.new()
     g.setup(0)
     for s in 4: g.names[s] = names[s] if s > 0 else (String(hub.player_name) if hub != null and String(hub.player_name) != "" else "Você")
@@ -271,9 +275,63 @@ func _snap_origin():
     for s in 4:
         for i in 4: _origin[_key([s, i])] = (g.pawns[s][i] as Dictionary).duplicate()
 
+## Placa do jogador (coordenadas de referência): de onde sai a carta de quem não é você.
+func seat_card_from(seat: int) -> Rect2:
+    var r: Rect2
+    if portrait: r = [Rect2(20, 1563, 130, 130), Rect2(20, 278, 272, 116), Rect2(360, 138, 360, 124), Rect2(788, 278, 272, 116)][seat]
+    else: r = [Rect2(40, 898, 390, 124), Rect2(40, 262, 390, 122), Rect2(40, 120, 390, 122), Rect2(40, 404, 390, 122)][seat]
+    return Rect2(r.get_center() - Vector2(46, 64), Vector2(92, 128))
+
+## Centro do monte na mesa (coordenadas de referência) e tamanho de uma carta lá.
+func pile_rect() -> Rect2:
+    var br := board_rect()
+    var s: float = br.size.x / Layout.SIZE
+    var cs := Vector2(270, 378) * s
+    return Rect2(br.position + Vector2(800, 805) * s - cs / 2.0, cs)
+
+## R37.3 · a(s) carta(s) jogada(s) voam até a mesa antes das peças andarem.
+## idxs: posições na SUA mão (escondidas enquanto voam); vazio = carta de outro jogador (sai da placa dele).
+var fly_hide: Array = []
+func _fly_cards(seat: int, ranks: Array, idxs: Array):
+    if ranks.is_empty(): return
+    flies = []
+    var n: int = g.hands[0].size()
+    for k in ranks.size():
+        var from: Rect2 = card_rect(int(idxs[k]), n) if seat == 0 and k < idxs.size() else seat_card_from(seat)
+        flies.append({"rank": String(ranks[k]), "from": from, "t": -0.08 * k})
+    fly_hide = idxs.duplicate() if seat == 0 else []
+    var tt := 0.0
+    var total := CARD_FLY + 0.08 * (ranks.size() - 1)
+    while tt < total:
+        await get_tree().process_frame
+        var d := get_process_delta_time()
+        tt += d
+        for f in flies: f.t += d
+        _redraw()
+    flies = []
+    fly_hide = []
+
+## Monte da mesa: cada carta que cai; as descartadas sem jogada ficam com a cor apagada.
+func _pile_add(events: Array, mv: Dictionary, rank: String):
+    var kind := String(mv.get("kind", ""))
+    if kind in ["discard", "discard_all"]:
+        for e in events: if String(e.type) == "discard": pile.append({"rank": String(e.rank), "dead": true})
+    else:
+        pile.append({"rank": rank, "dead": false})
+        for e in events: if String(e.type) == "burn": pile.append({"rank": String(e.rank), "dead": true})
+    if pile.size() > 6: pile = pile.slice(pile.size() - 6)
+
 func _play(seat: int, mv: Dictionary):
     busy = true
     _snap_origin()
+    if g.is_legal(seat, mv):
+        var played: Array = [g.hands[seat][int(mv.card)]]
+        var idxs: Array = [int(mv.card)]
+        if String(mv.get("kind", "")) == "discard_all":
+            played = g.hands[seat].duplicate()
+            idxs = range(played.size())
+        await _fly_cards(seat, played, idxs)
+    var rank0: String = g.hands[seat][int(mv.card)] if int(mv.get("card", -1)) >= 0 and int(mv.card) < g.hands[seat].size() else ""
     var events: Array = g.apply(seat, mv)
     if events.is_empty():
         # recusada pelo motor de regras (a mesma validação do bot): nada muda
@@ -285,7 +343,8 @@ func _play(seat: int, mv: Dictionary):
         return
     plays += 1
     _clear_selection()
-    _cue("discard" if String(mv.get("kind", "")) == "discard" else "card")
+    _pile_add(events, mv, rank0)
+    _cue("discard" if String(mv.get("kind", "")) in ["discard", "discard_all"] else "card")
     await _animate(events)
     busy = false
     if g == null or mode != "game": return
@@ -450,8 +509,15 @@ func pick_card(i: int):
             choose_function(String(able[0][0]))
             if pending.is_empty() and card_mode == "exit":
                 for m in my_moves(): if m.kind == "exit": pending = m
+        elif opts.size() == 1:
+            # R37.3 · uma jogada só possível (ex.: J com só 2 peões na mesa): já fica pronta, sem tocar em peça
+            pending = opts.values()[0]
+            if pending.kind == "swap":
+                sel_pawn = pending.pawn
+                sel_target = pending.target
+            elif pending.kind == "split" or (pending.has("pawn") and pending.kind != "exit"):
+                pick_pawn(pending.parts[0].pawn if pending.kind == "split" else pending.pawn)
         elif not sole_pawn().is_empty(): _auto_sole_pawn()
-        elif opts.size() == 1: pending = opts.values()[0]
     _redraw()
 
 ## Caixa de escolha das cartas com mais de uma função. Devolve [[id, texto do botão, texto menor, possível?]]
@@ -661,6 +727,18 @@ func confirm():
     var mv := pending
     _play(0, mv)
 
+## R37.3 · nenhuma carta da mão tem jogada nesta rodada: pode descartar TODAS de uma vez.
+func can_discard_all() -> bool:
+    return g != null and mode == "game" and g.turn == 0 and not busy and not waiting_server and g.hands[0].size() >= 2 and not g.has_any_move(0)
+
+func discard_all():
+    if not can_discard_all(): return
+    var mv := {"card": 0, "rank": g.hands[0][0], "kind": "discard_all"}
+    if online:
+        _online_send(mv)
+        return
+    _play(0, mv)
+
 func cancel():
     _clear_selection()
     _redraw()
@@ -674,7 +752,7 @@ func help_line() -> String:
         return "Sem jogada: escolha uma carta para descartar" if not g.has_any_move(0) else "Escolha uma carta"
     var rank: String = g.hands[0][sel_card]
     var head := Rules.card_label(rank)
-    if pending.get("kind", "") == "discard": return head + " · descartar"
+    if pending.get("kind", "") == "discard": return head + " · descartar" + (" (ou todas)" if can_discard_all() else "")
     if choice_open: return head + " · escolha o que fazer"
     match rank:
         "A", "K":
@@ -924,6 +1002,7 @@ func _on_hit(id: String):
         return
     match id:
         "play": confirm()
+        "discard_all": discard_all()
         "cancel": cancel()
         "help": tut_page = 0
         "mute_music": Sound.toggle_music(hub)
@@ -1025,7 +1104,9 @@ class TableView extends Control:
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         match ui.mode:
             "lobby": _draw_lobby()
-            "game", "over": _draw_game()
+            "game", "over":
+                _draw_game()
+                _draw_flies()
         if ui.mode == "over" and not ui.overlay_wait: _draw_over()
         if ui.choice_open and ui.mode == "game" and not ui.menu_open: _draw_choice()
         if ui.menu_open: _draw_menu()
@@ -1188,14 +1269,20 @@ class TableView extends Control:
         if g == null: return
         draw_set_transform(ui.origin + br.position * ui.k, 0.0, Vector2(ui.k * s, ui.k * s))
         # descarte sobre o emblema central
-        var n: int = g.discard.size()
+        var n: int = ui.pile.size()
         var rots := [-0.21, 0.13, -0.06]
         for j in range(maxi(0, n - 3), n):
-            var rank: String = g.discard[j]
+            var it: Dictionary = ui.pile[j]
+            var rank: String = it.rank
             var a: float = rots[(j - maxi(0, n - 3)) % 3]
             var cs := Vector2(270, 378)
             draw_set_transform(ui.origin + (br.position + Vector2(800, 805) * s) * ui.k, a, Vector2(ui.k * s, ui.k * s))
-            draw_texture_rect(Crisp.at(ui.cards[rank], cs * s * ui.k), Rect2(-cs / 2.0, cs), false)
+            # R37.3 · carta descartada sem jogada: cinza-avermelhada (diferente das cartas jogadas)
+            var mod := Color(0.55, 0.47, 0.47) if bool(it.dead) else Color.WHITE
+            draw_texture_rect(Crisp.at(ui.cards[rank], cs * s * ui.k), Rect2(-cs / 2.0, cs), false, mod)
+            if bool(it.dead):
+                draw_line(Vector2(-cs.x * 0.36, -cs.y * 0.3), Vector2(cs.x * 0.36, cs.y * 0.3), Color(0.55, 0.06, 0.06, 0.75), 14.0)
+                draw_line(Vector2(cs.x * 0.36, -cs.y * 0.3), Vector2(-cs.x * 0.36, cs.y * 0.3), Color(0.55, 0.06, 0.06, 0.75), 14.0)
         draw_set_transform(ui.origin + br.position * ui.k, 0.0, Vector2(ui.k * s, ui.k * s))
         # caminho da jogada escolhida
         var dots: Array = []
@@ -1306,6 +1393,23 @@ class TableView extends Control:
             text("VIROU DAMA!", Vector2(p.x - 300, ty), "title", 76, Color(1.0, 0.86, 0.36, ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
 
     ## Etiqueta (ABATER / CUIDADO) presa acima de uma casa do tabuleiro, pulsando.
+    ## R37.3 · cartas voando da mão / da placa até o monte (arco, giro e encolhendo).
+    func _draw_flies():
+        if ui.flies.is_empty(): return
+        var to: Rect2 = ui.pile_rect()
+        for f in ui.flies:
+            var k: float = clampf(float(f.t) / ui.CARD_FLY, 0.0, 1.0)
+            if f.t < 0.0: continue
+            var e := 1.0 - pow(1.0 - k, 3.0)
+            var fr: Rect2 = f.from
+            var c: Vector2 = fr.get_center().lerp(to.get_center(), e) + Vector2(0, -120.0 * sin(PI * k))
+            var sz: Vector2 = fr.size.lerp(to.size, e)
+            var rot := lerpf(0.0, 0.13, e) + sin(PI * k) * 0.35
+            draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k, ui.k))
+            draw_rect(Rect2(-sz / 2.0 + Vector2(10, 14), sz), Color(0, 0, 0, 0.35))
+            draw_texture_rect(Crisp.at(ui.cards[String(f.rank)], sz * ui.k), Rect2(-sz / 2.0, sz), false)
+            draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+
     func _tag(p: Vector2, label: String, col: Color):
         var fs := 46
         var w := text_w(label, "bold_sp", fs) + 44.0
@@ -1343,6 +1447,7 @@ class TableView extends Control:
         var hand: Array = g.hands[0] if g != null else []
         var n := hand.size()
         for i in n:
+            if ui.fly_hide.has(i): continue          # R37.3: esta carta está voando para a mesa
             var r: Rect2 = ui.card_rect(i, n)
             var selected: bool = i == ui.sel_card
             var rot := 0.0
@@ -1453,7 +1558,8 @@ class TableView extends Control:
             _plate(Rect2(20, 278, 272, 116), 1)
             _plate(Rect2(788, 278, 272, 116), 3)
             _draw_board()
-            if ui.split_options().size() <= 1 and not ui.ten_choice(): _draw_help(Rect2(140, 1462, 800, 60))
+            if ui.can_discard_all(): gold_button(Rect2(140, 1458, 800, 66), "DESCARTAR TODAS (%d) · SEM JOGADA" % g.hands[0].size(), 30, "discard_all")
+            elif ui.split_options().size() <= 1 and not ui.ten_choice(): _draw_help(Rect2(140, 1462, 800, 60))
             else: _draw_split(Vector2(150, 1478), 66.0)
             # meu retrato + SUA VEZ
             var pr := Rect2(20, 1563, 130, 130)
@@ -1483,6 +1589,7 @@ class TableView extends Control:
             _draw_help(Rect2(1482, 186, 398, 70))
             _draw_hand()
             _draw_split(Vector2(1484, 836), 50.0)
+            if ui.can_discard_all(): dark_button(Rect2(1482, 812, 398, 58), "DESCARTAR TODAS (%d)" % g.hands[0].size(), 28, "discard_all")
             gold_button(Rect2(1482, 880, 398, 86), "DESCARTAR CARTA" if ui.pending.get("kind", "") == "discard" else "JOGAR CARTA", 40, "play", not ui.pending.is_empty() and g.turn == 0 and not ui.busy)
             dark_button(Rect2(1482, 985, 398, 64), "CANCELAR", 30, "cancel", not ui.pending.is_empty() or ui.sel_card >= 0)
 
@@ -1712,6 +1819,7 @@ func start_online(msg: Dictionary):
     var resumed := bool(msg.get("resumed", false)) and online and room_id == String(msg.get("room_id", ""))
     online = true
     room_id = String(msg.get("room_id", ""))
+    if not resumed: pile = []
     players = msg.get("players", []) if msg.get("players") is Array else []
     names = DEFAULT_NAMES.duplicate()
     for i in mini(4, players.size()):
@@ -1805,9 +1913,19 @@ func _run_event(msg: Dictionary):
             var mv: Dictionary = msg.get("move", {})
             _clear_selection()
             _snap_origin()          # R37: posições de antes (a animação sai daqui, em pulinhos)
+            var seat_ev := int(msg.get("seat", 0))
+            var rank_ev := String(mv.get("rank", ""))
+            var flown: Array = [rank_ev]
+            var idxs_ev: Array = [int(mv.get("card", 0))]
+            if String(mv.get("kind", "")) == "discard_all":
+                flown = []
+                for e in msg.get("events", []): if String(e.get("type", "")) == "discard": flown.append(String(e.rank))
+                idxs_ev = range(flown.size())
+            if seat_ev != 0 or idxs_ev.any(func(q): return int(q) >= g.hands[0].size()): idxs_ev = []
+            await _fly_cards(seat_ev, flown, idxs_ev)
             _apply_snapshot(snap)
             plays += 1
-            _cue("discard" if String(mv.get("kind", "")) == "discard" else "card")
+            _cue("discard" if String(mv.get("kind", "")) in ["discard", "discard_all"] else "card")
             var evs := []
             for e in msg.get("events", []):
                 var o: Dictionary = (e as Dictionary).duplicate(true)
@@ -1816,6 +1934,7 @@ func _run_event(msg: Dictionary):
                 if o.has("seat"): o.seat = int(o.seat)
                 if o.has("path"): o.path = (o.path as Array).map(func(q): return {"zone": String(q.zone), "pos": int(q.pos)})
                 evs.append(o)
+            _pile_add(evs, mv, rank_ev)
             await _animate(evs)
             if String(msg.get("reason", "")) == "timeout" and int(msg.get("seat", -1)) == 0: _flash("Tempo esgotado: o servidor jogou por você.")
         "turn":

@@ -5,7 +5,7 @@
 // Mudou regra no .gd → muda aqui também e regenera o fixture (tools/marcha_parity_fixture.gd).
 const { rngFrom } = require('./rng');
 
-const RULESET_VERSION = 'marcha-real-5';   // R37.2: 5 no adversário passa da Entrada; J com peão no próprio Portão; 7 completa no aliado
+const RULESET_VERSION = 'marcha-real-6';   // R37.3: 5 não anda peça parada no próprio Portão; descartar todas as cartas sem jogada
 const TRACK = 76;
 const ARM = 19;
 const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -111,7 +111,7 @@ class Marcha {
         for (let i = 0; i < 4; i++) if (this.pawns[who][i].zone === 'track' && this.backwardPath(who, i, 4).ok) out.push({ card: cardIdx, rank, kind: 'back', pawn: [who, i], steps: 4 });
         break;
       case '5':
-        for (let s = 0; s < 4; s++) for (let i = 0; i < 4; i++) if (this.pawns[s][i].zone === 'track' && this.forwardPath(s, i, 5, teamOf(s) === teamOf(seat)).ok) out.push({ card: cardIdx, rank, kind: 'move', pawn: [s, i], steps: 5 });
+        for (let s = 0; s < 4; s++) for (let i = 0; i < 4; i++) if (this.pawns[s][i].zone === 'track' && this.pawns[s][i].pos !== gateIndex(s) && this.forwardPath(s, i, 5, teamOf(s) === teamOf(seat)).ok) out.push({ card: cardIdx, rank, kind: 'move', pawn: [s, i], steps: 5 });
         break;
       case 'J':
         for (let i = 0; i < 4; i++) {
@@ -190,12 +190,13 @@ class Marcha {
     const c = Math.trunc(Number(mv.card));
     if (!Number.isFinite(c) || c < 0 || c >= this.hands[seat].length) return false;
     if (String(mv.kind || '') === 'discard') return !this.hasAnyMove(seat);
+    if (String(mv.kind || '') === 'discard_all') return !this.hasAnyMove(seat) && this.hands[seat].length >= 2;
     const key = Marcha.moveKey(mv);
     return this.legalMoves(seat, c).some(m => Marcha.moveKey(m) === key);
   }
   // A jogada legal com a mesma chave (o servidor sempre aplica a SUA cópia, nunca o objeto do cliente).
   canonical(seat, mv) {
-    if (String(mv && mv.kind || '') === 'discard') { const c = Math.trunc(Number(mv.card)); return { card: c, rank: this.hands[seat][c], kind: 'discard' }; }
+    if (['discard', 'discard_all'].includes(String(mv && mv.kind || ''))) { const c = Math.trunc(Number(mv.card)); return { card: c, rank: this.hands[seat][c], kind: String(mv.kind) }; }
     const key = Marcha.moveKey(mv);
     return this.legalMoves(seat, Math.trunc(Number(mv.card))).find(m => Marcha.moveKey(m) === key) || null;
   }
@@ -219,6 +220,13 @@ class Marcha {
     const name = String(this.names[seat]);
     switch (String(mv.kind)) {
       case 'discard': ev.push({ type: 'discard', rank }); this.logLine(`${name} descartou ${rank}`); break;
+      case 'discard_all': {
+        const all = [rank, ...this.hands[seat]];
+        for (const r of this.hands[seat]) this.discard.push(r);
+        this.hands[seat] = [];
+        for (const r of all) ev.push({ type: 'discard', rank: r });
+        this.logLine(`${name} descartou ${all.length} cartas sem jogada`); break;
+      }
       case 'exit': {
         const w = mv.pawn, gate = gateIndex(w[0]), o = this.occupant(gate);
         if (o.length) { this.sendHome(o[0], o[1]); ev.push({ type: 'capture', pawn: o }); }

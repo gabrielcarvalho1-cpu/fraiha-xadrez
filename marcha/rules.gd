@@ -25,7 +25,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-5"   # R37.2: 5 no adversário passa da Entrada; J com peão no próprio Portão; 7 completa no aliado
+const RULESET_VERSION := "marcha-real-6"   # R37.3: 5 não anda peça parada no próprio Portão; descartar todas as cartas sem jogada
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -211,7 +211,8 @@ func legal_moves(seat: int, card_idx: int) -> Array:
         "5":
             for s in 4:
                 for i in 4:
-                    if pawns[s][i].zone == "track" and forward_path(s, i, 5, team_of(s) == team_of(seat)).ok:
+                    # R37.3: peça que acabou de sair (parada no PRÓPRIO Portão) não anda com o 5
+                    if pawns[s][i].zone == "track" and int(pawns[s][i].pos) != Layout.gate_index(s) and forward_path(s, i, 5, team_of(s) == team_of(seat)).ok:
                         out.append({"card": card_idx, "rank": rank, "kind": "move", "pawn": [s, i], "steps": 5})
         "J":
             for i in 4:
@@ -292,6 +293,8 @@ func is_legal(seat: int, mv: Dictionary) -> bool:
     var c := int(mv.get("card", -1))
     if c < 0 or c >= hands[seat].size(): return false
     if String(mv.get("kind", "")) == "discard": return not has_any_move(seat)
+    # R37.3 · nenhuma carta da mão tem jogada: pode descartar TODAS de uma vez (espera a próxima rodada)
+    if String(mv.get("kind", "")) == "discard_all": return not has_any_move(seat) and hands[seat].size() >= 2
     var key := _move_key(mv)
     for m in legal_moves(seat, c):
         if _move_key(m) == key: return true
@@ -334,6 +337,12 @@ func apply(seat: int, mv: Dictionary) -> Array:
         "discard":
             ev.append({"type": "discard", "rank": rank})
             _log("%s descartou %s" % [name, rank])
+        "discard_all":
+            var all: Array = [rank] + hands[seat]
+            for r in hands[seat]: discard.append(r)
+            hands[seat].clear()
+            for r in all: ev.append({"type": "discard", "rank": r})
+            _log("%s descartou %d cartas sem jogada" % [name, all.size()])
         "exit":
             var w: Array = mv.pawn
             var gate := Layout.gate_index(w[0])

@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-5", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-6", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
     var h1: int = g.hands[1].size()
@@ -221,5 +221,22 @@ func _initialize():
     var a7: Array = m7.filter(func(m): return int(m.parts[0].steps) == 3)
     f7.apply(0, a7[0])
     check(f7.crowned(0) == 4 and int(f7.pawns[2][0].pos) == 24, "R37.2: depois do 7 o seu último peão é DAMA e o do aliado andou 4")
+    # ---------- R37.3 ----------
+    var f8 = Rules.new()
+    f8.setup(56)
+    f8.pawns[1][0] = {"zone": "track", "pos": Layout.gate_index(1)}     # Rubi acabou de sair
+    f8.pawns[1][1] = {"zone": "track", "pos": 40}
+    f8.hands[0] = ["5"]
+    var m8: Array = f8.legal_moves(0, 0)
+    check(not m8.any(func(m): return m.pawn == [1, 0]) and m8.any(func(m): return m.pawn == [1, 1]), "R37.3: 5 não anda a peça que acabou de sair (parada no próprio Portão)")
+    var f9 = Rules.new()
+    f9.setup(57)
+    f9.hands[0] = ["Q", "9", "8"]                     # todos na base: nenhuma carta tem jogada
+    check(f9.is_legal(0, {"card": 0, "kind": "discard_all"}), "R37.3: sem nenhuma jogada pode descartar TODAS")
+    var d0: int = f9.discard.size()
+    var ev9: Array = f9.apply(0, {"card": 0, "kind": "discard_all"})
+    check(f9.hands[0].is_empty() and f9.discard.size() == d0 + 3 and ev9.filter(func(e): return e.type == "discard").size() == 3, "R37.3: DESCARTAR TODAS esvazia a mão (espera a próxima rodada)")
+    f9.hands[0] = ["A", "9"]
+    check(not f9.is_legal(0, {"card": 0, "kind": "discard_all"}), "R37.3: com alguma jogada possível não descarta todas")
     print("RESULT %d/%d" % [checks - failures, checks], " OK" if failures == 0 else " FALHAS=%d" % failures)
     quit(failures)

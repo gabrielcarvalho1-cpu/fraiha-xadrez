@@ -179,6 +179,46 @@ func run():
     check(all_auto, "R37.2: com UMA peça na Muralha (dama no Salão não conta) 3, 6, -4, 2, 8, 9, Q e 7 já ficam prontos nela")
     g.pawns = keep_s
     ui._clear_selection()
+    # R37.3 · J com só 2 peças na mesa (a sua e uma outra): troca já pronta, sem tocar
+    var keep_j: Array = g.pawns.duplicate(true)
+    for st in 4:
+        for i in 4: g.pawns[st][i] = {"zone": "home", "pos": i}
+    g.pawns[0][0] = {"zone": "track", "pos": 10}
+    g.pawns[1][0] = {"zone": "track", "pos": 30}
+    g.hands[0] = ["J", "2", "2", "2"]
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(not ui.pending.is_empty() and ui.pending.kind == "swap" and ui.sel_pawn == [0, 0] and ui.sel_target == [1, 0], "R37.3: J com só 2 peças na mesa: troca automática")
+    # Ás: as peças na Muralha não conseguem andar 11 nem 1 → só sair da base, automático
+    for i in 4: g.pawns[0][i] = {"zone": "home", "pos": i}
+    g.pawns[0][0] = {"zone": "track", "pos": ui.Layout.gate_index(2) - 1}
+    g.pawns[2][0] = {"zone": "track", "pos": ui.Layout.gate_index(2)}   # aliado no Portão dele: bloqueia 1 e 11
+    g.pawns[1][0] = {"zone": "home", "pos": 0}
+    g.hands[0] = ["A", "2", "2", "2"]
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(not ui.choice_open and not ui.pending.is_empty() and ui.pending.kind == "exit", "R37.3: Ás só com SAIR possível: já pronto, sem caixa")
+    # nenhuma jogada: DESCARTAR TODAS
+    for st in 4:
+        for i in 4: g.pawns[st][i] = {"zone": "home", "pos": i}
+    g.hands[0] = ["Q", "9", "8"]
+    ui._clear_selection()
+    ui._redraw()
+    await frames(2)
+    check(ui.can_discard_all() and ui.hits.any(func(h): return h.id == "discard_all"), "R37.3: sem nenhuma jogada aparece DESCARTAR TODAS")
+    ui.pile = []
+    ui.call("_fly_cards", 0, ["Q", "9", "8"], [0, 1, 2])
+    await frames(2)
+    check(ui.flies.size() == 3 and ui.fly_hide == [0, 1, 2], "R37.3: as cartas voam da mão até a mesa (escondidas na mão enquanto voam)")
+    await create_timer(ui.CARD_FLY + 0.4).timeout
+    check(ui.flies.is_empty(), "R37.3: voo termina sozinho")
+    var evd: Array = g.apply(0, {"card": 0, "kind": "discard_all"})
+    ui._pile_add(evd, {"kind": "discard_all"}, "Q")
+    check(g.hands[0].is_empty() and ui.pile.size() == 3 and ui.pile.all(func(p): return bool(p.dead)), "R37.3: as 3 caem no monte com a cor de descartadas")
+    g.pawns = keep_j
+    g.turn = 0
+    ui.busy = false
+    ui._clear_selection()
     # ABATER e CHEGADA na mão e no caminho
     var keep_ab: Array = g.pawns.duplicate(true)
     g.pawns[0][0] = {"zone": "track", "pos": 20}
@@ -287,7 +327,7 @@ func run():
     ui._on_hit("menu_quit")
     await frames(3)
     var mq: Array = stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real")
-    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-5" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
+    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-6" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
     var again: bool = await ui.access.request_start()
     check(not again, "sem Club: 2ª partida no mesmo dia bloqueada")
     hub.entitlements.apply_server({"is_founder": false, "club_active": true, "club_expires_at": "2099-01-01T00:00:00Z"})

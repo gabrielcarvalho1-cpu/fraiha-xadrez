@@ -18,6 +18,7 @@ check(ace(gd) === ace(js), 'Ás anda o mesmo nas duas pontas: ' + ace(gd));
 check(!/"K":\s*13/.test(gd) && !/K:\s*13/.test(js), 'Rei não anda (sem 13) nas duas pontas');
 const sec = (name) => Math.round(+ui.match(new RegExp(`const ${name} := ([\\d.]+)`))[1] * 1000);
 check(sec('STEP_TIME') === T.stepMs, `passo por casa cliente ${sec('STEP_TIME')} = servidor ${T.stepMs}`);
+check(sec('CARD_FLY') === T.cardFlyMs, 'voo da carta cliente = servidor');
 check(sec('EXIT_TIME') === T.exitMs && sec('CAPTURE_TIME') === T.captureMs && sec('CROWN_WAIT') === T.crownMs, 'saída / abatido / chegada: cliente = servidor');
 // R37.2 · 5 no peão adversário perto da Entrada dele: passa e dá a volta (servidor igual ao Godot)
 {

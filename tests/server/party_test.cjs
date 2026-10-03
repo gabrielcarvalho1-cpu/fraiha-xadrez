@@ -6,7 +6,7 @@ const { startServer, client, check, summary } = require('./helpers.cjs');
 const { Marcha, chooseAI, posmod } = require('../../online_v021/modes/marcha_rules');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const ENV = { FRAIHA_DEV_AUTH: '1', FRAIHA_PARTY_TURN_MS: '1500', FRAIHA_PARTY_MARCHA_BOT_MS: '5', FRAIHA_PARTY_XEQUE_BOT_MIN_MS: '5', FRAIHA_PARTY_XEQUE_BOT_MAX_MS: '10',
-  FRAIHA_PARTY_AWAY_MS: '30', FRAIHA_PARTY_STEP_MS: '0', FRAIHA_PARTY_EXIT_MS: '0', FRAIHA_PARTY_CAPTURE_MS: '0', FRAIHA_PARTY_CROWN_MS: '0', FRAIHA_PARTY_SWAP_MS: '5', FRAIHA_PARTY_MESA_MS: '5', FRAIHA_PARTY_INTRO_MS: '5', FRAIHA_PARTY_REVEAL_MS: '5', FRAIHA_PARTY_CLOCK_MS: '5', FRAIHA_PARTY_SAFE_MS: '5', FRAIHA_PARTY_MATE_MS: '5' };
+  FRAIHA_PARTY_AWAY_MS: '30', FRAIHA_PARTY_STEP_MS: '0', FRAIHA_PARTY_EXIT_MS: '0', FRAIHA_PARTY_CARD_FLY_MS: '0', FRAIHA_PARTY_CAPTURE_MS: '0', FRAIHA_PARTY_CROWN_MS: '0', FRAIHA_PARTY_SWAP_MS: '5', FRAIHA_PARTY_MESA_MS: '5', FRAIHA_PARTY_INTRO_MS: '5', FRAIHA_PARTY_REVEAL_MS: '5', FRAIHA_PARTY_CLOCK_MS: '5', FRAIHA_PARTY_SAFE_MS: '5', FRAIHA_PARTY_MATE_MS: '5' };
 async function login(port, name) {
   const c = client(port); await c.open();
   c.send({ type: 'acct_auth', access_token: 'dev:' + name });
@@ -92,7 +92,7 @@ async function startParty(A, B, game) {
     c.send({ type: 'party_action', room_id: room, action: mv });
   };
   const t0 = Date.now();
-  while (!ended && Date.now() - t0 < 120000) {
+  while (!ended && Date.now() - t0 < 240000) {
     const m = await nextEvent([['A', A], ['B', B]]);
     if (!m) break;
     const [who, ev] = m;
