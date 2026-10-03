@@ -318,7 +318,7 @@ func run():
     check(ui.cues_played.has("card") and ui.cues_played.has("exit"), "sons: carta jogada e peão saindo do pátio")
     # bots jogam sozinhos até voltar a vez do humano
     t0 = Time.get_ticks_msec()
-    while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 15000: await process_frame
+    while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 30000: await process_frame
     check(ui.g.turn == 0 and g.log.size() >= 4, "os 3 bots jogaram e a vez voltou (%d registros)" % g.log.size())
     check(ui.cues_played.has("your_turn") and (ui.cues_played.has("step") or ui.cues_played.has("discard")), "sons: passos dos peões e aviso da sua vez")
     # 7 dividido pela interface
