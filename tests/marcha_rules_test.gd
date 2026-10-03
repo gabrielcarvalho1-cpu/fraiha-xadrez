@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-4", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-5", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
     var h1: int = g.hands[1].size()
@@ -174,5 +174,52 @@ func _initialize():
             if part.pawn == [0, 0] and int(part.steps) >= 3: blocked = false
     check(blocked, "Portão: peão liberado parado na própria casa inicial trava todos que estão atrás (nem passa, nem cai)")
     check(gb.forward_path(0, 0, 2).ok, "Portão: dá para andar até a casa de antes")
+    # ---------- R37.2 ----------
+    # 5 do Marfim num peão do RUBI a 3 casas da Entrada dele: passa da Entrada e segue na Muralha
+    var f5 = Rules.new()
+    f5.setup(52)
+    var ent1: int = Layout.entrance_index(1)
+    f5.pawns[1][0] = {"zone": "track", "pos": posmod(ent1 - 3, Rules.TRACK)}
+    f5.hands[0] = ["5"]
+    var m5: Array = f5.legal_moves(0, 0).filter(func(m): return m.pawn == [1, 0])
+    check(m5.size() == 1, "R37.2: 5 pode mover o peão adversário perto da Entrada dele")
+    f5.apply(0, m5[0])
+    check(f5.pawns[1][0].zone == "track" and int(f5.pawns[1][0].pos) == posmod(ent1 + 2, Rules.TRACK), "R37.2: peão ADVERSÁRIO movido pelo 5 passa da Entrada e dá a volta (não entra no Salão)")
+    # 5 no peão do ALIADO perto da Entrada dele: entra no Salão normalmente
+    var f6 = Rules.new()
+    f6.setup(53)
+    var ent2: int = Layout.entrance_index(2)
+    f6.pawns[2][0] = {"zone": "track", "pos": posmod(ent2 - 2, Rules.TRACK)}
+    f6.hands[0] = ["5"]
+    f6.apply(0, f6.legal_moves(0, 0).filter(func(m): return m.pawn == [2, 0])[0])
+    check(f6.pawns[2][0].zone == "lane", "R37.2: 5 no peão do ALIADO entra no Salão dele")
+    # J: o seu peão que acabou de sair (no seu Portão) pode trocar; peça alheia no Portão dela não pode ser trocada
+    var fj = Rules.new()
+    fj.setup(54)
+    fj.pawns[0][0] = {"zone": "track", "pos": Layout.gate_index(0)}
+    fj.pawns[1][0] = {"zone": "track", "pos": 30}
+    fj.pawns[3][0] = {"zone": "track", "pos": Layout.gate_index(3)}
+    fj.hands[0] = ["J"]
+    var mj: Array = fj.legal_moves(0, 0)
+    check(mj.any(func(m): return m.pawn == [0, 0] and m.target == [1, 0]), "R37.2: J com o peão que acabou de sair (no Portão) troca com outra peça")
+    check(not mj.any(func(m): return m.target == [3, 0]), "R37.2: J não troca com a peça que acabou de sair (parada no Portão dela)")
+    check(mj.all(func(m): return int(m.pawn[0]) == 0), "J sempre usa o peão de quem joga (nunca troca duas peças dos outros)")
+    fj.pawns[0][0] = {"zone": "home", "pos": 0}
+    fj.hands[1] = ["J"]
+    fj.pawns[1][0] = {"zone": "home", "pos": 0}
+    check(fj.legal_moves(1, 0).is_empty(), "J do adversário sem peão dele na Muralha não faz nada")
+    # 7: último peão entra com parte das casas e o resto vai para o peão do aliado
+    var f7 = Rules.new()
+    f7.setup(55)
+    for i in range(1, 4): f7.pawns[0][i] = {"zone": "lane", "pos": i}
+    var ent0: int = Layout.entrance_index(0)
+    f7.pawns[0][0] = {"zone": "track", "pos": posmod(ent0 - 2, Rules.TRACK)}     # 3 casas: Entrada-1, Entrada, Salão 0
+    f7.pawns[2][0] = {"zone": "track", "pos": 20}
+    f7.hands[0] = ["7"]
+    var m7: Array = f7.legal_moves(0, 0).filter(func(m): return m.parts.size() == 2 and m.parts[1].pawn == [2, 0])
+    check(m7.any(func(m): return int(m.parts[0].steps) == 3 and int(m.parts[1].steps) == 4), "R37.2: 7 = 3 no seu último peão (entra no Salão) + 4 no peão do aliado")
+    var a7: Array = m7.filter(func(m): return int(m.parts[0].steps) == 3)
+    f7.apply(0, a7[0])
+    check(f7.crowned(0) == 4 and int(f7.pawns[2][0].pos) == 24, "R37.2: depois do 7 o seu último peão é DAMA e o do aliado andou 4")
     print("RESULT %d/%d" % [checks - failures, checks], " OK" if failures == 0 else " FALHAS=%d" % failures)
     quit(failures)

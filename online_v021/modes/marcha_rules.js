@@ -5,7 +5,7 @@
 // Mudou regra no .gd → muda aqui também e regenera o fixture (tools/marcha_parity_fixture.gd).
 const { rngFrom } = require('./rng');
 
-const RULESET_VERSION = 'marcha-real-4';   // R37: Ás anda 11 OU 1 (ou sai); Rei só tira peão do Pátio
+const RULESET_VERSION = 'marcha-real-5';   // R37.2: 5 no adversário passa da Entrada; J com peão no próprio Portão; 7 completa no aliado
 const TRACK = 76;
 const ARM = 19;
 const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -50,14 +50,15 @@ class Marcha {
   protectedAt(abs) { const o = this.occupant(abs); return o.length > 0 && gateIndex(o[0]) === abs; }
   enemyAt(seat, abs) { const o = this.occupant(abs); return o.length > 0 && teamOf(o[0]) !== teamOf(seat); }
 
-  forwardPath(seat, i, steps) {
+  // enter=false: passa da Entrada e segue na Muralha (peça adversária andando pelo 5 da outra dupla)
+  forwardPath(seat, i, steps, enter = true) {
     const p = this.pawns[seat][i];
     let zone = p.zone, pos = p.pos;
     const path = [];
     if (zone === 'home') return { ok: false };
     for (let k = 0; k < steps; k++) {
       if (zone === 'track') {
-        if (pos === entranceIndex(seat)) {
+        if (pos === entranceIndex(seat) && enter) {
           if (this.enemyAt(seat, pos)) return { ok: false };   // inimigo na Entrada tranca o Salão
           zone = 'lane'; pos = 0;
         } else {
@@ -110,12 +111,12 @@ class Marcha {
         for (let i = 0; i < 4; i++) if (this.pawns[who][i].zone === 'track' && this.backwardPath(who, i, 4).ok) out.push({ card: cardIdx, rank, kind: 'back', pawn: [who, i], steps: 4 });
         break;
       case '5':
-        for (let s = 0; s < 4; s++) for (let i = 0; i < 4; i++) if (this.pawns[s][i].zone === 'track' && this.forwardPath(s, i, 5).ok) out.push({ card: cardIdx, rank, kind: 'move', pawn: [s, i], steps: 5 });
+        for (let s = 0; s < 4; s++) for (let i = 0; i < 4; i++) if (this.pawns[s][i].zone === 'track' && this.forwardPath(s, i, 5, teamOf(s) === teamOf(seat)).ok) out.push({ card: cardIdx, rank, kind: 'move', pawn: [s, i], steps: 5 });
         break;
       case 'J':
         for (let i = 0; i < 4; i++) {
           const a = this.pawns[who][i];
-          if (a.zone !== 'track' || gateIndex(who) === a.pos) continue;
+          if (a.zone !== 'track') continue;      // R37.2: o seu peão no próprio Portão PODE trocar
           for (let s = 0; s < 4; s++) for (let j = 0; j < 4; j++) {
             if (s === who) continue;
             const b = this.pawns[s][j];
@@ -125,7 +126,7 @@ class Marcha {
         }
         break;
       case '7':
-        out.push(...this.splitMoves(who, cardIdx));
+        out.push(...this.splitMoves(seat, who, cardIdx));
         break;
       case '10': {
         out.push(...this.forwardMoves(who, cardIdx, rank, STEPS[rank]));
@@ -152,7 +153,8 @@ class Marcha {
     }
     return out;
   }
-  splitMoves(who, cardIdx) {
+  // R37.2: se a 1ª parte coroa o ÚLTIMO peão do jogador, a 2ª parte pode ir para um peão do aliado
+  splitMoves(seat, who, cardIdx) {
     const out = [];
     for (let i = 0; i < 4; i++) if (this.pawns[who][i].zone !== 'home' && this.forwardPath(who, i, 7).ok) out.push({ card: cardIdx, rank: '7', kind: 'split', parts: [{ pawn: [who, i], steps: 7 }] });
     for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
@@ -163,6 +165,22 @@ class Marcha {
         sim.applyForward(who, i, a, []);
         if (sim.pawns[who][j].zone === 'home') continue;
         if (sim.forwardPath(who, j, 7 - a).ok) out.push({ card: cardIdx, rank: '7', kind: 'split', parts: [{ pawn: [who, i], steps: a }, { pawn: [who, j], steps: 7 - a }] });
+      }
+    }
+    if (who === seat) {
+      const ally = partnerOf(seat);
+      for (let i = 0; i < 4; i++) {
+        if (this.pawns[who][i].zone !== 'track') continue;
+        for (let a = 1; a < 7; a++) {
+          const sim = this.clone();
+          if (!sim.forwardPath(who, i, a).ok) continue;
+          sim.applyForward(who, i, a, []);
+          if (sim.crowned(seat) !== 4) continue;
+          for (let j = 0; j < 4; j++) {
+            if (sim.pawns[ally][j].zone === 'home') continue;
+            if (sim.forwardPath(ally, j, 7 - a).ok) out.push({ card: cardIdx, rank: '7', kind: 'split', parts: [{ pawn: [who, i], steps: a }, { pawn: [ally, j], steps: 7 - a }] });
+          }
+        }
       }
     }
     return out;
@@ -209,7 +227,7 @@ class Marcha {
         this.logLine(`${name} jogou ${rank} · saiu do pátio`);
         break;
       }
-      case 'move': { const w = mv.pawn; this.applyForward(w[0], w[1], mv.steps, ev); this.logLine(`${name} jogou ${rank} · ${mv.steps} casas`); break; }
+      case 'move': { const w = mv.pawn; this.land(w[0], w[1], this.forwardPath(w[0], w[1], mv.steps, rank !== '5' || teamOf(w[0]) === teamOf(seat)), ev); this.logLine(`${name} jogou ${rank} · ${mv.steps} casas`); break; }
       case 'back': { const w = mv.pawn; this.land(w[0], w[1], this.backwardPath(w[0], w[1], 4), ev); this.logLine(`${name} jogou -4 · voltou 4 casas`); break; }
       case 'burn': {
         const t = mv.target_seat;

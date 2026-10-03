@@ -8,7 +8,8 @@ extends RefCounted
 ## Cartas (vale o valor; o naipe é só a ilustração):
 ##   A  sai do pátio OU anda 11 OU anda 1          K  SÓ sai do pátio (R37: não anda)          Q  anda 12
 ##   J  troca de lugar com outra peça    9/8/6/3/2  anda N   10 anda 10 ou faz o próximo descartar               7  divide 7 casas entre até 2 peças
-##   5  anda 5 com QUALQUER peça da mesa (segue o caminho do dono)          4  só volta 4 casas
+##   5  anda 5 com QUALQUER peça da mesa (segue o caminho do dono; peça ADVERSÁRIA passa da Entrada e dá a volta)
+##   4  só volta 4 casas
 ## Regras da mesa:
 ##   • Cair numa casa ocupada por outro peão manda esse peão de volta ao Pátio (inclusive o do aliado).
 ##   • Peão parado no PRÓPRIO Portão protege a casa: ninguém passa por cima nem cai nela, e não pode ser trocado.
@@ -24,7 +25,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-4"   # R37: Ás anda 11 OU 1 (ou sai); Rei só tira peão do Pátio
+const RULESET_VERSION := "marcha-real-5"   # R37.2: 5 no adversário passa da Entrada; J com peão no próprio Portão; 7 completa no aliado
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -131,7 +132,9 @@ func protected_at(abs_index: int) -> bool:
 
 ## Caminho de N casas para frente do peão (seguindo o caminho do DONO). Devolve
 ## {"ok", "path": [{"zone","pos"}...], "end": {"zone","pos"}} ou ok=false.
-func forward_path(seat: int, i: int, steps: int) -> Dictionary:
+## enter = false: o peão NÃO entra no Salão do dono — passa da Entrada e segue na Muralha (R37.2: peça
+## ADVERSÁRIA andando pelo 5 de quem é da outra dupla dá a volta de novo).
+func forward_path(seat: int, i: int, steps: int, enter := true) -> Dictionary:
     var p: Dictionary = pawns[seat][i]
     var zone: String = p.zone
     var pos: int = p.pos
@@ -139,7 +142,7 @@ func forward_path(seat: int, i: int, steps: int) -> Dictionary:
     if zone == "home": return {"ok": false}
     for k in range(steps):
         if zone == "track":
-            if pos == Layout.entrance_index(seat):
+            if pos == Layout.entrance_index(seat) and enter:
                 # R35 · peão INIMIGO parado na Entrada do Salão tranca a entrada (cair nele captura)
                 if _enemy_at(seat, pos): return {"ok": false}
                 zone = "lane"
@@ -208,12 +211,12 @@ func legal_moves(seat: int, card_idx: int) -> Array:
         "5":
             for s in 4:
                 for i in 4:
-                    if pawns[s][i].zone == "track" and forward_path(s, i, 5).ok:
+                    if pawns[s][i].zone == "track" and forward_path(s, i, 5, team_of(s) == team_of(seat)).ok:
                         out.append({"card": card_idx, "rank": rank, "kind": "move", "pawn": [s, i], "steps": 5})
         "J":
             for i in 4:
                 var a: Dictionary = pawns[who][i]
-                if a.zone != "track" or Layout.gate_index(who) == a.pos: continue
+                if a.zone != "track": continue      # R37.2: o seu peão que acabou de sair (no Portão) PODE trocar
                 for s in 4:
                     for j in 4:
                         if s == who: continue
@@ -221,7 +224,7 @@ func legal_moves(seat: int, card_idx: int) -> Array:
                         if b.zone != "track" or Layout.gate_index(s) == b.pos: continue
                         out.append({"card": card_idx, "rank": rank, "kind": "swap", "pawn": [who, i], "target": [s, j]})
         "7":
-            out.append_array(_split_moves(who, card_idx))
+            out.append_array(_split_moves(seat, who, card_idx))
         "10":
             # 10 tem duas funções: anda 10 casas OU faz o próximo jogador descartar uma carta
             out.append_array(_forward_moves(who, card_idx, rank, STEPS[rank]))
@@ -251,7 +254,9 @@ func _forward_moves(who: int, card_idx: int, rank: String, steps: int) -> Array:
     return out
 
 ## 7: todas as 7 casas num peão, ou divididas entre dois peões (a + b = 7). Cada parte tem de valer em sequência.
-func _split_moves(who: int, card_idx: int) -> Array:
+## R37.2: se a 1ª parte coroa o ÚLTIMO peão do jogador, a 2ª parte pode ir para um peão do aliado
+## (quem coroou os 4 passa a jogar com os peões do aliado — já na mesma carta).
+func _split_moves(seat: int, who: int, card_idx: int) -> Array:
     var out := []
     for i in 4:
         if pawns[who][i].zone != "home" and forward_path(who, i, 7).ok:
@@ -266,6 +271,19 @@ func _split_moves(who: int, card_idx: int) -> Array:
                 if sim.pawns[who][j].zone == "home": continue    # o segundo foi capturado pelo primeiro
                 if sim.forward_path(who, j, 7 - a).ok:
                     out.append({"card": card_idx, "rank": "7", "kind": "split", "parts": [{"pawn": [who, i], "steps": a}, {"pawn": [who, j], "steps": 7 - a}]})
+    if who == seat:
+        var ally := partner_of(seat)
+        for i in 4:
+            if pawns[who][i].zone != "track": continue
+            for a in range(1, 7):
+                var sim = clone()
+                if not sim.forward_path(who, i, a).ok: continue
+                sim._apply_forward(who, i, a, [])
+                if sim.crowned(seat) != 4: continue          # só quando a 1ª parte coroa o último peão
+                for j in 4:
+                    if sim.pawns[ally][j].zone == "home": continue
+                    if sim.forward_path(ally, j, 7 - a).ok:
+                        out.append({"card": card_idx, "rank": "7", "kind": "split", "parts": [{"pawn": [who, i], "steps": a}, {"pawn": [ally, j], "steps": 7 - a}]})
     return out
 
 ## A jogada é uma das devolvidas por legal_moves (ou descarte quando não existe nenhuma jogada).
@@ -328,7 +346,7 @@ func apply(seat: int, mv: Dictionary) -> Array:
             _log("%s jogou %s · saiu do pátio" % [name, rank])
         "move":
             var w: Array = mv.pawn
-            _apply_forward(w[0], w[1], int(mv.steps), ev)
+            _land(w[0], w[1], forward_path(w[0], w[1], int(mv.steps), move_enters(seat, {"rank": rank, "pawn": w})), ev)
             _log("%s jogou %s · %d casas" % [name, rank, int(mv.steps)])
         "back":
             var w: Array = mv.pawn
@@ -363,6 +381,12 @@ func apply(seat: int, mv: Dictionary) -> Array:
             _log("%s jogou 7 · %s" % [name, " + ".join(mv.parts.map(func(p): return str(int(p.steps))))])
     _check_winner()
     return ev
+
+## O peão desta jogada entra no Salão do dono ao passar pela Entrada? Não quando o 5 é usado por quem é
+## da OUTRA dupla (o adversário passa direto e dá a volta de novo).
+func move_enters(seat: int, mv: Dictionary) -> bool:
+    if String(mv.get("rank", "")) != "5" or not (mv.get("pawn") is Array): return true
+    return team_of(int(mv.pawn[0])) == team_of(seat)
 
 func _apply_forward(s: int, i: int, steps: int, ev: Array):
     _land(s, i, forward_path(s, i, steps), ev)

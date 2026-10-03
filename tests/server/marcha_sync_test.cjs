@@ -19,5 +19,16 @@ check(!/"K":\s*13/.test(gd) && !/K:\s*13/.test(js), 'Rei não anda (sem 13) nas 
 const sec = (name) => Math.round(+ui.match(new RegExp(`const ${name} := ([\\d.]+)`))[1] * 1000);
 check(sec('STEP_TIME') === T.stepMs, `passo por casa cliente ${sec('STEP_TIME')} = servidor ${T.stepMs}`);
 check(sec('EXIT_TIME') === T.exitMs && sec('CAPTURE_TIME') === T.captureMs && sec('CROWN_WAIT') === T.crownMs, 'saída / abatido / chegada: cliente = servidor');
+// R37.2 · 5 no peão adversário perto da Entrada dele: passa e dá a volta (servidor igual ao Godot)
+{
+  const g = new M.Marcha(); g.setup(52);
+  for (let s = 0; s < 4; s++) for (let i = 0; i < 4; i++) g.pawns[s][i] = { zone: 'home', pos: i };
+  const e1 = M.entranceIndex(1);
+  g.pawns[1][0] = { zone: 'track', pos: M.posmod(e1 - 3, M.TRACK) };
+  g.hands[0] = ['5'];
+  const mv = g.legalMoves(0, 0).find(m => m.pawn[0] === 1 && m.pawn[1] === 0);
+  g.apply(0, mv);
+  check(g.pawns[1][0].zone === 'track' && g.pawns[1][0].pos === M.posmod(e1 + 2, M.TRACK), 'servidor: 5 no adversário passa da Entrada e dá a volta');
+}
 console.log(`marcha_sync_test ${pass}/${pass + fail} ${fail ? 'FAIL' : 'OK'}`);
 process.exit(fail ? 1 : 0);

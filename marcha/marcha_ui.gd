@@ -118,22 +118,13 @@ func _init():
     layer = 64
     name = "MarchaReal"
 
-static func _mipmapped(tex: Texture2D) -> Texture2D:
-    if tex == null: return tex
-    var img := tex.get_image()
-    if img == null: return tex
-    if img.is_compressed(): img.decompress()
-    img.generate_mipmaps()
-    return ImageTexture.create_from_image(img)
-
 func setup(p_hub, p_stage):
     hub = p_hub
     stage = p_stage
 
 func _ready():
-    # R37 · cartas com mipmaps (a arte de 500×700 aparece bem menor na mão: sem mipmaps as letras
-    # "serrilham" e ficam ilegíveis). Feito aqui para não depender das opções de importação.
-    for r in CARD_FILES: cards[r] = _mipmapped(load("res://marcha/art/cards/" + CARD_FILES[r] + ".png"))
+    # R37.2 · as cartas são reduzidas na hora de desenhar (ui_v022/crisp_tex.gd) — legíveis com filtro NEAREST
+    for r in CARD_FILES: cards[r] = load("res://marcha/art/cards/" + CARD_FILES[r] + ".png")
     card_back = load("res://marcha/art/cards/carta_verso.png")
     for s in 4:
         pawn_tex[s] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + ".png")
@@ -525,21 +516,21 @@ func choose_function(kind: String):
 ## escolhido: não precisa tocar nele. Vale para toda carta que age sobre o peão (10 = ANDAR 10
 ## já marcado, J = só falta escolher a peça para trocar). Saída do Pátio conta como outra opção.
 func sole_pawn() -> Array:
+    # R37.2 · peça única = a única que pode fazer algo com esta carta. As damas que já estão no Salão e
+    # só se arrastam lá dentro não contam como "outra peça em jogo" (se houver UMA peça na Muralha que
+    # pode andar, é ela; tocar na dama continua possível).
     var who := []
     for m in my_moves():
         if m.kind == "burn": continue
         if m.kind == "exit":
             if card_mode == "move": continue
             return []
-        var w: Array
-        if m.kind == "split":
-            if m.parts.size() != 1: return []
-            w = m.parts[0].pawn
-        else:
-            w = m.pawn
-        if who.is_empty(): who = w
-        elif who != w: return []
-    return who
+        var w: Array = m.parts[0].pawn if m.kind == "split" else m.pawn
+        if not who.has(w): who.append(w)
+    if who.size() == 1: return who[0]
+    var on_track := who.filter(func(w): return g.pawns[w[0]][w[1]].zone == "track")
+    if on_track.size() == 1: return on_track[0]
+    return []
 
 func _auto_sole_pawn():
     var w := sole_pawn()
@@ -1006,6 +997,7 @@ const TUTORIAL := [
 
 # ================================================================= desenho
 class TableView extends Control:
+    const Crisp := preload("res://ui_v022/crisp_tex.gd")
     # No celular o toque já chega também como clique emulado: tratar os dois = jogada dupla.
     static var EMULATED_MOUSE: bool = bool(ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch", true))
     var ui
@@ -1203,7 +1195,7 @@ class TableView extends Control:
             var a: float = rots[(j - maxi(0, n - 3)) % 3]
             var cs := Vector2(270, 378)
             draw_set_transform(ui.origin + (br.position + Vector2(800, 805) * s) * ui.k, a, Vector2(ui.k * s, ui.k * s))
-            draw_texture_rect(ui.cards[rank], Rect2(-cs / 2.0, cs), false)
+            draw_texture_rect(Crisp.at(ui.cards[rank], cs * s * ui.k), Rect2(-cs / 2.0, cs), false)
         draw_set_transform(ui.origin + br.position * ui.k, 0.0, Vector2(ui.k * s, ui.k * s))
         # caminho da jogada escolhida
         var dots: Array = []
@@ -1328,7 +1320,7 @@ class TableView extends Control:
     func _collect_path(g, mv: Dictionary, dots: Array, dest: Array):
         var parts := []
         match String(mv.kind):
-            "move": parts.append([mv.pawn, g.forward_path(mv.pawn[0], mv.pawn[1], int(mv.steps))])
+            "move": parts.append([mv.pawn, g.forward_path(mv.pawn[0], mv.pawn[1], int(mv.steps), g.move_enters(0, mv))])
             "back": parts.append([mv.pawn, g.backward_path(mv.pawn[0], mv.pawn[1], 4)])
             "split":
                 for p in mv.parts: parts.append([p.pawn, g.forward_path(p.pawn[0], p.pawn[1], int(p.steps))])
@@ -1363,7 +1355,8 @@ class TableView extends Control:
             var local := Rect2(-r.size / 2.0, r.size)
             if selected:
                 for gl in 5: draw_rect(local.grow(3 + gl * 3), Color(1.0, 0.8, 0.3, 0.22 - gl * 0.04), false, 3.0)
-            draw_texture_rect(ui.cards[hand[i]], local, false, Color.WHITE if (g.turn == 0 or selected) else Color(0.85, 0.85, 0.85))
+            # R37.2 · reduzida com Lanczos para o tamanho real na tela (o projeto usa filtro NEAREST)
+            draw_texture_rect(Crisp.at(ui.cards[hand[i]], local.size * ui.k), local, false, Color.WHITE if (g.turn == 0 or selected) else Color(0.85, 0.85, 0.85))
             if ui.mode == "game" and not ui.busy:
                 # R37 · avisos da carta: ABATER (derruba peão adversário) e CHEGADA (entra no Salão)
                 var tags := []

@@ -158,6 +158,27 @@ func run():
     var sl: Dictionary = pp.stats_line()
     check(sl.win_pct == 60 and sl.loss_pct == 40 and pp.button_label() == "ADICIONAR AMIGO", "R37: cartão mostra 60% de vitória / 40% de derrota e ADICIONAR AMIGO")
     pp.close()
+    # R37.2 · uma peça só na Muralha (as outras são damas no Salão ou estão na base): carta já pronta nela
+    var keep_s: Array = g.pawns.duplicate(true)
+    g.pawns[0][0] = {"zone": "track", "pos": 12}
+    g.pawns[0][1] = {"zone": "lane", "pos": 0}
+    g.pawns[0][2] = {"zone": "home", "pos": 0}
+    g.pawns[0][3] = {"zone": "home", "pos": 1}
+    for i in 4: g.pawns[1][i] = {"zone": "home", "pos": i}
+    var all_auto := true
+    for rk in ["3", "6", "4", "2", "8", "9", "Q", "10", "7"]:
+        g.hands[0] = [rk, "2", "2", "2"]
+        ui._clear_selection()
+        ui.pick_card(0)
+        var pd: Dictionary = ui.pending
+        var on_it: bool = not pd.is_empty() and ((pd.get("pawn", []) == [0, 0]) or (pd.kind == "split" and pd.parts[0].pawn == [0, 0]))
+        if rk == "10": on_it = ui.choice_open or on_it
+        if not on_it:
+            all_auto = false
+            print("DBG sem auto: ", rk, " ", pd, " choice=", ui.choice_open)
+    check(all_auto, "R37.2: com UMA peça na Muralha (dama no Salão não conta) 3, 6, -4, 2, 8, 9, Q e 7 já ficam prontos nela")
+    g.pawns = keep_s
+    ui._clear_selection()
     # ABATER e CHEGADA na mão e no caminho
     var keep_ab: Array = g.pawns.duplicate(true)
     g.pawns[0][0] = {"zone": "track", "pos": 20}
@@ -266,7 +287,7 @@ func run():
     ui._on_hit("menu_quit")
     await frames(3)
     var mq: Array = stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real")
-    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-4" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
+    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-5" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
     var again: bool = await ui.access.request_start()
     check(not again, "sem Club: 2ª partida no mesmo dia bloqueada")
     hub.entitlements.apply_server({"is_founder": false, "club_active": true, "club_expires_at": "2099-01-01T00:00:00Z"})
