@@ -84,16 +84,30 @@ func run():
     g.hands[0] = ["10", "3", "8", "2"]
     ui._clear_selection()
     ui.pick_card(0)
-    check(ui.ten_choice() and ui.pending.is_empty() and ui.help_line().contains("descartar"), "10 com peão na pista: escolher ANDAR 10 ou PRÓXIMO DESCARTA")
+    check(ui.ten_choice() and ui.help_line().contains("10"), "10 com peão na pista: chips ANDAR 10 / PRÓXIMO DESCARTA")
+    check(not ui.pending.is_empty() and ui.pending.kind == "move" and ui.pending.pawn == [0, 0] and int(ui.pending.steps) == 10, "uma peça só no tabuleiro: 10 já vem com ANDAR 10 nela, sem tocar no peão")
     ui._on_hit("ten_burn")
     check(not ui.pending.is_empty() and ui.pending.kind == "burn", "PRÓXIMO DESCARTA prepara a 2ª função do 10")
     ui._on_hit("ten_move")
+    check(not ui.pending.is_empty() and ui.pending.kind == "move" and ui.pending.pawn == [0, 0], "voltar para ANDAR 10: peça única já escolhida")
     ui.pick_pawn([0, 0])
     check(not ui.pending.is_empty() and ui.pending.kind == "move" and int(ui.pending.steps) == 10, "ANDAR 10 + peão: anda 10 casas")
     g.hands[0] = ["8", "3", "4", "2"]
     ui._clear_selection()
     ui.pick_card(0)
     check(not ui.pending.is_empty() and ui.pending.kind == "move" and ui.pending.pawn == [0, 0], "só um peão pode jogar a carta: jogada já pronta")
+    for rk in ["2", "3", "5", "7", "9", "Q", "4"]:
+        g.hands[0] = [rk, "3", "8", "2"]
+        ui._clear_selection()
+        ui.pick_card(0)
+        if ui.sole_pawn().is_empty(): continue
+        check(ui.sel_pawn == [0, 0] and not ui.pending.is_empty(), "peça única no tabuleiro: carta %s já age nela" % rk)
+    g.hands[0] = ["J", "3", "8", "2"]
+    g.pawns[1][0] = {"zone": "track", "pos": 30}
+    g.pawns[3][0] = {"zone": "track", "pos": 45}
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(ui.sel_pawn == [0, 0] and ui.pending.is_empty() and ui.candidate_pawns().size() >= 2, "J com peça única: seu peão já escolhido, só falta a peça para trocar")
     g.hands[0] = keep_hand
     g.pawns = keep_pawns
     ui._clear_selection()

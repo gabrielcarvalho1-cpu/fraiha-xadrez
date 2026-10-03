@@ -325,8 +325,31 @@ func pick_card(i: int):
         # uma ação só possível → já fica pronta (ex.: A/K sem peão na pista = sair do Pátio;
         # carta que só um peão pode jogar). Só se escolhe peão quando há mais de uma opção.
         var opts := _options(my_moves())
-        if opts.size() == 1: pending = opts.values()[0]
+        if not sole_pawn().is_empty(): _auto_sole_pawn()
+        elif opts.size() == 1: pending = opts.values()[0]
     _redraw()
+
+## R34.2 · um peão só pode receber a carta (ex.: uma peça só rodando no tabuleiro) → ele já fica
+## escolhido: não precisa tocar nele. Vale para toda carta que age sobre o peão (10 = ANDAR 10
+## já marcado, J = só falta escolher a peça para trocar). Saída do Pátio conta como outra opção.
+func sole_pawn() -> Array:
+    var who := []
+    for m in my_moves():
+        if m.kind == "burn": continue
+        if m.kind == "exit": return []
+        var w: Array
+        if m.kind == "split":
+            if m.parts.size() != 1: return []
+            w = m.parts[0].pawn
+        else:
+            w = m.pawn
+        if who.is_empty(): who = w
+        elif who != w: return []
+    return who
+
+func _auto_sole_pawn():
+    var w := sole_pawn()
+    if not w.is_empty(): pick_pawn(w)
 
 ## Agrupa as jogadas em ações distintas para o jogador (todas as saídas do Pátio são a mesma ação).
 func _options(moves: Array) -> Dictionary:
@@ -577,6 +600,7 @@ func _on_hit(id: String):
         return
     if id == "ten_move":
         pending = {} if pending.get("kind", "") == "burn" else pending
+        if pending.is_empty(): _auto_sole_pawn()
         _redraw()
         return
     if id.begins_with("split_"):
@@ -981,7 +1005,7 @@ class TableView extends Control:
             _draw_ten(at, 800.0 if chip > 60 else 394.0)
             return
         var opts: Array = ui.split_options()
-        if opts.is_empty(): return
+        if opts.size() <= 1: return
         var label := "DIVIDIR O 7:"
         text(label, at + Vector2(0, -10), "semi_sp", 20, Color("e9c46e"))
         var x := at.x
@@ -1004,7 +1028,7 @@ class TableView extends Control:
             _plate(Rect2(20, 278, 272, 116), 1)
             _plate(Rect2(788, 278, 272, 116), 3)
             _draw_board()
-            if ui.split_options().is_empty() and not ui.ten_choice(): _draw_help(Rect2(140, 1462, 800, 60))
+            if ui.split_options().size() <= 1 and not ui.ten_choice(): _draw_help(Rect2(140, 1462, 800, 60))
             else: _draw_split(Vector2(150, 1478), 66.0)
             # meu retrato + SUA VEZ
             var pr := Rect2(20, 1563, 130, 130)
