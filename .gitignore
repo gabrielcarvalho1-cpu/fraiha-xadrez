@@ -10,3 +10,5 @@
 
 # Override local do servidor para F5 no editor (ex.: staging). Nunca versionar.
 online.local.cfg
+
+node_modules/

@@ -12,6 +12,7 @@ const { Invites } = require('./social/invites');
 const { Presence } = require('./social/presence');
 const { Payments } = require('./payments/service');
 const { BotService } = require('./bots/service');
+const { Party } = require('./modes/party');
 const Cosmetics = require('./accounts/cosmetics');
 
 const GUEST_TTL_MS = 24 * 3600e3;
@@ -47,6 +48,7 @@ class Backend {
     this.invites = new Invites({ send: (ws, o) => this.send(ws, o), backend: this });
     this.presence = new Presence({ send: (ws, o) => this.send(ws, o), backend: this });
     this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
+    this.party = new Party({ send: (ws, o) => this.send(ws, o), backend: this });   // R35: MARCHA REAL / XEQUE online
     this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o) }) : null;
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
@@ -58,6 +60,7 @@ class Backend {
   busyElsewhere(uid, service) {
     if (this.invites && this.invites.reserved(uid)) return true; // convite sendo aceito: partida prestes a começar
     for (const g of this.games()) if (g !== service && (g.activeMatchOf(uid) || g.mm.has(uid))) return true;
+    if (this.party && this.party.activeMatchOf(uid)) return true;      // mesa online de MARCHA REAL / XEQUE
     return false;
   }
   // Amizade desfeita/bloqueio (chamados pelo serviço de Amigos): cancela convite pendente entre os dois.
@@ -71,7 +74,7 @@ class Backend {
     this.invites.onQueue(uid);
     return true;
   }
-  inMatch(uid) { return this.games().some(g => !!g.activeMatchOf(uid)); }
+  inMatch(uid) { return this.games().some(g => !!g.activeMatchOf(uid)) || !!(this.party && this.party.activeMatchOf(uid)); }
   // Sessões/partidas mudaram: o serviço de presença recalcula (com tolerância) e avisa amigos se mudou.
   presenceChanged(uid) { if (this.presence) this.presence.changed(uid); }
   socketsOf(uid) { return [...(this.online.get(uid) || [])].filter(ws => ws.readyState === undefined || ws.readyState === 1); }
@@ -174,6 +177,10 @@ class Backend {
           return this.send(ws, { type: 'invite_error', message: 'Erro temporário no servidor. Tente novamente.', code: 'server_error' });
         }
       }
+      if (a.startsWith('party_')) {
+        if (!ws.user || !ws.profile) return this.send(ws, { type: 'party_error', message: 'Entre na sua conta para jogar com amigos.', code: 'auth_required' });
+        return this.party.handle(ws, m);
+      }
       if (a.startsWith('dm_')) {
         if (!ws.user || !ws.profile) return this.send(ws, { type: 'dm_error', message: 'Entre ou crie uma conta para conversar com amigos.', code: 'auth_required' });
         try { return await this.dm.handle(ws, m); }
@@ -208,6 +215,7 @@ class Backend {
         await this.state(ws);
         if (existing) for (const g of this.games()) g.onAuthenticated(ws);
         if (existing) this.invites.onAuthenticated(ws);
+        if (existing) this.party.onAuthenticated(ws);
         if (existing) await this.presence.snapshot(ws);
         return;
       }
@@ -329,6 +337,7 @@ class Backend {
   }
   onClose(ws) {
     for (const g of this.games()) g.onClose(ws);
+    if (this.party) this.party.onClose(ws);
     if (ws.identity) this.unlink(ws, ws.identity.id);
   }
 }

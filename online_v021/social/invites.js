@@ -10,6 +10,7 @@
 const crypto = require('crypto');
 const { CASUAL_MODES } = require('../ranked/config');
 const { UUID_RE } = require('../accounts/store');
+const { GAMES } = require('../modes/party');   // R35: convite também para MARCHA REAL e XEQUE (mesa online + bots)
 
 const TTL_MS = Number(process.env.FRAIHA_TEST_INVITE_TTL_MS || 60000); // env só para testes
 const OPEN = new Set(['pending', 'starting']);
@@ -32,7 +33,8 @@ class Invites {
   reserved(uid) { const inv = this.openOf(uid); return !!inv && inv.status === 'starting'; }
   inQueue(uid) { return this.backend.games().some(g => g.mm.has(uid)); }
   view(inv, now = this.now()) {
-    return { id: inv.id, from: inv.from, to: inv.to, mode: inv.mode, mode_name: CASUAL_MODES[inv.mode].name, minutes: CASUAL_MODES[inv.mode].minutes,
+    const game = inv.game || 'chess';
+    return { id: inv.id, from: inv.from, to: inv.to, mode: inv.mode, game, mode_name: game === 'chess' ? CASUAL_MODES[inv.mode].name : GAMES[game].name, minutes: game === 'chess' ? CASUAL_MODES[inv.mode].minutes : 0,
       created_at: new Date(inv.created).toISOString(), expires_at: new Date(inv.expires).toISOString(),
       expires_in_ms: Math.max(0, inv.expires - now), status: inv.status, reason: inv.reason || '', match_id: inv.match_id || '' };
   }
@@ -96,14 +98,16 @@ class Invites {
     if (this.limited(me)) return this.fail(ws, 'Muitas ações seguidas. Aguarde alguns segundos.', 'rate_limited');
     if (a === 'invite_sync') return this.onAuthenticated(ws);
     if (a === 'invite_send') {
-      const other = String(m.user_id || ''), mode = String(m.mode || '');
+      const other = String(m.user_id || ''), game = String(m.game || 'chess');
+      const mode = game === 'chess' ? String(m.mode || '') : game;
       if (!UUID_RE.test(other)) return this.fail(ws, 'Jogador inválido.', 'bad_user');
       if (other === me) return this.fail(ws, 'Você não pode convidar a si mesmo.', 'self');
-      if (!CASUAL_MODES[mode]) return this.fail(ws, 'Tempo inválido. Escolha 3, 5, 10 ou 20 minutos.', 'bad_mode');
+      if (game !== 'chess' && !GAMES[game]) return this.fail(ws, 'Modo inválido.', 'bad_mode');
+      if (game === 'chess' && !CASUAL_MODES[mode]) return this.fail(ws, 'Tempo inválido. Escolha 3, 5, 10 ou 20 minutos.', 'bad_mode');
       const mine = this.openOf(me);
       if (mine) {
         // Reenvio do mesmo convite (clique duplo / pacote repetido): devolve o existente.
-        if (mine.from.user_id === me && mine.to.user_id === other && mine.mode === mode && mine.status === 'pending') return this.send(ws, { type: 'invite_sent', invite: this.viewFor(mine, me), duplicate: true });
+        if (mine.from.user_id === me && mine.to.user_id === other && mine.mode === mode && (mine.game || 'chess') === game && mine.status === 'pending') return this.send(ws, { type: 'invite_sent', invite: this.viewFor(mine, me), duplicate: true });
         return this.fail(ws, mine.from.user_id === me ? 'Você já tem um convite enviado. Cancele-o para enviar outro.' : 'Você tem um convite pendente. Aceite ou recuse primeiro.', 'pending_exists', { invite: this.viewFor(mine, me) });
       }
       const [peer] = await this.store().getProfilesByIds([other]);
@@ -119,7 +123,7 @@ class Invites {
       if (this.openOf(other)) return this.fail(ws, 'Este amigo já tem um convite pendente.', 'target_busy');
       const p = ws.profile;
       const inv = { id: crypto.randomUUID(), from: { user_id: me, nickname: p.nickname, avatar_id: (ws.identity && ws.identity.avatar) || p.avatar_id, badge: (ws.identity && ws.identity.badge) || '' }, to: { user_id: other, nickname: peer.nickname, avatar_id: peer.avatar_id, badge: peer.badge || '' },
-        mode, created: now, expires: now + TTL_MS, status: 'pending' };
+        mode, game, created: now, expires: now + TTL_MS, status: 'pending' };
       this.invites.set(inv.id, inv); this.byUser.set(me, inv.id); this.byUser.set(other, inv.id);
       this.toUser(me, { type: 'invite_sent', invite: { ...this.view(inv, now), role: 'sender' } });
       this.toUser(other, { type: 'invite_received', invite: { ...this.view(inv, now), role: 'recipient' } });
@@ -166,6 +170,20 @@ class Invites {
       if (this.backend.inMatch(uid)) return release('busy', `${who} já está em uma partida.`);
       if (this.inQueue(uid)) return release('busy', `${who} está em uma fila.`);
       if (!this.sockets(uid).length) return release('offline', `${who} está offline.`);
+    }
+    if ((inv.game || 'chess') !== 'chess') {
+      // R35 · MARCHA REAL / XEQUE: mesa de 4 no servidor (quem convidou + amigo + 2 bots)
+      const party = this.backend.party;
+      if (!party) return release('server_error', 'Modo indisponível no servidor.');
+      let room;
+      try { room = party.start(inv.game, [inv.from, inv.to]); }
+      catch (e) { console.error('invite party start', e && e.message); return release('server_error', 'Não foi possível iniciar a partida.'); }
+      inv.status = 'accepted'; inv.match_id = room.id;
+      for (const u of [from, to]) if (this.byUser.get(u) === inv.id) this.byUser.delete(u);
+      this.broadcast(inv);
+      for (const u of [from, to]) if (this.backend.presenceChanged) this.backend.presenceChanged(u);
+      setTimeout(() => this.invites.delete(inv.id), 120000).unref();
+      return;
     }
     const casual = this.casual();
     if (!casual) return release('server_error', 'Casual indisponível no servidor.');
