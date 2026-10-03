@@ -505,6 +505,30 @@ func _crowns(pos: Vector2, s: int, w: float, gap: float, eliminated := false):
         var h := w * 192.0 / 228.0
         draw_texture_rect(tex, Rect2(pos + Vector2(i * (w + gap), 0), Vector2(w, h)), false, mod)
 
+## R37 · relógio de CADA jogador na placa dele: 5 pauzinhos (1 por XEQUE perdido e sobrevivido) e a
+## chance do próximo aperto. Mesmo valor do motor (clock_used / CLOCK_CHANCES) — nada é sorteado aqui.
+func _clock_row(pos: Vector2, w: float, h: float, s: int, fs: int):
+    var vis: String = ui.clock_visual(s)
+    var used: int = ui.clock_used(s)
+    var segs := Rules.CLOCK_SLOTS - 1
+    var lit := segs if vis == "disparado" else used
+    var col: Color = {"neutro": Color("e8b242"), "pulsando": Color("b068ff"), "perigo": Color("e02a36"), "quase": Color("e02a36"), "disparado": Color("e02a36")}[vis]
+    var ch: float = 1.0 if vis == "disparado" else ui.clock_next_chance(s)
+    var pct := "%d%%" % roundi(ch * 100.0)
+    var tw_ := tw("100%", "ui_sp", fs) + 6
+    var gap := maxf(2.0, h * 0.22)
+    var sw := (w - tw_ - (segs - 1) * gap) / float(segs)
+    draw_rect(Rect2(pos - Vector2(2, 2), Vector2(w - tw_ + 2, h + 4)), Color("0a1712"))
+    for i in segs:
+        var sr := Rect2(pos + Vector2(i * (sw + gap), 0), Vector2(sw, h))
+        draw_rect(sr, Color("10241b"))
+        draw_rect(sr, Color("2d4a3c"), false, 1.5)
+        var blink: bool = ui.phase == "clock" and int(ui.result.get("loser", -1)) == s and i == used and int(ui.t * 5) % 2 == 0
+        if i < lit or blink:
+            draw_rect(sr.grow(-1.5), col)
+    var pcol := Color("e8b242").lerp(Color("ff4a42"), clampf((ch - 0.12) / 0.6, 0.0, 1.0))
+    text(pct, Vector2(pos.x + w - tw_ + 6, pos.y + h * 0.5 + fs * 0.36), "ui_sp", fs, pcol)
+
 func _cards_count(pos: Vector2, s: int, fs: int):
     var n: int = ui.g.hands[s].size()
     var h := fs * 1.05
@@ -558,6 +582,10 @@ func _draw_plate(s: int):
                 chip(Rect2(bx, top - nfs * 0.78, (42 if compact else 48) * (1.45 if tag != "BOT" else 1.0), nfs * 0.92), tag, Color("9fd0ff") if not elim else Color("555"), Color("9fd0ff") if not elim else Color("555"), Color("13314f"), 15)
             var cw := 30.0 if compact else 36.0
             _crowns(Vector2(x + 2, top + (8 if compact else 12)), s, cw, cw * 0.27, elim)
+            # R37 · relógio deste jogador, ao lado das coroas
+            var rx := x + 2 + 2 * cw + cw * 0.27 + 10        # depois da coroa (centrada no espaço de 3)
+            var rw := r.end.x - rx - 12.0
+            if rw > 36: _clock_row(Vector2(rx, top + (10 if compact else 14)), rw, cw * 0.5, s, 14 if compact else 16)
             var ch := 24.0 if compact else 30.0
             var cy := r.end.y - ch - (12 if compact else 14)
             var label: String = st.text
@@ -575,7 +603,7 @@ func _draw_plate(s: int):
             var bh := 22.0 * u
             var one_line := tw(name, "ui", nfs) + bw + 10 <= w - 16 or not bot
             var avs := 100.0 * u
-            var h := (304.0 if not one_line else 278.0) * u
+            var h := (330.0 if not one_line else 304.0) * u      # R37: + linha do relógio do jogador
             var r := Rect2(c.x - w / 2.0, c.y - h / 2.0, w, h)
             ui.set_meta("plate_top_%d" % s, r.position.y)
             ui.hits.append({"rect": r, "id": "seat_%d" % s})     # R37: cartão de perfil (mouse / toque)
@@ -600,6 +628,8 @@ func _draw_plate(s: int):
             var cw := 36.0 * u
             _crowns(Vector2(c.x - (cw * 3 + cw * 0.36 * 2) / 2.0, y - 2 * u), s, cw, cw * 0.36, elim)
             y += 27 * u + 13 * u
+            _clock_row(Vector2(r.position.x + 14 * u, y), w - 28 * u, 14 * u, s, int(round(16 * u)))
+            y += 26 * u
             var label: String = st.text
             var chh := 30.0 * u
             var cfs := int(round(19 * u))
@@ -681,8 +711,7 @@ func _draw_meter():
     var compact: bool = ui.layout != "desktop"
     text("RELÓGIO DE XEQUE", r.position + Vector2(18, 33 if not compact else 31), "ui_sp4", 21 if not compact else 19, Color("e8b242"))
     var total: int = Rules.CLOCK_SLOTS
-    var used: int = total - ui.g.clock_left(who)
-    if ui.phase in ["reveal", "clock"] and int(ui.result.loser) == who: used = total - int(ui.result.clock_left_before)
+    var used: int = ui.clock_used(who)
     var segs := total - 1                     # medidor de 5 casas da arte: apertos sobrevividos
     var lit := used
     if vis == "disparado": lit = segs
@@ -705,10 +734,10 @@ func _draw_meter():
     var fs := 30 if not compact else 26
     var ty := r.end.y - (22 if not compact else 18)
     text(words, Vector2(r.position.x + 18, ty), "ui_sp4", fit(words, "ui_sp4", fs, r.size.x * 0.62), wcol)
-    var owner: String = ui.g.names[who]
+    var owner: String = "Seu relógio" if who == 0 else String(ui.g.names[who])
     text(owner, Vector2(r.position.x, ty), "ui", fit(owner, "ui", 20, r.size.x * 0.34), Color("c9d6cf"), r.size.x - 18, HORIZONTAL_ALIGNMENT_RIGHT)
     # R36 · chance do próximo acionamento de quem está em foco (12% → 100%)
-    var ch: float = ui.g.clock_chance(who) if vis != "disparado" else 1.0
+    var ch: float = ui.clock_next_chance(who) if vis != "disparado" else 1.0
     var ct := "%d%%" % roundi(ch * 100.0)
     var ccol := Color("e8b242").lerp(Color("ff4a42"), clampf((ch - 0.12) / 0.6, 0.0, 1.0))
     text(ct, Vector2(r.position.x, r.position.y + (33 if not compact else 31)), "ui_sp", 22 if not compact else 19, ccol, r.size.x - 18, HORIZONTAL_ALIGNMENT_RIGHT)
@@ -791,7 +820,16 @@ func _draw_hand():
             for gj in 4: draw_rect(Rect2(-sz / 2.0, sz).grow(4 + gj * 4 + pj * 3), Color(0.35, 1.0, 0.55, 0.30 - gj * 0.07), false, 4.0)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         var mod := Color.WHITE if my_turn or g.turn != 0 else Color(0.9, 0.9, 0.9)
-        tex_center(tex, it.c, it.sc, it.rot, mod)
+        var cpos: Vector2 = it.c
+        if my_turn:
+            # R37 · SUA VEZ: as cartas da mão brilham e "respiram" (onda que passa carta por carta)
+            var wv := 0.5 + 0.5 * sin(ui.t * 4.0 - i * 0.7)
+            if not (i in ui.selected): cpos = cpos + Vector2(0, -6.0 * wv)
+            draw_set_transform(ui.origin + cpos * ui.k, it.rot, Vector2(ui.k, ui.k))
+            for gk in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(4 + gk * 5), Color(1.0, 0.82, 0.32, (0.16 - gk * 0.03) * (0.55 + 0.45 * wv)), false, 5.0)
+            draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+            mod = Color(1.0 + 0.16 * wv, 1.0 + 0.13 * wv, 1.0 + 0.04 * wv)
+        tex_center(tex, cpos, it.sc, it.rot, mod)
         if hand[i] == Rules.JOKER:
             var tagc := Vector2(it.c) + Vector2(0, -sz.y / 2.0 - 16)
             chip(Rect2(tagc - Vector2(62, 15), Vector2(124, 30)), "CORINGA", Color("1d7a4a"), Color("ffd257"), Color("fff1c2"), 18)

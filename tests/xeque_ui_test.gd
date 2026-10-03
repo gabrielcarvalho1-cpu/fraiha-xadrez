@@ -71,6 +71,15 @@ func run():
     check(ui.intro_anim < 0.0, "R36: apresentação termina sozinha (%.1f s)" % ui.INTRO_T)
     check(Rules.DECK_COUNTS == {"rei": 6, "rainha": 6, "cavalo": 6, "peao": 2}, "R36: baralho 6 Rei / 6 Rainha / 6 Cavalo / 2 Peão")
     check(g.names[1] == "Dama de Ferro" and g.names[2] == "Sir Gambito" and g.names[3] == "Torre Velha", "3 bots da referência à mesa")
+    # ---------- R37 · cada jogador tem o próprio relógio (pauzinhos = XEQUEs perdidos) ----------
+    for pair in [[0, 1], [1, 2], [2, 3], [3, 0]]:
+        g.reset_clock(pair[0])
+        for kk in pair[1]: g.clocks[pair[0]].pop_front()
+    g.turn = 2
+    check(ui.clock_focus() == 0, "R37: fora do XEQUE o medidor mostra o SEU relógio (não segue a vez)")
+    check(ui.clock_used(0) == 1 and ui.clock_used(1) == 2 and ui.clock_used(2) == 3 and ui.clock_used(3) == 0, "R37: cada placa mostra os pauzinhos do próprio jogador (1, 2, 3, 0)")
+    check(is_equal_approx(ui.clock_next_chance(2), Rules.CLOCK_CHANCES[3]) and is_equal_approx(ui.clock_next_chance(3), Rules.CLOCK_CHANCES[0]) and ui.clock_next_chance(2) > ui.clock_next_chance(1), "R37: quem errou mais tem chance maior de estourar (mesma tabela do motor)")
+    for st in 4: g.reset_clock(st)
     # ---------- vez do humano: seleção, JOGAR travado ----------
     g.turn = 0
     g.last_play = {}

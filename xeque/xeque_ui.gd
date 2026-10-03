@@ -727,11 +727,24 @@ func clock_visual(seat: int) -> String:
     # mesmo mapa da especificação do pacote: 0 apertos = neutro, 1–2 pulsando, 3 perigo, 4–5 quase
     return {6: "neutro", 5: "pulsando", 4: "pulsando", 3: "perigo", 2: "quase", 1: "quase"}.get(left, "neutro")
 
-## De quem é o relógio mostrado no centro e no medidor.
+## De quem é o relógio mostrado no centro e no medidor. R37: fora do XEQUE é sempre o SEU relógio
+## (antes seguia a vez e parecia "aleatório"); cada jogador tem o próprio relógio na placa dele.
 func clock_focus() -> int:
     if g == null: return 0
     if phase != "" and not result.is_empty(): return int(result.loser)
-    return g.turn if g.turn >= 0 else 0
+    return 0
+
+## Apertos que este jogador já sobreviveu no relógio atual (cada XEQUE perdido = 1 pauzinho).
+## Durante a revelação/relógio do próprio jogador mostra o valor de ANTES (o motor já resolveu).
+func clock_used(seat: int) -> int:
+    if g == null or seat < 0: return 0
+    if phase in ["reveal", "clock"] and int(result.get("loser", -1)) == seat:
+        return Rules.CLOCK_SLOTS - int(result.clock_left_before)
+    return Rules.CLOCK_SLOTS - g.clock_left(seat)
+
+## Chance do próximo aperto deste jogador (o mesmo valor que o motor usa: Rules.CLOCK_CHANCES).
+func clock_next_chance(seat: int) -> float:
+    return float(Rules.CLOCK_CHANCES[clampi(clock_used(seat), 0, Rules.CLOCK_SLOTS - 1)])
 
 func seat_status(s: int) -> Dictionary:
     if g == null: return {"text": "AGUARDANDO", "id": "aguardando"}
