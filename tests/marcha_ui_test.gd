@@ -329,7 +329,8 @@ func run():
     ui._on_hit("cancel")
     check(ui.pending.is_empty() and ui.sel_card < 0, "CANCELAR limpa a escolha")
     # R38.2 · o caso da foto: 2 peões (um no Portão), 7 → JOGAR CARTA → toque no 1º → 5+2 → toque no 2º = joga
-    for i in 4: g.pawns[0][i] = {"zone": "home", "pos": i}
+    for s7 in 4:
+        for i in 4: g.pawns[s7][i] = {"zone": "home", "pos": i}      # ninguém mais na Muralha (bots não interferem)
     g.pawns[0][0] = {"zone": "track", "pos": 26}
     g.pawns[0][1] = {"zone": "track", "pos": 0}
     g.hands[0] = ["7", "3", "8", "2"]
@@ -347,8 +348,8 @@ func run():
     ui.on_press(br7.position + ui.pawn_point(0, 1) * sc7)
     check(ui.sel_second == [0, 1] or ui.busy or g.hands[0].size() < hand7, "R38.2: toque no 2º peão (no Portão) aceito")
     t0 = Time.get_ticks_msec()
-    while ui.busy and Time.get_ticks_msec() - t0 < 6000: await process_frame
-    check(int(g.pawns[0][0].pos) == 31 and int(g.pawns[0][1].pos) == 2, "R38.2: 7 = 5 + 2 jogado sem 2º JOGAR CARTA (26→31, 0→2)")
+    while ui.g.turn == 0 and Time.get_ticks_msec() - t0 < 6000: await process_frame      # (logo depois, um bot pode usar o 5 nela)
+    check(int(g.pawns[0][0].pos) == 31 and int(g.pawns[0][1].pos) == 2, "R38.2: 7 = 5 + 2 jogado sem 2º JOGAR CARTA (26→31, 0→2) · %s" % str(g.pawns[0]))
     t0 = Time.get_ticks_msec()
     while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 15000: await process_frame
     # sair e tentar de novo no mesmo dia (sem Club)
