@@ -116,6 +116,12 @@ func text(s: String, pos: Vector2, key: String, fs: int, col: Color, width := -1
     if outline > 0: draw_string_outline(font(key), pos, s, align, width, fs, outline, ocol)
     draw_string(font(key), pos, s, align, width, fs, col)
 
+## seta desenhada (a fonte "ui" não tem o glifo →); pos = linha de base, como em text()
+func arrow(pos: Vector2, col: Color):
+    var c := pos + Vector2(16, -13)
+    draw_rect(Rect2(c + Vector2(-16, -3), Vector2(20, 6)), col)
+    draw_colored_polygon(PackedVector2Array([c + Vector2(2, -11), c + Vector2(18, 0), c + Vector2(2, 11)]), col)
+
 func tw(s: String, key: String, fs: int) -> float:
     return font(key).get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 
@@ -961,7 +967,7 @@ func _tutorial_panels() -> Array:
         {"title": "AS CARTAS", "text": "*%d cartas*: %d Rei, %d Rainha, %d Cavalo e %d Peão Coroado, o *CORINGA*. %d para cada um." % [Rules.deck_size(), Rules.DECK_COUNTS[Rules.KING], Rules.DECK_COUNTS[Rules.QUEEN], Rules.DECK_COUNTS[Rules.KNIGHT], Rules.DECK_COUNTS[Rules.JOKER], Rules.HAND], "art": "cards"},
         {"title": "SUA VEZ", "text": "Baixe de *1 a 3 cartas viradas* e diga que são a peça pedida. Pode ser verdade. Pode ser blefe.", "art": "backs"},
         {"title": "XEQUE", "text": "O próximo jogador joga ou aperta *XEQUE* na jogada anterior: as cartas dela são reveladas.", "art": "xeque"},
-        {"title": "RELÓGIO DE XEQUE", "text": "*Quem perde o desafio aciona o seu Relógio*: pode estourar já no 1º aperto (%d%%) e o perigo sobe a cada nível, até %d%%." % [roundi(Rules.CLOCK_CHANCES[0] * 100.0), roundi(Rules.CLOCK_CHANCES[-1] * 100.0)], "art": "clocks"},
+        {"title": "RELÓGIO DE XEQUE", "text": "*Quem perde o desafio aciona o seu Relógio*: pode estourar já no primeiro aperto (%d%%) e o perigo sobe a cada nível, até %d%%." % [roundi(Rules.CLOCK_CHANCES[0] * 100.0), roundi(Rules.CLOCK_CHANCES[-1] * 100.0)], "art": "clocks"},
         {"title": "XEQUE-MATE", "text": "Se o Relógio disparar, é *xeque-mate*: o jogador está *fora da partida*.", "art": "mate"},
     ]
 
@@ -1041,15 +1047,15 @@ func _tutorial_art(a: Rect2, kind: String):
             draw_texture_rect(ui.cards["rei"], Rect2(x3 + w3 + 8, c.y - h3 / 2.0, w3, h3), false)
             var bsc := minf(0.42, (x3 - a.position.x - 60) / 380.0)
             tex_center(ui.xeque_tex["normal"], Vector2(a.position.x + 10 + 216 * bsc, c.y), bsc)
-            text("→", Vector2(x3 - 44, c.y + 12), "ui", 40, Color("e8b242"))
+            arrow(Vector2(x3 - 44, c.y + 12), Color("e8b242"))
         "clocks":
             var names2 := ["neutro", "perigo", "quase"]   # 6 posições: neutro → em perigo → quase disparando
             for i in 3:
                 tex_center(ui.clock_tex[names2[i]], c + Vector2((i - 1) * 140, 4), (a.size.y + 30) / 560.0)
-                if i < 2: text("→", Vector2(c.x + (i - 1) * 140 + 56, c.y + 12), "ui", 40, Color("e8b242"))
+                if i < 2: arrow(Vector2(c.x + (i - 1) * 140 + 56, c.y + 12), Color("e8b242"))
         "mate":
             tex_center(ui.clock_tex["disparado"], c + Vector2(-120, 4), (a.size.y + 40) / 560.0)
-            text("→", Vector2(c.x - 30, c.y + 12), "ui", 40, Color("e8b242"))
+            arrow(Vector2(c.x - 30, c.y + 12), Color("e8b242"))
             draw_texture_rect(ui.CROWN_LOST, Rect2(c.x + 30, c.y - 34, 80, 67), false)
             text("FORA", Vector2(c.x + 120, c.y + 12), "ui_sp4", 36, Color("ff5a52"))
 
