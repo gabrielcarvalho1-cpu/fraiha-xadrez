@@ -203,7 +203,11 @@ func _build():
     who.add_theme_font_size_override("font_size", 18)
     who.add_theme_color_override("font_color", Color("f4edda"))
     col.add_child(who)
-    _label("%s · %d min · Casual (sem PL)" % [String(invite.get("mode_name", "")).to_upper(), int(invite.get("minutes", 0))], 15, TEXT).name = "InviteMode"
+    var game := String(invite.get("game", "chess"))
+    var mode_text := "%s · %d min · Casual (sem PL)" % [String(invite.get("mode_name", "")).to_upper(), int(invite.get("minutes", 0))]
+    if game == "marcha": mode_text = "MARCHA REAL · vocês em dupla contra 2 bots"
+    elif game == "xeque": mode_text = "XEQUE · vocês dois + 2 bots, cada um por si"
+    _label(mode_text, 15, TEXT).name = "InviteMode"
     countdown = _label("", 14, DIM_TEXT)
     countdown.name = "InviteCountdown"
     status_label = _label("", 14, GOLD)

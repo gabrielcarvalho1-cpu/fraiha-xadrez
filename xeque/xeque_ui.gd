@@ -100,6 +100,11 @@ var flash := ""
 var flash_t := 0.0
 var rng := RandomNumberGenerator.new()
 var seed_override := 0            # testes: semente fixa
+# ---- R35 · partida ONLINE com amigo (o servidor é a autoridade; aqui só pedimos ações e animamos)
+var online := false
+var room_id := ""
+var players: Array = []           # [{name, bot, connected, left}] já girados (você = 0)
+var ev_queue: Array = []
 
 const PHASE_TIME := {"reveal": 1.7, "clock": 1.4, "safe": 1.4, "mate": 2.6, "elim": 1.6}
 
@@ -154,6 +159,9 @@ func open():
     _relayout()
 
 func close():
+    if online:
+        if mode == "game" and g != null and g.state != Rules.MATCH_END: _record_history("abandon")
+        _online_leave()
     visible = false
     root.visible = false
     Sound.music_off(stage)
@@ -201,6 +209,7 @@ func _redraw():
 # ---------------------------------------------------------------- partida
 func start_game():
     if mode == "game" and g != null and g.state != Rules.MATCH_END: return
+    online = false
     g = Rules.new()
     var names := SEAT_NAMES.duplicate()
     g.setup(seed_override if seed_override != 0 else 0, names)
@@ -236,6 +245,14 @@ func _begin_turn():
     if g.state != Rules.TURN_WAITING:
         _redraw()
         return
+    if online:
+        # o servidor decide a vez e o tempo; bots também rodam no servidor
+        input_locked = g.turn != 0
+        turn_left_ms = online_turn_ms if g.turn == 0 else TURN_MS
+        if g.turn == 0: _cue("your_turn")
+        last_tick_s = -1
+        _redraw()
+        return
     if g.turn != 0: bot_wait = rng.randf_range(BOT_DELAY_MIN, BOT_DELAY_MAX)
     else: _cue("your_turn")       # aviso sonoro: é a sua vez
     last_tick_s = -1
@@ -268,7 +285,7 @@ func _process(delta):
                         _cue("tick")
                     if turn_left_ms <= 0:
                         turn_left_ms = 0
-                        _timeout()
+                        if not online: _timeout()     # online: o servidor joga 1 carta por você
             elif bot_wait >= 0.0:
                 bot_wait -= delta
                 if bot_wait < 0.0: _bot_act()
@@ -324,11 +341,17 @@ func human_play():
     input_locked = true                # trava toque/clique duplo
     var idx := selected.duplicate()
     selected = []
+    if online:
+        _online_send({"kind": "play", "idx": idx})
+        return
     _after_play(0, g.play(0, idx))
 
 func human_challenge():
     if not can_human_challenge(): return
     input_locked = true
+    if online:
+        _online_send({"kind": "challenge"})
+        return
     _on_challenge(g.challenge(0), 0)
 
 # ---------------------------------------------------------------- XEQUE → relógio → xeque-mate
@@ -368,6 +391,10 @@ func _advance_phase():
 func _end_resolution():
     phase = ""
     bubble = {}
+    if online:
+        _drain_events()               # rodada nova / fim chegam do servidor
+        _redraw()
+        return
     if g.state == Rules.MATCH_END:
         _finish()
         return
@@ -393,12 +420,12 @@ func _record_history(res: String) -> Dictionary:
     recorded = true
     var final := []
     for s in Rules.SEATS:
-        final.append({"seat": s, "name": g.names[s], "lives": g.lives[s], "placement": g.placement(s), "eliminated_round": g.eliminated_round[s], "bot": s != 0})
+        final.append({"seat": s, "name": g.names[s], "lives": g.lives[s], "placement": g.placement(s), "eliminated_round": g.eliminated_round[s], "bot": (bool(players[s].get("bot", true)) if online and s < players.size() else s != 0)})
     var place := g.placement(0)
     if res == "abandon":
         place = g.alive_seats().size()      # sai no lugar em que estava
     return mh.add_entry({
-        "mode_id": Rules.MODE_ID, "ruleset_version": Rules.RULESET_VERSION, "mode": "xeque",
+        "mode_id": Rules.MODE_ID, "ruleset_version": Rules.RULESET_VERSION, "mode": "xeque", "online": online, "room_id": room_id,
         "result": res, "reason": "abandono" if res == "abandon" else "xeque-mate",
         "player": "Você", "opponent": "%s, %s e %s" % [g.names[1], g.names[2], g.names[3]],
         "started_at": started_unix, "finished_at": int(Time.get_unix_time_from_system()),
@@ -463,12 +490,14 @@ func _on_hit(id: String):
         "menu_quit":
             menu_open = false
             confirm_quit = true
-        "quit_yes": quit_match()
+        "quit_yes": quit_match()     # online: close() avisa o servidor (party_leave)
         "quit_no": confirm_quit = false
         "tut_back":
             if tutorial_from_game: _resume_from_tutorial()
             else: close()
-        "tut_play", "again": start_game()
+        "tut_play", "again":
+            if online and mode == "tutorial" and tutorial_from_game: _resume_from_tutorial()
+            else: start_game()
         "over_tutorial":
             tutorial_from_game = false
             mode = "tutorial"
@@ -490,6 +519,11 @@ func _cue(kind: String):
     if audio != null and audio.has_method("play_cue"): audio.play_cue("ui")
 
 # ---------------------------------------------------------------- consultas para o desenho
+## Etiqueta do lugar: "BOT" (contra bots) ou "AMIGO" (jogador humano na mesa online).
+func seat_tag(seat: int) -> String:
+    if online and seat > 0 and seat < players.size() and not bool(players[seat].get("bot", true)) and not bool(players[seat].get("left", false)): return "AMIGO"
+    return "BOT"
+
 func clock_visual(seat: int) -> String:
     if seat < 0 or g == null: return "neutro"
     if phase == "mate" and int(result.loser) == seat: return "disparado"
@@ -533,3 +567,167 @@ func help_text() -> Array:
             return ["Escolha de *1 a 3* cartas", "ou duvide com *XEQUE*"] if g.can_challenge(0) else ["Escolha de *1 a 3* cartas", "e baixe viradas para baixo"]
         return ["Você vai dizer: *%s*" % g.declared_text(selected.size()), "toque em *JOGAR CARTAS*"]
     return ["Vez de *%s*" % g.names[g.turn], "aguarde a jogada"]
+
+
+# ================================================================ R35 · ONLINE COM AMIGO
+var online_turn_ms := TURN_MS
+## Mesa criada pelo servidor (convite aceito). Tudo já vem girado: você é o lugar 0 (embaixo).
+## O espelho local (g) só guarda o que é PÚBLICO + a sua mão; as mãos dos outros e a ordem dos
+## relógios nunca chegam aqui.
+func start_online(msg: Dictionary):
+    var resumed := bool(msg.get("resumed", false)) and online and room_id == String(msg.get("room_id", "")) and g != null
+    online = true
+    room_id = String(msg.get("room_id", ""))
+    players = msg.get("players", []) if msg.get("players") is Array else []
+    if not visible:
+        visible = true
+        root.visible = true
+        Sound.music_on(stage, MUSIC)
+        _load_avatars()
+    menu_open = false
+    confirm_quit = false
+    tutorial_from_game = false
+    ev_queue.clear()
+    if not resumed:
+        g = Rules.new()
+        phase = ""
+        result = {}
+        bubble = {}
+        fly = []
+        recorded = false
+        started_unix = int(Time.get_unix_time_from_system())
+        started_ms = Time.get_ticks_msec()
+        mesa_round = -1
+    mode = "game"
+    _apply_snapshot(msg.get("snapshot", {}))
+    if bool(msg.get("ended", false)) or g.state == Rules.MATCH_END: _finish()
+    else: _begin_turn()
+    _relayout()
+
+static func _ints(a) -> Array:
+    var out := []
+    if a is Array:
+        for x in a: out.append(int(x))
+    return out
+
+func _apply_snapshot(snap: Dictionary):
+    if g == null or snap.is_empty(): return
+    g.state = String(snap.get("state", g.state))
+    g.round_no = int(snap.get("round", g.round_no))
+    g.target = String(snap.get("target", g.target))
+    g.turn = int(snap.get("turn", -1))
+    g.lives = _ints(snap.get("lives", [1, 1, 1, 1]))
+    var counts := _ints(snap.get("hand_counts", [0, 0, 0, 0]))
+    var clk := _ints(snap.get("clock_left", [6, 6, 6, 6]))
+    g.hands = []
+    g.clocks = []
+    for s in Rules.SEATS:
+        if s == 0: g.hands.append((snap.get("my_hand", []) as Array).map(func(c): return String(c)))
+        else:
+            var h := []
+            for k in counts[s]: h.append("?")          # cartas dos outros: só a quantidade
+            g.hands.append(h)
+        var c := []
+        for k in clk[s]: c.append(Rules.SAFE)          # posições restantes (o conteúdo é segredo do servidor)
+        g.clocks.append(c)
+    var lp: Dictionary = snap.get("last_play", {})
+    g.last_play = {} if lp.is_empty() else {"seat": int(lp.seat), "count": int(lp.count), "cards": []}
+    g.plays = (snap.get("plays_this_round", []) as Array).map(func(p): return {"seat": int(p.seat), "count": int(p.count), "cards": []})
+    g.reveals = (snap.get("reveals", []) as Array).map(func(r): return {"seat": int(r.seat), "cards": (r.cards as Array).map(func(c): return String(c)), "target": String(r.target), "truthful": bool(r.truthful), "round": int(r.get("round", 0))})
+    g.winner = int(snap.get("winner", -1))
+    g.eliminated_round = _ints(snap.get("eliminated_round", [-1, -1, -1, -1]))
+    g.finish_order = _ints(snap.get("finish_order", []))
+    g.next_starter = int(snap.get("next_starter", -1))
+    g.public_log = (snap.get("public_log", []) as Array).map(func(x): return String(x))
+    var nm: Array = snap.get("names", [])
+    if nm.size() == Rules.SEATS:
+        g.names = nm.map(func(x): return String(x))
+        g.names[0] = SEAT_NAMES[0]
+    if bool(snap.get("my_turn", false)): online_turn_ms = int(snap.get("turn_left_ms", TURN_MS))
+    var conn: Array = snap.get("players_connected", [])
+    for i in mini(conn.size(), players.size()): players[i]["connected"] = bool(conn[i])
+
+static func _result(r: Dictionary) -> Dictionary:
+    var o := r.duplicate(true)
+    for key in ["caller", "accused", "loser", "winner", "next_starter", "clock_left_before", "lives_after", "round"]:
+        if o.has(key): o[key] = int(o[key])
+    for key in ["cards", "false_cards"]:
+        if o.has(key): o[key] = (o[key] as Array).map(func(c): return String(c))
+    return o
+
+## Mensagens party_* do servidor (repassadas pelo stage).
+func on_party_message(msg: Dictionary):
+    if not online or String(msg.get("room_id", room_id)) != room_id: return
+    match String(msg.get("type", "")):
+        "party_event":
+            ev_queue.append(msg)
+            _drain_events()
+        "party_error":
+            if msg.has("snapshot"): _apply_snapshot(msg.snapshot)
+            input_locked = g == null or g.turn != 0
+            _flash(String(msg.get("message", "Ação recusada.")))
+            _redraw()
+
+## Aplica os eventos em ordem; durante a apresentação do XEQUE (revelar → relógio) os próximos esperam.
+func _drain_events():
+    while not ev_queue.is_empty() and online and phase == "":
+        _run_event(ev_queue.pop_front())
+
+func _run_event(msg: Dictionary):
+    var snap: Dictionary = msg.get("snapshot", {})
+    match String(msg.get("ev", "")):
+        "play":
+            var pub: Dictionary = msg.get("play", {})
+            var seat := int(pub.get("seat", -1))
+            var target_before := g.target
+            _apply_snapshot(snap)
+            input_locked = true
+            selected = []
+            bubble = {"seat": seat, "count": int(pub.get("count", 1)), "target": target_before}
+            fly.append({"from": seat, "t": 0.0, "count": int(pub.get("count", 1))})
+            _cue("card_%d" % clampi(int(pub.get("count", 1)), 1, 3))
+            if String(msg.get("reason", "")) == "timeout" and seat == 0: _flash("Tempo esgotado: uma carta foi jogada por você.")
+            if pub.has("forced") and pub.forced is Dictionary:
+                var r := _result(pub.forced)
+                _on_challenge(r, int(r.caller))
+        "challenge":
+            _apply_snapshot(snap)
+            var r := _result(msg.get("result", {}))
+            _on_challenge(r, int(r.get("caller", -1)))
+        "round", "turn", "presence":
+            _apply_snapshot(snap)
+            _begin_turn()
+        "left":
+            _apply_snapshot(snap)
+            var who := int(msg.get("who", -1))
+            if who > 0 and who < players.size():
+                players[who]["left"] = true
+                _flash("%s saiu da partida — um bot joga no lugar." % g.names[who])
+        "end":
+            _apply_snapshot(snap)
+            if mode == "game": _finish()
+    _redraw()
+
+func _online_send(action: Dictionary):
+    var acc = stage.get("account") if stage != null else null
+    if acc == null or not acc.has_method("send_server") or not acc.send_server({"type": "party_action", "room_id": room_id, "action": action}):
+        input_locked = false
+        _flash("Sem conexão com o servidor. Tente de novo.")
+    _redraw()
+
+func _online_leave():
+    var acc = stage.get("account") if stage != null else null
+    if acc != null and acc.has_method("send_server"): acc.send_server({"type": "party_leave", "room_id": room_id})
+    online = false
+    ev_queue.clear()
+
+func online_lost(text: String):
+    if not online: return
+    online = false
+    ev_queue.clear()
+    if mode == "game":
+        mode = "tutorial"
+        g = null
+        phase = ""
+    _flash(text)
+    _redraw()

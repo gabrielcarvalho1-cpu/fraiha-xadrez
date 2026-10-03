@@ -62,7 +62,15 @@ var portrait := false
 var design := Vector2(1920, 1080)
 var k := 1.0
 var origin := Vector2.ZERO
-var names := ["Você", "ReiDoBlitz", "Lady Torre", "Cavalo_Louco"]
+const DEFAULT_NAMES := ["Você", "ReiDoBlitz", "Lady Torre", "Cavalo_Louco"]
+var names := DEFAULT_NAMES.duplicate()
+# ---- R35 · partida ONLINE com amigo (o servidor é a autoridade; aqui só pedimos jogadas e animamos)
+var online := false
+var room_id := ""
+var players: Array = []           # [{name, bot, connected, left}] já girados (você = 0)
+var ev_queue: Array = []
+var ev_running := false
+var waiting_server := false
 var cards := {}
 var card_back: Texture2D
 var pawn_tex := {}
@@ -148,6 +156,9 @@ func open():
     _relayout()
 
 func close():
+    if online:
+        if mode == "game": _record_history("abandon")
+        _online_leave()
     visible = false
     root.visible = false
     Sound.music_off(stage)
@@ -201,6 +212,8 @@ func start_game():
         mode = "lobby"
         _redraw()
         return
+    online = false
+    names = DEFAULT_NAMES.duplicate()
     g = Rules.new()
     g.setup(0)
     for s in 4: g.names[s] = names[s] if s > 0 else (String(hub.player_name) if hub != null and String(hub.player_name) != "" else "Você")
@@ -215,7 +228,7 @@ func start_game():
     _begin_turn()
 
 func _begin_turn():
-    if g == null or mode != "game": return
+    if g == null or mode != "game" or online: return
     turn_left_ms = TURN_MS
     _clear_selection()
     _redraw()
@@ -277,6 +290,7 @@ func _record_history(result: String) -> Dictionary:
     return mh.add_entry({
         "mode_id": "marcha_real", "ruleset_version": Rules.RULESET_VERSION, "mode": "marcha",
         "result": result, "reason": "abandono" if result == "abandon" else "coroação",
+        "online": online, "room_id": room_id,
         "player": "Você", "ally": String(g.names[2]), "opponent": "%s e %s" % [g.names[1], g.names[3]],
         "started_at": started_unix, "finished_at": int(Time.get_unix_time_from_system()), "plies": plays,
         "data": {"rounds": g.round_no, "crowned": [g.team_crowned(0), g.team_crowned(1)], "seat": 0, "log": g.log.slice(-12)},
@@ -295,7 +309,7 @@ func _process(delta):
         turn_left_ms -= int(delta * 1000.0)
         if turn_left_ms <= 0:
             turn_left_ms = 0
-            _auto_play()
+            if not online: _auto_play()    # online: o servidor joga por você quando o tempo acaba
     _redraw()
 
 ## Tempo esgotado: a jogada sugerida (a mesma do bot) é feita no lugar do jogador.
@@ -476,6 +490,9 @@ func pick_split(a: int):
 
 func confirm():
     if busy or pending.is_empty() or g == null or g.turn != 0: return
+    if online:
+        _online_send(pending)
+        return
     var mv := pending
     _play(0, mv)
 
@@ -635,6 +652,7 @@ func _on_hit(id: String):
         "menu_quit":
             menu_open = false
             if mode == "game": _record_history("abandon")
+            if online: _online_leave()
             mode = "lobby"
             g = null
             access.refresh()
@@ -645,6 +663,7 @@ func _on_hit(id: String):
             close()
             if hub != null and hub.has_method("open_club"): hub.open_club()
         "over_again":
+            online = false
             mode = "lobby"
             g = null
             access.refresh()
@@ -1297,3 +1316,171 @@ class TableView extends Control:
         draw_rect(r, Color(0.05, 0.08, 0.06, 0.94))
         draw_rect(r, ui.GOLD, false, 2.0)
         text(ui.flash, Vector2(r.position.x, r.position.y + 37), "semi", 26, ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+
+
+# ================================================================ R35 · ONLINE COM AMIGO
+## Mesa criada pelo servidor (convite aceito). msg = party_start: jogadores e estado já girados
+## para você ficar no lugar 0 (embaixo). As regras locais servem só para mostrar as jogadas
+## possíveis; quem valida e aplica é o servidor.
+func start_online(msg: Dictionary):
+    var resumed := bool(msg.get("resumed", false)) and online and room_id == String(msg.get("room_id", ""))
+    online = true
+    room_id = String(msg.get("room_id", ""))
+    players = msg.get("players", []) if msg.get("players") is Array else []
+    names = DEFAULT_NAMES.duplicate()
+    for i in mini(4, players.size()):
+        if i > 0: names[i] = String(players[i].get("name", names[i]))
+    if not visible:
+        visible = true
+        root.visible = true
+        Sound.music_on(stage, MUSIC)
+    tut_page = -1
+    menu_open = false
+    if not resumed:
+        g = Rules.new()
+        g.setup(0)
+        started_at = Time.get_ticks_msec()
+        started_unix = int(Time.get_unix_time_from_system())
+        plays = 0
+        recorded = false
+        celebs.clear()
+    ev_queue.clear()
+    ev_running = false
+    waiting_server = false
+    mode = "game"
+    _apply_snapshot(msg.get("snapshot", {}))
+    _clear_selection()
+    busy = not _my_turn()
+    if bool(msg.get("ended", false)): _finish()
+    elif _my_turn(): _cue("your_turn")
+    _relayout()
+
+func _my_turn() -> bool:
+    return g != null and g.turn == 0 and g.winner < 0
+
+static func _ints(a) -> Array:
+    var out := []
+    if a is Array:
+        for x in a: out.append(int(x))
+    return out
+
+func _apply_snapshot(snap: Dictionary):
+    if g == null or snap.is_empty(): return
+    var pw: Array = snap.get("pawns", [])
+    if pw.size() == 4:
+        for s in 4:
+            for i in 4:
+                var p: Dictionary = pw[s][i]
+                g.pawns[s][i] = {"zone": String(p.get("zone", "home")), "pos": int(p.get("pos", i))}
+    var counts: Array = snap.get("hand_counts", [4, 4, 4, 4])
+    g.hands[0] = (snap.get("my_hand", []) as Array).map(func(c): return String(c))
+    for s in range(1, 4):
+        var h := []
+        for k in int(counts[s]): h.append("2")       # cartas dos outros: só a quantidade (o servidor esconde)
+        g.hands[s] = h
+    g.turn = int(snap.get("turn", 0))
+    g.round_no = int(snap.get("round_no", 1))
+    g.winner = int(snap.get("winner", -1))
+    g.log = (snap.get("log", []) as Array).map(func(x): return String(x))
+    for s in 4: g.names[s] = "Você" if s == 0 else names[s]
+    if snap.has("turn_left_ms"): turn_left_ms = int(snap.turn_left_ms) if bool(snap.get("my_turn", false)) else TURN_MS
+    var conn: Array = snap.get("players_connected", [])
+    for i in mini(conn.size(), players.size()): players[i]["connected"] = bool(conn[i])
+
+## Mensagens party_* do servidor (repassadas pelo stage).
+func on_party_message(msg: Dictionary):
+    if not online or String(msg.get("room_id", room_id)) != room_id: return
+    match String(msg.get("type", "")):
+        "party_event":
+            ev_queue.append(msg)
+            if not ev_running: _drain_events()
+        "party_error":
+            waiting_server = false
+            if msg.has("snapshot"): _apply_snapshot(msg.snapshot)
+            busy = not _my_turn()
+            _clear_selection()
+            _flash(String(msg.get("message", "Jogada recusada.")))
+            _redraw()
+
+func _drain_events():
+    ev_running = true
+    while not ev_queue.is_empty() and online:
+        var msg: Dictionary = ev_queue.pop_front()
+        await _run_event(msg)
+    ev_running = false
+
+func _run_event(msg: Dictionary):
+    var snap: Dictionary = msg.get("snapshot", {})
+    match String(msg.get("ev", "")):
+        "move":
+            busy = true
+            waiting_server = false
+            var mv: Dictionary = msg.get("move", {})
+            _clear_selection()
+            _apply_snapshot(snap)
+            plays += 1
+            _cue("discard" if String(mv.get("kind", "")) == "discard" else "card")
+            var evs := []
+            for e in msg.get("events", []):
+                var o: Dictionary = (e as Dictionary).duplicate(true)
+                if o.has("pawn"): o.pawn = _ints(o.pawn)
+                if o.has("target"): o.target = _ints(o.target)
+                if o.has("seat"): o.seat = int(o.seat)
+                if o.has("path"): o.path = (o.path as Array).map(func(q): return {"zone": String(q.zone), "pos": int(q.pos)})
+                evs.append(o)
+            await _animate(evs)
+            if String(msg.get("reason", "")) == "timeout" and int(msg.get("seat", -1)) == 0: _flash("Tempo esgotado: o servidor jogou por você.")
+        "turn":
+            _apply_snapshot(snap)
+            _clear_selection()
+            busy = not _my_turn()
+            if _my_turn():
+                _cue("your_turn")
+                if not g.has_any_move(0): _flash("Sem jogada possível: escolha uma carta para descartar.")
+        "left":
+            _apply_snapshot(snap)
+            var who := int(msg.get("who", -1))
+            if who > 0 and who < players.size():
+                players[who]["left"] = true
+                _flash("%s saiu da partida — um bot joga no lugar." % names[who])
+        "presence":
+            _apply_snapshot(snap)
+        "end":
+            _apply_snapshot(snap)
+            if mode == "game": _finish()
+    _redraw()
+
+## Pede a jogada ao servidor (coordenadas já na mesa girada; o servidor desfaz o giro e valida).
+func _online_send(mv: Dictionary):
+    if waiting_server: return
+    var out := {"kind": String(mv.get("kind", "")), "card": int(mv.get("card", 0))}
+    for key in ["steps", "target_seat"]:
+        if mv.has(key): out[key] = int(mv[key])
+    for key in ["pawn", "target"]:
+        if mv.has(key): out[key] = _ints(mv[key])
+    if mv.has("parts"):
+        out["parts"] = (mv.parts as Array).map(func(p): return {"pawn": _ints(p.pawn), "steps": int(p.steps)})
+    var acc = stage.get("account") if stage != null else null
+    if acc == null or not acc.has_method("send_server") or not acc.send_server({"type": "party_action", "room_id": room_id, "action": out}):
+        _flash("Sem conexão com o servidor. Tentando de novo…")
+        return
+    waiting_server = true
+    busy = true
+    _redraw()
+
+func _online_leave():
+    var acc = stage.get("account") if stage != null else null
+    if acc != null and acc.has_method("send_server"): acc.send_server({"type": "party_leave", "room_id": room_id})
+    online = false
+    ev_queue.clear()
+
+## O servidor reiniciou / a partida não existe mais.
+func online_lost(text: String):
+    if not online: return
+    online = false
+    ev_queue.clear()
+    if mode == "game":
+        mode = "lobby"
+        g = null
+    _flash(text)
+    _redraw()

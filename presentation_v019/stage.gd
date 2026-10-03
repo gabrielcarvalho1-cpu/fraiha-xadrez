@@ -461,7 +461,9 @@ func _setup_account():
     invite_ui.name = "InviteUI"
     add_child(invite_ui)
     # Convite nunca aparece por cima de uma partida online em andamento.
-    invite_ui.setup(account, hub.avatar_texture, func(): return mode in ["online", "ranked", "casual"] and ((mode != "ranked" or ranked.in_match()) and (mode != "casual" or casual.in_match())))
+    invite_ui.setup(account, hub.avatar_texture, func(): return party_in_match() or (mode in ["online", "ranked", "casual"] and ((mode != "ranked" or ranked.in_match()) and (mode != "casual" or casual.in_match()))))
+    # R35 · MARCHA REAL / XEQUE online com amigo: o servidor manda party_* e a tela do modo joga
+    account.server_message.connect(_on_party_message)
     account_chip = Button.new()
     account_chip.name = "AccountChip"
     account_chip.add_theme_font_size_override("font_size", 20)
@@ -1330,3 +1332,41 @@ func open_training(report: Dictionary):
         training_ui = preload("res://analysis/training_ui.gd").new(analysis_engine)
         add_child(training_ui)
     training_ui.open_for(report)
+
+
+# ---------- R35 · MARCHA REAL / XEQUE online com amigo (mesa de 4 com bots, servidor autoridade) ----------
+func _party_ui(game: String):
+    if hub == null: return null
+    return hub.get("marcha") if game == "marcha" else hub.get("xeque")
+
+func party_in_match() -> bool:
+    for game in ["marcha", "xeque"]:
+        var ui = _party_ui(game)
+        if ui != null and bool(ui.get("online")) and String(ui.get("mode")) == "game" and ui.is_open(): return true
+    return false
+
+func _on_party_message(msg: Dictionary):
+    var type := String(msg.get("type", ""))
+    if not type.begins_with("party_"): return
+    match type:
+        "party_start":
+            var game := String(msg.get("game", ""))
+            if not game in ["marcha", "xeque"]: return
+            if social_ui != null and social_ui.is_open(): social_ui.hide_ui()   # partida por convite: sai de Amigos
+            if account_ui.is_open(): account_ui.hide_ui()
+            var other = _party_ui("xeque" if game == "marcha" else "marcha")
+            if other != null and other.is_open(): other.close()
+            var ui = _party_ui(game)
+            if ui == null or not ui.is_open():
+                if game == "marcha": hub.open_marcha()
+                else: hub.open_xeque()
+                ui = _party_ui(game)
+            if ui != null: ui.start_online(msg)
+        "party_event", "party_error":
+            for game in ["marcha", "xeque"]:
+                var ui = _party_ui(game)
+                if ui != null and bool(ui.get("online")): ui.on_party_message(msg)
+        "party_none":
+            for game in ["marcha", "xeque"]:
+                var ui = _party_ui(game)
+                if ui != null and bool(ui.get("online")): ui.online_lost("A partida online terminou (o servidor reiniciou ou ela expirou).")

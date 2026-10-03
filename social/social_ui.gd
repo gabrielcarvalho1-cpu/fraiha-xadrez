@@ -831,11 +831,13 @@ func open_invite(uid: String, peer: Dictionary):
     invite_sending = false
     _show("invite_pick")
 
-func send_invite(mode: String):
+func send_invite(mode: String, game := "chess"):
     if invite_sending: return
     invite_sending = true
     _show("invite_pick")
-    if not _send({"type": "invite_send", "user_id": String(invite_peer.get("user_id", "")), "mode": mode}):
+    var msg := {"type": "invite_send", "user_id": String(invite_peer.get("user_id", "")), "mode": mode}
+    if game != "chess": msg["game"] = game     # R35: MARCHA REAL / XEQUE (mesa online com bots)
+    if not _send(msg):
         invite_sending = false
         _show("invite_pick")
         notice_text("Sem conexão. Tente de novo em instantes.")
@@ -875,6 +877,20 @@ func _build_invite_pick():
         b.custom_minimum_size.y = 54
         b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         b.disabled = invite_sending
+    # R35 · modos de cartas: vocês dois + 2 bots no servidor (não gasta a partida grátis do dia)
+    _label(box, "Ou um modo de cartas (vocês dois + 2 bots):", 15, GOLD)
+    var grid2 = GridContainer.new()
+    grid2.columns = 1 if _narrow() else 2
+    grid2.add_theme_constant_override("h_separation", 8)
+    grid2.add_theme_constant_override("v_separation", 8)
+    box.add_child(grid2)
+    for item in [["marcha", "MARCHA REAL · dupla contra 2 bots"], ["xeque", "XEQUE · cada um por si"]]:
+        var game: String = item[0]
+        var gb = _button(grid2, item[1], func(): send_invite(game, game), true)
+        gb.name = "Invite_" + game
+        gb.custom_minimum_size.y = 54
+        gb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        gb.disabled = invite_sending
     if invite_sending: _label(box, "Enviando convite…", 14, GOLD, true)
 
 # ---------- Presença ----------

@@ -501,6 +501,7 @@ func _draw_plate(s: int):
     var fill_b := Color("141716") if elim else Color("0f2a1e")
     var name: String = g.names[s]
     var bot := s != 0
+    var tag: String = ui.seat_tag(s)           # R35: "BOT" ou "AMIGO" (online)
     var namecol := Color("8d9092") if elim else Color("f6ecd2")
     match spec[0]:
         "h", "hc":
@@ -519,7 +520,7 @@ func _draw_plate(s: int):
             text(name, Vector2(x, top), "ui", nfs, namecol, -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
             if bot:
                 var bx := x + tw(name, "ui", nfs) + 8
-                chip(Rect2(bx, top - nfs * 0.78, 42 if compact else 48, nfs * 0.92), "BOT", Color("9fd0ff") if not elim else Color("555"), Color("9fd0ff") if not elim else Color("555"), Color("13314f"), 15)
+                chip(Rect2(bx, top - nfs * 0.78, (42 if compact else 48) * (1.45 if tag != "BOT" else 1.0), nfs * 0.92), tag, Color("9fd0ff") if not elim else Color("555"), Color("9fd0ff") if not elim else Color("555"), Color("13314f"), 15)
             var cw := 30.0 if compact else 36.0
             _crowns(Vector2(x + 2, top + (8 if compact else 12)), s, cw, cw * 0.27, elim)
             var ch := 24.0 if compact else 30.0
@@ -554,11 +555,11 @@ func _draw_plate(s: int):
                 var total := tw(name, "ui", nfs) + (bw + 8 if bot else 0.0)
                 var x0 := c.x - total / 2.0
                 text(name, Vector2(x0, y), "ui", nfs, namecol, -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
-                if bot: chip(Rect2(x0 + tw(name, "ui", nfs) + 8, y - nfs * 0.74, bw, bh), "BOT", bcol, bcol, Color("13314f"), int(18 * u))
+                if bot: chip(Rect2(x0 + tw(name, "ui", nfs) + 8, y - nfs * 0.74, bw * (1.45 if tag != "BOT" else 1.0), bh), tag, bcol, bcol, Color("13314f"), int(18 * u))
                 y += 21 * u
             else:
                 text(name, Vector2(r.position.x, y), "ui", nfs, namecol, w, HORIZONTAL_ALIGNMENT_CENTER, 3)
-                chip(Rect2(c.x - bw / 2.0, y + 11 * u, bw, bh), "BOT", bcol, bcol, Color("13314f"), int(18 * u))
+                chip(Rect2(c.x - bw * (1.45 if tag != "BOT" else 1.0) / 2.0, y + 11 * u, bw * (1.45 if tag != "BOT" else 1.0), bh), tag, bcol, bcol, Color("13314f"), int(18 * u))
                 y += 43 * u
             var cw := 36.0 * u
             _crowns(Vector2(c.x - (cw * 3 + cw * 0.36 * 2) / 2.0, y - 2 * u), s, cw, cw * 0.36, elim)
@@ -1060,7 +1061,7 @@ func _draw_result(d: Vector2):
         draw_texture_rect(ui.avatars[s], ar, false)
         var nx := ar.end.x + 12
         text(g.names[s], Vector2(nx, rr.position.y + 36), "ui", 34, Color("f6ecd2"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
-        if s != 0: chip(Rect2(nx + tw(g.names[s], "ui", 34) + 10, rr.position.y + 12, 48, 28), "BOT", Color("9fd0ff"), Color("9fd0ff"), Color("13314f"), 16)
+        if s != 0: chip(Rect2(nx + tw(g.names[s], "ui", 34) + 10, rr.position.y + 12, 48 * (1.45 if ui.seat_tag(s) != "BOT" else 1.0), 28), ui.seat_tag(s), Color("9fd0ff"), Color("9fd0ff"), Color("13314f"), 16)
         var line := "Último de pé" if i == 0 else ("Xeque-mate final na rodada %d" % g.eliminated_round[s] if i == 1 else "Eliminad%s na rodada %d" % ["a" if s == 1 else "o", g.eliminated_round[s]])
         text(line, Vector2(nx, rr.position.y + 66), "ui_sp", 22, Color("c9d6cf"))
         for c in Rules.LIVES:
