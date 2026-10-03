@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-2", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-3", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
     var h1: int = g.hands[1].size()
@@ -105,5 +105,43 @@ func _initialize():
         turns_total += t
     check(not illegal, "bots só fazem jogadas legais (e só descartam sem jogada)")
     check(finished == 6, "6 de 6 partidas de bots terminam (%d jogadas em média)" % (turns_total / 6))
+    # R35 · peão inimigo na Entrada do Salão tranca a entrada
+    var eb = Rules.new()
+    eb.setup(77)
+    var ent := Layout.entrance_index(0)
+    eb.pawns[0][0] = {"zone": "track", "pos": posmod(ent - 3, Rules.TRACK)}
+    eb.pawns[1][0] = {"zone": "track", "pos": ent}
+    eb.hands[0] = ["5", "3", "2", "9"]
+    check(not eb.forward_path(0, 0, 5).ok, "Rubi parado na Entrada de Marfim: peão de Marfim não entra no Salão")
+    var cap3: Dictionary = eb.forward_path(0, 0, 3)
+    check(cap3.ok and cap3.end.zone == "track" and cap3.end.pos == ent, "cair exatamente no peão da Entrada vale (captura)")
+    eb.apply(0, {"card": 1, "rank": "3", "kind": "move", "pawn": [0, 0], "steps": 3})
+    check(eb.pawns[1][0].zone == "home" and eb.pawns[0][0].pos == ent, "captura na Entrada manda o inimigo para o Pátio")
+    eb.pawns[0][0] = {"zone": "track", "pos": posmod(ent - 3, Rules.TRACK)}
+    eb.pawns[2][0] = {"zone": "track", "pos": ent}
+    check(eb.forward_path(0, 0, 5).ok and eb.forward_path(0, 0, 5).end.zone == "lane", "peão do ALIADO na Entrada não tranca")
+    eb.pawns[2][0] = {"zone": "home", "pos": 0}
+    eb.pawns[3][0] = {"zone": "track", "pos": ent}
+    eb.pawns[1][1] = {"zone": "track", "pos": posmod(ent - 4, Rules.TRACK)}
+    check(eb.forward_path(1, 1, 6).ok, "outros reinos passam pela casa normalmente (só tranca o Salão daquele reino)")
+    # fase de ajuda: só o 5 (qualquer cor), o J (troca) e o 10 (descarte) alcançam o inimigo
+    var hp = Rules.new()
+    hp.setup(78)
+    for i in 4: hp.pawns[0][i] = {"zone": "lane", "pos": i}
+    hp.pawns[2][0] = {"zone": "track", "pos": 10}
+    hp.pawns[1][0] = {"zone": "track", "pos": 30}
+    var only_ally := true
+    for rk in ["A", "K", "Q", "9", "8", "7", "6", "4", "3", "2", "10", "J", "5"]:
+        hp.hands[0] = [rk]
+        for m in hp.legal_moves(0, 0):
+            match String(m.kind):
+                "move", "back", "exit":
+                    if rk != "5" and int(m.pawn[0]) != 2: only_ally = false
+                "split":
+                    for part in m.parts:
+                        if int(part.pawn[0]) != 2: only_ally = false
+                "swap":
+                    if int(m.pawn[0]) != 2: only_ally = false
+    check(only_ally, "fase de ajuda: as cartas movem só o aliado (5 mexe qualquer cor; J troca o aliado)")
     print("RESULT %d/%d" % [checks - failures, checks], " OK" if failures == 0 else " FALHAS=%d" % failures)
     quit(failures)

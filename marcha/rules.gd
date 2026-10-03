@@ -13,6 +13,8 @@ extends RefCounted
 ##   • Cair numa casa ocupada por outro peão manda esse peão de volta ao Pátio (inclusive o do aliado).
 ##   • Peão parado no PRÓPRIO Portão protege a casa: ninguém passa por cima nem cai nela, e não pode ser trocado.
 ##   • Sair do Pátio é para o próprio Portão; se houver peão de outro reino lá, ele volta ao Pátio.
+##   • Peão da outra dupla parado na Entrada do Salão de um reino tranca a entrada desse reino
+##     (ninguém daquele reino entra enquanto ele estiver lá); cair exatamente nele captura.
 ##   • Na Entrada do Salão o peão do dono entra no Salão; o número de casas tem de caber (sem passar do fundo
 ##     e sem pular peões do próprio reino lá dentro). Se não couber, essa jogada não vale.
 ##   • Voltar 4 a partir do Portão (ou logo depois dele) leva o peão para trás do Portão — atalho clássico.
@@ -22,7 +24,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-2"   # R34.1: 10 também faz o próximo descartar
+const RULESET_VERSION := "marcha-real-3"   # R35: peão inimigo na Entrada tranca o Salão
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -136,6 +138,8 @@ func forward_path(seat: int, i: int, steps: int) -> Dictionary:
     for k in range(steps):
         if zone == "track":
             if pos == Layout.entrance_index(seat):
+                # R35 · peão INIMIGO parado na Entrada do Salão tranca a entrada (cair nele captura)
+                if _enemy_at(seat, pos): return {"ok": false}
                 zone = "lane"
                 pos = 0
             else:
@@ -158,6 +162,11 @@ func backward_path(seat: int, i: int, steps: int) -> Dictionary:
         if protected_at(pos): return {"ok": false}
         path.append({"zone": "track", "pos": pos})
     return _landing(seat, i, path)
+
+## Peão da outra dupla nesta casa da Muralha?
+func _enemy_at(seat: int, abs_index: int) -> bool:
+    var o := occupant(abs_index)
+    return not o.is_empty() and team_of(o[0]) != team_of(seat)
 
 func _lane_taken(seat: int, k: int, except_i: int) -> bool:
     for j in 4:

@@ -19,8 +19,9 @@ const SFX := {
     "capture": preload("res://marcha/audio/captura.wav"), "swap": preload("res://marcha/audio/troca.wav"),
     "crown": preload("res://marcha/audio/coroa.wav"), "your_turn": preload("res://marcha/audio/sua_vez.wav"),
     "victory": preload("res://marcha/audio/vitoria.wav"), "defeat": preload("res://marcha/audio/derrota.wav"),
+    "arrive": preload("res://marcha/audio/chegada.wav"), "victory_final": preload("res://marcha/audio/vitoria_final.wav"),
 }
-const SFX_DB := {"step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0}
+const SFX_DB := {"arrive": -6.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0}
 
 const BOARD := preload("res://marcha/art/board.png")
 const BG := preload("res://marcha/art/table_bg.png")
@@ -42,7 +43,7 @@ const PANEL := Color("0f2b20")
 const PANEL_DARK := Color("0a1d16")
 const TURN_MS := 30000
 const BOT_DELAY := 0.95
-const STEP_TIME := 0.11
+const STEP_TIME := 0.18           # R35: 0,18 s por casa (antes 0,11 — rápido demais para acompanhar)
 ## Bots da mesa (nomes e retratos da tela de referência).
 const BOTS := {1: {"name": "ReiDoBlitz", "portrait": "rei_do_blitz"}, 2: {"name": "Lady Torre", "portrait": "lady_torre"}, 3: {"name": "Cavalo_Louco", "portrait": "cavalo_louco"}}
 const PAWN_SCALE := 0.24          # peão PNG (211x279) sobre a casa da arte 1600x1600
@@ -79,6 +80,9 @@ var turn_left_ms := TURN_MS
 var busy := false                 # animando ou bot pensando
 var anim := {}                    # [seat,i] -> posição desenhada (coordenadas do tabuleiro) durante animação
 var anim_alpha := {}
+var celebs: Array = []            # R35 · festa de chegada ao Salão: [{"p": Vector2 (tabuleiro), "t", "seat"}]
+const CELEB_T := 1.7
+var over_t := 0.0                 # R35 · tempo desde o fim (animação da vitória final)
 var flash := ""                   # aviso curto (ex.: "Sem jogada: descarte uma carta")
 var flash_t := 0.0
 var hits: Array = []              # áreas de toque desta moldura: [{"rect","id"}]
@@ -259,7 +263,8 @@ func _play(seat: int, mv: Dictionary):
 func _finish():
     mode = "over"
     busy = false
-    _cue("victory" if g.winner == 0 else "defeat")
+    over_t = 0.0
+    _cue("victory_final" if g.winner == 0 else "defeat")
     _record_history("win" if g.winner == 0 else "loss")
     _redraw()
 
@@ -280,6 +285,9 @@ func _record_history(result: String) -> Dictionary:
 func _process(delta):
     if not visible: return
     t += delta
+    for c in celebs: c.t += delta
+    celebs = celebs.filter(func(c): return c.t < CELEB_T)
+    if mode == "over": over_t += delta
     if flash_t > 0.0:
         flash_t -= delta
         if flash_t <= 0.0: flash = ""
@@ -539,7 +547,14 @@ func _animate(events: Array):
                 if int(e.seat) == 0: _flash("%s te fez descartar %s." % [names[g.turn], Rules.card_label(String(e.rank))])
                 _redraw()
                 await get_tree().create_timer(0.4).timeout
-            "swap", "crown", "discard":
+            "crown":
+                # R35 · peão chegou às 4 casas do Salão: som de vitória + coroa estourando na casa
+                var w: Array = e.pawn
+                _cue("arrive")
+                celebs.append({"p": _cell_of(w[0], g.pawns[w[0]][w[1]]), "t": 0.0, "seat": int(w[0])})
+                _redraw()
+                await get_tree().create_timer(0.55).timeout
+            "swap", "discard":
                 if String(e.type) != "discard": _cue(String(e.type))
                 _redraw()
                 await get_tree().create_timer(0.18).timeout
@@ -904,7 +919,43 @@ class TableView extends Control:
             var sz: Vector2 = tx.get_size() * ui.PAWN_SCALE
             var rr := Rect2(Vector2(c.x - sz.x / 2.0, c.y + ui.PAWN_BASE - sz.y - lift), sz)
             draw_texture_rect(tx, rr, false, Color(1, 1, 1, alpha))
+        _draw_celebs()
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+
+    ## R35 · peão chegou ao Salão: anel dourado que se abre, raios girando, faíscas e "COROADO!" subindo.
+    func _draw_celebs():
+        for c in ui.celebs:
+            var k: float = clampf(c.t / ui.CELEB_T, 0.0, 1.0)
+            var p: Vector2 = c.p + Vector2(0, -18)
+            var z := 1.9                 # tamanho (coordenadas da arte do tabuleiro)
+            var fade := 1.0 - k
+            var col: Color = ui.KINGDOM_COLOR[int(c.seat)]
+            var ease := 1.0 - pow(1.0 - minf(1.0, k * 2.2), 3.0)
+            # clarão
+            draw_circle(p, (34.0 + 30.0 * ease) * z, Color(1.0, 0.85, 0.4, 0.28 * fade))
+            # anéis
+            for ring in 2:
+                var rk := clampf(k * 1.6 - ring * 0.25, 0.0, 1.0)
+                if rk <= 0.0: continue
+                draw_arc(p, (20.0 + 95.0 * rk) * z, 0, TAU, 48, Color(1.0, 0.86, 0.38, (1.0 - rk) * 0.95), (6.0 * (1.0 - rk) + 1.5) * z)
+            draw_arc(p, (30.0 + 40.0 * ease) * z, 0, TAU, 40, Color(col.r, col.g, col.b, 0.8 * fade), 3.0 * z)
+            # raios
+            for i in 12:
+                var a: float = ui.t * 1.6 + TAU * i / 12.0
+                var r0 := (28.0 + 20.0 * ease) * z
+                var r1 := r0 + (38.0 if i % 2 == 0 else 22.0) * fade * z
+                draw_line(p + Vector2.from_angle(a) * r0, p + Vector2.from_angle(a) * r1, Color(1.0, 0.92, 0.55, 0.85 * fade), 4.0 * z)
+            # faíscas
+            for i in 10:
+                var a2 := TAU * i / 10.0 + 0.3
+                var d := (24.0 + 110.0 * ease) * z
+                var q := p + Vector2.from_angle(a2) * d + Vector2(0, 60.0 * k * k * z)
+                draw_circle(q, (5.0 * fade + 1.0) * z, Color(1.0, 0.95, 0.7, fade))
+            # texto subindo
+            var ty := p.y - (70.0 + 50.0 * ease) * z
+            var ta := clampf(fade * 1.6, 0.0, 1.0)
+            text("COROADO!", Vector2(p.x - 300 + 4, ty + 4), "title", 76, Color(0.1, 0.05, 0.0, 0.7 * ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
+            text("COROADO!", Vector2(p.x - 300, ty), "title", 76, Color(1.0, 0.86, 0.36, ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
 
     func _collect_path(g, mv: Dictionary, dots: Array, dest: Array):
         var parts := []
@@ -1116,6 +1167,14 @@ class TableView extends Control:
         var g = ui.g
         var won: bool = g != null and g.winner == 0
         var r := Rect2(ui.design.x / 2.0 - 380, ui.design.y / 2.0 - 230, 760, 460)
+        var ot: float = ui.over_t
+        if won: _draw_victory_fx(r, ot)
+        # o painel entra crescendo (com um leve passo além) — R35
+        var pk := clampf(ot / 0.55, 0.0, 1.0)
+        var sc := 1.0 + 2.70158 * pow(pk - 1.0, 3.0) + 1.70158 * pow(pk - 1.0, 2.0)
+        sc = maxf(0.05, sc)
+        var cc := r.get_center()
+        draw_set_transform(ui.origin + cc * ui.k * (1.0 - sc), 0.0, Vector2(ui.k * sc, ui.k * sc))
         panel(r, true)
         text("VITÓRIA!" if won else "DERROTA", Vector2(r.position.x, r.position.y + 100), "title", 64, Color("ffd770") if won else Color("f2a070"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
         var sub := "Sua dupla coroou os 8 peões." if won else "A dupla rival coroou os 8 peões primeiro."
@@ -1124,6 +1183,57 @@ class TableView extends Control:
             text("PEÕES COROADOS  %d  X  %d" % [g.team_crowned(0), g.team_crowned(1)], Vector2(r.position.x, r.position.y + 210), "semi_sp2", 24, Color("d9a441"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
         gold_button(Rect2(r.position.x + 60, r.position.y + 270, r.size.x - 120, 80), "VOLTAR AO SALÃO DA MARCHA", 32, "over_again")
         dark_button(Rect2(r.position.x + 60, r.position.y + 366, r.size.x - 120, 64), "SAIR DO MODO", 28, "over_back")
+        draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+        if won and ot < 3.0:
+            # coroa dourada descendo sobre o painel
+            var ck := clampf(ot / 0.8, 0.0, 1.0)
+            var cy := r.position.y - 30.0 - 120.0 * (1.0 - ck * ck)
+            _draw_crown(Vector2(cc.x, cy), 1.0, clampf(ot * 2.0, 0.0, 1.0))
+        elif won:
+            _draw_crown(Vector2(cc.x, r.position.y - 30.0), 1.0 + 0.04 * sin(ot * 3.0), 1.0)
+
+    ## Raios de luz girando atrás do painel + chuva de confetes nas cores dos 4 reinos e ouro.
+    func _draw_victory_fx(r: Rect2, ot: float):
+        var cc := r.get_center()
+        var grow := clampf(ot / 0.8, 0.0, 1.0)
+        for i in 18:
+            var a := ot * 0.35 + TAU * i / 18.0
+            var len := (420.0 + 120.0 * (i % 3)) * grow
+            var w := 0.07
+            var pts := PackedVector2Array([cc, cc + Vector2.from_angle(a - w) * len, cc + Vector2.from_angle(a + w) * len])
+            draw_colored_polygon(pts, Color(1.0, 0.84, 0.35, 0.10 + 0.05 * (i % 2)))
+        draw_circle(cc, 300.0 * grow, Color(1.0, 0.8, 0.3, 0.10))
+        var cols := [Color("ffd770"), Color("f3ead2"), Color("e3283a"), Color("35c27c"), Color("d6dde3"), Color("e9a417")]
+        var d: Vector2 = ui.design
+        for i in 90:
+            var h1 := fposmod(sin(i * 12.9898) * 43758.5453, 1.0)
+            var h2 := fposmod(sin(i * 78.233) * 12345.678, 1.0)
+            var speed := 160.0 + 220.0 * h2
+            var y := fposmod(-60.0 - h2 * d.y + ot * speed, d.y + 80.0) - 40.0
+            if ot * speed < 60.0 + h2 * d.y - 40.0 and y > d.y * 0.9: continue
+            var x := h1 * d.x + 26.0 * sin(ot * (1.5 + h2) + i)
+            var rot := ot * (2.0 + 4.0 * h1) + i
+            var sz := Vector2(10 + 8 * h2, 6 + 4 * h1)
+            var c: Color = cols[i % cols.size()]
+            var u := Vector2.from_angle(rot) * sz.x * 0.5
+            var v := Vector2.from_angle(rot + PI / 2) * sz.y * 0.5 * absf(sin(ot * 5.0 + i))
+            draw_colored_polygon(PackedVector2Array([Vector2(x, y) - u - v, Vector2(x, y) + u - v, Vector2(x, y) + u + v, Vector2(x, y) - u + v]), c)
+
+    func _draw_crown(at: Vector2, sc: float, alpha: float):
+        var w := 150.0 * sc
+        var h := 92.0 * sc
+        var base := at + Vector2(-w / 2.0, 0)
+        var pts := PackedVector2Array([base, base + Vector2(0, -h * 0.75), base + Vector2(w * 0.25, -h * 0.35), base + Vector2(w * 0.5, -h),
+            base + Vector2(w * 0.75, -h * 0.35), base + Vector2(w, -h * 0.75), base + Vector2(w, 0)])
+        for gl in 4: draw_circle(at + Vector2(0, -h * 0.45), (70.0 + gl * 16.0) * sc, Color(1.0, 0.82, 0.3, 0.08 * alpha))
+        draw_colored_polygon(pts, Color(0.95, 0.72, 0.18, alpha))
+        draw_polyline(pts + PackedVector2Array([base]), Color(0.42, 0.25, 0.02, alpha), 4.0)
+        draw_rect(Rect2(base + Vector2(0, -2), Vector2(w, 18 * sc)), Color(0.85, 0.6, 0.12, alpha))
+        draw_rect(Rect2(base + Vector2(0, -2), Vector2(w, 18 * sc)), Color(0.42, 0.25, 0.02, alpha), false, 3.0)
+        for j in 3:
+            draw_circle(base + Vector2(w * (0.25 + 0.25 * j), 7 * sc), 5.0 * sc, [Color("e3283a"), Color("35c27c"), Color("e3283a")][j] * Color(1, 1, 1, alpha))
+        for j in [0.0, 0.5, 1.0]:
+            draw_circle(base + Vector2(w * j, -h * (1.0 if j == 0.5 else 0.75)), 7.0 * sc, Color(1.0, 0.95, 0.7, alpha))
 
     func _draw_menu():
         _shade()

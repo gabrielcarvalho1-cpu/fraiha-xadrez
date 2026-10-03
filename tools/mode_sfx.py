@@ -201,3 +201,25 @@ save("coroa", mix(1.2, (0.0, bell(1046.5, 0.6, 0.25) * 0.6), (0.08, bell(1318.5,
 save("sua_vez", mix(1.1, (0.0, bell(659.25, 0.9, 0.35) * 0.8), (0.16, bell(987.77, 0.95, 0.4))), MOUT)
 save("vitoria", mix(1.6, (0.0, fan(523.25, 0.3)), (0.14, fan(659.25, 0.3)), (0.28, fan(783.99, 0.3)), (0.44, fan(1046.5, 1.0) * 1.1), (0.44, bell(2093.0, 1.0, 0.4) * 0.2)), MOUT)
 save("derrota", mix(1.6, (0.0, fan(392.0, 0.45)), (0.28, fan(349.23, 0.45)), (0.56, fan(311.13, 0.45)), (0.84, fan(261.63, 0.8))), MOUT)
+
+# R35 · peão chegou ao Salão (as 4 casas da chegada): mini-fanfarra de vitória (corneta sol–dó–mi–sol + brilho)
+save("chegada", mix(1.5, (0.0, horn(392.0, 0.16)), (0.11, horn(523.25, 0.16)), (0.22, horn(659.25, 0.16)),
+                    (0.33, horn(783.99, 0.7) * 1.1), (0.33, bell(1568.0, 0.9, 0.35) * 0.35), (0.45, bell(2093.0, 0.9, 0.4) * 0.3)), MOUT)
+
+# R35 · vitória final da Marcha: rufar de tambor + fanfarra completa + sinos
+def drum_roll(d=0.9):
+    n = int(SR * d)
+    x = np.zeros(n)
+    k = 0.0
+    while k < d - 0.03:
+        j = int(k * SR)
+        hit = lowpass(rng.normal(0, 1, int(SR * 0.05)), 1800) * env(int(SR * 0.05), 0.0005, 0.02) * (0.4 + 0.6 * k / d)
+        x[j:j + len(hit)] += hit[:n - j]
+        k += 0.045
+    return x
+roll_end = tone(70, 0.6, ((1, 1.0), (2, 0.4)), 0.001, 0.2) + lowpass(rng.normal(0, 1, int(SR * 0.6)), 900) * env(int(SR * 0.6), 0.001, 0.08)
+save("vitoria_final", mix(3.6, (0.0, drum_roll(0.9)), (0.9, roll_end * 0.9),
+                         (0.9, fan(523.25, 0.25)), (1.05, fan(659.25, 0.25)), (1.2, fan(783.99, 0.25)),
+                         (1.38, fan(1046.5, 0.5)), (1.62, fan(783.99, 0.22)), (1.8, fan(1046.5, 1.6) * 1.15),
+                         (1.8, fan(659.25, 1.6) * 0.5), (1.8, bell(2093.0, 1.5, 0.6) * 0.3), (2.1, bell(2637.0, 1.3, 0.5) * 0.25),
+                         (2.4, bell(3136.0, 1.1, 0.45) * 0.2)), MOUT)

@@ -17,10 +17,11 @@ const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
 const APP_VERSION = "0.33"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
-const FOREST = preload("res://ui_v022/assets/home_forest_v5.png")   # R33.1: logo menor + menu de 11 linhas (tools/home_menu_11rows.py)
+const FOREST = preload("res://ui_v022/assets/home_forest_v6.png")   # R35: arte oficial intacta (logo original) + miolo do menu em 11 linhas (tools/home_menu_v6.py)
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
-const MENU_ROWS := [Vector2(299.7, 41.9), Vector2(347.2, 42.7), Vector2(394.7, 55.4), Vector2(454.8, 43.5), Vector2(503.9, 43.5), Vector2(552.9, 43.5), Vector2(602.0, 43.5), Vector2(651.8, 44.3), Vector2(702.5, 44.3), Vector2(752.3, 43.5), Vector2(802.2, 44.3)]
-const MENU_SCALE := 0.7912
+const MENU_ROWS := [Vector2(338.4, 38.7), Vector2(382.2, 39.4), Vector2(426.0, 51.8), Vector2(482.2, 40.8), Vector2(527.8, 40.7), Vector2(573.8, 40.7), Vector2(620.2, 40.8), Vector2(666.9, 41.1), Vector2(713.9, 41.1), Vector2(759.7, 39.8), Vector2(805.9, 41.0)]
+const MENU_SCALE := 0.74   # R35: escala das linhas (o conteúdo encolhe por igual a partir de x=628)
+const MENU_TEXT_X := 691.0  # onde começam os textos das linhas na arte v6
 const FOREST_V2 = FOREST
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
@@ -289,7 +290,7 @@ func _build():
     # transparente por cima — a arte original fica intacta. Só aparece com a arte oficial.
     var details = TextureRect.new()
     details.name = "ForestDetails"
-    details.texture = preload("res://ui_v022/assets/home_forest_v5_details.png")
+    details.texture = preload("res://ui_v022/assets/home_forest_v6_details.png")
     details.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     details.stretch_mode = TextureRect.STRETCH_SCALE
     details.size = DESIGN
@@ -1701,13 +1702,13 @@ func _build_web_quit_caption():
     patch.name = "WebQuitCaption"
     patch.color = Color8(1, 36, 21)
     var sair_row: Vector2 = MENU_ROWS[MENU_ROWS.size() - 1]
-    patch.position = Vector2(714, sair_row.x + 29.0 * MENU_SCALE)   # coordenadas da arte (DESIGN 1672x941)
-    patch.size = Vector2(290, 22)
+    patch.position = Vector2(MENU_TEXT_X, sair_row.x + 24.0)   # coordenadas da arte v6 (DESIGN 1672x941)
+    patch.size = Vector2(240, 19)
     patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(patch)
     canvas.move_child(patch, canvas.get_node("MainMenu").get_index())
-    var cap = _label(patch, "Voltar para o site", 14, Color("e8e2d0"))
-    cap.position = Vector2(2, 0)
+    var cap = _label(patch, "Voltar para o site", 12, Color("e8e2d0"))
+    cap.position = Vector2(1, -2)
     cap.size = Vector2(236, 24)
     cap.autowrap_mode = TextServer.AUTOWRAP_OFF
     ref_nodes.append(patch)
@@ -2153,22 +2154,22 @@ func _build_reference_chrome():
             cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
             cap.size = button.size
             button.add_child(cap)
-            var t1 = _label(cap, title, 16, Color("f4f1e6"))
-            t1.position = Vector2(103, 1)
+            var t1 = _label(cap, title, 15, Color("f4f1e6"))
+            t1.position = Vector2(MENU_TEXT_X - 611.0, 1)
             t1.size = Vector2(300, 24)
             t1.autowrap_mode = TextServer.AUTOWRAP_OFF
-            var t2 = _label(cap, {"MARCHA REAL": "Novo modo · cartas e corrida", "XEQUE": "Novo modo · blefe de cartas"}.get(title, "Suas partidas e análises"), 13, Color("e8e2d0"))
-            t2.position = Vector2(103, 22)
+            var t2 = _label(cap, {"MARCHA REAL": "Novo modo · cartas e corrida", "XEQUE": "Novo modo · blefe de cartas"}.get(title, "Suas partidas e análises"), 12, Color("e8e2d0"))
+            t2.position = Vector2(MENU_TEXT_X - 611.0, 19)
             t2.size = Vector2(300, 20)
             t2.autowrap_mode = TextServer.AUTOWRAP_OFF
             if title in ["MARCHA REAL", "XEQUE"]:
                 var tag = preload("res://monetization/premium_art.gd").Stamp.new("NOVO", "new", 11)
-                tag.position = Vector2(300, 6)
+                tag.position = Vector2(285, 4)
                 tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
                 cap.add_child(tag)
             else:
-                var ic = preload("res://monetization/premium_art.gd").Glyph.new("hourglass", 36, Color("f2c14e"))
-                ic.position = Vector2(36, 4)
+                var ic = preload("res://monetization/premium_art.gd").Glyph.new("hourglass", 30, Color("f2c14e"))
+                ic.position = Vector2(20, 2)
                 ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
                 cap.add_child(ic)
 
