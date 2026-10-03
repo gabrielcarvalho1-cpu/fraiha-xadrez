@@ -991,7 +991,7 @@ const TUTORIAL := [
     {"title": "BEM-VINDO À MARCHA REAL", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png",
         "text": "Quatro reinos disputam uma corrida de peões ao redor da mesa de pedra. Você joga com o MARFIM (embaixo) ao lado do aliado ÔNIX (em cima), contra RUBI e ESMERALDA.\n\nCada peão que chega ao fim do caminho vira DAMA, como na promoção do xadrez."},
     {"title": "O CAMINHO", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "marks": true,
-        "text": "1 PÁTIO: onde seus 4 peões começam.\n2 PORTÃO: a casa de saída, com a seta do sentido.\n3 MURALHA: a trilha de 76 casas, no sentido horário.\n4 ENTRADA DO SALÃO: a casa com aro na sua cor.\n5 SALÃO DO TRONO: 4 casas; quem entra é coroado."},
+        "text": "1 PÁTIO: onde seus 4 peões começam.\n2 PORTÃO: a casa de saída, com a seta do sentido.\n3 MURALHA: a trilha de 76 casas, no sentido horário.\n4 ENTRADA DO SALÃO: a casa com aro na sua cor.\n5 SALÃO DO TRONO: 4 casas; quem entra vira DAMA."},
     {"title": "AS CARTAS", "img": "res://marcha/art/tutorial/cartas_todas.png",
         "text": "Na sua vez você joga UMA carta da mão (4 cartas por rodada). A carta diz o que fazer na faixa de ação e na frase embaixo da ilustração: K tira um peão da base. A tira um peão da base, anda 11 ou anda 1 (você escolhe). Q anda 12; 10, 9, 8, 6, 3 e 2 andam o número. Carta com ABATER derruba um adversário; com CHEGADA leva um peão ao Salão."},
     {"title": "CARTAS ESPECIAIS", "img": "res://marcha/art/simbolos_de_acao.png",
@@ -1509,7 +1509,7 @@ class TableView extends Control:
         var y := pr.position.y + 70
         text("MARCHA REAL", Vector2(x, y), "title", 54 if not ui.portrait else 50, Color("e9b94a"))
         text("NOVO MODO · CARTAS E CORRIDA", Vector2(x, y + 42), "semi_sp2", 20, Color("d9a441"))
-        var desc := "Quatro reinos disputam uma corrida de peões ao redor de uma mesa de pedra esculpida. Cada peão que chega ao fim do caminho é coroado. Você e seu aliado contra dois reinos rivais."
+        var desc := "Quatro reinos disputam uma corrida de peões ao redor de uma mesa de pedra esculpida. Cada peão que chega ao fim do caminho vira DAMA. Você e seu aliado contra dois reinos rivais."
         var lines := _wrap(desc, "semi", 25, pr.size.x - 80)
         for li in lines.size(): text(lines[li], Vector2(x, y + 92 + li * 34), "semi", 25, ui.CREAM)
         var sy := y + 110 + lines.size() * 34

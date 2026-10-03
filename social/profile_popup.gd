@@ -185,8 +185,12 @@ func stats_line() -> Dictionary:
 func _txt(s: String, p: Vector2, fs: int, col: Color, bold := false, w := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT):
     view.draw_string(FONT_B if bold else FONT, p, s, align, w, fs, col)
 
+func _height() -> float:
+    return SIZE.y if (not button_label().is_empty() or not stats_line().is_empty() or not notice.is_empty()) else 178.0
+
 func _draw_card():
-    var r := Rect2(Vector2.ZERO, SIZE)
+    view.size = Vector2(SIZE.x, _height())
+    var r := Rect2(Vector2.ZERO, view.size)
     view.draw_rect(r.grow(4), Color(0, 0, 0, 0.45))
     view.draw_rect(r, Color("0d241a"))
     view.draw_rect(r, GOLD, false, 2.0)
