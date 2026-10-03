@@ -553,7 +553,7 @@ func layout_hud(board: Rect2, mobile: bool, portrait: bool, safe: Rect2, top_slo
     strips.top.bg.size = Vector2(width, 66)
     strips.bottom.bg.position = Vector2(x, board.end.y - 66)
     strips.bottom.bg.size = Vector2(width, 66)
-    resign_button.position = Vector2(x, board.end.y - 136)
+    resign_button.position = Vector2(x, board.end.y - 192)     # R38.3: acima da faixa de capturas (stage.MATERIAL_H)
     resign_button.size = Vector2(220, 56)
     link_label.position = Vector2(x, board.get_center().y - 30)
     link_label.size = Vector2(width, 60)

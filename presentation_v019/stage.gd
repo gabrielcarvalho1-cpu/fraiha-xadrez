@@ -28,6 +28,7 @@ const HudButton = preload("res://ui_v022/hud_button.gd")
 var fullscreen_button: Button
 var medieval_modal
 var match_plaque: Control
+var material_hud: Control        # R38.3 · pontos e peças capturadas (bot, online, ranqueada, local)
 var desk_panel: PanelContainer
 var desk_person: HBoxContainer
 var desk_portrait: TextureRect
@@ -152,6 +153,9 @@ func _build_navigation():
     match_plaque = preload("res://presentation_v019/match_plaque.gd").new()
     match_plaque.name = "MatchPlaque"
     overlay.add_child(match_plaque)
+    material_hud = preload("res://presentation_v019/material_hud.gd").new()
+    material_hud.game = game
+    overlay.add_child(material_hud)
     _build_desk_panel(overlay)
     bot_info = Label.new()
     bot_info.name = "BotInfo"
@@ -377,6 +381,7 @@ func _refresh_desk_hud():
     navigation_dialog.min_size = Vector2i.ZERO if mobile else Vector2i(620, 230)
     game.external_hud = not mobile
     match_plaque.visible = mode == "bot" and not mobile
+    if is_instance_valid(material_hud): material_hud.visible = in_match
     if match_plaque.visible:
         var king = game.piece_textures.get("wK" if bot_side_name == "BRANCAS" else "bK")
         match_plaque.set_info(bot_controller.bot_id if not String(bot_controller.bot_id).is_empty() else bot_controller.difficulty, bot_level_name, bot_side_name, king)
@@ -407,6 +412,7 @@ func _layout_desk_hud():
         var limit_left: float = (size.x + match_plaque.size.x) / 2.0 + 16.0 if match_plaque.visible else home_button.position.x + home_button.size.x + 16.0
         if size.x - 24.0 - desk_panel.get_combined_minimum_size().x < limit_left:
             _set_analyze_compact(true)
+    _layout_material_desktop()
     desk_panel.reset_size()
     desk_panel.size = desk_panel.get_combined_minimum_size()
     desk_panel.position = Vector2(maxf(8.0, size.x - 24 - desk_panel.size.x), 16)
@@ -1090,7 +1096,26 @@ func _layout():
         for ui in [ranked_ui, casual_ui]:
             if ui != null: ui.layout_hud(board_rect, false, false, get_viewport_rect(), Rect2(), Rect2())
         if match_chat != null: match_chat.layout(board_rect, false, get_viewport_rect())
+    if not mobile: _layout_material_desktop()
     _refresh_desk_hud()
+
+## R38.3 · faixas de pontos/capturas no desktop: à direita do tabuleiro (adversário em cima, você embaixo);
+## na ranqueada/online ficam coladas nas faixas de nome e relógio. Tela estreita: lado esquerdo.
+const MATERIAL_H := 52.0
+func _layout_material_desktop():
+    if not is_instance_valid(material_hud): return
+    var board := Rect2(game.position + game.ORIGIN * game.scale.x, Vector2.ONE * game.BOARD * game.scale.x)
+    var vs := get_viewport_rect().size
+    var strips := mode in ["ranked", "casual"]
+    var w := 460.0 if strips else 320.0
+    var x := board.end.x + 28.0
+    if x + w > vs.x - 8.0: x = maxf(8.0, board.position.x - w - 28.0)
+    var top_y := board.position.y + (74.0 if strips else 0.0)
+    var bottom_y := board.end.y - MATERIAL_H - (74.0 if strips else 0.0)
+    material_hud.compact = false
+    material_hud.top_rect = Rect2(x, top_y, w, MATERIAL_H)
+    material_hud.bottom_rect = Rect2(x, bottom_y, w, MATERIAL_H)
+    material_hud.queue_redraw()
 
 # Painted wood board: 600 grid units span ~522 texture pixels (calibrated at 1920x1080).
 const WOOD_ART_BOARD_RATIO := (540.0/445.5) / (1080.0/1024.0)
@@ -1137,13 +1162,14 @@ func _layout_mobile(board_center: Vector2):
         var top_h = 128.0 if online_play else (44.0 if ranked_play else 34.0)
         var player_h = 48.0
         var controls_h = 44.0
-        var available = safe.size.y - top_h - player_h - controls_h - gap*4.0
+        var mat_h = 32.0      # R38.3 · faixa de capturas acima e abaixo do tabuleiro
+        var available = safe.size.y - top_h - player_h - controls_h - gap*4.0 - mat_h*2.0
         var board_total = minf(safe.size.x, available)
         board_pixels = maxf(160.0, board_total/rim)
         board_total = board_pixels*rim
-        var column_h = top_h + gap + board_total + gap + player_h
+        var column_h = top_h + gap + mat_h + board_total + mat_h + gap + player_h
         var top = safe.position.y + maxf(0.0, (safe.size.y - controls_h - gap - column_h)/2.0)
-        var board_top = top + top_h + gap
+        var board_top = top + top_h + gap + mat_h
         var board_mid = Vector2(safe.get_center().x, board_top + board_total/2.0)
         game.scale = Vector2.ONE * (board_pixels/game.BOARD)
         game.position = board_mid - board_center*game.scale.x
@@ -1153,7 +1179,12 @@ func _layout_mobile(board_center: Vector2):
         bot_info.size = Vector2(half, top_h)
         mobile_status.position = Vector2(safe.position.x + half + gap, top)
         mobile_status.size = Vector2(half, top_h)
-        var player_y = board_top + board_total + gap + 4.0
+        var player_y = board_top + board_total + mat_h + gap + 4.0
+        if is_instance_valid(material_hud):
+            material_hud.compact = true
+            material_hud.top_rect = Rect2(safe.position.x, board_top - mat_h, safe.size.x, mat_h - 2.0)
+            material_hud.bottom_rect = Rect2(safe.position.x, board_top + board_total + 2.0, safe.size.x, mat_h - 2.0)
+            material_hud.queue_redraw()
         player_card.position = Vector2(safe.position.x, player_y)
         player_card.size = Vector2(safe.size.x, player_h)
         # Adversário acima do tabuleiro, você abaixo (relógios compactos).
@@ -1192,6 +1223,11 @@ func _layout_mobile(board_center: Vector2):
         home_button.position = Vector2(right_x, safe.end.y - 44)
         home_button.size = Vector2(side_width, 44)
         var left_x = safe.position.x
+        if is_instance_valid(material_hud):
+            material_hud.compact = true
+            material_hud.top_rect = Rect2(left_x, safe.position.y + 84.0, side_width, 34.0)
+            material_hud.bottom_rect = Rect2(left_x, safe.end.y - 50.0 - 8.0 - 34.0, side_width, 34.0)
+            material_hud.queue_redraw()
         for ui in [ranked_ui, casual_ui]:
             if ui != null: ui.layout_hud(Rect2(), true, false, safe, Rect2(left_x, safe.position.y, side_width, 50), Rect2(left_x, safe.end.y - 50, side_width, 50))
     var crowded = portrait and mobile_actions.get_children().filter(func(b): return b.visible).size() > 3
