@@ -15,13 +15,16 @@ signal cosmetics_changed   # R31: ícone/título/moldura/avatar mudaram (a conta
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
-const APP_VERSION = "0.35"
+const APP_VERSION = "0.36"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
-const FOREST = preload("res://ui_v022/assets/home_forest_v6.png")   # R35: arte oficial intacta (logo original) + miolo do menu em 11 linhas (tools/home_menu_v6.py)
+const FOREST = preload("res://ui_v022/assets/home_forest_v7.png")   # R36: arte de REFERÊNCIA aprovada pelo dono (tools/home_ref_v7.py): menu com pilares e tochas, 11 linhas com textos; só o que é vivo foi apagado
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
-const MENU_ROWS := [Vector2(338.4, 38.7), Vector2(382.2, 39.4), Vector2(426.0, 51.8), Vector2(482.2, 40.8), Vector2(527.8, 40.7), Vector2(573.8, 40.7), Vector2(620.2, 40.8), Vector2(666.9, 41.1), Vector2(713.9, 41.1), Vector2(759.7, 39.8), Vector2(805.9, 41.0)]
+## R36 · linhas do menu na arte v7 (y da borda dourada de cima, altura até a de baixo) — medidas na referência
+const MENU_ROWS := [Vector2(324.0, 46.5), Vector2(375.0, 46.5), Vector2(427.5, 55.0), Vector2(491.0, 46.5), Vector2(541.0, 46.5), Vector2(592.0, 46.0), Vector2(642.0, 46.5), Vector2(692.0, 46.5), Vector2(743.0, 45.5), Vector2(793.0, 45.5), Vector2(842.0, 45.5)]
+const MENU_X := 603.0       # borda esquerda das linhas na arte v7
+const MENU_W := 457.0       # até a borda direita (x 1060)
 const MENU_SCALE := 0.74   # R35: escala das linhas (o conteúdo encolhe por igual a partir de x=628)
-const MENU_TEXT_X := 691.0  # onde começam os textos das linhas na arte v6
+const MENU_TEXT_X := 695.0  # onde começam os textos das linhas na arte v7
 const FOREST_V2 = FOREST
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
@@ -286,29 +289,8 @@ func _build():
     art.size = DESIGN
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(art)
-    # Detalhes vivos da arte oficial (gato dormindo, viajantes na ponte, easter eggs): camada
-    # transparente por cima — a arte original fica intacta. Só aparece com a arte oficial.
-    var details = TextureRect.new()
-    details.name = "ForestDetails"
-    details.texture = preload("res://ui_v022/assets/home_forest_v6_details.png")
-    details.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    details.stretch_mode = TextureRect.STRETCH_SCALE
-    details.size = DESIGN
-    details.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    canvas.add_child(details)
-    # A placa do cartão da conta era desenhada DENTRO da arte (e a camada de detalhes trazia uma cópia antiga
-    # dela, um pouco acima — o "fantasma" atrás de MINHA CONTA). Agora a arte de fundo não tem placa nenhuma
-    # (folhagem no lugar) e a placa é um recorte exato da arte original, desenhado só na Home.
-    var art_scale := Vector2(1672.0 / DESIGN.x, 941.0 / DESIGN.y)
-    var plaque := TextureRect.new()
-    plaque.name = "RefAccountPlaque"
-    plaque.texture = preload("res://ui_v022/assets/home_account_plaque.png")
-    plaque.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    plaque.stretch_mode = TextureRect.STRETCH_SCALE
-    plaque.position = Vector2(28, 832) / art_scale
-    plaque.size = Vector2(plaque.texture.get_size()) / art_scale
-    plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    canvas.add_child(plaque)
+    # R36: a arte de referência já traz o gato, os viajantes, a placa da conta etc. — sem camada de detalhes
+    # nem recorte da placa por cima (eles eram da arte v2/v6 e ficariam fora do lugar).
     # Espírito das águas sobre o lago (abaixo da cachoeira, à esquerda da placa), animado.
     var spirit = preload("res://ui_v022/water_spirit.gd").new()
     spirit.position = Vector2(1258, 642)
@@ -331,7 +313,7 @@ func _build():
     var icons = [1,2,3,3,5,5,0,4,5,5,6]
     for i in range(titles.size()):
         var row: Vector2 = MENU_ROWS[i]
-        var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(611, row.x), actions[i], Vector2(450, row.y))
+        var item = _button(main, icons[i], titles[i], subtitles[i], Vector2(MENU_X, row.x), actions[i], Vector2(MENU_W, row.y))
         item.name = "MainAction" + str(i)
         menu_buttons.append(item)
         if titles[i] == "JOGAR RANQUEADO": _feature_ranked(item)
@@ -1703,16 +1685,16 @@ func _build_web_quit_caption():
     var sair_row: Vector2 = MENU_ROWS[MENU_ROWS.size() - 1]
     var patch = TextureRect.new()
     patch.name = "WebQuitCaption"
-    patch.texture = _slice(FOREST, Rect2(870.0, sair_row.x + 22.0, 130.0, 15.0))
+    patch.texture = _slice(FOREST, Rect2(870.0, sair_row.x + 23.0, 130.0, 16.0))
     patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     patch.stretch_mode = TextureRect.STRETCH_SCALE
-    patch.position = Vector2(MENU_TEXT_X - 2.0, sair_row.x + 22.0)   # coordenadas da arte v6 (DESIGN 1672x941)
-    patch.size = Vector2(170, 15)
+    patch.position = Vector2(MENU_TEXT_X - 2.0, sair_row.x + 23.0)   # coordenadas da arte v7 (DESIGN 1672x941): só a linha do subtítulo
+    patch.size = Vector2(170, 16)
     patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(patch)
     canvas.move_child(patch, canvas.get_node("MainMenu").get_index())
     var cap = _label(patch, "Voltar para o site", 12, Color("e8e2d0"))
-    cap.position = Vector2(3, -4)
+    cap.position = Vector2(2, -5)
     cap.size = Vector2(236, 24)
     cap.autowrap_mode = TextServer.AUTOWRAP_OFF
     ref_nodes.append(patch)
@@ -1954,7 +1936,7 @@ func public_cosmetics() -> Dictionary:
 # ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
 # Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo
 # (retrato, nickname, liga/PL, barra, insígnia, texto da conta) e as áreas de clique.
-const REF_MENU_RECT = Rect2(614,296,446,556)
+const REF_MENU_RECT = Rect2(598,318,468,575)   # R36: miolo do menu da arte v7 (entre os pilares)
 var ref_nodes: Array = []
 var ref_mode := false
 var desk_profile := {}
@@ -2002,8 +1984,8 @@ func _build_reference_chrome():
     var clip = Control.new()
     clip.name = "RefPortraitClip"
     clip.clip_contents = true
-    clip.position = Vector2(1253,62) - pbtn.position
-    clip.size = Vector2(93,100)
+    clip.position = Vector2(1255,65) - pbtn.position   # R36: dentro da moldura dourada da arte v7
+    clip.size = Vector2(84,91)
     clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(clip)
     var portrait = TextureRect.new()
@@ -2023,20 +2005,20 @@ func _build_reference_chrome():
     pbtn.add_child(club_host)
     ref_profile_club_host = club_host
     attach_club_frame(club_host)
-    var name_label = _label(pbtn, player_name, 22)
+    var name_label = _label(pbtn, player_name, 24)
     name_label.name = "RefProfileName"
     _single_line(name_label)
-    name_label.position = Vector2(1394,56) - pbtn.position
-    name_label.size = Vector2(158,32)
+    name_label.position = Vector2(1392,52) - pbtn.position
+    name_label.size = Vector2(150,36)
     var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
-    var league = _label(pbtn, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 16, GOLD)
+    var league = _label(pbtn, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 18, GOLD)
     _single_line(league)
-    league.position = Vector2(1362,88) - pbtn.position
-    league.size = Vector2(190,24)
+    league.position = Vector2(1360,87) - pbtn.position
+    league.size = Vector2(196,28)
     var fill = ColorRect.new()
     fill.color = GOLD
-    fill.position = Vector2(1371,118) - pbtn.position
-    fill.size = Vector2(170.0 * clampf(league_profile.data.lp / 100.0, 0.0, 1.0), 6)
+    fill.position = Vector2(1365,121) - pbtn.position   # R36: dentro da barra dourada da arte v7
+    fill.size = Vector2(177.0 * clampf(league_profile.data.lp / 100.0, 0.0, 1.0), 5)
     fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(fill)
     # Insígnia da liga: a arte já traz a da Madeira; outras ligas cobrem com a insígnia viva.
@@ -2045,15 +2027,15 @@ func _build_reference_chrome():
     plate.bg_color = Color(0.0,0.13,0.07)
     plate.set_corner_radius_all(6)
     ref_badge_plate.add_theme_stylebox_override("panel", plate)
-    ref_badge_plate.position = Vector2(1552,54) - pbtn.position
-    ref_badge_plate.size = Vector2(58,98)
+    ref_badge_plate.position = Vector2(1558,56) - pbtn.position
+    ref_badge_plate.size = Vector2(68,96)
     ref_badge_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(ref_badge_plate)
     ref_badge = TextureRect.new()
     ref_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     ref_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    ref_badge.position = Vector2(1552,62) - pbtn.position
-    ref_badge.size = Vector2(58,80)
+    ref_badge.position = Vector2(1560,60) - pbtn.position
+    ref_badge.size = Vector2(64,86)
     ref_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(ref_badge)
     pbtn.pressed.connect(func(): show_page("profile"))
@@ -2076,7 +2058,7 @@ func _build_reference_chrome():
     ref_account_avatar.name = "RefAccountAvatar"
     ref_account_avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     ref_account_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    ref_account_avatar.position = Vector2(49,851)
+    ref_account_avatar.position = Vector2(44,849)   # R36: centro do medalhão da arte v7
     ref_account_avatar.size = Vector2(62,62)
     ref_account_avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var mask = ShaderMaterial.new()
@@ -2110,26 +2092,26 @@ func _build_reference_chrome():
     ref_nodes.append(ref_menu_cover)
     # Os louros do Ranqueado ficam sobre a borda da moldura: nas páginas internas, a borda é
     # recomposta com as mesmas colunas da própria arte, logo abaixo (sem emenda).
-    for x in [596.0, 1060.0]:
+    for x in [580.0, 1060.0]:
         var patch = TextureRect.new()
         patch.name = "RefLaurelPatch"
-        patch.texture = _slice(FOREST_V2, Rect2(x, 600, 18, 76))
+        patch.texture = _slice(FOREST_V2, Rect2(x, 600, 22, 76))
         patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         patch.stretch_mode = TextureRect.STRETCH_SCALE
-        patch.position = Vector2(x, MENU_ROWS[2].x - 5.3)
-        patch.size = Vector2(18, 76.0 * MENU_SCALE / 0.891)
+        patch.position = Vector2(x, MENU_ROWS[2].x - 10.0)
+        patch.size = Vector2(22, MENU_ROWS[2].y + 20.0)
         patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
         ref_menu_cover.add_child(patch)
         patch.top_level = false
-        patch.position = Vector2(x, MENU_ROWS[2].x - 5.3) - ref_menu_cover.position
+        patch.position = Vector2(x, MENU_ROWS[2].x - 10.0) - ref_menu_cover.position
     # Botões do menu: ao passar o mouse / foco o PRÓPRIO botão da arte reluz (mesmos pixels,
     # somando luz nas partes douradas). Nada de caixa por cima nem texto extra.
     var glow_material = ShaderMaterial.new()
     glow_material.shader = preload("res://ui_v022/home_button_glow.gdshader")
     for button in menu_buttons:
         var ranked = title_of(button) == "JOGAR RANQUEADO"
-        var offset = Vector2(-5, -11) if ranked else Vector2(0, -2)
-        var region = Rect2(button.position + offset, button.size + (Vector2(11, 23) if ranked else Vector2(0, 4)))
+        var offset = Vector2(-20, -10) if ranked else Vector2(0, -2)
+        var region = Rect2(button.position + offset, button.size + (Vector2(40, 20) if ranked else Vector2(0, 4)))
         var atlas = AtlasTexture.new()
         atlas.atlas = FOREST
         atlas.region = region
@@ -2150,32 +2132,7 @@ func _build_reference_chrome():
         button.mouse_exited.connect(func(): if ref_mode and not button.has_focus(): hover.hide())
         button.focus_entered.connect(func(): if ref_mode: hover.show())
         button.focus_exited.connect(func(): hover.hide())
-        # R32: linhas novas da arte v3 (moldura sem texto): título, subtítulo e ícone vivos por cima
-        var title := title_of(button)
-        if title in ["MARCHA REAL", "XEQUE", "HISTÓRICO DE PARTIDAS"]:
-            var cap = Control.new()
-            cap.name = "RefCaption"
-            cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-            cap.size = button.size
-            button.add_child(cap)
-            var t1 = _label(cap, title, 15, Color("f4f1e6"))
-            t1.position = Vector2(MENU_TEXT_X - 611.0, 1)
-            t1.size = Vector2(300, 24)
-            t1.autowrap_mode = TextServer.AUTOWRAP_OFF
-            var t2 = _label(cap, {"MARCHA REAL": "Novo modo · cartas e corrida", "XEQUE": "Novo modo · blefe de cartas"}.get(title, "Suas partidas e análises"), 12, Color("e8e2d0"))
-            t2.position = Vector2(MENU_TEXT_X - 611.0, 19)
-            t2.size = Vector2(300, 20)
-            t2.autowrap_mode = TextServer.AUTOWRAP_OFF
-            if title in ["MARCHA REAL", "XEQUE"]:
-                var tag = preload("res://monetization/premium_art.gd").Stamp.new("NOVO", "new", 11)
-                tag.position = Vector2(285, 4)
-                tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-                cap.add_child(tag)
-            else:
-                var ic = preload("res://monetization/premium_art.gd").Glyph.new("hourglass", 30, Color("f2c14e"))
-                ic.position = Vector2(20, 2)
-                ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-                cap.add_child(ic)
+        # R36: a arte v7 já traz os textos de TODAS as linhas (inclusive MARCHA REAL, XEQUE e HISTÓRICO)
 
 func _sync_chrome():
     var ref = _is_ref_art(canvas.get_node("ForestArtwork").texture)
@@ -2207,7 +2164,7 @@ func _sync_chrome():
         account_card.size = Vector2(322,72) if ref else Vector2(326,62)
         account_card.get_node("AccountIcon").visible = not ref
         var words = account_card_title.get_parent().get_parent()
-        words.position = Vector2(98,11) if ref else Vector2(70,8)
+        words.position = Vector2(95,12) if ref else Vector2(70,8)
         words.size = Vector2(172,50) if ref else Vector2(214,48)
         account_card_title.add_theme_font_size_override("font_size", 20 if ref else 18)
         account_card_subtitle.add_theme_font_size_override("font_size", 14 if ref else 13)
@@ -2253,9 +2210,15 @@ func _sync_menu_cover():
     # Páginas internas usam o painel largo (y 260 → 900): o HUD de baixo da Home (cartão da conta,
     # versão) fica escondido enquanto a página está aberta — antes os textos vivos atravessavam a moldura.
     var home := page == "main"
-    for n in [account_card, ref_account_avatar, ref_account_frame_host, canvas.get_node_or_null("RefAccountPlaque")]:
-        if is_instance_valid(n): n.modulate.a = 1.0 if home else 0.0
-    if is_instance_valid(account_card): account_card.mouse_filter = Control.MOUSE_FILTER_STOP if home else Control.MOUSE_FILTER_IGNORE
+    # R36: na arte v7 a placa da conta faz parte do cenário; numa página interna os textos vivos
+    # continuam nela (sem eles a placa ficaria vazia), a não ser na arte antiga/temas.
+    var wide: bool = not home and pages.has(page) and pages[page] is Control and (pages[page] as Control).position.x < 400.0
+    var keep := home or (ref_mode and not wide)
+    for n in [account_card, ref_account_avatar, ref_account_frame_host]:
+        if is_instance_valid(n):
+            n.modulate.a = 1.0 if keep else 0.0
+            n.z_index = 1   # por cima do fundo das páginas internas (a placa é da arte)
+    if is_instance_valid(account_card): account_card.mouse_filter = Control.MOUSE_FILTER_STOP if keep else Control.MOUSE_FILTER_IGNORE
     var acct = canvas.get_node_or_null("AccountPanel")
     if acct != null: acct.modulate.a = 1.0 if home else 0.0
     var quit_cap = canvas.get_node_or_null("WebQuitCaption")

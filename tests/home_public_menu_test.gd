@@ -16,7 +16,7 @@ func run():
     check(not "JOGAR LOCAL" in titles, "JOGAR LOCAL fora da Home")
     for i in range(hub.menu_buttons.size()):
         var row: Vector2 = hub.MENU_ROWS[i]
-        check(hub.menu_buttons[i].position == Vector2(611, row.x) and (i == 0 or row.x - (hub.MENU_ROWS[i - 1].x + hub.MENU_ROWS[i - 1].y) < 12.0), "sem buraco no layout %d" % i)
+        check(hub.menu_buttons[i].position == Vector2(hub.MENU_X, row.x) and (i == 0 or row.x - (hub.MENU_ROWS[i - 1].x + hub.MENU_ROWS[i - 1].y) < 12.0), "sem buraco no layout %d" % i)
     var all_text = hub.root.find_children("*","Label",true,false).map(func(l): return l.text)
     check(not all_text.any(func(t): return "Duas pessoas no mesmo computador" in t), "texto do Local fora da Home")
     check(stage.has_method("_start_local"), "modo Local interno preservado")
