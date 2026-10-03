@@ -1680,29 +1680,9 @@ func refresh_fullscreen_button():
 ## Web: SAIR volta para o site — o subtítulo desenhado na arte ("Até a próxima partida!") é coberto
 ## com o mesmo verde do botão e recebe "Voltar para o site".
 func _build_web_quit_caption():
-    if not OS.has_feature("web") or canvas.get_node_or_null("WebQuitCaption") != null: return
-    # R35.1 · o "Até a próxima partida!" da arte é coberto com o PRÓPRIO fundo do botão (recorte da arte
-    # na mesma altura, à direita do texto) — sem retângulo de cor chapada e sem tocar na borda dourada.
-    var sair_row: Vector2 = MENU_ROWS[MENU_ROWS.size() - 1]
-    var patch = TextureRect.new()
-    patch.name = "WebQuitCaption"
-    patch.texture = _slice(FOREST, Rect2(870.0, sair_row.x + 23.0, 130.0, 16.0))
-    patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    patch.stretch_mode = TextureRect.STRETCH_SCALE
-    patch.position = Vector2(MENU_TEXT_X - 2.0, sair_row.x + 23.0)   # coordenadas da arte v7 (DESIGN 1672x941): só a linha do subtítulo
-    patch.size = Vector2(170, 16)
-    patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    canvas.add_child(patch)
-    canvas.move_child(patch, canvas.get_node("MainMenu").get_index())
-    var cap = _label(patch, "Voltar para o site", 12, Color("e8e2d0"))
-    cap.position = Vector2(2, -5)
-    cap.size = Vector2(236, 24)
-    cap.autowrap_mode = TextServer.AUTOWRAP_OFF
-    ref_nodes.append(patch)
-    patch.visible = ref_mode
-    var last := menu_buttons.size() - 1
-    if last >= 0:
-        menu_buttons[last].tooltip_text = "Voltar para o site fraihaxadrez.com"
+    # R37.2 · pedido do dono: o SAIR fica só com a palavra (sem legenda por cima nem sombra).
+    var last0 := menu_buttons.size() - 1
+    if OS.has_feature("web") and last0 >= 0: menu_buttons[last0].tooltip_text = "Voltar para o site fraihaxadrez.com"
 
 func _refresh_sound_button():
     if not is_instance_valid(sound_button): return

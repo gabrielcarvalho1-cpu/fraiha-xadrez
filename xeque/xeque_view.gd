@@ -16,8 +16,8 @@ const LAYOUTS := {
         "xeque": [Vector2(1700, 640), 0.92], "play": Rect2(1525, 757, 350, 80),
         "hint": [Vector2(1700, 912), 24], "help": Rect2(1752, 993, 54, 54), "menu": Rect2(1813, 993, 54, 54),
         "music": Rect2(1630, 993, 54, 54), "fx": Rect2(1691, 993, 54, 54),
-        "hand": [Vector2(960, 930), 0.212], "pile": [Vector2(960, 530), 0.128], "clock": [Vector2(960, 333), 0.22],
-        "reveal": [Vector2(960, 528), 0.19], "mate_clock": [Vector2(960, 262), 0.36], "mate_title": [Vector2(960, 862), 196],
+        "hand": [Vector2(960, 930), 0.212], "pile": [Vector2(960, 478), 0.128], "clock": [Vector2(960, 333), 0.22],
+        "reveal": [Vector2(960, 476), 0.19], "mate_clock": [Vector2(960, 262), 0.36], "mate_title": [Vector2(960, 862), 196],
         "mate_line": [Vector2(960, 958), 33],
     },
     "portrait": {
@@ -29,8 +29,8 @@ const LAYOUTS := {
         "xeque": [Vector2(184, 1846), 0.768], "play": Rect2(405, 1805, 630, 82),
         "hint": null, "help": Rect2(470, 22, 60, 60), "menu": Rect2(540, 22, 60, 60),
         "music": Rect2(330, 22, 60, 60), "fx": Rect2(400, 22, 60, 60),
-        "hand": [Vector2(540, 1664), 0.167], "pile": [Vector2(540, 988), 0.18], "clock": [Vector2(540, 703), 0.32],
-        "reveal": [Vector2(540, 960), 0.25], "mate_clock": [Vector2(540, 690), 0.48], "mate_title": [Vector2(540, 1252), 128],
+        "hand": [Vector2(540, 1664), 0.167], "pile": [Vector2(540, 912), 0.18], "clock": [Vector2(540, 703), 0.32],
+        "reveal": [Vector2(540, 884), 0.25], "mate_clock": [Vector2(540, 690), 0.48], "mate_title": [Vector2(540, 1252), 128],
         "mate_line": [Vector2(540, 1326), 27],
     },
     "landscape": {
@@ -42,8 +42,8 @@ const LAYOUTS := {
         "xeque": [Vector2(1750, 360), 0.837], "play": Rect2(1581, 459, 326, 96),
         "hint": [Vector2(1750, 632), 22], "help": Rect2(1798, 2, 50, 48), "menu": Rect2(1856, 2, 50, 48),
         "music": Rect2(1682, 2, 50, 48), "fx": Rect2(1740, 2, 50, 48),
-        "hand": [Vector2(975, 772), 0.183], "pile": [Vector2(975, 413), 0.122], "clock": [Vector2(975, 248), 0.185],
-        "reveal": [Vector2(975, 400), 0.16], "mate_clock": [Vector2(975, 222), 0.31], "mate_title": [Vector2(975, 690), 124],
+        "hand": [Vector2(975, 772), 0.183], "pile": [Vector2(975, 369), 0.122], "clock": [Vector2(975, 248), 0.185],
+        "reveal": [Vector2(975, 356), 0.16], "mate_clock": [Vector2(975, 222), 0.31], "mate_title": [Vector2(975, 690), 124],
         "mate_line": [Vector2(975, 800), 26],
     },
 }
@@ -167,8 +167,11 @@ func chip(r: Rect2, label: String, fill: Color, border: Color, col: Color, fs :=
     var f := fit(label, "ui_sp", fs, r.size.x - 10)
     text(label, Vector2(r.position.x, r.position.y + r.size.y / 2.0 + f * 0.36), "ui_sp", f, col, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
 
+const Crisp := preload("res://ui_v022/crisp_tex.gd")
 func tex_center(tex: Texture2D, c: Vector2, sc: float, rot := 0.0, mod: Color = Color.WHITE):
     var sz := tex.get_size() * sc
+    # R37.2 · cartas: reduzidas com Lanczos para o tamanho real na tela (texto legível com filtro NEAREST)
+    if tex == ui.CARD_BACK or ui.cards.values().has(tex): tex = Crisp.at(tex, sz * ui.k)
     if rot == 0.0:
         draw_texture_rect(tex, Rect2(c - sz / 2.0, sz), false, mod)
         return
@@ -850,8 +853,9 @@ func _draw_reveal(big: bool):
     var cw := 360.0 * sc
     var base: Vector2 = rv[0]
     if big: base.y += 0.0
-    var flip: float = clampf(ui.phase_t / 0.35, 0.0, 1.0) if ui.phase == "reveal" else 1.0
     for i in n:
+        # R37.2 · as cartas viram devagar, uma de cada vez (tempos em xeque_ui.gd: FLIP_*)
+        var flip: float = ui.flip_progress(i) if ui.phase == "reveal" else 1.0
         var off := i - (n - 1) / 2.0
         var c := base + Vector2(off * cw * 1.0, absf(off) * cw * 0.2)
         var rot := deg_to_rad(8.0 * off)
@@ -862,7 +866,7 @@ func _draw_reveal(big: bool):
         draw_rect(Rect2(-sz / 2.0, sz).grow(3), Color(0, 0, 0, 0.45))
         var lie: bool = not Rules.is_true_card(cards[i], String(r.target))
         if flip >= 1.0 and lie: draw_rect(Rect2(-sz / 2.0, sz).grow(4), Color("e02a36"), false, 4.0)
-        draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false)
+        draw_texture_rect(Crisp.at(tex, sz * ui.k), Rect2(-sz / 2.0, sz), false)
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
     # faixa "DISSE 3 TORRES · TINHA 1 CAVALO"
     var said: String = "DISSE " + _declared(n, String(r.target))

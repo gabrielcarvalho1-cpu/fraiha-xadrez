@@ -127,5 +127,13 @@ out = fill_dark(out, m)
 m = np.zeros(out.shape[:2], np.uint8); cv2.rectangle(m, (126, 856), (302, 908), 255, -1)
 out = fill_dark(out, m, 10)
 
+# ---------- 4. SAIR: fica só a palavra (R37.2, pedido do dono): some "Até a próxima partida!" ----------
+x0, x1 = 690, 868
+for y in range(864, 884):
+    L = out[y, x0 - 3:x0].astype(np.float64).mean(axis=0)
+    R = out[y, x1:x1 + 3].astype(np.float64).mean(axis=0)
+    t = np.linspace(0, 1, x1 - x0)[:, None]
+    out[y, x0:x1] = (L * (1 - t) + R * t).astype(np.uint8)
+
 Image.fromarray(out).save(OUT, optimize=True)
 print("ok", OUT)

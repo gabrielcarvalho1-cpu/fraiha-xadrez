@@ -114,10 +114,16 @@ var room_id := ""
 var players: Array = []           # [{name, bot, connected, left}] já girados (você = 0)
 var ev_queue: Array = []
 
-const PHASE_TIME := {"reveal": 2.6, "clock": 2.4, "safe": 2.0, "mate": 3.8, "elim": 2.0}   # R36: mais tempo para cada momento
+const PHASE_TIME := {"reveal": 3.2, "clock": 2.4, "safe": 2.0, "mate": 3.8, "elim": 2.0}   # R36: mais tempo para cada momento
 ## R36 · atrasos dos efeitos dentro de cada fase (segundos) e força do tremor — tudo num lugar só.
 ## Espelho no servidor: online_v021/modes/party.js (T.revealMs/clockMs/safeMs/mateMs/introMs/mesaMs).
-const FX_DELAY := {"flip": 0.55, "voice_xeque": 0.12, "voice_mate": 0.45, "mate_red_flash": 0.12}
+## R37.2 · XEQUE: as cartas da jogada viram devagar, uma a uma (antes viravam juntas em 0,35 s)
+const FLIP_START := 0.35          # espera antes da 1ª carta virar
+const FLIP_T := 0.7               # cada carta leva isto para virar
+const FLIP_STAGGER := 0.45        # intervalo entre uma carta e a próxima
+func flip_progress(i: int) -> float:
+    return clampf((phase_t - FLIP_START - i * FLIP_STAGGER) / FLIP_T, 0.0, 1.0)
+const FX_DELAY := {"flip": FLIP_START + FLIP_T * 0.5, "voice_xeque": 0.12, "voice_mate": 0.45, "mate_red_flash": 0.12}
 const FX_SHAKE := {"xeque": 18.0, "clock": 4.0, "mate": 38.0}
 ## R36 · efeitos de tela (motion): tremor, clarão, partículas e o "carimbo" de texto grande
 var shake_amp := 0.0
@@ -486,7 +492,8 @@ func _on_challenge(r: Dictionary, caller: int):
     input_locked = true
     selected = []
     phase = "reveal"
-    get_tree().create_timer(FX_DELAY.flip).timeout.connect(func(): if phase == "reveal": _cue("flip"))
+    for ci in int(r.get("cards", []).size()):   # um "flip" por carta, no meio da virada dela
+        get_tree().create_timer(FX_DELAY.flip + ci * FLIP_STAGGER).timeout.connect(func(): if phase == "reveal": _cue("flip"))
     phase_t = 0.0
     _cue("xeque_hit")
     # R36 · XEQUE! com impacto: tremor, clarão e o carimbo grande na tela

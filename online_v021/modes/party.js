@@ -26,7 +26,7 @@ const T = {
   swapMs: num(env.FRAIHA_PARTY_SWAP_MS, 3200),           // troca do J (marcha_ui.gd: 0,35 + até 2,4 + 0,35 s)
   mesaMs: num(env.FRAIHA_PARTY_MESA_MS, 4400),           // distribuição (DEAL_T 2,4 s) + carta da MESA (MESA_T 1,9 s) no xeque_ui.gd
   introMs: num(env.FRAIHA_PARTY_INTRO_MS, 3200),         // apresentação do baralho antes da 1ª rodada (INTRO_T)
-  revealMs: num(env.FRAIHA_PARTY_REVEAL_MS, 2600), clockMs: num(env.FRAIHA_PARTY_CLOCK_MS, 2400),
+  revealMs: num(env.FRAIHA_PARTY_REVEAL_MS, 3200), clockMs: num(env.FRAIHA_PARTY_CLOCK_MS, 2400),
   safeMs: num(env.FRAIHA_PARTY_SAFE_MS, 2000), mateMs: num(env.FRAIHA_PARTY_MATE_MS, 3800),
   keepEndedMs: 120000,
 };
