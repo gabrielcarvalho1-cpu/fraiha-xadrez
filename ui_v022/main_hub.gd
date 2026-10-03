@@ -15,7 +15,7 @@ signal cosmetics_changed   # R31: ícone/título/moldura/avatar mudaram (a conta
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
-const APP_VERSION = "0.36"
+const APP_VERSION = "0.37"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
 const FOREST = preload("res://ui_v022/assets/home_forest_v7.png")   # R36: arte de REFERÊNCIA aprovada pelo dono (tools/home_ref_v7.py): menu com pilares e tochas, 11 linhas com textos; só o que é vivo foi apagado
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
