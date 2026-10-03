@@ -2,7 +2,7 @@
 // Amigos: busca por nickname, perfil público, pedidos, amizades e bloqueios.
 // Só contas com perfil. O servidor decide tudo; o cliente só pede. Nunca expõe e-mail.
 const { MODES } = require('../ranked/config');
-const { UUID_RE } = require('../accounts/store');
+const { UUID_RE, STAT_MODES } = require('../accounts/store');
 const NICK_QUERY = /^[A-Za-z0-9_.À-ÖØ-öø-ÿ-]{2,16}$/;
 
 class Social {
@@ -45,6 +45,24 @@ class Social {
   notify(uid, event, user) {
     for (const ws of (this.backend.socketsOf ? this.backend.socketsOf(uid) : [])) this.send(ws, { type: 'social_event', event, user });
   }
+  // R37 · cartão de perfil (passar o mouse no avatar durante a partida): perfil público, relação
+  // (para o botão ADICIONAR AMIGO) e o placar do MODO em jogo. Vale também para a própria conta.
+  async card(ws, me, other, mode) {
+    const st = this.store();
+    const rel = await st.getRelations(me);
+    if (other !== me && rel.blockedBy.includes(other)) return this.send(ws, { type: 'social_card', user_id: other, missing: true });
+    const [target] = await st.getProfilesByIds([other]);
+    if (!target) return this.send(ws, { type: 'social_card', user_id: other, missing: true });
+    let stats = null;
+    if (MODES[mode]) {
+      const s = (await st.getRankedStats(other))[mode] || {};
+      stats = { wins: s.wins || 0, losses: s.losses || 0, draws: s.draws || 0, league: s.league || 0, pl: s.pl || 0 };
+    } else if (STAT_MODES.includes(mode)) {
+      const all = st.getModeStats ? await st.getModeStats(other) : { not_configured: true };
+      stats = all.not_configured ? null : all[mode];
+    }
+    this.send(ws, { type: 'social_card', user_id: other, mode, card: { ...target, relation: other === me ? 'self' : Social.relation(rel, other), stats, stats_ready: stats !== null } });
+  }
   async handle(ws, m) {
     const a = String(m.type || ''), me = ws.user.id, meProfile = ws.profile;
     if (this.limited(me)) return this.fail(ws, 'Muitas ações seguidas. Aguarde alguns segundos.', 'rate_limited');
@@ -59,6 +77,7 @@ class Social {
     }
     const other = String(m.user_id || '');
     if (!UUID_RE.test(other)) return this.fail(ws, 'Jogador inválido.', 'bad_user');
+    if (a === 'social_card') return this.card(ws, me, other, String(m.mode || ''));
     if (other === me) return this.fail(ws, 'Esta é a sua própria conta.', 'self');
     const rel = await st.getRelations(me);
     // Quem me bloqueou não aparece para mim: tratado como inexistente.

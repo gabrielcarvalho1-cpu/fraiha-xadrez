@@ -179,6 +179,7 @@ func open():
     _relayout()
 
 func close():
+    _popup_close()
     if online:
         if mode == "game": _record_history("abandon")
         _online_leave()
@@ -835,6 +836,55 @@ func pawn_point(s: int, i: int) -> Vector2:
     return _cell_of(s, g.pawns[s][i])
 
 # ---------------------------------------------------------------- toques
+# ---------------------------------------------------------------- R37 · cartão de perfil
+var _hover_seat := -1
+func _popup():
+    return stage.get("profile_popup") if stage != null else null
+
+func _popup_close():
+    var pp = _popup()
+    if pp != null: pp.close()
+    _hover_seat = -1
+
+## Dados do jogador da placa `seat` para o cartão (você, bot ou amigo da mesa online).
+func seat_info(seat: int) -> Dictionary:
+    var acc = stage.get("account") if stage != null else null
+    var info := {"name": String(names[seat]), "mode": "marcha", "mode_label": "MARCHA REAL",
+        "subtitle": KINGDOM_LABEL[seat] + (" · ALIADO" if seat == 2 else (" · VOCÊ" if seat == 0 else " · ADVERSÁRIO"))}
+    if online and seat < players.size():
+        var pl: Dictionary = players[seat]
+        info.user_id = String(pl.get("user_id", ""))
+        info.bot = bool(pl.get("bot", false))
+        if hub != null and hub.has_method("avatar_texture") and not info.bot: info.avatar = hub.avatar_texture(String(pl.get("avatar", ""))) if seat != 0 else (my_portrait if my_portrait != null else portraits.voce)
+        else: info.avatar = portraits[BOTS[seat].portrait] if BOTS.has(seat) else null
+    elif seat == 0:
+        info.user_id = String(acc.user_id) if acc != null and acc.has_profile() else ""
+        info.bot = false
+        info.avatar = my_portrait if my_portrait != null else portraits.voce
+    else:
+        info.bot = true
+        info.avatar = portraits[BOTS[seat].portrait]
+    return info
+
+func _seat_screen_rect(seat: int) -> Rect2:
+    for h in hits:
+        if String(h.id) == "seat_%d" % seat:
+            var r: Rect2 = h.rect
+            return Rect2(origin + r.position * k, r.size * k)
+    return Rect2()
+
+func on_hover(p: Vector2):
+    var pp = _popup()
+    if pp == null: return
+    var seat := -1
+    if mode in ["game", "over"] and tut_page < 0 and not menu_open and not choice_open:
+        for h in hits:
+            if String(h.id).begins_with("seat_") and Rect2(h.rect).has_point(p): seat = int(String(h.id).substr(5))
+    if seat == _hover_seat: return
+    if _hover_seat >= 0: pp.unhover("marcha_seat_%d" % _hover_seat)
+    _hover_seat = seat
+    if seat >= 0: pp.hover("marcha_seat_%d" % seat, seat_info(seat), _seat_screen_rect(seat))
+
 func on_press(p: Vector2):
     # tutorial e menu ficam por cima de tudo
     for h in range(hits.size() - 1, -1, -1):
@@ -872,6 +922,11 @@ func _on_hit(id: String):
         if id == "choice_cancel": cancel()
         else: choose_function(id.substr(7))
         _redraw()
+        return
+    if id.begins_with("seat_"):
+        var pp = _popup()
+        var seat := int(id.substr(5))
+        if pp != null: pp.toggle("marcha_seat_%d" % seat, seat_info(seat), _seat_screen_rect(seat))
         return
     if id.begins_with("split_"):
         pick_split(int(id.substr(6)))
@@ -958,6 +1013,9 @@ class TableView extends Control:
     func _init():
         mouse_filter = Control.MOUSE_FILTER_STOP
     func _gui_input(event):
+        if event is InputEventMouseMotion:
+            ui.on_hover((event.position - ui.origin) / ui.k)
+            return
         var pos := Vector2.INF
         if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT: pos = event.position
         elif event is InputEventScreenTouch and event.pressed and not EMULATED_MOUSE: pos = event.position
@@ -1065,6 +1123,7 @@ class TableView extends Control:
 
     # ------------------------------------------------------------ placas dos jogadores
     func _plate(r: Rect2, seat: int, big := false):
+        ui.hits.append({"rect": r, "id": "seat_%d" % seat})     # R37: cartão de perfil (mouse / toque)
         var g = ui.g
         var lit: bool = g != null and g.turn == seat and ui.mode == "game"
         panel(r, lit or (seat == 0 and not ui.portrait), ui.PANEL)

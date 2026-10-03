@@ -71,6 +71,7 @@ class Ranked {
       catch (e) { console.error('ranked persist failed', match.id, e && e.message); }
     }
     match.saved = saved;
+    if (!this.rated && match.result) this.recordCasual(match);
     for (const c of ['w', 'b']) {
       const uid = match.players[c].userId, ws = this.sockets.get(uid);
       if (ws && match.players[c].connected) this.send(ws, match.resultFor(c, saved));
@@ -78,6 +79,19 @@ class Ranked {
       this.presence(uid);
     }
     setTimeout(() => this.matches.delete(match.id), 60000).unref();
+  }
+  // R37 · placar do Casual por conta (cartão de perfil). Convidados não têm placar. Falha não atrapalha a partida.
+  recordCasual(match) {
+    const st = this.backend && this.backend.store;
+    if (!st || !st.recordModeResult) return;
+    const { UUID_RE } = require('../accounts/store');
+    const w = match.result.winner;
+    for (const c of ['w', 'b']) {
+      const uid = match.players[c].userId;
+      if (!UUID_RE.test(String(uid || ''))) continue;
+      const res = w === 'draw' ? 'draw' : w === c ? 'win' : 'loss';
+      st.recordModeResult(uid, 'casual', res).catch(e => console.error('mode stats (casual) failed', e && e.message));
+    }
   }
   // Cria a partida entre duas entradas {userId,nickname,avatar,stats}. Usado pela fila e pelos convites.
   startMatch(mode, a, b, now = this.now()) {

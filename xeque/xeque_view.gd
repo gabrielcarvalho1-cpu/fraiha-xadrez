@@ -541,6 +541,7 @@ func _draw_plate(s: int):
         "h", "hc":
             var r: Rect2 = spec[1]
             var compact: bool = spec[0] == "hc"
+            ui.hits.append({"rect": r, "id": "seat_%d" % s})     # R37: cartão de perfil (mouse / toque)
             panel(r, border, glow, fill_t, fill_b)
             var av := r.size.y - (24.0 if compact else 30.0)
             var ar := Rect2(r.position + Vector2(11, (r.size.y - av) / 2.0), Vector2(av, av))
@@ -577,6 +578,7 @@ func _draw_plate(s: int):
             var h := (304.0 if not one_line else 278.0) * u
             var r := Rect2(c.x - w / 2.0, c.y - h / 2.0, w, h)
             ui.set_meta("plate_top_%d" % s, r.position.y)
+            ui.hits.append({"rect": r, "id": "seat_%d" % s})     # R37: cartão de perfil (mouse / toque)
             panel(r, border, glow, fill_t, fill_b)
             var ar := Rect2(c.x - avs / 2.0, r.position.y + 13 * u, avs, avs)
             draw_rect(ar.grow(4), Color("120a06"))

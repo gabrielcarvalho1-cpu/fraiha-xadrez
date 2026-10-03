@@ -139,6 +139,25 @@ func run():
     ui._on_hit("choice_seat1")
     check(not ui.choice_open and ui.five_seat == 1 and not ui.pending.is_empty() and ui.pending.pawn == [1, 0], "R37: escolheu RUBI → a peça Rubi (única) já fica pronta para andar 5")
     ui._clear_selection()
+    # R37 · cartão de perfil: passar o mouse na placa de um bot abre o cartão de bot (sem placar)
+    ui._redraw()
+    await frames(2)
+    var seat1: Rect2 = Rect2()
+    for h in ui.hits: if String(h.id) == "seat_1": seat1 = h.rect
+    check(seat1.size.x > 0, "R37: placa do Rubi é área de cartão de perfil")
+    ui.on_hover(seat1.get_center())
+    await create_timer(0.4).timeout
+    var pp = stage.profile_popup
+    check(pp.is_open() and pp.state == "bot" and pp.info.mode == "marcha" and not pp.view.get_global_rect().intersects(ui._seat_screen_rect(1).grow(-2)), "R37: mouse na placa do bot abre o cartão BOT ao lado (modo MARCHA REAL)")
+    ui.on_hover(Vector2(-50, -50))
+    await create_timer(0.6).timeout
+    check(not pp.is_open(), "R37: mouse saiu: o cartão fecha")
+    pp.show_card("t", {"user_id": "x", "name": "Teste", "mode": "marcha"}, Rect2(100, 100, 50, 50))
+    pp.state = "ready"
+    pp.card = {"relation": "none", "stats_ready": true, "stats": {"wins": 6, "losses": 4, "draws": 0}}
+    var sl: Dictionary = pp.stats_line()
+    check(sl.win_pct == 60 and sl.loss_pct == 40 and pp.button_label() == "ADICIONAR AMIGO", "R37: cartão mostra 60% de vitória / 40% de derrota e ADICIONAR AMIGO")
+    pp.close()
     # ABATER e CHEGADA na mão e no caminho
     var keep_ab: Array = g.pawns.duplicate(true)
     g.pawns[0][0] = {"zone": "track", "pos": 20}

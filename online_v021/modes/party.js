@@ -79,7 +79,7 @@ class Party {
   }
   startMsg(room, v) {
     return { type: 'party_start', room_id: room.id, game: room.game, game_name: GAMES[room.game].name, seat: 0,
-      players: rotArr(room.seats, v).map(s => ({ name: s.nickname, avatar: s.avatar || '', badge: s.badge || '', bot: s.kind !== 'human', connected: s.kind !== 'human' || s.connected, left: !!s.left })),
+      players: rotArr(room.seats, v).map(s => ({ user_id: s.kind === 'human' ? s.uid : '', name: s.nickname, avatar: s.avatar || '', badge: s.badge || '', bot: s.kind !== 'human', connected: s.kind !== 'human' || s.connected, left: !!s.left })),
       ruleset: room.game === 'marcha' ? M.RULESET_VERSION : X.RULESET_VERSION, turn_ms: T.turnMs, snapshot: this.snapshot(room, v) };
   }
   later(room, ms, fn) { clearTimeout(room.timer); room.timer = setTimeout(() => { room.timer = null; if (!room.ended) fn(); }, Math.max(0, ms)); room.timer.unref && room.timer.unref(); }
@@ -274,8 +274,22 @@ class Party {
     room.ended = true; room.deadline = 0; room.turn_seat = -1; clearTimeout(room.timer);
     room.ended_at = this.now();
     this.broadcast(room, { ev: 'end', reason });
+    this.recordStats(room);
     for (const s of room.seats) if (s.kind === 'human' && this.byUser.get(s.uid) === room.id) this.byUser.delete(s.uid);
     for (const s of room.seats) if (s.kind === 'human' && this.backend && this.backend.presenceChanged) this.backend.presenceChanged(s.uid);
+  }
+  // R37 · placar do modo (cartão de perfil): vitória/derrota de cada pessoa da mesa. Quem saiu perde.
+  recordStats(room) {
+    const st = this.backend && this.backend.store;
+    if (!st || !st.recordModeResult) return;
+    const w = room.g ? room.g.winner : -1;
+    room.seats.forEach((s, seat) => {
+      if (s.kind !== 'human' || !/^[0-9a-f-]{36}$/i.test(String(s.uid || ''))) return;
+      let res = '';
+      if (s.left) res = 'loss';
+      else if (w >= 0) res = (room.game === 'marcha' ? seat % 2 === w : seat === w) ? 'win' : 'loss';
+      if (res) st.recordModeResult(s.uid, room.game, res).catch(e => console.error('mode stats failed', e && e.message));
+    });
   }
   leave(room, uid) {
     const seat = this.seatOf(room, uid);

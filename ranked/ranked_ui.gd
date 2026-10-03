@@ -145,7 +145,39 @@ func _make_strip() -> Dictionary:
     clock.custom_minimum_size.x = 96
     row.add_child(clock)
     hud.add_child(bg)
-    return {"bg": bg, "name": name, "clock": clock, "style": style, "seal": seal, "seal_id": ""}
+    var strip := {"bg": bg, "name": name, "clock": clock, "style": style, "seal": seal, "seal_id": "", "color": ""}
+    # R37 · passar o mouse (ou tocar) na faixa do jogador abre o cartão de perfil com o placar deste modo
+    bg.mouse_filter = Control.MOUSE_FILTER_PASS
+    bg.mouse_entered.connect(func(): _strip_hover(strip, true))
+    bg.mouse_exited.connect(func(): _strip_hover(strip, false))
+    bg.gui_input.connect(func(ev):
+        if (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) or (ev is InputEventScreenTouch and ev.pressed):
+            var pp = _popup()
+            if pp != null and not String(strip.color).is_empty(): pp.toggle("chess_" + String(strip.color), strip_info(String(strip.color)), bg.get_global_rect()))
+    return strip
+
+# ---------- R37 · cartão de perfil ----------
+func _popup():
+    var st = get_parent()
+    return st.get("profile_popup") if st != null else null
+
+func strip_info(color: String) -> Dictionary:
+    var info: Dictionary = controller.player(color)
+    var me: bool = color == controller.human_color
+    var mode: String = String(controller.mode)
+    var d := {"user_id": String(info.get("user_id", "")) if not me else (String(account.user_id) if account != null and account.has_profile() else ""),
+        "name": "Você" if me else String(info.get("nickname", "Adversário")), "bot": false,
+        "mode": mode if rated() else "casual", "mode_label": ("RANQUEADO · " if rated() else "CASUAL · ") + String(controller.mode_name).to_upper(),
+        "subtitle": ("BRANCAS" if color == "w" else "PRETAS")}
+    if hub != null and hub.has_method("avatar_texture"): d.avatar = hub.avatar_texture() if me else hub.avatar_texture(String(info.get("avatar_id", "")))
+    return d
+
+func _strip_hover(strip: Dictionary, entered: bool):
+    var pp = _popup()
+    var c := String(strip.color)
+    if pp == null or c.is_empty(): return
+    if entered: pp.hover("chess_" + c, strip_info(c), (strip.bg as Control).get_global_rect())
+    else: pp.unhover("chess_" + c)
 
 # ---------- Painéis ----------
 func open_modes():
@@ -470,6 +502,7 @@ func _refresh_strips():
     var opp = "b" if me == "w" else "w"
     for pair in [["top", opp], ["bottom", me]]:
         var strip = strips[pair[0]]
+        strip.color = pair[1]
         var info = controller.player(pair[1])
         var who = "Você" if pair[1] == me else String(info.get("nickname", "Adversário"))
         if pair[1] != me and not bool(info.get("connected", true)): who += " (reconectando…)"

@@ -44,12 +44,22 @@ const pub = (p, ent) => {
   return { user_id: p.user_id, nickname: p.nickname, avatar_id: c.avatar_id, avatar_url: p.avatar_url || null,
     badge: c.badge, title: c.title, frame: c.frame, founder: c.founder, club: c.club };
 };
+// R37 · placar por modo (0009_fraiha_mode_stats): casual / marcha / xeque (o Ranked fica em ranked_stats).
+const STAT_MODES = ['casual', 'marcha', 'xeque'];
+const emptyModeStats = () => { const o = {}; for (const m of STAT_MODES) o[m] = { wins: 0, losses: 0, draws: 0 }; return o; };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fullStats = rows => { const out = {}; for (const m of MODES) out[m] = { ...emptyStats(), ...(rows[m] || {}) }; return out; };
 
 class MemoryStore {
   constructor() { this.profiles = new Map(); this.stats = new Map(); this.matches = []; this.persistent = false; this.social = { requests: new Set(), friends: new Set(), blocks: new Set() }; this.dms = []; this.dmSeq = 0; }
   async getProfile(userId) { return this.profiles.get(userId) || null; }
+  async getModeStats(userId) { const o = emptyModeStats(); const m = (this.modeStats || new Map()).get(userId) || {}; for (const k of STAT_MODES) Object.assign(o[k], m[k] || {}); return o; }
+  async recordModeResult(userId, mode, result) {
+    if (!STAT_MODES.includes(mode) || !['win', 'loss', 'draw'].includes(result)) return;
+    this.modeStats = this.modeStats || new Map();
+    const row = this.modeStats.get(userId) || {}; const r = row[mode] || { wins: 0, losses: 0, draws: 0 };
+    r[result === 'win' ? 'wins' : result === 'loss' ? 'losses' : 'draws'] += 1; row[mode] = r; this.modeStats.set(userId, row);
+  }
   async createProfile(userId, nickname, avatarId) {
     if (this.profiles.has(userId)) return { error: 'Este perfil já existe.' };
     for (const p of this.profiles.values()) if (p.nickname.toLowerCase() === nickname.toLowerCase()) return { error: 'Este nome já está em uso.', code: 'nickname_taken' };
@@ -419,6 +429,19 @@ class SupabaseStore {
     }
   }
   // ---------- R32 · MARCHA REAL (0008): fraiha_marcha_consume decide no banco. Sem a 0008 → not_configured ----------
+  async getModeStats(userId) {
+    try {
+      const rows = await this.req('/mode_stats?user_id=eq.' + encodeURIComponent(userId) + '&select=mode_id,wins,losses,draws');
+      const o = emptyModeStats();
+      for (const r of rows) if (o[r.mode_id]) o[r.mode_id] = { wins: Number(r.wins) || 0, losses: Number(r.losses) || 0, draws: Number(r.draws) || 0 };
+      return o;
+    } catch (e) { if (SCHEMA_MISSING(e)) return { not_configured: true }; throw e; }
+  }
+  async recordModeResult(userId, mode, result) {
+    if (!STAT_MODES.includes(mode) || !['win', 'loss', 'draw'].includes(result)) return;
+    try { await this.req('/rpc/fraiha_mode_record', { method: 'POST', body: JSON.stringify({ p_user: userId, p_mode: mode, p_result: result }) }); }
+    catch (e) { if (!SCHEMA_MISSING(e)) throw e; }
+  }
   async marchaUsage(userId, day) {
     try {
       const rows = await this.req('/marcha_usage?user_id=eq.' + encodeURIComponent(userId) + '&day=eq.' + day + '&select=used');
@@ -505,4 +528,4 @@ class SupabaseStore {
 }
 const DM_COLS = 'id,sender_id,recipient_id,body,created_at,read_at';
 
-module.exports = { MemoryStore, SupabaseStore, validateNickname, cleanNickname, nextNickChange, NICK_COOLDOWN_MS, MODES, AVATARS, emptyStats, UUID_RE, pub, extendClub, FOUNDER_CLUB_DAYS };
+module.exports = { STAT_MODES, MemoryStore, SupabaseStore, validateNickname, cleanNickname, nextNickChange, NICK_COOLDOWN_MS, MODES, AVATARS, emptyStats, UUID_RE, pub, extendClub, FOUNDER_CLUB_DAYS };

@@ -52,6 +52,7 @@ var bot_side_name := "BRANCAS"
 var mobile_status: Label
 var mobile_promotion: PanelContainer
 var account
+var profile_popup                # R37 · social/profile_popup.gd (cartão de perfil durante a partida)
 var account_ui
 var account_chip: Button
 var ranked
@@ -403,6 +404,10 @@ func _setup_account():
     add_child(account_ui)
     account_ui.setup(account)
     hub.bind_account(account)
+    # R37 · cartão de perfil ao passar o mouse no avatar (Ranked, Casual, Marcha, Xeque)
+    profile_popup = preload("res://social/profile_popup.gd").new()
+    add_child(profile_popup)
+    profile_popup.bind(account)
     _setup_analysis()
     account_ui.ready_for_ranked.connect(_open_ranked)
     ranked = preload("res://ranked/ranked_controller.gd").new()

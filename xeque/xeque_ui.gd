@@ -200,6 +200,7 @@ func open():
     _relayout()
 
 func close():
+    _popup_close()
     if online:
         if mode == "game" and g != null and g.state != Rules.MATCH_END: _record_history("abandon")
         _online_leave()
@@ -607,11 +608,58 @@ func on_hover(p: Vector2):
         if Rect2(hits[h].rect).has_point(p):
             id = String(hits[h].id)
             break
+    _hover_profile(int(id.substr(5)) if id.begins_with("seat_") and mode == "game" else -1)
     if id != hover_id:
         hover_id = id
         _redraw()
 
+# ---------------------------------------------------------------- R37 · cartão de perfil
+var _hover_seat := -1
+func _popup():
+    return stage.get("profile_popup") if stage != null else null
+
+func _hover_profile(seat: int):
+    var pp = _popup()
+    if pp == null or seat == _hover_seat: return
+    if _hover_seat >= 0: pp.unhover("xeque_seat_%d" % _hover_seat)
+    _hover_seat = seat
+    if seat >= 0: pp.hover("xeque_seat_%d" % seat, seat_info(seat), _seat_screen_rect(seat))
+
+## Dados do jogador da placa `seat` para o cartão (você, bot ou amigo da mesa online).
+func seat_info(seat: int) -> Dictionary:
+    var acc = stage.get("account") if stage != null else null
+    var nm: String = String(g.names[seat]) if g != null else String(SEAT_NAMES[seat])
+    var info := {"name": nm, "mode": "xeque", "mode_label": "XEQUE", "avatar": avatars[seat] if seat < avatars.size() else null,
+        "subtitle": "VOCÊ" if seat == 0 else ""}
+    if online and seat < players.size():
+        info.user_id = String(players[seat].get("user_id", ""))
+        info.bot = bool(players[seat].get("bot", false))
+        if not info.bot and seat != 0: info.subtitle = "AMIGO"
+    elif seat == 0:
+        info.user_id = String(acc.user_id) if acc != null and acc.has_profile() else ""
+        info.bot = false
+    else:
+        info.bot = true
+    return info
+
+func _seat_screen_rect(seat: int) -> Rect2:
+    for h in hits:
+        if String(h.id) == "seat_%d" % seat:
+            var r: Rect2 = h.rect
+            return Rect2(origin + r.position * k, r.size * k)
+    return Rect2()
+
+func _popup_close():
+    var pp = _popup()
+    if pp != null: pp.close()
+    _hover_seat = -1
+
 func _on_hit(id: String):
+    if id.begins_with("seat_"):
+        var pp = _popup()
+        var seat := int(id.substr(5))
+        if pp != null: pp.toggle("xeque_seat_%d" % seat, seat_info(seat), _seat_screen_rect(seat))
+        return
     if id.begins_with("card_"):
         toggle_card(int(id.substr(5)))
         return
