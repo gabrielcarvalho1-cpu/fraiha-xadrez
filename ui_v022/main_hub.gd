@@ -1659,6 +1659,7 @@ func attach_screen_mode(sm):
         fullscreen_button.name = "FullscreenButton"
         fullscreen_button.size = Vector2(62, 62)
         fullscreen_button.position = Vector2(434, 16)
+        fullscreen_button.set_over_art(ref_mode)
         fullscreen_button.pressed.connect(func(): if screen_mode != null: screen_mode.toggle())
         canvas.add_child(fullscreen_button)
     sm.changed.connect(func(_on): refresh_fullscreen_button())
@@ -1968,6 +1969,7 @@ func _build_reference_chrome():
     # CLUB FRAIHA: fita pendurada no cartão de perfil (entrada própria, fora de Configurações).
     # Canto superior esquerdo do HUD (antes ficava pendurado no cartão de perfil e invadia as páginas).
     club_entry = preload("res://monetization/club_home_entry.gd").new()
+    club_entry.over_art = true   # R36: a placa é da arte v7
     club_entry.position = Vector2(22, 16)
     club_entry.size = Vector2(330, 62)
     club_entry.pressed.connect(open_club)
@@ -2137,6 +2139,9 @@ func _build_reference_chrome():
 func _sync_chrome():
     var ref = _is_ref_art(canvas.get_node("ForestArtwork").texture)
     ref_mode = ref
+    # R36: na arte v7 os quadrados de som / tela cheia já estão desenhados (o botão só põe o ícone)
+    for b in [sound_button, fullscreen_button]:
+        if is_instance_valid(b): b.set_over_art(ref)
     if is_instance_valid(presentation_frame): presentation_frame.queue_redraw()
     for n in ref_nodes: n.visible = ref
     for name in ["ProfilePanel","AccountPanel"]:

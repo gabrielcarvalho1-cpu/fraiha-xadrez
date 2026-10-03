@@ -8,6 +8,9 @@ const Art := preload("res://monetization/premium_art.gd")
 
 var active := false
 var compact := false   # celular: fita mais baixa, texto menor
+## R36 · Home v7: a placa (moldura de madeira/ouro e medalhão com coroa) é da própria arte de referência;
+## aqui só entram os textos vivos, o selo ✓ (ativo) ou a seta (inativo) e o brilho do hover.
+var over_art := false
 var t := 0.0
 
 # Gradiente metálico do ouro (de cima para baixo)
@@ -65,6 +68,9 @@ static func span(w: float, h: float, notch: float, y: float) -> Vector2:
     return Vector2(notch * k, w - notch * k)
 
 func _draw():
+    if over_art:
+        _draw_over_art()
+        return
     var lit := is_hovered() or has_focus()
     var down := button_pressed or (is_hovered() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))
     if down: draw_set_transform(Vector2(0, 2))   # pressionado: a placa "afunda" 2 px
@@ -174,3 +180,38 @@ func _draw_shifted(p: PackedVector2Array, d: Vector2, col: Color):
     var out := PackedVector2Array()
     for v in p: out.append(v + d)
     draw_colored_polygon(out, col)
+
+## Coordenadas medidas na arte v7 (placa em x 18–352, y 8–80; o botão fica em 22,16 com 330×62).
+func _draw_over_art():
+    var lit := is_hovered() or has_focus()
+    var down := button_pressed or (is_hovered() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))
+    var pulse := 0.5 + 0.5 * sin(t * 2.4)
+    if lit:   # luz quente por dentro da placa
+        draw_rect(Rect2(74, 7, 248, 50), Color(1.0, 0.86, 0.45, 0.07))
+    var f := get_theme_default_font()
+    var title := "CLUB ATIVO" if active else "CLUB FRAIHA"
+    var sub := "Análises ilimitadas · moldura premium" if active else "Jogue. Analise. Evolua."
+    var tx := 79.0
+    var dy := 1.0 if down else 0.0
+    var tfs := Art.fit(f, title, 23, 196.0, 14)
+    var gold := Color("ffd76e") if lit else Color("f2c65a")
+    draw_string_outline(f, Vector2(tx, 31 + dy), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, 5, Color(0.08, 0.05, 0.0, 0.85))
+    draw_string_outline(f, Vector2(tx, 31 + dy), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, 1, gold)   # traço mais encorpado
+    draw_string(f, Vector2(tx, 31 + dy), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, gold)
+    var sfs := Art.fit(f, sub, 12, 196.0, 9)
+    draw_string_outline(f, Vector2(tx, 50 + dy), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, 3, Color(0.05, 0.03, 0.0, 0.8))
+    draw_string(f, Vector2(tx, 50 + dy), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, Color("f1ead6"))
+    var sc := Vector2(291, 30 + dy)
+    if active:
+        # selo dourado com ✓ (igual à referência), com um leve pulso
+        draw_circle(sc + Vector2(0, 2), 19.0, Color(0, 0, 0, 0.45))
+        draw_circle(sc, 19.0, Color("6e4210"))
+        draw_circle(sc, 17.5, Color("e9a321"))
+        draw_circle(sc, 15.0, Color("f7b62a").lerp(Color("ffd25c"), 0.35 * pulse))
+        draw_arc(sc, 14.0, PI * 1.1, PI * 1.9, 16, Color(1, 0.95, 0.7, 0.75), 2.0)
+        draw_polyline(PackedVector2Array([sc + Vector2(-8, 0), sc + Vector2(-2, 6), sc + Vector2(9, -7)]), Color("0f3518"), 5.0)
+    else:
+        # seta dourada (abre a página do Club)
+        var c := sc + Vector2(4 if lit else 0, 0)
+        draw_polyline(PackedVector2Array([c + Vector2(-5, -9), c + Vector2(5, 0), c + Vector2(-5, 9)]), Color(0.1, 0.06, 0.0, 0.8), 7.0)
+        draw_polyline(PackedVector2Array([c + Vector2(-5, -9), c + Vector2(5, 0), c + Vector2(-5, 9)]), gold, 4.0)

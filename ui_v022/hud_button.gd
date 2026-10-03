@@ -10,6 +10,24 @@ var hint := ""
 var icon_only := false
 var icon_box := 54.0   # largura reservada ao ícone à esquerda (botões com texto)
 
+## R36 · Home v7: o quadrado (moldura dourada e fundo) já está na arte; o botão só desenha o ícone
+## e uma luz suave no hover/clique.
+func set_over_art(on: bool):
+    if not on:
+        _style()
+        queue_redraw()
+        return
+    var clear := StyleBoxFlat.new()
+    clear.bg_color = Color(0, 0, 0, 0)
+    var glow := StyleBoxFlat.new()
+    glow.bg_color = Color(1.0, 0.86, 0.45, 0.10)
+    glow.set_corner_radius_all(4)
+    var press := glow.duplicate()
+    press.bg_color = Color(0, 0, 0, 0.18)
+    for pair in [["normal", clear], ["hover", glow], ["pressed", press], ["disabled", clear]]:
+        add_theme_stylebox_override(pair[0], pair[1])
+    queue_redraw()
+
 static func make(glyph_id: String, caption := "", key_hint := "") -> Button:
     var b = load("res://ui_v022/hud_button.gd").new()
     b.glyph = glyph_id

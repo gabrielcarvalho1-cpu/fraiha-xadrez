@@ -3,8 +3,8 @@
 A referência é uma captura "ideal" da própria Home (com uma conta Club logada). Ela vira o fundo
 inteiro — menu com pilares e tochas, 11 linhas com textos e selos NOVO, logo, cenário — e só o que é
 VIVO no jogo é apagado da arte, para o Godot desenhar por cima com o estado real do jogador:
-  • canto superior esquerdo (CLUB / som / tela cheia): volta a folhagem da arte anterior (v6),
-    com a cor ajustada à referência e borda suave — os botões vivos ficam por cima;
+  • canto superior esquerdo: a placa CLUB e os quadrados de som / tela cheia ficam; saem só os
+    textos, o selo ✓ e os ícones (o jogo desenha o estado real por cima);
   • cartão de perfil: retrato + moldura Club, nome e selo ao lado, liga/PL; ficam a moldura do
     cartão, a coroa à esquerda do nome, a barra de PL (vazia), a legenda, a citação e o escudo;
     o lugar do retrato ganha uma moldura dourada simples (o retrato vivo encaixa nela);
@@ -42,22 +42,6 @@ def bright_mask(img, box, thr, grow=2):
     return m
 
 
-# ---------- 1. canto superior esquerdo: folhagem da v6 com a cor da referência ----------
-X0, Y0, X1, Y1 = 8, 0, 512, 96
-patch = old[Y0:Y1, X0:X1].astype(np.float64)
-# casa média e desvio por canal com a faixa logo abaixo (onde as duas artes mostram a mesma árvore)
-ra = ref[100:150, X0:X1].reshape(-1, 3).astype(np.float64)
-oa = old[100:150, X0:X1].reshape(-1, 3).astype(np.float64)
-patch = (patch - oa.mean(0)) / (oa.std(0) + 1e-6) * ra.std(0) + ra.mean(0)
-patch = np.clip(patch, 0, 255)
-alpha = np.ones((Y1 - Y0, X1 - X0))
-F = 14
-for i in range(F):
-    a = (i + 1) / (F + 1)
-    alpha[-1 - i, :] = np.minimum(alpha[-1 - i, :], a)       # borda de baixo suave
-    alpha[:, -1 - i] = np.minimum(alpha[:, -1 - i], a)       # borda da direita suave
-out[Y0:Y1, X0:X1] = (patch * alpha[..., None] + ref[Y0:Y1, X0:X1] * (1 - alpha[..., None])).astype(np.uint8)
-
 # ---------- 2. cartão de perfil ----------
 def fill_dark(img, mask, sigma=14, known_max=58):
     """Recompõe o fundo ESCURO do painel sob a máscara: média gaussiana só dos pixels escuros em volta
@@ -78,6 +62,39 @@ def fill_dark(img, mask, sigma=14, known_max=58):
     a = a[..., None]
     return (f * (1 - a) + filled * a).astype(np.uint8)
 
+
+# ---------- 1. canto superior esquerdo: a placa CLUB e os quadrados de som/tela cheia FICAM ----------
+# (pedido do dono: o botão do Club com o visual da referência). Só saem os textos e o selo ✓ da placa
+# e os ícones dos quadrados — o jogo desenha por cima o estado real (ativo/inativo, som, tela cheia).
+def fill_rows(img, box, lum_max=60):
+    """Cada fileira recebe a mediana dos pixels ESCUROS dela mesma (o fundo liso da placa, com o
+    degradê vertical da arte), mais um grão fino; as colunas das pontas se misturam suavemente."""
+    x0, y0, x1, y1 = box
+    res = img.copy()
+    rng = np.random.default_rng(7)
+    meds = []
+    for y in range(y0, y1 + 1):
+        row = img[y, x0:x1 + 1].astype(np.float64)
+        dark = row[row.mean(axis=1) < lum_max]
+        meds.append(np.median(dark, axis=0) if len(dark) >= 4 else None)
+    last = next(m for m in meds if m is not None)
+    for i in range(len(meds)):
+        if meds[i] is None: meds[i] = last
+        last = meds[i]
+    meds = cv2.GaussianBlur(np.array(meds)[:, None, :], (1, 5), 0)[:, 0, :]   # degradê sem degraus
+    for y in range(y0, y1 + 1):
+        row = img[y, x0:x1 + 1].astype(np.float64)
+        med = meds[y - y0]
+        fill = med + rng.normal(0, 1.4, (x1 - x0 + 1, 1))
+        a = np.ones(x1 - x0 + 1)
+        e = min(6, (x1 - x0) // 4)
+        a[:e] = np.linspace(0.2, 1, e); a[-e:] = np.linspace(1, 0.2, e)
+        res[y, x0:x1 + 1] = np.clip(row * (1 - a[:, None]) + fill * a[:, None], 0, 255).astype(np.uint8)
+    return res
+
+
+for box in [(95, 22, 342, 72), (369, 23, 420, 72), (439, 23, 489, 72)]:
+    out = fill_rows(out, box)
 
 # 2a. retrato + moldura Club (medalhão sobre a borda de cima): o painel verde é recomposto
 m = np.zeros(out.shape[:2], np.uint8)
