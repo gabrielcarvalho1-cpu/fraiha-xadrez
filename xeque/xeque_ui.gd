@@ -231,13 +231,18 @@ func start_game():
 ## R34.1: a cada rodada nova a carta da MESA aparece grande no centro e voa para o painel A MESA PEDE.
 const MESA_T := 1.9
 var mesa_anim := -1.0             # segundos da animação (-1 = parada)
+## R35.1 · rodada nova: primeiro as cartas são DISTRIBUÍDAS (voam do centro para cada jogador, uma a uma),
+## depois a carta da MESA aparece. O tempo da vez e os bots esperam as duas.
+const DEAL_T := 1.8
+const DEAL_FLIGHT := 0.38         # cada carta leva 0,38 s do centro até o jogador
+var deal_anim := -1.0
+var deal_order: Array = []        # [{seat, slot}] na ordem em que as cartas saem
 var mesa_round := -1
 func _begin_turn():
     if g == null or mode != "game": return
     if g.round_no != mesa_round and g.state == Rules.TURN_WAITING:
         mesa_round = g.round_no
-        mesa_anim = 0.0
-        _cue("reveal")
+        _start_deal()
     selected = []
     input_locked = false
     turn_left_ms = TURN_MS
@@ -265,12 +270,20 @@ func _process(delta):
     if flash_t > 0.0:
         flash_t -= delta
         if flash_t <= 0.0: flash = ""
-    for f in fly: f.t += delta * 3.2
+    for f in fly: f.t += delta * 1.5      # R35.1: cartas jogadas voam para a mesa sem pressa (~0,7 s)
     fly = fly.filter(func(f): return f.t < 1.0)
-    if mesa_anim >= 0.0:
+    if deal_anim >= 0.0:
+        var before := deal_landed(0)
+        deal_anim += delta
+        if deal_landed(0) > before: _cue("card_1")
+        if deal_anim >= DEAL_T:
+            deal_anim = -1.0
+            mesa_anim = 0.0
+            _cue("reveal")
+    elif mesa_anim >= 0.0:
         mesa_anim += delta
         if mesa_anim >= MESA_T: mesa_anim = -1.0
-    if mode == "game" and g != null and not menu_open and not confirm_quit and mesa_anim < 0.0:
+    if mode == "game" and g != null and not menu_open and not confirm_quit and mesa_anim < 0.0 and deal_anim < 0.0:
         if phase != "":
             phase_t += delta
             if phase_t >= PHASE_TIME[phase]: _advance_phase()
@@ -290,6 +303,33 @@ func _process(delta):
                 bot_wait -= delta
                 if bot_wait < 0.0: _bot_act()
     _redraw()
+
+func _start_deal():
+    deal_order = []
+    var counts := []
+    for s in Rules.SEATS: counts.append(g.hands[s].size() if g.alive(s) else 0)
+    var mx: int = counts.max()
+    for k in mx:
+        for i in Rules.SEATS:
+            var s := (g.turn + i) % Rules.SEATS
+            if k < counts[s]: deal_order.append({"seat": s, "slot": k})
+    deal_anim = 0.0 if not deal_order.is_empty() else -1.0
+    mesa_anim = -1.0
+    if deal_anim < 0.0:
+        mesa_anim = 0.0
+        _cue("reveal")
+
+## Saída da k-ésima carta da distribuição (segundos desde o início).
+func deal_start(k: int) -> float:
+    return float(k) * (DEAL_T - DEAL_FLIGHT) / maxf(1.0, deal_order.size() - 1)
+
+## Quantas cartas do jogador `seat` já chegaram (a mão aparece carta a carta).
+func deal_landed(seat: int) -> int:
+    if deal_anim < 0.0: return 999
+    var n := 0
+    for k in deal_order.size():
+        if int(deal_order[k].seat) == seat and deal_anim >= deal_start(k) + DEAL_FLIGHT: n += 1
+    return n
 
 ## Tempo esgotado: o motor joga 1 carta da mão (escolha cega); nunca XEQUE.
 func _timeout():

@@ -22,7 +22,7 @@ const T = {
   xequeBotMin: num(env.FRAIHA_PARTY_XEQUE_BOT_MIN_MS, 1000), xequeBotMax: num(env.FRAIHA_PARTY_XEQUE_BOT_MAX_MS, 2200),
   awayMs: num(env.FRAIHA_PARTY_AWAY_MS, 1500),           // jogador desconectado: o bot joga por ele depois disso
   stepMs: num(env.FRAIHA_PARTY_STEP_MS, 180),            // animação: 0,18 s por casa (marcha_ui.gd STEP_TIME)
-  mesaMs: num(env.FRAIHA_PARTY_MESA_MS, 1900),           // animação da carta da MESA (xeque_ui.gd MESA_T)
+  mesaMs: num(env.FRAIHA_PARTY_MESA_MS, 3800),           // distribuição (DEAL_T 1,8 s) + carta da MESA (MESA_T 1,9 s) no xeque_ui.gd
   revealMs: num(env.FRAIHA_PARTY_REVEAL_MS, 1700), clockMs: num(env.FRAIHA_PARTY_CLOCK_MS, 1400),
   safeMs: num(env.FRAIHA_PARTY_SAFE_MS, 1400), mateMs: num(env.FRAIHA_PARTY_MATE_MS, 2600),
   keepEndedMs: 120000,
@@ -194,6 +194,7 @@ class Party {
       else if (e.type === 'capture') ms += 300;
       else if (e.type === 'burn') ms += 400;
       else if (e.type === 'crown') ms += 550;
+      else if (e.type === 'swap') ms += 3200;          // J: brilho + travessia em arco (até 2,4 s) + brilho
       else ms += 180;
     }
     return ms;

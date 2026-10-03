@@ -1698,17 +1698,21 @@ func refresh_fullscreen_button():
 ## com o mesmo verde do botão e recebe "Voltar para o site".
 func _build_web_quit_caption():
     if not OS.has_feature("web") or canvas.get_node_or_null("WebQuitCaption") != null: return
-    var patch = ColorRect.new()
-    patch.name = "WebQuitCaption"
-    patch.color = Color8(1, 36, 21)
+    # R35.1 · o "Até a próxima partida!" da arte é coberto com o PRÓPRIO fundo do botão (recorte da arte
+    # na mesma altura, à direita do texto) — sem retângulo de cor chapada e sem tocar na borda dourada.
     var sair_row: Vector2 = MENU_ROWS[MENU_ROWS.size() - 1]
-    patch.position = Vector2(MENU_TEXT_X, sair_row.x + 24.0)   # coordenadas da arte v6 (DESIGN 1672x941)
-    patch.size = Vector2(240, 19)
+    var patch = TextureRect.new()
+    patch.name = "WebQuitCaption"
+    patch.texture = _slice(FOREST, Rect2(870.0, sair_row.x + 22.0, 130.0, 15.0))
+    patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    patch.stretch_mode = TextureRect.STRETCH_SCALE
+    patch.position = Vector2(MENU_TEXT_X - 2.0, sair_row.x + 22.0)   # coordenadas da arte v6 (DESIGN 1672x941)
+    patch.size = Vector2(170, 15)
     patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(patch)
     canvas.move_child(patch, canvas.get_node("MainMenu").get_index())
     var cap = _label(patch, "Voltar para o site", 12, Color("e8e2d0"))
-    cap.position = Vector2(1, -2)
+    cap.position = Vector2(3, -4)
     cap.size = Vector2(236, 24)
     cap.autowrap_mode = TextServer.AUTOWRAP_OFF
     ref_nodes.append(patch)

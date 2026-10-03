@@ -43,6 +43,8 @@ const PANEL := Color("0f2b20")
 const PANEL_DARK := Color("0a1d16")
 const TURN_MS := 30000
 const BOT_DELAY := 0.95
+const SWAP_MIN := 1.0             # R35.1: troca do J leva de 1,0 a 2,4 s (+0,7 s de brilho)
+const SWAP_MAX := 2.4
 const STEP_TIME := 0.18           # R35: 0,18 s por casa (antes 0,11 — rápido demais para acompanhar)
 ## Bots da mesa (nomes e retratos da tela de referência).
 const BOTS := {1: {"name": "ReiDoBlitz", "portrait": "rei_do_blitz"}, 2: {"name": "Lady Torre", "portrait": "lady_torre"}, 3: {"name": "Cavalo_Louco", "portrait": "cavalo_louco"}}
@@ -88,6 +90,9 @@ var turn_left_ms := TURN_MS
 var busy := false                 # animando ou bot pensando
 var anim := {}                    # [seat,i] -> posição desenhada (coordenadas do tabuleiro) durante animação
 var anim_alpha := {}
+var choice_open := false         # R35.1 · caixa "o que você quer fazer?" (cartas de 2 funções: A e 10)
+var card_mode := ""               # função escolhida: "" | "move" | "exit" | "burn"
+var swap_glow: Array = []         # R35.1 · as duas peças da troca (J) brilham durante a animação
 var celebs: Array = []            # R35 · festa de chegada ao Salão: [{"p": Vector2 (tabuleiro), "t", "seat"}]
 const CELEB_T := 1.7
 var over_t := 0.0                 # R35 · tempo desde o fim (animação da vitória final)
@@ -330,6 +335,8 @@ func _clear_selection():
     split_first = 0
     sel_second = []
     pending = {}
+    choice_open = false
+    card_mode = ""
 
 func my_moves() -> Array:
     if g == null or sel_card < 0: return []
@@ -347,8 +354,35 @@ func pick_card(i: int):
         # uma ação só possível → já fica pronta (ex.: A/K sem peão na pista = sair do Pátio;
         # carta que só um peão pode jogar). Só se escolhe peão quando há mais de uma opção.
         var opts := _options(my_moves())
-        if not sole_pawn().is_empty(): _auto_sole_pawn()
+        if not two_choices().is_empty(): choice_open = true     # A e 10: primeiro escolhe a função
+        elif not sole_pawn().is_empty(): _auto_sole_pawn()
         elif opts.size() == 1: pending = opts.values()[0]
+    _redraw()
+
+## R35.1 · A e 10 têm duas funções: quando as duas são possíveis, abre a caixa de escolha.
+## Devolve [[id, texto do botão, texto menor]] ou [] (uma função só → segue direto).
+func two_choices() -> Array:
+    if g == null or sel_card < 0 or sel_card >= g.hands[0].size(): return []
+    var rank: String = g.hands[0][sel_card]
+    var mv := my_moves()
+    if rank == "10" and mv.any(func(m): return m.kind == "burn") and mv.any(func(m): return m.kind == "move"):
+        return [["move", "ANDAR 10 CASAS", "um peão seu avança 10"], ["burn", "%s PERDE A VEZ" % String(names[g.burn_target(0)]).to_upper(), "ele descarta 1 carta da mão (sorteada)"]]
+    if rank == "A" and mv.any(func(m): return m.kind == "exit") and mv.any(func(m): return m.kind == "move"):
+        return [["exit", "TIRAR UMA PEÇA NOVA", "um peão sai do Pátio para o Portão"], ["move", "ANDAR 11 CASAS", "um peão seu avança 11"]]
+    return []
+
+func choose_function(kind: String):
+    if not choice_open: return
+    choice_open = false
+    card_mode = kind
+    match kind:
+        "burn": pick_burn()
+        "exit":
+            for m in my_moves():
+                if m.kind == "exit":
+                    pending = m
+                    break
+        "move": _auto_sole_pawn()
     _redraw()
 
 ## R34.2 · um peão só pode receber a carta (ex.: uma peça só rodando no tabuleiro) → ele já fica
@@ -358,7 +392,9 @@ func sole_pawn() -> Array:
     var who := []
     for m in my_moves():
         if m.kind == "burn": continue
-        if m.kind == "exit": return []
+        if m.kind == "exit":
+            if card_mode == "move": continue
+            return []
         var w: Array
         if m.kind == "split":
             if m.parts.size() != 1: return []
@@ -388,9 +424,7 @@ func _options(moves: Array) -> Dictionary:
 
 ## 10 com as duas funções: o jogador escolhe ANDAR 10 ou FAZER DESCARTAR.
 func ten_choice() -> bool:
-    if g == null or sel_card < 0 or g.turn != 0 or g.hands[0][sel_card] != "10": return false
-    var mv := my_moves()
-    return mv.any(func(m): return m.kind == "burn") and mv.any(func(m): return m.kind != "burn")
+    return false        # R35.1: a escolha do 10 (e do A) agora é a caixa de diálogo (two_choices)
 
 func pick_burn():
     for m in my_moves():
@@ -402,12 +436,14 @@ func pick_burn():
 ## Peões que podem receber o próximo toque (para os aros dourados).
 func candidate_pawns() -> Array:
     var out := []
-    if g == null or sel_card < 0 or g.turn != 0 or busy: return out
+    if g == null or sel_card < 0 or g.turn != 0 or busy or choice_open: return out
+    if card_mode in ["burn", "exit"]: return out
     var mv := my_moves()
     var rank: String = g.hands[0][sel_card]
     if rank == "J" and not sel_pawn.is_empty():
         for m in mv:
             if m.pawn == sel_pawn and not out.has(m.target): out.append(m.target)
+            if m.pawn != sel_pawn and not out.has(m.pawn): out.append(m.pawn)     # trocar a escolha do 1º toque
         return out
     if rank == "7" and split_first > 0 and split_first < 7:
         for m in mv:
@@ -415,6 +451,7 @@ func candidate_pawns() -> Array:
         return out
     for m in mv:
         if m.kind == "burn": continue
+        if m.kind == "exit" and card_mode == "move": continue
         if m.kind == "exit":
             # sair do Pátio: qualquer peão do Pátio serve (o toque escolhe qual)
             var who: int = m.pawn[0]
@@ -426,10 +463,11 @@ func candidate_pawns() -> Array:
     return out
 
 func pick_pawn(w: Array):
-    if g == null or sel_card < 0 or busy: return
+    if g == null or sel_card < 0 or busy or choice_open: return
+    if card_mode == "move" and g.pawns[w[0]][w[1]].zone == "home": return
     var rank: String = g.hands[0][sel_card]
     var mv := my_moves()
-    if rank == "J" and not sel_pawn.is_empty() and sel_pawn != w:
+    if rank == "J" and not sel_pawn.is_empty() and sel_pawn != w and int(w[0]) != g.controlled(0):
         for m in mv:
             if m.pawn == sel_pawn and m.target == w:
                 sel_target = w
@@ -510,13 +548,17 @@ func help_line() -> String:
     var rank: String = g.hands[0][sel_card]
     var head := Rules.card_label(rank)
     if pending.get("kind", "") == "discard": return head + " · descartar"
+    if choice_open: return head + " · escolha o que fazer"
     match rank:
         "A", "K":
             if not pending.is_empty() and pending.kind == "exit": return head + " · seu peão sai do pátio"
             return head + " · sai do pátio ou anda %d casas" % Rules.STEPS[rank]
-        "J": return head + (" · troca de lugar com a peça escolhida" if not pending.is_empty() else " · escolha seu peão e a peça para trocar")
+        "J":
+            if not pending.is_empty(): return head + " · troca pronta: toque em JOGAR CARTA"
+            if sel_pawn.is_empty(): return head + " · 1º toque no SEU peão que vai trocar"
+            return head + " · 2º toque na peça do amigo ou do adversário"
         "10":
-            if not pending.is_empty() and pending.kind == "burn": return head + " · %s descarta uma carta" % names[int(pending.target_seat)]
+            if not pending.is_empty() and pending.kind == "burn": return head + " · %s perde a vez (descarta 1 carta)" % names[int(pending.target_seat)]
             if ten_choice(): return head + " · anda 10 casas ou faz %s descartar" % names[g.burn_target(0)]
         "7":
             if split_first > 0 and split_first < 7: return head + " · %d casas + %d casas: escolha o 2º peão" % [split_first, 7 - split_first]
@@ -571,7 +613,37 @@ func _animate(events: Array):
                 celebs.append({"p": _cell_of(w[0], g.pawns[w[0]][w[1]]), "t": 0.0, "seat": int(w[0])})
                 _redraw()
                 await get_tree().create_timer(0.55).timeout
-            "swap", "discard":
+            "swap":
+                # R35.1 · troca (J): as duas peças brilham e cruzam o tabuleiro em arco, no ritmo do andar
+                var a: Array = e.pawn
+                var b: Array = e.target
+                var ka := _key(a)
+                var kb := _key(b)
+                var pa: Vector2 = _cell_of(a[0], g.pawns[a[0]][a[1]])     # destino de a (= onde b estava)
+                var pb: Vector2 = _cell_of(b[0], g.pawns[b[0]][b[1]])     # destino de b (= onde a estava)
+                swap_glow = [a, b]
+                anim[ka] = pb
+                anim[kb] = pa
+                _redraw()
+                await get_tree().create_timer(0.35).timeout          # as duas brilham antes de sair
+                _cue("swap")
+                var dur := clampf(pa.distance_to(pb) / 65.0 * STEP_TIME, SWAP_MIN, SWAP_MAX)
+                var tt := 0.0
+                while tt < dur:
+                    await get_tree().process_frame
+                    tt += get_process_delta_time()
+                    var f := clampf(tt / dur, 0.0, 1.0)
+                    var ee := f * f * (3.0 - 2.0 * f)
+                    var lift := Vector2(0, -70.0 * sin(PI * f))
+                    anim[ka] = pb.lerp(pa, ee) + lift
+                    anim[kb] = pa.lerp(pb, ee) + lift
+                    _redraw()
+                anim.erase(ka)
+                anim.erase(kb)
+                _redraw()
+                await get_tree().create_timer(0.35).timeout
+                swap_glow = []
+            "discard":
                 if String(e.type) != "discard": _cue(String(e.type))
                 _redraw()
                 await get_tree().create_timer(0.18).timeout
@@ -627,12 +699,9 @@ func _on_hit(id: String):
     if id.begins_with("card_"):
         pick_card(int(id.substr(5)))
         return
-    if id == "ten_burn":
-        pick_burn()
-        return
-    if id == "ten_move":
-        pending = {} if pending.get("kind", "") == "burn" else pending
-        if pending.is_empty(): _auto_sole_pawn()
+    if id.begins_with("choice_"):
+        if id == "choice_cancel": cancel()
+        else: choose_function(id.substr(7))
         _redraw()
         return
     if id.begins_with("split_"):
@@ -738,6 +807,7 @@ class TableView extends Control:
             "lobby": _draw_lobby()
             "game", "over": _draw_game()
         if ui.mode == "over": _draw_over()
+        if ui.choice_open and ui.mode == "game" and not ui.menu_open: _draw_choice()
         if ui.menu_open: _draw_menu()
         if ui.tut_page >= 0: _draw_tutorial()
         if not ui.flash.is_empty(): _draw_flash()
@@ -928,6 +998,11 @@ class TableView extends Control:
             var lift := 0.0
             var key := "%d_%d" % [w[0], w[1]]
             var alpha: float = ui.anim_alpha.get(key, 1.0)
+            var glowing: bool = ui.swap_glow.has(w) or (ui.sel_card >= 0 and ui.g.hands[0].size() > ui.sel_card and ui.g.hands[0][ui.sel_card] == "J" and (w == ui.sel_pawn or w == ui.sel_target))
+            if glowing:
+                # R35.1 · peças da troca brilhando (aura dourada pulsando)
+                for gl in 5: draw_circle(c + Vector2(0, -14), 30.0 + gl * 8.0 + pulse * 6.0, Color(1.0, 0.84, 0.36, 0.22 - gl * 0.04))
+                draw_arc(c + Vector2(0, 2), 28.0 + pulse * 3.0, 0, TAU, 40, Color(1.0, 0.93, 0.6, 0.95), 4.0)
             if cands.has(w):
                 draw_arc(c + Vector2(0, 2), 25.0, 0, TAU, 36, Color(1.0, 0.82, 0.32, 0.55 + 0.45 * pulse), 3.0)
             if w == ui.sel_pawn or w == ui.sel_target or w == ui.sel_second:
@@ -1309,6 +1384,24 @@ class TableView extends Control:
             draw_circle(c, 17, Color("f0c44c"))
             draw_arc(c, 17, 0, TAU, 24, Color("2a1a04"), 2.0)
             text(String(m[1]), Vector2(c.x - 17, c.y + 9), "bold", 24, Color("1c1405"), 34, HORIZONTAL_ALIGNMENT_CENTER)
+
+    ## R35.1 · caixa de escolha das cartas de 2 funções (A e 10).
+    func _draw_choice():
+        var opts: Array = ui.two_choices()
+        if opts.is_empty(): return
+        _shade()
+        var d: Vector2 = ui.design
+        var w := 820.0 if not ui.portrait else 960.0
+        var r := Rect2(d.x / 2.0 - w / 2.0, d.y / 2.0 - 250, w, 500)
+        panel(r, true)
+        var rank: String = ui.g.hands[0][ui.sel_card]
+        text(ui.Rules.card_label(rank).to_upper(), Vector2(r.position.x, r.position.y + 70), "title", 44, Color("ffd770"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+        text("O QUE VOCÊ QUER FAZER?", Vector2(r.position.x, r.position.y + 118), "semi_sp", 26, ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+        for i in opts.size():
+            var br := Rect2(r.position.x + 50, r.position.y + 150 + i * 120, r.size.x - 100, 96)
+            gold_button(Rect2(br.position, Vector2(br.size.x, 66)), String(opts[i][1]), 34, "choice_" + String(opts[i][0]))
+            text(String(opts[i][2]), Vector2(br.position.x, br.position.y + 92), "semi", 22, Color("d9c79a"), br.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+        dark_button(Rect2(r.position.x + 50, r.end.y - 80, r.size.x - 100, 56), "CANCELAR", 26, "choice_cancel")
 
     func _draw_flash():
         var w := text_w(ui.flash, "semi", 26) + 60

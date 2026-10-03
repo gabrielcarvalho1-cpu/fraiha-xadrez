@@ -54,9 +54,11 @@ var ui
 var grey_avatars := {}
 var vignette: ImageTexture = null
 var vignette_layout := ""
+# R35.1 · cenário sem "caixa preta": a cena nítida tem as bordas esfumadas e, por trás, a MESMA cena
+# desfocada cobre a tela inteira (janela do navegador mais larga/baixa que 16:9 não mostra faixas pretas).
+const SCENE_SOFT := preload("res://xeque/art/mesa/mesa_cena_soft.png")   # tools/xeque_scene_soft.py
+const SCENE_BLUR := preload("res://xeque/art/mesa/mesa_cena_blur.png")
 
-## Escurecimento das bordas do salão medido nas telas de referência (razão referência/cena em blocos):
-## ~0,93 sobre o tabuleiro, caindo para ~0,55 nas laterais e ~0,45 nos cantos de cima.
 func _vignette() -> ImageTexture:
     if vignette != null and vignette_layout == ui.layout: return vignette
     var d: Vector2 = ui.design
@@ -72,7 +74,7 @@ func _vignette() -> ImageTexture:
             var dy := (px.y - c.y) / (b.size.y * 1.12)
             var dist := sqrt(dx * dx + dy * dy)
             var tt := pow(clampf((dist - 0.35) / 0.6, 0.0, 1.0), 1.3)
-            var f := 0.94 - 0.44 * tt
+            var f := 0.97 - 0.25 * tt          # R35.1: vinheta mais leve (antes 0,94 − 0,44)
             img.set_pixel(x, y, Color(0.02, 0.012, 0.008, 1.0 - f))
     vignette = ImageTexture.create_from_image(img)
     vignette_layout = ui.layout
@@ -229,6 +231,11 @@ func _draw():
     ui.hits.clear()
     var vs := size
     draw_rect(Rect2(Vector2.ZERO, vs), Color("070b0a"))
+    if ui.mode == "game":
+        # fundo que cobre a janela toda: a própria cena, desfocada e um pouco mais escura
+        var cov := maxf(vs.x / 1672.0, vs.y / 941.0)
+        var cs := Vector2(1672, 941) * cov
+        draw_texture_rect(SCENE_BLUR, Rect2((vs - cs) / 2.0, cs), false, Color(0.62, 0.6, 0.58))
     # telas 16:9 (tutorial e resultado) usam o desenho do PC também no celular deitado
     var dsg: Vector2 = ui.design
     if ui.mode in ["tutorial", "over"] and ui.layout == "landscape": dsg = Vector2(1920, 1080)
@@ -249,25 +256,16 @@ func _draw_scene():
     var sc: Array = L().scene
     var s: float = sc[0]
     var o: Vector2 = sc[1]
-    draw_texture_rect(ui.SCENE, Rect2(o, Vector2(1672, 941) * s), false)
+    draw_texture_rect(SCENE_SOFT, Rect2(o, Vector2(1672, 941) * s), false)
     var d: Vector2 = ui.design
     draw_texture_rect(_vignette(), Rect2(Vector2.ZERO, d), false)
-    var end_y: float = o.y + 941 * s
-    # escurece até o fundo (como nas referências: a mão fica sobre a sombra do salão)
-    var fade := 240.0
-    draw_polygon(PackedVector2Array([Vector2(0, end_y - fade), Vector2(d.x, end_y - fade), Vector2(d.x, end_y), Vector2(0, end_y)]),
-        PackedColorArray([Color(0.027, 0.043, 0.04, 0), Color(0.027, 0.043, 0.04, 0), Color("070b0a"), Color("070b0a")]))
-    if end_y < d.y: draw_rect(Rect2(0, end_y, d.x, d.y - end_y), Color("070b0a"))
-    if o.y > 0: draw_rect(Rect2(0, 0, d.x, o.y), Color("070b0a"))
-    if o.x > 0:
-        draw_rect(Rect2(0, 0, o.x, d.y), Color("070b0a"))
-        draw_polygon(PackedVector2Array([Vector2(o.x, 0), Vector2(o.x + 90, 0), Vector2(o.x + 90, d.y), Vector2(o.x, d.y)]),
-            PackedColorArray([Color("070b0a"), Color(0.027, 0.043, 0.04, 0), Color(0.027, 0.043, 0.04, 0), Color("070b0a")]))
-    var right: float = o.x + 1672 * s
-    if right < d.x:
-        draw_rect(Rect2(right, 0, d.x - right, d.y), Color("070b0a"))
-        draw_polygon(PackedVector2Array([Vector2(right - 90, 0), Vector2(right, 0), Vector2(right, d.y), Vector2(right - 90, d.y)]),
-            PackedColorArray([Color(0.027, 0.043, 0.04, 0), Color("070b0a"), Color("070b0a"), Color(0.027, 0.043, 0.04, 0)]))
+    var end_y: float = minf(o.y + 941 * s, d.y)
+    # R35.1 · sombra suave embaixo (a mão continua legível) — sem faixa preta chapada
+    var fade := 220.0
+    var shade := Color(0.027, 0.043, 0.04, 0.45)
+    draw_polygon(PackedVector2Array([Vector2(-2000, end_y - fade), Vector2(d.x + 2000, end_y - fade), Vector2(d.x + 2000, end_y), Vector2(-2000, end_y)]),
+        PackedColorArray([Color(shade, 0.0), Color(shade, 0.0), shade, shade]))
+    if end_y < d.y + 600: draw_rect(Rect2(-2000, end_y, d.x + 4000, 600), shade)
 
 func _draw_game():
     var g = ui.g
@@ -297,6 +295,7 @@ func _draw_game():
     if not mate: _draw_hand()
     _draw_fly()
     if ui.phase in ["reveal", "clock", "safe"]: _draw_reveal(false)
+    if ui.deal_anim >= 0.0: _draw_deal()
     if ui.mesa_anim >= 0.0 and ui.phase == "": _draw_mesa_anim()
     if ui.phase == "safe": _draw_safe()
     if mate: _draw_mate()
@@ -364,12 +363,18 @@ func _draw_mesa_pede():
     text("A MESA PEDE", r.position + Vector2(pad, 33 if compact else 35), "ui_sp4", 19 if compact else 21, Color("e8b242"))
     var name: String = Rules.NAMES[g.target]
     var plural: String = Rules.PLURAL[g.target]
-    var icon: Texture2D = ui.pieces[g.target]
-    var ih := (r.size.y - 66.0) if compact else (r.size.y - 82.0)
-    var isz := icon.get_size() * (ih / icon.get_size().y)
-    var ipos := r.position + Vector2(pad, (46 if compact else 57))
-    draw_texture_rect(icon, Rect2(ipos, isz), false)
-    var x := ipos.x + maxf(isz.x, ih * 0.6) + (14 if compact else 16)
+    # R35.1 · a CARTA da rodada (a mesma arte da mão), levemente inclinada: identificação imediata
+    var card: Texture2D = ui.cards[g.target]
+    var ih := (r.size.y - 52.0) if compact else (r.size.y - 62.0)
+    var isz := card.get_size() * (ih / card.get_size().y)
+    var ipos := r.position + Vector2(pad + 4, (40 if compact else 48))
+    var cc := ipos + isz / 2.0
+    draw_set_transform(ui.origin + cc * ui.k, -0.07, Vector2(ui.k, ui.k))
+    draw_rect(Rect2(-isz / 2.0 + Vector2(5, 6), isz), Color(0, 0, 0, 0.45))
+    draw_texture_rect(card, Rect2(-isz / 2.0, isz), false)
+    draw_rect(Rect2(-isz / 2.0, isz).grow(1), Color("ffd257"), false, 2.0)
+    draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+    var x := ipos.x + isz.x + (14 if compact else 18)
     var big := fit(name.to_upper(), "ui", 66 if compact else 78, r.end.x - x - 12)
     text(name.to_upper(), Vector2(x, r.position.y + (101 if compact else 107)), "ui", big, Color("f6ecd2"), -1, HORIZONTAL_ALIGNMENT_LEFT, 5, Color("120a06"))
     if compact:
@@ -429,6 +434,24 @@ func _seat_anchor(s: int) -> Vector2:
     var p: Array = L().plates[s]
     if p[0] == "v": return p[1]
     return Rect2(p[1]).get_center()
+
+## R35.1 · distribuição: cada carta (verso) sai do centro da mesa e voa até o jogador, uma a uma.
+func _draw_deal():
+    var pl: Array = L().pile
+    var hl := hand_layout()
+    for k in ui.deal_order.size():
+        var t0: float = ui.deal_start(k)
+        var f: float = (ui.deal_anim - t0) / ui.DEAL_FLIGHT
+        if f < 0.0 or f >= 1.0: continue
+        var it: Dictionary = ui.deal_order[k]
+        var s := int(it.seat)
+        var to := _seat_anchor(s)
+        if s == 0:
+            var slot := int(it.slot)
+            to = Vector2(hl[slot].c) if slot < hl.size() else L().hand[0]
+        var e := ease(f, -2.0)
+        var p: Vector2 = Vector2(pl[0]).lerp(to, e) + Vector2(0, -60.0 * sin(PI * f))
+        tex_center(ui.CARD_BACK, p, pl[1] * (2.0 + 0.6 * sin(PI * f)), -0.6 + 1.2 * f + s * 0.4)
 
 func _draw_fly():
     var pl: Array = L().pile
@@ -731,7 +754,9 @@ func _draw_hand():
     var hand: Array = g.hands[0]
     var lay := hand_layout()
     var my_turn: bool = ui.phase == "" and g.turn == 0 and g.state == Rules.TURN_WAITING and not ui.input_locked
+    var landed: int = ui.deal_landed(0)
     for i in hand.size():
+        if i >= landed: continue            # distribuição: a carta ainda está voando
         var it: Dictionary = lay[i]
         var tex: Texture2D = ui.cards[hand[i]]
         var sz: Vector2 = tex.get_size() * it.sc

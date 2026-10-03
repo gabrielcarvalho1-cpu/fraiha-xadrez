@@ -13,6 +13,12 @@ func check(ok: bool, label: String):
     if not ok: failures += 1
     print(("PASS " if ok else "FAIL ") + label)
 
+func wait_frames_until(f: Callable, n: int) -> bool:
+    for i in n:
+        if f.call(): return true
+        await process_frame
+    return f.call()
+
 func _initialize(): call_deferred("run")
 
 func frames(n := 3):
@@ -84,14 +90,73 @@ func run():
     g.hands[0] = ["10", "3", "8", "2"]
     ui._clear_selection()
     ui.pick_card(0)
-    check(ui.ten_choice() and ui.help_line().contains("10"), "10 com peão na pista: chips ANDAR 10 / PRÓXIMO DESCARTA")
-    check(not ui.pending.is_empty() and ui.pending.kind == "move" and ui.pending.pawn == [0, 0] and int(ui.pending.steps) == 10, "uma peça só no tabuleiro: 10 já vem com ANDAR 10 nela, sem tocar no peão")
-    ui._on_hit("ten_burn")
-    check(not ui.pending.is_empty() and ui.pending.kind == "burn", "PRÓXIMO DESCARTA prepara a 2ª função do 10")
-    ui._on_hit("ten_move")
-    check(not ui.pending.is_empty() and ui.pending.kind == "move" and ui.pending.pawn == [0, 0], "voltar para ANDAR 10: peça única já escolhida")
+    check(ui.choice_open and ui.pending.is_empty() and ui.two_choices().size() == 2 and ui.help_line().contains("escolha o que fazer"), "10 com as duas funções: abre a caixa ANDAR 10 / PERDE A VEZ")
+    check(ui.candidate_pawns().is_empty(), "com a caixa aberta nenhum peão recebe toque")
+    ui._redraw()
+    await frames(2)
+    check(ui.hits.any(func(h): return h.id == "choice_move") and ui.hits.any(func(h): return h.id == "choice_burn") and ui.hits.any(func(h): return h.id == "choice_cancel") and not ui.hits.any(func(h): return String(h.id).begins_with("card_")), "caixa desenhada por cima (só os botões dela recebem toque)")
+    ui._on_hit("choice_burn")
+    check(not ui.choice_open and not ui.pending.is_empty() and ui.pending.kind == "burn" and ui.help_line().contains("perde a vez"), "PERDE A VEZ prepara a 2ª função do 10")
+    ui.pick_card(0)
+    ui._on_hit("choice_move")
+    check(not ui.pending.is_empty() and ui.pending.kind == "move" and ui.pending.pawn == [0, 0] and int(ui.pending.steps) == 10, "ANDAR 10 com peça única: já vem pronto nela, sem tocar no peão")
+    ui.pick_card(0)
+    ui._on_hit("choice_cancel")
+    check(not ui.choice_open and ui.sel_card < 0, "CANCELAR fecha a caixa")
+    # Ás com peão na pista e peões no Pátio: caixa TIRAR UMA PEÇA NOVA / ANDAR 11
+    g.hands[0] = ["A", "3", "8", "2"]
+    ui.pick_card(0)
+    var ace: Array = ui.two_choices()
+    check(ui.choice_open and ace.size() == 2 and String(ace[0][1]).contains("PEÇA NOVA") and String(ace[1][1]).contains("11"), "Ás com as duas funções: caixa TIRAR UMA PEÇA NOVA / ANDAR 11")
+    ui._on_hit("choice_exit")
+    check(not ui.pending.is_empty() and ui.pending.kind == "exit", "TIRAR UMA PEÇA NOVA: saída do Pátio pronta")
+    ui.pick_card(0)
+    ui._on_hit("choice_move")
+    check(not ui.pending.is_empty() and ui.pending.kind == "move" and int(ui.pending.steps) == 11 and ui.pending.pawn == [0, 0], "ANDAR 11: só os peões da pista contam (peça única já escolhida)")
+    # Ás sem peão na pista: uma função só → sem caixa
+    g.pawns[0][0] = {"zone": "home", "pos": 0}
+    ui.pick_card(0)
+    check(not ui.choice_open and not ui.pending.is_empty() and ui.pending.kind == "exit", "Ás só com saída possível: sem caixa, saída automática")
+    g.pawns[0][0] = {"zone": "track", "pos": 3}
+    # Valete: 1º o SEU peão, depois a peça do outro; as duas brilham
+    g.pawns[0][1] = {"zone": "track", "pos": 9}
+    g.pawns[1][0] = {"zone": "track", "pos": 30}
+    g.pawns[2][0] = {"zone": "track", "pos": 50}
+    g.hands[0] = ["J", "3", "8", "2"]
+    ui.pick_card(0)
+    var c1: Array = ui.candidate_pawns()
+    check(c1.has([0, 0]) and c1.has([0, 1]) and not c1.has([1, 0]) and ui.help_line().contains("SEU peão"), "J: 1º toque só nos SEUS peões")
+    ui.pick_pawn([0, 1])
+    var c2: Array = ui.candidate_pawns()
+    check(c2.has([1, 0]) and c2.has([2, 0]) and ui.help_line().contains("2º toque"), "J: depois do 1º toque, as peças do amigo e do adversário")
     ui.pick_pawn([0, 0])
-    check(not ui.pending.is_empty() and ui.pending.kind == "move" and int(ui.pending.steps) == 10, "ANDAR 10 + peão: anda 10 casas")
+    check(ui.sel_pawn == [0, 0] and ui.pending.is_empty(), "J: tocar outro peão seu troca a 1ª escolha")
+    ui.pick_pawn([1, 0])
+    check(not ui.pending.is_empty() and ui.pending.kind == "swap" and ui.sel_target == [1, 0] and ui.help_line().contains("JOGAR CARTA"), "J: 2º toque prepara a troca (as duas ficam brilhando)")
+    # animação da troca: as duas peças viajam e brilham; leva de 1,0 a 2,4 s
+    var pa_before: Vector2 = ui.pawn_point(0, 0)
+    var pb_before: Vector2 = ui.pawn_point(1, 0)
+    ui.busy = true
+    var ev: Array = g.apply(0, ui.pending)
+    ui._clear_selection()
+    var t_sw := Time.get_ticks_msec()
+    var mid_ok := false
+    ui._animate.call_deferred(ev)
+    await wait_frames_until(func(): return ui.swap_glow.size() == 2, 30)
+    check(ui.swap_glow.size() == 2, "troca: as duas peças brilham")
+    await create_timer(0.9).timeout
+    var mid: Vector2 = ui.pawn_point(0, 0)
+    mid_ok = mid.distance_to(pa_before) > 20.0 and mid.distance_to(pb_before) > 20.0
+    while ui.swap_glow.size() > 0 and Time.get_ticks_msec() - t_sw < 5000: await process_frame
+    var took := (Time.get_ticks_msec() - t_sw) / 1000.0
+    check(mid_ok, "troca: no meio da animação a peça está no caminho (nem na origem nem no destino)")
+    check(took >= 1.6 and took <= 3.4, "troca animada sem pressa (%.1f s)" % took)
+    check(ui.pawn_point(0, 0).distance_to(pb_before) < 2.0 and ui.pawn_point(1, 0).distance_to(pa_before) < 2.0, "troca: cada peça termina no lugar da outra")
+    ui.busy = false
+    g.pawns[0][0] = {"zone": "track", "pos": 3}
+    g.pawns[0][1] = {"zone": "home", "pos": 1}
+    g.pawns[1][0] = {"zone": "home", "pos": 0}
+    g.pawns[2][0] = {"zone": "home", "pos": 0}
     g.hands[0] = ["8", "3", "4", "2"]
     ui._clear_selection()
     ui.pick_card(0)

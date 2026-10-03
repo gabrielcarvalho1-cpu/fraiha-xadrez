@@ -40,38 +40,35 @@ hs = [int(np.floor(q)) for q in quota]
 for k in np.argsort([-(q - np.floor(q)) for q in quota])[: target - sum(hs)]: hs[k] += 1
 
 
-CX0, CX1 = 612, 1018                     # conteúdo do botão (ícone + textos); a seta fica na moldura, igual às outras linhas
-ANCHOR = 628                             # o conteúdo encolhe por igual a partir daqui (sem achatar)
+CX0, CX1 = 624, 1018                     # conteúdo do botão (ícone + textos); a seta fica na moldura, igual às outras linhas
+ANCHOR = 630                             # o conteúdo encolhe por igual a partir daqui (sem achatar)
 
 
 def uniform(band, h, fr_rel):
-    """Moldura: altura ajustada (linhas retas, não se nota). Conteúdo (ícone, textos, seta): encolhe
-    por IGUAL na largura e na altura — letras e ícones mantêm a proporção da arte."""
+    """Moldura: altura ajustada (linhas retas, não se nota). Conteúdo (ícone, textos): encolhe por IGUAL
+    na largura e na altura — letras e ícones mantêm a proporção da arte. O fundo atrás do conteúdo
+    antigo é recomposto só nos pixels do conteúdo (inpainting), sem retângulos nem emendas, e as
+    bordas douradas do botão (x 618 e 1054) nunca são tocadas."""
+    import cv2
     bh, bw = band.shape[:2]
     s = h / bh
-    frame = band.copy()
     f0, f1 = fr_rel[0] + 4, fr_rel[1] - 3
-    clean = band[:, 1046 - X0].copy()                        # coluna limpa perto da borda direita
-    cl = band.copy()
-    for x in range(CX0 - X0, CX1 - X0):
-        cl[f0:f1, x] = clean[f0:f1]
-    framev = np.array(Image.fromarray(cl.astype(np.uint8)).resize((bw, h), Image.LANCZOS)).astype(np.float64)
-    # conteúdo + máscara (o que difere do fundo limpo)
     sub = band[f0:f1, CX0 - X0:CX1 - X0].astype(np.float64)
-    bg = cl[f0:f1, CX0 - X0:CX1 - X0].astype(np.float64)
-    msk = np.clip((np.abs(sub - bg).sum(axis=2) - 18) / 40.0, 0, 1)
+    bgrow = np.median(sub, axis=1)                                   # fundo de cada fileira (o verde do botão)
+    hard = (np.abs(sub - bgrow[:, None, :]).sum(axis=2) > 45).astype(np.uint8)
+    soft = np.clip((np.abs(sub - bgrow[:, None, :]).sum(axis=2) - 20) / 45.0, 0, 1)
+    full = np.zeros((bh, bw), np.uint8)
+    full[f0:f1, CX0 - X0:CX1 - X0] = cv2.dilate(hard, np.ones((5, 5), np.uint8)) * 255
+    cl = cv2.inpaint(band.astype(np.uint8)[:, :, ::-1], full, 6, cv2.INPAINT_TELEA)[:, :, ::-1]
+    framev = np.array(Image.fromarray(cl).resize((bw, h), Image.LANCZOS)).astype(np.float64)
     nw, nh = max(1, int(round(sub.shape[1] * s))), max(1, int(round(sub.shape[0] * s)))
     sub_s = np.array(Image.fromarray(sub.astype(np.uint8)).resize((nw, nh), Image.LANCZOS)).astype(np.float64)
-    m_s = np.array(Image.fromarray((msk * 255).astype(np.uint8)).resize((nw, nh), Image.LANCZOS)).astype(np.float64)[..., None] / 255.0
-    # a seta fica na ponta direita: o bloco é ancorado à esquerda (ícone/texto) e a seta à direita
-    arrow_x = CX1 - CX0
+    m_s = np.array(Image.fromarray((soft * 255).astype(np.uint8)).resize((nw, nh), Image.LANCZOS)).astype(np.float64)[..., None] / 255.0
+    m_s[:, :2] = 0; m_s[:, -4:] = 0; m_s[:1] = 0; m_s[-1:] = 0        # bordas do recorte (sem riscos)
     ox = int(round((ANCHOR - X0) - (ANCHOR - CX0) * s))
     oy = int(round(f0 * s))
-    left = sub_s[:, : int(arrow_x * s)]
-    ml = m_s[:, : int(arrow_x * s)].copy()
-    ml[:, -4:] = 0
-    tgt = framev[oy:oy + nh, ox:ox + left.shape[1]]
-    framev[oy:oy + nh, ox:ox + left.shape[1]] = left[: tgt.shape[0]] * ml[: tgt.shape[0]] + tgt * (1 - ml[: tgt.shape[0]])
+    tgt = framev[oy:oy + nh, ox:ox + nw]
+    framev[oy:oy + nh, ox:ox + nw] = sub_s[: tgt.shape[0], : tgt.shape[1]] * m_s[: tgt.shape[0], : tgt.shape[1]] + tgt * (1 - m_s[: tgt.shape[0], : tgt.shape[1]])
     return np.rint(framev).astype(np.int32)
 
 

@@ -57,7 +57,7 @@ func run():
     check(FC.JS_ENTER.contains("documentElement") and FC.JS_ENTER.contains("requestFullscreen"), "Web: tela cheia da página inteira (documentElement)")
     check(FC.JS_EXIT.contains("exitFullscreen"), "Web: botão também SAI da tela cheia (exitFullscreen)")
     var all_js: String = FC.JS_SETUP + FC.JS_ENTER + FC.JS_EXIT + FC.JS_AUTO
-    check(not all_js.contains("keyboard.lock") and not all_js.contains("lock(['Escape'])"), "Web: Esc NÃO é travado (sai da tela cheia naturalmente)")
+    check(FC.JS_SETUP.contains("kb.lock(['Escape'])") and FC.JS_SETUP.contains("kb.unlock"), "Web (R35.1): com a tela cheia ativa o Esc é travado para o jogo (Keyboard Lock); sair = botão ou segurar Esc")
     check(FC.JS_AUTO.contains("userLeft") and FC.JS_AUTO.contains("autoDone"), "Web: pedido automático só 1x e nunca depois que o jogador sai")
     check(FC.SITE_URL == "https://fraihaxadrez.com/", "Web: SAIR volta para fraihaxadrez.com")
     # Desktop: o botão alterna nos dois sentidos
