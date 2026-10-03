@@ -1,4 +1,4 @@
-"""R33.1 · Gera ui_v022/assets/home_forest_v5.png: a arte oficial da Home (home_forest_v2.png) com o menu
+"""R34 · Gera ui_v022/assets/home_forest_v5.png: a arte oficial da Home (home_forest_v2.png) com o menu
 recomposto em 11 linhas — as 8 linhas originais (mesmos pixels, só compactadas na vertical) + 3 linhas
 novas feitas da moldura da própria arte (MARCHA REAL e XEQUE depois de LIGAS E RANKING;
 HISTÓRICO DE PARTIDAS depois de CONHEÇA O FRAIHA). Textos e ícones das linhas novas são desenhados
@@ -33,48 +33,60 @@ seq = [tpl if o == "new" else bands[o] for o in order]
 total = sum(b.shape[0] for b in seq)
 bottom = img[BOTTOM[0]:BOTTOM[1], X0:X1]
 import cv2
-# 1) logo reduzido (mesmos pixels): recorta o logo COM a folhagem e o fundo em volta, reduz em torno
-#    do centro do logo e funde as bordas do recorte na arte original. O recorte é mais largo que o
-#    logo, então o próprio recorte reduzido cobre os cavalos originais; à direita ele para antes da
-#    placa do perfil, e o pedaço do cavalo branco que sobra sobre o céu é preenchido pelo próprio céu.
-lx0, ly0, lx1, ly1 = LOGO
-CROP = (371, 0, 1215, 360)
-CX = (lx0 + lx1) / 2.0
+# 1) logo: só o TEXTO encolhe (FRAIHA, XADREZ e a placa do subtítulo, mesmos pixels), em volta do
+#    topo do texto. Coroa, cavalos, folhagem e céu ficam exatamente como na arte original: nada de
+#    recorte retangular nem céu refeito. O fundo verde-escuro atrás das letras antigas é recomposto
+#    por inpainting (é um fundo liso), e a parte de baixo fica coberta pelo painel, que sobe.
+GROUP = (605, 95, 1055, 310)              # FRAIHA + XADREZ + placa (sem a coroa)
+SHAPES = [(615, 95, 1045, 222), (680, 200, 968, 255)]   # letras: só pixels que diferem do fundo
+PLAQUE = (610, 255, 1046, 310)            # placa inteira (caixa sólida)
+TEXT_SCALE = 0.80
 out = img.copy()
-cw_, ch_ = CROP[2] - CROP[0], CROP[3] - CROP[1]
-lw, lh = int(round(cw_ * LOGO_SCALE)), int(round(ch_ * LOGO_SCALE))
-logo = np.array(Image.fromarray(img[CROP[1]:CROP[3], CROP[0]:CROP[2]].astype(np.uint8)).resize((lw, lh), Image.LANCZOS)).astype(np.float32)
-lxo = int(round(CX - (CX - CROP[0]) * LOGO_SCALE))
-lyo = 4
-# sobra do cavalo branco (fora do recorte reduzido, sobre o céu): céu do pôr do sol reconstruído
-# linha a linha com a cor da faixa de céu logo à direita do louro (x 1194–1214, antes da placa do
-# perfil), com o leve ruído de pixel da própria faixa; acima das orelhas fica a copa original.
-R0, R1 = lxo + lw - 34, 1200
-Y0, Y1 = 54, 318
-rng_ = np.random.default_rng(7)
-for y in range(Y0, Y1):
-    strip = img[y, 1200:1216].astype(np.float32)
-    med = np.median(strip, axis=0)
-    noise = rng_.integers(0, strip.shape[0], R1 - R0)
-    row = 0.75 * med + 0.25 * strip[noise]
-    # funde com a arte original na borda de cima, na de baixo e à direita
-    t = min(1.0, (y - Y0) / 14.0) * min(1.0, (Y1 - y) / 18.0)
-    xs_ = np.arange(R0, R1)
-    w = np.clip((R1 - xs_) / 4.0, 0, 1) * np.clip((xs_ - R0) / 14.0, 0, 1) * t
-    out[y, R0:R1] = (row * w[:, None] + img[y, R0:R1].astype(np.float32) * (1 - w[:, None])).astype(out.dtype)
-yy, xx = np.mgrid[0:lh, 0:lw]
-feather = 24.0
-alpha = np.clip(np.minimum(np.minimum(xx / feather, (lw - 1 - xx) / feather), (lh - 1 - yy) / feather), 0, 1)
-# a lanterna da esquerda (x < 432, y > 165 na arte original) não entra no recorte reduzido: fica a original
-srcx = CROP[0] + xx / LOGO_SCALE
-srcy = CROP[1] + yy / LOGO_SCALE
-lantern = np.clip((432 - srcx) / 14.0, 0, 1) * np.clip((srcy - 150) / 14.0, 0, 1)
-alpha = (alpha * (1 - lantern))[..., None]
-dst = out[lyo:lyo + lh, lxo:lxo + lw].astype(np.float32)
-out[lyo:lyo + lh, lxo:lxo + lw] = (logo * alpha + dst * (1 - alpha)).astype(out.dtype)
+gx0, gy0, gx1, gy1 = GROUP
+_r = img[95:255, 615:1045].reshape(-1, 3).astype(np.int32)
+_dk = _r[(_r.mean(axis=1) < 60) & (_r[:, 1] > _r[:, 0])]
+bgc = np.median(_dk, axis=0)                 # verde-escuro do fundo atrás das letras
+el = np.zeros(img.shape[:2], np.uint8)
+for (x0, y0, x1, y1) in SHAPES:
+    reg = img[y0:y1, x0:x1].astype(np.int32)
+    d = np.abs(reg - bgc).sum(axis=2)
+    lum = reg.mean(axis=2)
+    # letras: douradas/marfim ou o contorno escuro colado nelas; folhas (verde-amarelo saturado) ficam de fora
+    leafy = (reg[..., 1] > reg[..., 0] + 10) & (reg[..., 1] > 70)
+    brown = (reg[..., 0] >= reg[..., 1]) & (lum < 90)          # contorno marrom das letras (o fundo é verde)
+    el[y0:y1, x0:x1] = (((d > 120) | brown) & ~leafy).astype(np.uint8) * 255
+el = cv2.morphologyEx(el, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+el = cv2.dilate(el, np.ones((3, 3), np.uint8))
+px0, py0, px1, py1 = PLAQUE
+el[py0:py1, px0:px1] = 255
+# o que sai: as letras com uma folga de 4 px (leva junto o brilho dourado em volta) e a placa
+rem = cv2.dilate(el, np.ones((9, 9), np.uint8))
+# folhas da coroa de folhas encostadas nas letras: ficam com os pixels originais (não são borradas)
+_g = img.astype(np.int32)
+leaf_px = (_g[..., 1] > _g[..., 0] + 10) & (_g[..., 1] > 70) & (_g[..., 2] < _g[..., 1])
+leaf_px = cv2.morphologyEx(leaf_px.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8)) > 0
+core = cv2.dilate(el, np.ones((3, 3), np.uint8)) > 0
+keep_leaf = leaf_px & ~core
+keep_leaf[py0:py1, px0:px1] = False
+rem[keep_leaf] = 0
+# fundo sem o texto antigo
+base = cv2.inpaint(img[:, :, ::-1].astype(np.uint8), rem, 9, cv2.INPAINT_TELEA)[:, :, ::-1]
+out = base.astype(img.dtype).copy()
+# texto reduzido, colado só onde há texto (máscara reduzida junto), centro x e topo mantidos
+cx = (gx0 + gx1) / 2.0
+gw, gh = gx1 - gx0, gy1 - gy0
+nw, nh = int(round(gw * TEXT_SCALE)), int(round(gh * TEXT_SCALE))
+txt = np.array(Image.fromarray(img[gy0:gy1, gx0:gx1].astype(np.uint8)).resize((nw, nh), Image.LANCZOS)).astype(np.float32)
+msk = np.array(Image.fromarray(el[gy0:gy1, gx0:gx1]).resize((nw, nh), Image.LANCZOS)).astype(np.float32) / 255.0
+msk = cv2.GaussianBlur(msk, (3, 3), 0)[..., None]
+nx0 = int(round(cx - nw / 2.0))
+dst = out[gy0:gy0 + nh, nx0:nx0 + nw].astype(np.float32)
+out[gy0:gy0 + nh, nx0:nx0 + nw] = (txt * msk + dst * (1 - msk)).astype(out.dtype)
+lyo, LOGO_SCALE = 0, 1.0                  # (compat.: o logo não muda de lugar)
+plaque_bottom = gy0 + int(round((py1 - gy0) * TEXT_SCALE))
 # 3) borda de cima do painel logo abaixo do logo; as 11 faixas até o fim original do painel
 top = img[TOP[0]:TOP[1], X0:X1]
-top_y = lyo + int(round(TOP[0] * LOGO_SCALE)) + 1
+top_y = plaque_bottom + 2
 out[top_y:top_y + top.shape[0], X0:X1] = top
 start = top_y + top.shape[0]
 end_y = PANEL_END - bottom.shape[0]
@@ -145,6 +157,6 @@ print("linhas do celular: home_row_blank.png, home_row_marcha.png, home_row_xequ
 # camada de detalhes vivos (gato, viajantes…): nada por cima do painel novo, que agora desce até o rodapé
 det = np.array(Image.open(os.path.join(ROOT, "ui_v022/assets/home_forest_v2_details.png")).convert("RGBA"))
 det[top_y:941, X0:X1, 3] = 0
-det[0:330, lx0:lx1, 3] = 0              # nada de detalhe vivo sobre o logo (ele mudou de tamanho)
+det[gy0:330, gx0:gx1, 3] = 0             # nada de detalhe vivo sobre o texto do logo (ele mudou de tamanho)
 Image.fromarray(det).save(os.path.join(ROOT, "ui_v022/assets/home_forest_v5_details.png"))
 print("home_forest_v5_details.png")

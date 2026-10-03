@@ -19,8 +19,8 @@ const APP_VERSION = "0.33"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
 const FOREST = preload("res://ui_v022/assets/home_forest_v5.png")   # R33.1: logo menor + menu de 11 linhas (tools/home_menu_11rows.py)
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
-const MENU_ROWS := [Vector2(288.8, 42.8), Vector2(337.2, 43.6), Vector2(385.7, 56.5), Vector2(447.0, 44.4), Vector2(497.0, 44.4), Vector2(547.0, 44.4), Vector2(597.0, 44.4), Vector2(647.9, 45.2), Vector2(699.5, 45.2), Vector2(750.3, 44.4), Vector2(801.2, 45.2)]
-const MENU_SCALE := 0.8068
+const MENU_ROWS := [Vector2(299.7, 41.9), Vector2(347.2, 42.7), Vector2(394.7, 55.4), Vector2(454.8, 43.5), Vector2(503.9, 43.5), Vector2(552.9, 43.5), Vector2(602.0, 43.5), Vector2(651.8, 44.3), Vector2(702.5, 44.3), Vector2(752.3, 43.5), Vector2(802.2, 44.3)]
+const MENU_SCALE := 0.7912
 const FOREST_V2 = FOREST
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
@@ -1949,7 +1949,7 @@ func public_cosmetics() -> Dictionary:
 # ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
 # Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo
 # (retrato, nickname, liga/PL, barra, insígnia, texto da conta) e as áreas de clique.
-const REF_MENU_RECT = Rect2(614,286,446,566)
+const REF_MENU_RECT = Rect2(614,296,446,556)
 var ref_nodes: Array = []
 var ref_mode := false
 var desk_profile := {}
