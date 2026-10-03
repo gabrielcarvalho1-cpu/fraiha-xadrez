@@ -5,13 +5,13 @@
 // Mudou regra no .gd → muda aqui também e regenera o fixture (tools/marcha_parity_fixture.gd).
 const { rngFrom } = require('./rng');
 
-const RULESET_VERSION = 'marcha-real-7';   // R38.2: J nunca troca peão parado no Portão (nem o seu); 5 anda o seu peão do Portão, nunca o alheio
+const RULESET_VERSION = 'marcha-real-8';   // R38.3: J só a partir de peão SEU; baralho de 52 em ciclos 4 → 4 → 5
 const TRACK = 76;
 const ARM = 19;
 const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
 const ACE_STEPS = [11, 1];
 const STEPS = { A: 11, Q: 12, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': -4, '3': 3, '2': 2 };
-const HAND = 4;
+const DEAL_CYCLE = [4, 4, 5], COPIES = 4;   // R38.3: 52 cartas (4 de cada), ciclos 4 → 4 → 5; fim do ciclo = baralho novo
 const posmod = (a, n) => ((a % n) + n) % n;
 const gateIndex = seat => seat * ARM;
 const entranceIndex = seat => posmod(seat * ARM - 2, TRACK);
@@ -25,20 +25,25 @@ class Marcha {
   setup() {
     this.pawns = [];
     for (let s = 0; s < 4; s++) { const row = []; for (let i = 0; i < 4; i++) row.push({ zone: 'home', pos: i }); this.pawns.push(row); }
-    this.deck = []; this.discard = [];
-    for (const r of RANKS) for (let c = 0; c < 4; c++) this.deck.push(r);
-    this.shuffle(this.deck);
+    this.newDeck();
     this.hands = [[], [], [], []];
     this.turn = 0; this.round_no = 1; this.winner = -1; this.log = [];
     this.deal();
   }
   shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = this.rng.int(0, i); const t = a[i]; a[i] = a[j]; a[j] = t; } }
+  newDeck() {
+    this.deck = []; this.discard = [];
+    for (const r of RANKS) for (let c = 0; c < COPIES; c++) this.deck.push(r);
+    this.shuffle(this.deck);
+  }
+  static handSizeFor(round) { return DEAL_CYCLE[(round - 1) % DEAL_CYCLE.length]; }
+  deckCycle() { return Math.floor((this.round_no - 1) / DEAL_CYCLE.length) + 1; }
   deal() {
-    for (let s = 0; s < 4; s++) {
-      while (this.hands[s].length < HAND) {
-        if (!this.deck.length) { this.deck = this.discard.slice(); this.discard = []; this.shuffle(this.deck); if (!this.deck.length) return; }
-        this.hands[s].push(this.deck.pop());
-      }
+    if ((this.round_no - 1) % DEAL_CYCLE.length === 0 && this.round_no > 1) this.newDeck();
+    const n = Marcha.handSizeFor(this.round_no);
+    for (let s = 0; s < 4; s++) for (let k = 0; k < n; k++) {
+      if (!this.deck.length) return;
+      this.hands[s].push(this.deck.pop());
     }
   }
 
@@ -115,13 +120,13 @@ class Marcha {
         break;
       case 'J':
         for (let i = 0; i < 4; i++) {
-          const a = this.pawns[who][i];
-          if (a.zone !== 'track' || gateIndex(who) === a.pos) continue;      // R38.2: peão que acabou de sair (no Portão) não troca
+          const a = this.pawns[seat][i];      // R38.3: sempre um peão SEU (nunca do aliado); o do Portão não troca
+          if (a.zone !== 'track' || gateIndex(seat) === a.pos) continue;
           for (let s = 0; s < 4; s++) for (let j = 0; j < 4; j++) {
-            if (s === who) continue;
+            if (s === seat) continue;
             const b = this.pawns[s][j];
             if (b.zone !== 'track' || gateIndex(s) === b.pos) continue;
-            out.push({ card: cardIdx, rank, kind: 'swap', pawn: [who, i], target: [s, j] });
+            out.push({ card: cardIdx, rank, kind: 'swap', pawn: [seat, i], target: [s, j] });
           }
         }
         break;
@@ -362,4 +367,4 @@ function danger(g, s, i) {
   return Math.min(d, 0.6);
 }
 
-module.exports = { Marcha, chooseAI, evaluate, RULESET_VERSION, TRACK, ARM, STEPS, gateIndex, entranceIndex, teamOf, partnerOf, posmod };
+module.exports = { Marcha, chooseAI, evaluate, RULESET_VERSION, TRACK, ARM, STEPS, DEAL_CYCLE, COPIES, gateIndex, entranceIndex, teamOf, partnerOf, posmod };

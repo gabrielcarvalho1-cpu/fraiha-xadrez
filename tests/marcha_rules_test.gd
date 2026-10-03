@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-7", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-8", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
     var h1: int = g.hands[1].size()
@@ -140,9 +140,10 @@ func _initialize():
                 "split":
                     for part in m.parts:
                         if int(part.pawn[0]) != 2: only_ally = false
-                "swap":
-                    if int(m.pawn[0]) != 2: only_ally = false
-    check(only_ally, "fase de ajuda: as cartas movem só o aliado (5 mexe qualquer cor; J troca o aliado)")
+                "swap": only_ally = false
+    check(only_ally, "fase de ajuda: as cartas movem só o aliado (5 mexe qualquer cor)")
+    hp.hands[0] = ["J"]
+    check(hp.legal_moves(0, 0).is_empty(), "R38.3: J nunca troca peça do aliado (sem peão SEU ativo na Muralha, o J não tem jogada)")
     # ---------- R37 · Ás: sair / 11 / 1;  Rei: só sai da base ----------
     var r7 = Rules.new()
     r7.setup(37)
@@ -247,5 +248,25 @@ func _initialize():
     check(f9.hands[0].is_empty() and f9.discard.size() == d0 + 3 and ev9.filter(func(e): return e.type == "discard").size() == 3, "R37.3: DESCARTAR TODAS esvazia a mão (espera a próxima rodada)")
     f9.hands[0] = ["A", "9"]
     check(not f9.is_legal(0, {"card": 0, "kind": "discard_all"}), "R37.3: com alguma jogada possível não descarta todas")
+    # ---------- R38.3 · baralho de 52 (4 de cada valor) em ciclos 4 → 4 → 5 ----------
+    var fd = Rules.new()
+    fd.setup(91)
+    check(fd.deck.size() + 16 == 52, "R38.3: baralho de 52; 1ª rodada tira 16")
+    var cyc_ok := true
+    var size_ok := true
+    for cyc in 3:
+        var seen := {}
+        for r in 3:
+            var n: int = [4, 4, 5][r]
+            for hd in fd.hands:
+                if hd.size() != n: size_ok = false
+                for c in hd: seen[c] = int(seen.get(c, 0)) + 1
+            if r == 2 and not fd.deck.is_empty(): cyc_ok = false
+            fd.hands = [[], [], [], []]
+            fd.next_turn()
+        if seen.size() != 13 or seen.values().any(func(v): return int(v) != 4): cyc_ok = false
+    check(size_ok, "R38.3: cada ciclo dá 4, 4 e 5 cartas para cada jogador")
+    check(cyc_ok, "R38.3: cada ciclo usa as 52 cartas, exatamente 4 de cada valor; depois embaralha de novo")
+    check(fd.deck_cycle() == 4 and fd.round_no == 10, "R38.3: ciclo do baralho conta certo (rodada 10 = ciclo 4)")
     print("RESULT %d/%d" % [checks - failures, checks], " OK" if failures == 0 else " FALHAS=%d" % failures)
     quit(failures)

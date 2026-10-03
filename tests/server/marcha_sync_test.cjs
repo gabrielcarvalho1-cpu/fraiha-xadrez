@@ -31,5 +31,23 @@ check(sec('EXIT_TIME') === T.exitMs && sec('CAPTURE_TIME') === T.captureMs && se
   g.apply(0, mv);
   check(g.pawns[1][0].zone === 'track' && g.pawns[1][0].pos === M.posmod(e1 + 2, M.TRACK), 'servidor: 5 no adversário passa da Entrada e dá a volta');
 }
+// R38.3 · baralho: 52 cartas (4 de cada valor), ciclos 4 → 4 → 5, o mesmo nas duas pontas
+{
+  const cyc = gd.match(/const DEAL_CYCLE := \[([^\]]+)\]/)[1].replace(/\s/g, '');
+  check(cyc === M.DEAL_CYCLE.join(',') && cyc === '4,4,5', 'ciclo de distribuição igual: ' + cyc);
+  const g = new M.Marcha(); g.setup();
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const seen = {};
+    for (let r = 0; r < 3; r++) {
+      const n = M.DEAL_CYCLE[r];
+      check(g.hands.every(h => h.length === n), `ciclo ${cycle + 1}, rodada ${r + 1}: ${n} cartas para cada um`);
+      for (const h of g.hands) for (const c of h) seen[c] = (seen[c] || 0) + 1;
+      g.hands = [[], [], [], []];
+      g.round_no += 1; g.deal();
+    }
+    const counts = Object.values(seen);
+    check(Object.keys(seen).length === 13 && counts.every(c => c === 4), `ciclo ${cycle + 1}: exatamente 4 de cada valor (52 cartas)`);
+  }
+}
 console.log(`marcha_sync_test ${pass}/${pass + fail} ${fail ? 'FAIL' : 'OK'}`);
 process.exit(fail ? 1 : 0);

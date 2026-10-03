@@ -22,7 +22,7 @@ const T = {
   xequeBotMin: num(env.FRAIHA_PARTY_XEQUE_BOT_MIN_MS, 1600), xequeBotMax: num(env.FRAIHA_PARTY_XEQUE_BOT_MAX_MS, 3000),   // R36: ritmo mais calmo
   awayMs: num(env.FRAIHA_PARTY_AWAY_MS, 1500),           // jogador desconectado: o bot joga por ele depois disso
   stepMs: num(env.FRAIHA_PARTY_STEP_MS, 260),            // R37: 0,26 s por casa, em pulinho (marcha_ui.gd STEP_TIME)
-  cardFlyMs: num(env.FRAIHA_PARTY_CARD_FLY_MS, 450), exitMs: num(env.FRAIHA_PARTY_EXIT_MS, 550), captureMs: num(env.FRAIHA_PARTY_CAPTURE_MS, 500), crownMs: num(env.FRAIHA_PARTY_CROWN_MS, 1200),             // R37: saída em arco, abatido some, chegada da DAMA (EXIT_TIME/CAPTURE_TIME/CROWN_WAIT)
+  cardFlyMs: num(env.FRAIHA_PARTY_CARD_FLY_MS, 450), exitMs: num(env.FRAIHA_PARTY_EXIT_MS, 550), captureMs: num(env.FRAIHA_PARTY_CAPTURE_MS, 1300), crownMs: num(env.FRAIHA_PARTY_CROWN_MS, 1200),             // R37: saída em arco, abatido some, chegada da DAMA (EXIT_TIME/CAPTURE_TIME/CROWN_WAIT)
   swapMs: num(env.FRAIHA_PARTY_SWAP_MS, 3200),           // troca do J (marcha_ui.gd: 0,35 + até 2,4 + 0,35 s)
   mesaMs: num(env.FRAIHA_PARTY_MESA_MS, 4400),           // distribuição (DEAL_T 2,4 s) + carta da MESA (MESA_T 1,9 s) no xeque_ui.gd
   introMs: num(env.FRAIHA_PARTY_INTRO_MS, 3200),         // apresentação do baralho antes da 1ª rodada (INTRO_T)

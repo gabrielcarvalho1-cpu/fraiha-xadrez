@@ -49,7 +49,8 @@ const SWAP_MAX := 2.4
 const STEP_TIME := 0.26           # R37: 0,26 s por casa, em pulinho suave (antes 0,18 em saltos secos)
 const HOP_H := 22.0               # R37: altura do pulinho entre casas (coordenadas do tabuleiro)
 const EXIT_TIME := 0.55           # R37: saída da base em arco
-const CAPTURE_TIME := 0.5         # R37: o peão abatido some devagar
+const CAPTURE_TIME := 1.3         # R38.3: o peão abatido volta para a base girando, sem pressa (antes sumia em 0,5 s)
+const CAPTURE_SPINS := 2.0        # R38.3: voltas completas no caminho até a base
 const CROWN_WAIT := 1.2           # R37: chegada ao Salão (vira DAMA + fanfarra)
 const CARD_FLY := 0.45            # R37.3: a carta jogada voa da mão (ou da placa do bot) até o centro da mesa
 ## Espelho no servidor: online_v021/modes/party.js (T.stepMs/exitMs/captureMs/crownMs/cardFlyMs) — conferido em tests/server/marcha_sync_test.cjs
@@ -97,11 +98,13 @@ var turn_left_ms := TURN_MS
 var busy := false                 # animando ou bot pensando
 var anim := {}                    # [seat,i] -> posição desenhada (coordenadas do tabuleiro) durante animação
 var anim_alpha := {}
+var anim_rot := {}                # R38.3 · [seat_i] -> giro (rad) do peão abatido voltando para a base
 var choice_open := false         # R35.1 · caixa "o que você quer fazer?" (cartas de 2 funções: A e 10)
 var card_mode := ""               # função escolhida: "" | "move" | "exit" | "burn"
 var ace_steps := 0                # R37 · Ás: 11 ou 1 (0 = ainda não escolhido)
 var five_seat := -1               # R37 · 5: de que cor é a peça que vai andar (-1 = qualquer; R38.2: não pergunta mais)
 var card_played := false          # R38.2 · a carta já foi JOGADA na mesa; agora o jogador toca na(s) peça(s)
+var choice_commits := true       # R38.3 · escolher na caixa (TIRAR DA BASE, ANDAR 10/11/1, PERDE A VEZ) já JOGA a carta
 var split_chosen := false         # R38.2 · 7: o jogador já escolheu a divisão (botões 7 / 6+1 / …)
 var flies: Array = []             # R37.3 · cartas voando até a mesa: [{"rank", "from": Rect2 (tela de referência), "t", "idx"}]
 var pile: Array = []              # R37.3 · monte da mesa: [{"rank", "dead": bool}] — "dead" = descartada sem jogada (cor apagada)
@@ -511,9 +514,11 @@ func pick_card(i: int):
         elif able.size() == 1:
             # R37 · só uma função (ou uma cor) é possível: ela já é ativada sozinha
             choice_open = true
-            choose_function(String(able[0][0]))
+            choose_function(String(able[0][0]), true)
             if pending.is_empty() and card_mode == "exit":
                 for m in my_moves(): if m.kind == "exit": pending = m
+        elif g.hands[0][i] == "J":
+            pass        # R38.3 · J: sempre o jogador escolhe — 1º toque no SEU peão, 2º na peça que troca com ele
         elif opts.size() == 1:
             # R37.3 · uma jogada só possível (ex.: J com só 2 peões na mesa): já fica pronta, sem tocar em peça
             pending = opts.values()[0]
@@ -553,7 +558,10 @@ func choice_title() -> String:
     if g == null or sel_card < 0 or sel_card >= g.hands[0].size(): return ""
     return "VOCÊ QUER MOVER QUAL PEÇA?" if g.hands[0][sel_card] == "5" else "O QUE VOCÊ QUER FAZER?"
 
-func choose_function(kind: String):
+## auto = ativada sozinha (só uma função possível) ao tocar na carta: aí a carta ainda NÃO foi jogada.
+## Escolhida pelo jogador na caixa = carta jogada: a jogada completa acontece na hora (TIRAR DA BASE sai
+## sozinho; ANDAR com peça única anda sozinho); se ainda falta tocar na peça, o próximo toque já joga.
+func choose_function(kind: String, auto := false):
     if not choice_open: return
     for o in two_choices():
         if String(o[0]) == kind and not bool(o[3]): return        # opção apagada: não faz nada
@@ -576,6 +584,14 @@ func choose_function(kind: String):
                     break
         "move": _auto_sole_pawn()
     _redraw()
+    if not auto and choice_commits: _commit_choice()
+
+func _commit_choice():
+    if needs_pieces():
+        card_played = true
+        _cue("card")
+        _redraw()
+    elif not pending.is_empty(): confirm()
 
 ## R34.2 · um peão só pode receber a carta (ex.: uma peça só rodando no tabuleiro) → ele já fica
 ## escolhido: não precisa tocar nele. Vale para toda carta que age sobre o peão (10 = ANDAR 10
@@ -659,7 +675,7 @@ func pick_pawn(w: Array):
     if card_mode == "move" and g.pawns[w[0]][w[1]].zone == "home": return
     var rank: String = g.hands[0][sel_card]
     var mv := my_moves()
-    if rank == "J" and not sel_pawn.is_empty() and sel_pawn != w and int(w[0]) != g.controlled(0):
+    if rank == "J" and not sel_pawn.is_empty() and sel_pawn != w and int(w[0]) != 0:
         for m in mv:
             if m.pawn == sel_pawn and m.target == w:
                 sel_target = w
@@ -845,14 +861,26 @@ func _animate(events: Array):
                 await _tween_hop(key, a, b, EXIT_TIME, 60.0)
                 anim.erase(key)
             "capture":
+                # R38.3 · o abatido volta para a base: arco suave girando (o motor já o pôs no Pátio)
                 _cue("capture")
-                var key := _key(e.pawn)
-                for i in range(10):
-                    anim_alpha[key] = 1.0 - i / 10.0
+                var w: Array = e.pawn
+                var key := _key(w)
+                var a: Vector2 = anim[key] if anim.has(key) else (_cell_of(w[0], _origin[key]) if _origin.has(key) else pawn_point(w[0], w[1]))
+                var pw: Dictionary = g.pawns[w[0]][w[1]]
+                var b: Vector2 = Layout.home_cell(w[0], int(pw.pos)) if pw.zone == "home" else pawn_point(w[0], w[1])
+                var tt := 0.0
+                while tt < CAPTURE_TIME:
+                    await get_tree().process_frame
+                    tt += get_process_delta_time()
+                    var f := clampf(tt / CAPTURE_TIME, 0.0, 1.0)
+                    var ee := f * f * (3.0 - 2.0 * f)
+                    anim[key] = a.lerp(b, ee) + Vector2(0, -90.0 * sin(PI * f))
+                    anim_rot[key] = TAU * CAPTURE_SPINS * ee
                     _redraw()
-                    await get_tree().create_timer(CAPTURE_TIME / 10.0).timeout
+                anim_rot.erase(key)
                 anim_alpha.erase(key)
                 anim.erase(key)
+                _redraw()
             "burn":
                 _cue("discard")
                 if int(e.seat) == 0: _flash("%s te fez descartar %s." % [names[g.turn], Rules.card_label(String(e.rank))])
@@ -1082,6 +1110,13 @@ func board_rect() -> Rect2:
     return Rect2(30, 430, 1020, 1020) if portrait else Rect2(480, 103, 955, 955)
 
 func card_rect(i: int, n: int) -> Rect2:
+    # R38.3 · 3ª rodada do ciclo do baralho: 5 cartas na mão (menores, para caber no mesmo espaço)
+    if n >= 5:
+        if portrait: return Rect2(238.0 + i * 166.0, 1548.0, 152, 214)
+        var cw := 124.0
+        var ch := 175.0
+        if i < 3: return Rect2(1484.0 + i * 137.0, 266.0, cw, ch)
+        return Rect2(1552.0 + (i - 3) * 137.0, 458.0, cw, ch)
     if portrait:
         var xs := [265.0, 445.0, 612.0, 778.0]
         var ys := [1515.0, 1545.0, 1545.0, 1550.0]
@@ -1381,7 +1416,16 @@ class TableView extends Control:
             var tx: Texture2D = ui.pawn_tex[w[0] + (10 if crowned else 0)]
             var sz: Vector2 = tx.get_size() * ui.PAWN_SCALE
             var rr := Rect2(Vector2(c.x - sz.x / 2.0, c.y + ui.PAWN_BASE - sz.y - lift), sz)
-            draw_texture_rect(tx, rr, false, Color(1, 1, 1, alpha))
+            if ui.anim_rot.has(key):
+                # R38.3 · peão abatido girando em volta do próprio centro, a caminho da base
+                var th: float = ui.anim_rot[key]
+                var piv := rr.get_center()
+                var o0: Vector2 = ui.origin + br.position * ui.k
+                var sc0: float = ui.k * s
+                draw_set_transform(o0 + sc0 * (piv - piv.rotated(th)), th, Vector2(sc0, sc0))
+                draw_texture_rect(tx, rr, false, Color(1, 1, 1, alpha))
+                draw_set_transform(o0, 0.0, Vector2(sc0, sc0))
+            else: draw_texture_rect(tx, rr, false, Color(1, 1, 1, alpha))
             var pw: Dictionary = g.pawns[w[0]][w[1]]
             if pw.zone == "track" and int(pw.pos) == ui.Layout.gate_index(w[0]) and not ui.anim.has(key):
                 # R37 · peão no PRÓPRIO Portão: escudo — bloqueia a casa (ninguém passa nem cai nela)

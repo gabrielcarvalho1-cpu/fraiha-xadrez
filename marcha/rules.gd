@@ -25,7 +25,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-7"   # R38.2: J nunca troca peão parado no Portão (nem o seu); 5 anda o seu peão do Portão, nunca o alheio
+const RULESET_VERSION := "marcha-real-8"   # R38.3: J só a partir de peão SEU; baralho de 52 em ciclos 4 → 4 → 5
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -35,7 +35,10 @@ const SUIT_OF := {"A": "copas", "K": "espadas", "Q": "copas", "J": "ouros", "10"
     "7": "paus", "6": "copas", "5": "ouros", "4": "paus", "3": "copas", "2": "espadas"}
 const SUIT_NAME := {"copas": "Copas", "espadas": "Espadas", "ouros": "Ouros", "paus": "Paus"}
 const STEPS := {"A": 11, "Q": 12, "10": 10, "9": 9, "8": 8, "7": 7, "6": 6, "5": 5, "4": -4, "3": 3, "2": 2}
-const HAND := 4
+## R38.3 · baralho real de 52 cartas (4 de cada valor, sem coringa), em ciclos 4 → 4 → 5 cartas por jogador:
+## 16 + 16 + 20 = 52. Fim do ciclo: o baralho inteiro volta e é embaralhado de novo (sem reposição no meio).
+const DEAL_CYCLE := [4, 4, 5]
+const COPIES := 4
 ## R37 · o Ás tem 3 funções: sair do Pátio, andar 11 ou andar 1.
 const ACE_STEPS := [11, 1]
 
@@ -59,11 +62,7 @@ func setup(seed := 0):
         var row := []
         for i in 4: row.append({"zone": "home", "pos": i})
         pawns.append(row)
-    deck.clear()
-    discard.clear()
-    for r in RANKS:
-        for c in 4: deck.append(r)
-    _shuffle(deck)
+    _new_deck()
     hands = [[], [], [], []]
     turn = 0
     round_no = 1
@@ -78,15 +77,29 @@ func _shuffle(a: Array):
         a[i] = a[j]
         a[j] = t
 
-## Reparte 4 cartas para cada reino (quando todas as mãos acabam). Baralho vazio → embaralha o descarte.
+## Baralho novo e completo (52), embaralhado (Fisher–Yates com o RNG da mesa).
+func _new_deck():
+    deck.clear()
+    discard.clear()
+    for r in RANKS:
+        for c in COPIES: deck.append(r)
+    _shuffle(deck)
+
+## Quantas cartas cada jogador recebe nesta rodada (1ª e 2ª do ciclo: 4; 3ª: 5).
+static func hand_size_for(round: int) -> int:
+    return DEAL_CYCLE[(round - 1) % DEAL_CYCLE.size()]
+
+## Ciclo do baralho (1, 2, 3…): cada ciclo usa as 52 cartas exatamente uma vez.
+func deck_cycle() -> int:
+    return (round_no - 1) / DEAL_CYCLE.size() + 1
+
+## Reparte a rodada (quando todas as mãos acabam). Começo de ciclo → baralho novo de 52 embaralhado.
 func deal():
+    if (round_no - 1) % DEAL_CYCLE.size() == 0 and round_no > 1: _new_deck()
+    var n := hand_size_for(round_no)
     for s in 4:
-        while hands[s].size() < HAND:
-            if deck.is_empty():
-                deck = discard.duplicate()
-                discard.clear()
-                _shuffle(deck)
-                if deck.is_empty(): return
+        for k in n:
+            if deck.is_empty(): return
             hands[s].append(deck.pop_back())
 
 static func team_of(seat: int) -> int:
@@ -216,15 +229,17 @@ func legal_moves(seat: int, card_idx: int) -> Array:
                     if pawns[s][i].zone == "track" and (s == who or int(pawns[s][i].pos) != Layout.gate_index(s)) and forward_path(s, i, 5, team_of(s) == team_of(seat)).ok:
                         out.append({"card": card_idx, "rank": rank, "kind": "move", "pawn": [s, i], "steps": 5})
         "J":
+            # R38.3 · a troca sempre parte de um peão SEU, ativo na Muralha (nunca do aliado, mesmo depois de
+            # coroar os 4); peão parado no próprio Portão (acabou de sair) não troca nem é trocado.
             for i in 4:
-                var a: Dictionary = pawns[who][i]
-                if a.zone != "track" or Layout.gate_index(who) == a.pos: continue      # R38.2: peão que acabou de sair (no Portão) não troca
+                var a: Dictionary = pawns[seat][i]
+                if a.zone != "track" or Layout.gate_index(seat) == a.pos: continue
                 for s in 4:
                     for j in 4:
-                        if s == who: continue
+                        if s == seat: continue
                         var b: Dictionary = pawns[s][j]
                         if b.zone != "track" or Layout.gate_index(s) == b.pos: continue
-                        out.append({"card": card_idx, "rank": rank, "kind": "swap", "pawn": [who, i], "target": [s, j]})
+                        out.append({"card": card_idx, "rank": rank, "kind": "swap", "pawn": [seat, i], "target": [s, j]})
         "7":
             out.append_array(_split_moves(seat, who, card_idx))
         "10":

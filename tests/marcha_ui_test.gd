@@ -84,6 +84,7 @@ func run():
     check(not ui.pending.is_empty() and ui.pending.kind == "exit", "tocar num peão do Pátio prepara SAIR")
     check(ui.help_line().to_upper().contains("SAI DA BASE"), "linha de ajuda explica a carta")
     # 10: duas funções
+    ui.choice_commits = false     # (aqui só confere o que cada escolha prepara; jogar na hora é testado no fim)
     var keep_hand: Array = g.hands[0].duplicate()
     var keep_pawns: Array = g.pawns.duplicate(true)
     g.pawns[0][0] = {"zone": "track", "pos": 3}
@@ -181,7 +182,7 @@ func run():
     check(all_auto, "R37.2: com UMA peça na Muralha (dama no Salão não conta) 3, 6, -4, 2, 8, 9, Q e 7 já ficam prontos nela")
     g.pawns = keep_s
     ui._clear_selection()
-    # R37.3 · J com só 2 peças na mesa (a sua e uma outra): troca já pronta, sem tocar
+    # R38.3 · J com só 2 peças na mesa: NADA automático — 1º toque no seu peão, 2º na peça que troca
     var keep_j: Array = g.pawns.duplicate(true)
     for st in 4:
         for i in 4: g.pawns[st][i] = {"zone": "home", "pos": i}
@@ -190,7 +191,12 @@ func run():
     g.hands[0] = ["J", "2", "2", "2"]
     ui._clear_selection()
     ui.pick_card(0)
-    check(not ui.pending.is_empty() and ui.pending.kind == "swap" and ui.sel_pawn == [0, 0] and ui.sel_target == [1, 0], "R37.3: J com só 2 peças na mesa: troca automática")
+    check(ui.pending.is_empty() and ui.sel_pawn.is_empty() and ui.awaiting_play(), "R38.3: J com só 2 peças na mesa: nada escolhido sozinho (primeiro JOGAR CARTA)")
+    ui.confirm()
+    check(ui.card_played and ui.candidate_pawns() == [[0, 0]] and ui.help_line().contains("SEU peão"), "R38.3: J jogado → 1º toque só no SEU peão")
+    ui.pick_pawn([0, 0])
+    check(ui.candidate_pawns().has([1, 0]) and ui.pending.is_empty(), "R38.3: J → depois a peça que vai trocar com o seu")
+    ui._clear_selection()
     # Ás: as peças na Muralha não conseguem andar 11 nem 1 → só sair da base, automático
     for i in 4: g.pawns[0][i] = {"zone": "home", "pos": i}
     g.pawns[0][0] = {"zone": "track", "pos": ui.Layout.gate_index(2) - 1}
@@ -299,7 +305,7 @@ func run():
     ui._clear_selection()
     ui.pick_card(0)
     ui.confirm()
-    check(ui.sel_pawn == [0, 0] and ui.pending.is_empty() and ui.candidate_pawns().size() >= 2, "J com peça única: seu peão já escolhido, só falta a peça para trocar")
+    check(ui.sel_pawn.is_empty() and ui.pending.is_empty() and ui.candidate_pawns() == [[0, 0]], "R38.3: J com peça única: o seu peão NÃO é escolhido sozinho (1º toque nele)")
     g.hands[0] = keep_hand
     g.pawns = keep_pawns
     ui._clear_selection()
@@ -352,12 +358,104 @@ func run():
     check(int(g.pawns[0][0].pos) == 31 and int(g.pawns[0][1].pos) == 2, "R38.2: 7 = 5 + 2 jogado sem 2º JOGAR CARTA (26→31, 0→2) · %s" % str(g.pawns[0]))
     t0 = Time.get_ticks_msec()
     while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 15000: await process_frame
+    # R38.3 · escolher na caixa já JOGA: ANDAR 10 com um peão só anda sozinho; TIRAR DA BASE sai sozinho
+    ui.choice_commits = true
+    for s3 in 4:
+        for i in 4: g.pawns[s3][i] = {"zone": "home", "pos": i}
+    g.pawns[0][0] = {"zone": "track", "pos": 10}
+    for s3 in range(1, 4): if g.hands[s3].is_empty(): g.hands[s3] = ["2"]
+    g.hands[0] = ["10", "3", "8", "2"]
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(ui.choice_open, "R38.3: 10 abre a caixa ANDAR 10 / PERDE A VEZ")
+    ui._on_hit("choice_move")
+    t0 = Time.get_ticks_msec()
+    while ui.g.turn == 0 and Time.get_ticks_msec() - t0 < 6000: await process_frame
+    check(int(g.pawns[0][0].pos) == 20, "R38.3: ANDAR 10 com um peão só: andou sozinho, sem tocar no peão nem em JOGAR CARTA (pos %d)" % int(g.pawns[0][0].pos))
+    t0 = Time.get_ticks_msec()
+    while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 15000: await process_frame
+    for s3 in 4:
+        for i in 4: g.pawns[s3][i] = {"zone": "home", "pos": i}
+    g.pawns[0][0] = {"zone": "track", "pos": 30}
+    g.hands[0] = ["A", "3", "8", "2"]
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(ui.choice_open and ui.two_choices().size() == 3, "R38.3: Ás abre a caixa das 3 funções")
+    ui._on_hit("choice_exit")
+    t0 = Time.get_ticks_msec()
+    while ui.g.turn == 0 and Time.get_ticks_msec() - t0 < 6000: await process_frame
+    check(g.pawns[0].filter(func(q): return q.zone == "track").size() == 2 and g.pawns[0].any(func(q): return q.zone == "track" and int(q.pos) == ui.Layout.gate_index(0)), "R38.3: TIRAR DA BASE: o peão saiu sozinho (sem tocar nele nem em JOGAR CARTA)")
+    t0 = Time.get_ticks_msec()
+    while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 15000: await process_frame
+    # R38.3 · peão abatido volta para a base girando, sem pressa
+    for s3 in 4:
+        for i in 4: g.pawns[s3][i] = {"zone": "home", "pos": i}
+    g.pawns[0][0] = {"zone": "track", "pos": 10}
+    g.pawns[1][0] = {"zone": "track", "pos": 13}
+    g.hands[0] = ["3", "4", "4", "4"]
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(not ui.pending.is_empty() and ui.captures_of(ui.pending).enemy == [[1, 0]], "R38.3: o 3 abate o Rubi")
+    ui.confirm()
+    t0 = Time.get_ticks_msec()
+    var spun := false
+    var rot_t0 := -1
+    var mid_far := false
+    var home_pt: Vector2 = ui.Layout.home_cell(1, 0)
+    while ui.g.turn == 0 and Time.get_ticks_msec() - t0 < 8000:
+        if ui.anim_rot.has("1_0"):
+            if rot_t0 < 0: rot_t0 = Time.get_ticks_msec()
+            if float(ui.anim_rot["1_0"]) > 1.0: spun = true
+            if ui.pawn_point(1, 0).distance_to(home_pt) > 120.0 and float(ui.anim_rot["1_0"]) > 2.0: mid_far = true
+            if OS.get_environment("MARCHA_SHOTS") != "" and spun and not FileAccess.file_exists("/tmp/claude-0/sc/capture_mid.png"): root.get_texture().get_image().save_png("/tmp/claude-0/sc/capture_mid.png")
+        elif rot_t0 > 0 and not ui.anim_rot.has("1_0"): break
+        await process_frame
+    var rot_ms := Time.get_ticks_msec() - rot_t0
+    check(spun and mid_far, "R38.3: abatido gira no caminho de volta (no meio, ainda longe da base)")
+    check(rot_ms >= 1000 and rot_ms <= 2200, "R38.3: volta para a base sem pressa (%d ms)" % rot_ms)
+    check(g.pawns[1][0].zone == "home" and ui.pawn_point(1, 0).distance_to(home_pt) < 2.0, "R38.3: termina na casa da base dele")
+    t0 = Time.get_ticks_msec()
+    while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 15000: await process_frame
+    # R38.3 · com um 5 que tem jogada (peão do aliado na Muralha), DESCARTAR TODAS nunca aparece
+    for s3 in 4:
+        for i in 4: g.pawns[s3][i] = {"zone": "home", "pos": i}
+    g.pawns[2][0] = {"zone": "track", "pos": 50}
+    g.hands[0] = ["Q", "9", "5", "8"]
+    ui._clear_selection()
+    check(g.has_any_move(0) and not ui.can_discard_all(), "R38.3: tem um 5 com jogada na mão → DESCARTAR TODAS não aparece")
+    g.pawns[0][0] = {"zone": "track", "pos": ui.Layout.gate_index(0)}
+    g.pawns[2][0] = {"zone": "home", "pos": 0}
+    g.hands[0] = ["5", "4", "4", "4"]
+    check(not ui.can_discard_all() and g.legal_moves(0, 0).any(func(m): return m.pawn == [0, 0]), "R38.3: 5 com o seu peão parado no seu Portão → tem jogada, sem DESCARTAR TODAS")
+    # R38.3 · 3ª rodada do ciclo: 5 cartas na mão cabem sem encostar nos botões (paisagem e retrato)
+    g.hands[0] = ["5", "4", "4", "4", "2"]
+    ui._clear_selection()
+    for lay in ["land", "port"]:
+        if lay == "port":
+            root.size = Vector2i(900, 1600)
+            await frames(6)
+            ui._relayout()
+        ui._redraw()
+        await frames(3)
+        var rs: Array = []
+        for i in 5: rs.append(ui.card_rect(i, 5))
+        var ok5 := true
+        for i in 5:
+            var r: Rect2 = rs[i]
+            if r.end.x > ui.design.x - 8 or r.position.x < 0: ok5 = false
+            if (not ui.portrait and (r.position.x < 1480 or r.end.y > 800)) or (ui.portrait and r.end.y > 1800): ok5 = false
+            for j in range(i + 1, 5): if r.intersects(rs[j]): ok5 = false
+        check(ok5 and ui.hits.filter(func(h): return String(h.id).begins_with("card_")).size() == 5, "R38.3: 5 cartas na mão sem sobrepor (%s)" % ("retrato" if ui.portrait else "paisagem"))
+        if OS.get_environment("MARCHA_SHOTS") != "": root.get_texture().get_image().save_png("/tmp/claude-0/sc/hand5_%s.png" % lay)
+    root.size = Vector2i(1600, 900)
+    await frames(6)
+    ui._relayout()
     # sair e tentar de novo no mesmo dia (sem Club)
     ui._on_hit("menu")
     ui._on_hit("menu_quit")
     await frames(3)
     var mq: Array = stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real")
-    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-7" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
+    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-8" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
     var again: bool = await ui.access.request_start()
     check(not again, "sem Club: 2ª partida no mesmo dia bloqueada")
     hub.entitlements.apply_server({"is_founder": false, "club_active": true, "club_expires_at": "2099-01-01T00:00:00Z"})
