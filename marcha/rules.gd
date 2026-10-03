@@ -7,7 +7,7 @@ extends RefCounted
 ##
 ## Cartas (vale o valor; o naipe é só a ilustração):
 ##   A  sai do pátio OU anda 11          K  sai do pátio OU anda 13          Q  anda 12
-##   J  troca de lugar com outra peça    10/9/8/6/3/2  anda N               7  divide 7 casas entre até 2 peças
+##   J  troca de lugar com outra peça    9/8/6/3/2  anda N   10 anda 10 ou faz o próximo descartar               7  divide 7 casas entre até 2 peças
 ##   5  anda 5 com QUALQUER peça da mesa (segue o caminho do dono)          4  só volta 4 casas
 ## Regras da mesa:
 ##   • Cair numa casa ocupada por outro peão manda esse peão de volta ao Pátio (inclusive o do aliado).
@@ -17,11 +17,12 @@ extends RefCounted
 ##     e sem pular peões do próprio reino lá dentro). Se não couber, essa jogada não vale.
 ##   • Voltar 4 a partir do Portão (ou logo depois dele) leva o peão para trás do Portão — atalho clássico.
 ##   • Sem jogada possível: a carta é descartada.
+##   • 10: anda 10 casas OU faz o próximo jogador descartar uma carta da mão (sorteada).
 ##   • Quem coroou os 4 peões passa a jogar com os peões do aliado.
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-1"
+const RULESET_VERSION := "marcha-real-2"   # R34.1: 10 também faz o próximo descartar
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -209,6 +210,11 @@ func legal_moves(seat: int, card_idx: int) -> Array:
                         out.append({"card": card_idx, "rank": rank, "kind": "swap", "pawn": [who, i], "target": [s, j]})
         "7":
             out.append_array(_split_moves(who, card_idx))
+        "10":
+            # 10 tem duas funções: anda 10 casas OU faz o próximo jogador descartar uma carta
+            out.append_array(_forward_moves(who, card_idx, rank, STEPS[rank]))
+            var nxt := burn_target(seat)
+            if nxt >= 0: out.append({"card": card_idx, "rank": rank, "kind": "burn", "target_seat": nxt})
         _:
             out.append_array(_forward_moves(who, card_idx, rank, STEPS[rank]))
     return out
@@ -264,12 +270,19 @@ func is_legal(seat: int, mv: Dictionary) -> bool:
 static func _move_key(mv: Dictionary) -> String:
     var parts := []
     for p in mv.get("parts", []): parts.append([_ints(p.get("pawn", [])), int(p.get("steps", 0))])
-    return JSON.stringify([String(mv.get("kind", "")), int(mv.get("card", -1)), _ints(mv.get("pawn", [])), int(mv.get("steps", 0)), _ints(mv.get("target", [])), parts])
+    return JSON.stringify([String(mv.get("kind", "")), int(mv.get("card", -1)), _ints(mv.get("pawn", [])), int(mv.get("steps", 0)), _ints(mv.get("target", [])), parts, int(mv.get("target_seat", -1))])
 
 static func _ints(a) -> Array:
     var out := []
     for x in a: out.append(int(x))
     return out
+
+## Próximo jogador (ordem da vez) que ainda tem carta na mão; -1 se ninguém.
+func burn_target(seat: int) -> int:
+    for k in range(1, 4):
+        var s := (seat + k) % 4
+        if not hands[s].is_empty(): return s
+    return -1
 
 func has_any_move(seat: int) -> bool:
     for c in hands[seat].size():
@@ -310,6 +323,14 @@ func apply(seat: int, mv: Dictionary) -> Array:
             var r := backward_path(w[0], w[1], 4)
             _land(w[0], w[1], r, ev)
             _log("%s jogou -4 · voltou 4 casas" % name)
+        "burn":
+            var t := int(mv.target_seat)
+            var k := rng.randi_range(0, hands[t].size() - 1)
+            var lost: String = hands[t][k]
+            hands[t].remove_at(k)
+            discard.append(lost)
+            ev.append({"type": "burn", "seat": t, "rank": lost})
+            _log("%s jogou 10 · %s descartou %s" % [name, names[t], lost])
         "swap":
             var a: Array = mv.pawn
             var b: Array = mv.target

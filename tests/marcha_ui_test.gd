@@ -72,10 +72,33 @@ func run():
     g.hands[0] = ["A", "3", "8", "2"]
     ui._clear_selection()
     ui.pick_card(0)
+    check(not ui.pending.is_empty() and ui.pending.kind == "exit", "Ás com todos no Pátio: saída já pronta, sem escolher peão")
     check(ui.candidate_pawns().size() == 4, "Ás: os 4 peões do Pátio ficam com aro dourado")
     ui.pick_pawn([0, 2])
     check(not ui.pending.is_empty() and ui.pending.kind == "exit", "tocar num peão do Pátio prepara SAIR")
     check(ui.help_line().contains("SAI DO PÁTIO") or ui.help_line().to_upper().contains("SAI DO PÁTIO"), "linha de ajuda explica a carta")
+    # 10: duas funções
+    var keep_hand: Array = g.hands[0].duplicate()
+    var keep_pawns: Array = g.pawns.duplicate(true)
+    g.pawns[0][0] = {"zone": "track", "pos": 3}
+    g.hands[0] = ["10", "3", "8", "2"]
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(ui.ten_choice() and ui.pending.is_empty() and ui.help_line().contains("descartar"), "10 com peão na pista: escolher ANDAR 10 ou PRÓXIMO DESCARTA")
+    ui._on_hit("ten_burn")
+    check(not ui.pending.is_empty() and ui.pending.kind == "burn", "PRÓXIMO DESCARTA prepara a 2ª função do 10")
+    ui._on_hit("ten_move")
+    ui.pick_pawn([0, 0])
+    check(not ui.pending.is_empty() and ui.pending.kind == "move" and int(ui.pending.steps) == 10, "ANDAR 10 + peão: anda 10 casas")
+    g.hands[0] = ["8", "3", "4", "2"]
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(not ui.pending.is_empty() and ui.pending.kind == "move" and ui.pending.pawn == [0, 0], "só um peão pode jogar a carta: jogada já pronta")
+    g.hands[0] = keep_hand
+    g.pawns = keep_pawns
+    ui._clear_selection()
+    ui.pick_card(0)
+    ui.pick_pawn([0, 2])
     ui.confirm()
     var t0 := Time.get_ticks_msec()
     while ui.g.turn == 0 and Time.get_ticks_msec() - t0 < 5000: await process_frame
@@ -104,7 +127,7 @@ func run():
     ui._on_hit("menu_quit")
     await frames(3)
     var mq: Array = stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real")
-    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-1" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
+    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-2" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
     var again: bool = await ui.access.request_start()
     check(not again, "sem Club: 2ª partida no mesmo dia bloqueada")
     hub.entitlements.apply_server({"is_founder": false, "club_active": true, "club_expires_at": "2099-01-01T00:00:00Z"})

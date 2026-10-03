@@ -321,6 +321,37 @@ func pick_card(i: int):
         pending = {"card": i, "rank": g.hands[0][i], "kind": "discard"}
     elif my_moves().is_empty():
         _flash("Esta carta não tem jogada agora.")
+    else:
+        # uma ação só possível → já fica pronta (ex.: A/K sem peão na pista = sair do Pátio;
+        # carta que só um peão pode jogar). Só se escolhe peão quando há mais de uma opção.
+        var opts := _options(my_moves())
+        if opts.size() == 1: pending = opts.values()[0]
+    _redraw()
+
+## Agrupa as jogadas em ações distintas para o jogador (todas as saídas do Pátio são a mesma ação).
+func _options(moves: Array) -> Dictionary:
+    var out := {}
+    for m in moves:
+        var k: String
+        match String(m.kind):
+            "exit": k = "exit"
+            "burn": k = "burn"
+            "split": k = "split:" + str(m.parts)
+            _: k = String(m.kind) + str(m.get("pawn", [])) + str(m.get("target", []))
+        if not out.has(k): out[k] = m
+    return out
+
+## 10 com as duas funções: o jogador escolhe ANDAR 10 ou FAZER DESCARTAR.
+func ten_choice() -> bool:
+    if g == null or sel_card < 0 or g.turn != 0 or g.hands[0][sel_card] != "10": return false
+    var mv := my_moves()
+    return mv.any(func(m): return m.kind == "burn") and mv.any(func(m): return m.kind != "burn")
+
+func pick_burn():
+    for m in my_moves():
+        if m.kind == "burn":
+            sel_pawn = []
+            pending = m
     _redraw()
 
 ## Peões que podem receber o próximo toque (para os aros dourados).
@@ -338,6 +369,7 @@ func candidate_pawns() -> Array:
             if m.parts.size() == 2 and m.parts[0].pawn == sel_pawn and int(m.parts[0].steps) == split_first and not out.has(m.parts[1].pawn): out.append(m.parts[1].pawn)
         return out
     for m in mv:
+        if m.kind == "burn": continue
         if m.kind == "exit":
             # sair do Pátio: qualquer peão do Pátio serve (o toque escolhe qual)
             var who: int = m.pawn[0]
@@ -371,7 +403,7 @@ func pick_pawn(w: Array):
     split_first = 0
     sel_second = []
     pending = {}
-    var mine := mv.filter(func(m): return (m.parts[0].pawn if m.kind == "split" else m.pawn) == w)
+    var mine := mv.filter(func(m): return m.kind != "burn" and (m.parts[0].pawn if m.kind == "split" else m.pawn) == w)
     if rank in ["A", "K"]:
         # peão no Pátio → sair; peão na Muralha → andar
         var home: bool = g.pawns[w[0]][w[1]].zone == "home"
@@ -435,6 +467,9 @@ func help_line() -> String:
             if not pending.is_empty() and pending.kind == "exit": return head + " · seu peão sai do pátio"
             return head + " · sai do pátio ou anda %d casas" % Rules.STEPS[rank]
         "J": return head + (" · troca de lugar com a peça escolhida" if not pending.is_empty() else " · escolha seu peão e a peça para trocar")
+        "10":
+            if not pending.is_empty() and pending.kind == "burn": return head + " · %s descarta uma carta" % names[int(pending.target_seat)]
+            if ten_choice(): return head + " · anda 10 casas ou faz %s descartar" % names[g.burn_target(0)]
         "7":
             if split_first > 0 and split_first < 7: return head + " · %d casas + %d casas: escolha o 2º peão" % [split_first, 7 - split_first]
             return head + " · até 2 peças dividem 7 casas"
@@ -476,6 +511,11 @@ func _animate(events: Array):
                     _redraw()
                     await get_tree().create_timer(0.05).timeout
                 anim_alpha.erase(key)
+            "burn":
+                _cue("discard")
+                if int(e.seat) == 0: _flash("%s te fez descartar %s." % [names[g.turn], Rules.card_label(String(e.rank))])
+                _redraw()
+                await get_tree().create_timer(0.4).timeout
             "swap", "crown", "discard":
                 if String(e.type) != "discard": _cue(String(e.type))
                 _redraw()
@@ -531,6 +571,13 @@ func _on_hit(id: String):
     if audio != null and audio.has_method("play_cue"): audio.play_cue("ui")
     if id.begins_with("card_"):
         pick_card(int(id.substr(5)))
+        return
+    if id == "ten_burn":
+        pick_burn()
+        return
+    if id == "ten_move":
+        pending = {} if pending.get("kind", "") == "burn" else pending
+        _redraw()
         return
     if id.begins_with("split_"):
         pick_split(int(id.substr(6)))
@@ -914,7 +961,25 @@ class TableView extends Control:
         if not cur.is_empty(): out.append(cur)
         return out
 
+    func _draw_ten(at: Vector2, w: float):
+        text("CARTA 10:", at + Vector2(0, -10), "semi_sp", 20, Color("e9c46e"))
+        var burn_on: bool = not ui.pending.is_empty() and ui.pending.kind == "burn"
+        var tgt: String = ui.names[ui.g.burn_target(0)]
+        var items := [["ten_move", "ANDAR 10", not burn_on], ["ten_burn", "%s DESCARTA" % tgt.to_upper(), burn_on]]
+        var bw := (w - 8) / 2.0
+        for i in 2:
+            var r := Rect2(Vector2(at.x + i * (bw + 8), at.y), Vector2(bw, 40))
+            var on: bool = items[i][2]
+            draw_rect(r, Color("f0c44c") if on else Color("0a1611"))
+            draw_rect(r, ui.GOLD, false, 2.0)
+            var f := fit(items[i][1], "bold", 20, r.size.x - 10)
+            text(items[i][1], Vector2(r.position.x, r.position.y + 28), "bold", f, Color("1c1405") if on else ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+            ui.hits.append({"rect": r, "id": items[i][0]})
+
     func _draw_split(at: Vector2, chip := 66.0):
+        if ui.ten_choice():
+            _draw_ten(at, 800.0 if chip > 60 else 394.0)
+            return
         var opts: Array = ui.split_options()
         if opts.is_empty(): return
         var label := "DIVIDIR O 7:"
@@ -939,7 +1004,7 @@ class TableView extends Control:
             _plate(Rect2(20, 278, 272, 116), 1)
             _plate(Rect2(788, 278, 272, 116), 3)
             _draw_board()
-            if ui.split_options().is_empty(): _draw_help(Rect2(140, 1462, 800, 60))
+            if ui.split_options().is_empty() and not ui.ten_choice(): _draw_help(Rect2(140, 1462, 800, 60))
             else: _draw_split(Vector2(150, 1478), 66.0)
             # meu retrato + SUA VEZ
             var pr := Rect2(20, 1563, 130, 130)

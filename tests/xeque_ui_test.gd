@@ -124,6 +124,12 @@ func run():
     ui._begin_turn()
     var n0: int = g.hands[0].size()
     var reveals0: int = g.reveals.size()
+    check(ui.mesa_anim >= 0.0 and ui.mesa_round == g.round_no, "rodada nova: animação da carta da MESA")
+    var tl0: int = ui.turn_left_ms
+    ui._process(0.5)
+    check(ui.turn_left_ms == tl0, "durante a animação da MESA o tempo da vez não corre")
+    ui._process(2.0)
+    check(ui.mesa_anim < 0.0, "animação da MESA termina sozinha")
     ui.turn_left_ms = 5
     ui._process(0.02)
     check(g.hands[0].size() == n0 - 1 and g.reveals.size() == reveals0 and int(g.last_play.seat) == 0, "tempo esgotado: joga 1 carta, nunca XEQUE")

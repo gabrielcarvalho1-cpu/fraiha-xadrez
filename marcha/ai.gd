@@ -16,6 +16,9 @@ static func choose(g, seat: int, rng: RandomNumberGenerator = null) -> Dictionar
             sim.apply(seat, mv)
             var sc: float = evaluate(sim, seat) - base
             sc -= float(KEEP.get(String(mv.rank), 2)) * 0.6    # gastar carta valiosa custa um pouco
+            if String(mv.kind) == "burn":
+                # fazer adversário descartar ajuda; fazer o aliado descartar atrapalha
+                sc += 1.6 if int(mv.target_seat) % 2 != seat % 2 else -6.0
             if rng != null: sc += rng.randf() * 0.5
             if sc > best_score:
                 best_score = sc

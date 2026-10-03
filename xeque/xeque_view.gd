@@ -297,8 +297,50 @@ func _draw_game():
     if not mate: _draw_hand()
     _draw_fly()
     if ui.phase in ["reveal", "clock", "safe"]: _draw_reveal(false)
+    if ui.mesa_anim >= 0.0 and ui.phase == "": _draw_mesa_anim()
     if ui.phase == "safe": _draw_safe()
     if mate: _draw_mate()
+
+## Rodada nova: a carta da MESA vira no centro da mesa e voa para o painel A MESA PEDE.
+func _draw_mesa_anim():
+    var g = ui.g
+    var t: float = ui.mesa_anim
+    var d: Vector2 = ui.design
+    var tex: Texture2D = ui.cards[g.target]
+    var center: Vector2 = Rect2(L().board).get_center()
+    var big := minf(d.y * 0.42, 460.0) / 504.0
+    var mr: Rect2 = L().mesa
+    var shade := clampf(t / 0.25, 0.0, 1.0) * (1.0 - clampf((t - 1.2) / 0.4, 0.0, 1.0))
+    draw_rect(Rect2(Vector2(-4000, -4000), Vector2(12000, 12000)), Color(0, 0, 0, 0.55 * shade))
+    var pos := center
+    var sc := big
+    var flip := 1.0
+    if t < 0.5:
+        # entra virada para baixo e gira mostrando a peça
+        var k := t / 0.5
+        flip = absf(cos(k * PI))
+        if k < 0.5: tex = ui.CARD_BACK
+        sc = big * (0.6 + 0.4 * ease(k, 0.4))
+    elif t > 1.2:
+        var k := ease(clampf((t - 1.2) / 0.55, 0.0, 1.0), 2.2)
+        pos = center.lerp(mr.get_center(), k)
+        sc = lerpf(big, (mr.size.y * 0.8) / 504.0, k)
+    var a := 1.0 - clampf((t - 1.7) / 0.2, 0.0, 1.0)
+    var sz := tex.get_size() * sc
+    draw_set_transform(ui.origin + pos * ui.k, 0.0, Vector2(ui.k * maxf(0.04, flip), ui.k))
+    if t >= 0.5 and t < 1.2:
+        for i in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(6 + i * 6), Color(1, 0.84, 0.35, 0.13 - i * 0.022), false, 6.0)
+    draw_rect(Rect2(-sz / 2.0, sz).grow(3), Color(0, 0, 0, 0.5 * a))
+    draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false, Color(1, 1, 1, a))
+    draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+    if t >= 0.45 and t < 1.3:
+        var ta := clampf((t - 0.45) / 0.2, 0.0, 1.0) * (1.0 - clampf((t - 1.1) / 0.2, 0.0, 1.0))
+        var label := "A MESA PEDE"
+        var nm: String = String(Rules.NAMES[g.target]).to_upper()
+        var ty := pos.y - sz.y / 2.0 - 22
+        text(label, Vector2(0, ty - 54), "ui_sp4", 34, Color(0.91, 0.7, 0.26, ta), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0.07, 0.04, 0.02, ta))
+        text(nm, Vector2(0, ty), "title", 64, Color(1, 0.93, 0.7, ta), d.x, HORIZONTAL_ALIGNMENT_CENTER, 8, Color(0.16, 0.07, 0.02, ta))
+        text("RODADA %d" % g.round_no, Vector2(0, pos.y + sz.y / 2.0 + 44), "ui_sp4", 26, Color(0.96, 0.92, 0.82, ta), d.x, HORIZONTAL_ALIGNMENT_CENTER, 5, Color(0.07, 0.04, 0.02, ta))
 
 func _draw_title():
     var lay := L()
@@ -312,7 +354,11 @@ func _draw_title():
 func _draw_mesa_pede():
     var r: Rect2 = L().mesa
     var g = ui.g
-    panel(r)
+    # destaque permanente: brilho dourado pulsando em volta do painel
+    var pulse := 0.5 + 0.5 * sin(ui.t * 3.2)
+    for i in 6: stair(r.grow(5 + i * 4), 4, Color(1.0, 0.82, 0.3, (0.16 - i * 0.025) * (0.6 + 0.4 * pulse)))
+    var landing: float = clampf((ui.mesa_anim - 1.45) / 0.45, 0.0, 1.0) if ui.mesa_anim >= 0.0 else 0.0
+    panel(r, Color("ffd257").lerp(Color("fff3c0"), landing), true)
     var compact: bool = ui.layout == "portrait"
     var pad := 18.0 if compact else 20.0
     text("A MESA PEDE", r.position + Vector2(pad, 33 if compact else 35), "ui_sp4", 19 if compact else 21, Color("e8b242"))

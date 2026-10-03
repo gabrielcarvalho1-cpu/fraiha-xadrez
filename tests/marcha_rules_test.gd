@@ -35,8 +35,13 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-1", "versão das regras para o histórico")
-    check(g.legal_moves(0, 1).is_empty(), "10 com todos no Pátio: nenhuma jogada")
+    check(String(g.RULESET_VERSION) == "marcha-real-2", "versão das regras para o histórico")
+    var m10 := g.legal_moves(0, 1)
+    check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
+    var h1: int = g.hands[1].size()
+    var ev10 := g.apply(0, m10[0])
+    check(g.hands[1].size() == h1 - 1 and ev10.size() == 1 and ev10[0].type == "burn" and int(ev10[0].seat) == 1 and g.hands[0].size() == 3, "10: o próximo jogador perde uma carta da mão (sorteada)")
+    g.hands[0] = ["A", "10", "4", "J"]
     g.apply(0, mv[0])
     check(g.pawns[0][0].zone == "track" and g.pawns[0][0].pos == 0, "peão sai para o próprio Portão")
     g.hands[0].append("A")

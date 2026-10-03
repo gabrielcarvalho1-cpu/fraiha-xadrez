@@ -216,10 +216,19 @@ func start_game():
     recorded = false
     started_unix = int(Time.get_unix_time_from_system())
     started_ms = Time.get_ticks_msec()
+    mesa_round = -1
     _begin_turn()
 
+## R34.1: a cada rodada nova a carta da MESA aparece grande no centro e voa para o painel A MESA PEDE.
+const MESA_T := 1.9
+var mesa_anim := -1.0             # segundos da animação (-1 = parada)
+var mesa_round := -1
 func _begin_turn():
     if g == null or mode != "game": return
+    if g.round_no != mesa_round and g.state == Rules.TURN_WAITING:
+        mesa_round = g.round_no
+        mesa_anim = 0.0
+        _cue("reveal")
     selected = []
     input_locked = false
     turn_left_ms = TURN_MS
@@ -241,7 +250,10 @@ func _process(delta):
         if flash_t <= 0.0: flash = ""
     for f in fly: f.t += delta * 3.2
     fly = fly.filter(func(f): return f.t < 1.0)
-    if mode == "game" and g != null and not menu_open and not confirm_quit:
+    if mesa_anim >= 0.0:
+        mesa_anim += delta
+        if mesa_anim >= MESA_T: mesa_anim = -1.0
+    if mode == "game" and g != null and not menu_open and not confirm_quit and mesa_anim < 0.0:
         if phase != "":
             phase_t += delta
             if phase_t >= PHASE_TIME[phase]: _advance_phase()
