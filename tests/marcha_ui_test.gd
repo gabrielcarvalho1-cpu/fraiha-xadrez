@@ -43,15 +43,21 @@ func run():
     await frames(6)
     var ui = hub.marcha
     check(ui != null and ui.visible and ui.mode == "lobby", "MARCHA REAL abre no salão (lobby)")
+    var audio = stage.get_node_or_null("GameAudio")
+    check(audio != null and audio.music_path == "res://marcha/audio/musica_marcha.mp3" and bool(audio.music.stream.loop), "música da MARCHA REAL tocando, em loop")
     check(ui.tut_page == 0, "1ª vez: tutorial abre sozinho")
     for i in ui.TUTORIAL.size(): ui._on_hit("tut_next")
     check(ui.tut_page == -1 and Access.tutorial_seen(), "tutorial percorrido até o fim e marcado como visto")
     await frames(3)
+    check(ui.hits.any(func(h): return String(h.id) == "mute_music") and ui.hits.any(func(h): return String(h.id) == "mute_fx"), "botões MÚSICA e EFEITOS no salão")
     check(bool(ui.gate_info.get("can_play", false)) and String(ui.gate_info.label).contains("GRÁTIS"), "sem Club: 1 partida grátis hoje")
     await ui.start_game()
     await frames(3)
     check(ui.mode == "game" and ui.g != null and ui.g.hands[0].size() == 4, "partida começa com 4 cartas na mão")
     check(Access.local_played_today(), "partida grátis do dia consumida (aparelho)")
+    ui._on_hit("mute_fx")
+    check(hub.effects_muted and AudioServer.is_bus_mute(AudioServer.get_bus_index("Effects")) and not AudioServer.is_bus_mute(AudioServer.get_bus_index("Music")), "EFEITOS desliga só os efeitos")
+    ui._on_hit("mute_fx")
     # celular: o mesmo toque chega 2× (toque + clique emulado) → o 2º não pode voltar ao lobby
     var g0 = ui.g
     ui._on_hit("lobby_play")
@@ -74,10 +80,12 @@ func run():
     var t0 := Time.get_ticks_msec()
     while ui.g.turn == 0 and Time.get_ticks_msec() - t0 < 5000: await process_frame
     check(g.pawns[0].any(func(p): return p.zone == "track"), "JOGAR CARTA: peão saiu para o Portão")
+    check(ui.cues_played.has("card") and ui.cues_played.has("exit"), "sons: carta jogada e peão saindo do pátio")
     # bots jogam sozinhos até voltar a vez do humano
     t0 = Time.get_ticks_msec()
     while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 15000: await process_frame
     check(ui.g.turn == 0 and g.log.size() >= 4, "os 3 bots jogaram e a vez voltou (%d registros)" % g.log.size())
+    check(ui.cues_played.has("your_turn") and (ui.cues_played.has("step") or ui.cues_played.has("discard")), "sons: passos dos peões e aviso da sua vez")
     # 7 dividido pela interface
     g.pawns[0][0] = {"zone": "track", "pos": 5}
     g.pawns[0][1] = {"zone": "track", "pos": 20}
@@ -115,6 +123,7 @@ func run():
     ui.close()
     await frames(2)
     check(not ui.visible, "VOLTAR fecha o modo")
+    check(audio.music_override == "", "saindo da MARCHA REAL a música da Home volta")
     # ---------- Histórico de partidas ----------
     var Rec = preload("res://analysis/match_record.gd")
     var rec = Rec.new()

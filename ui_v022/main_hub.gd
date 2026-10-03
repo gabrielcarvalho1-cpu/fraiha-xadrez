@@ -116,6 +116,8 @@ var desk_badge: TextureRect
 var founder_title_label: Label
 var founder_sub_label: Label
 var sound_muted := false        # botão SOM da Home: silencia o bus Master (mesmo sistema de áudio)
+var music_muted := false        # R34: MUTAR MÚSICA (botões dentro do XEQUE e da MARCHA REAL)
+var effects_muted := false      # R34: MUTAR EFEITOS
 var sound_button: Button
 var volume_label: Label
 var music_volume_label: Label
@@ -1616,7 +1618,7 @@ func _set_volume(value: float, save := true):
     volume = value / 100.0
     var bus = AudioServer.get_bus_index("Effects")
     AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(volume,0.0001)))
-    AudioServer.set_bus_mute(bus, volume <= 0.0)
+    AudioServer.set_bus_mute(bus, volume <= 0.0 or effects_muted)
     volume_label.text = "EFEITOS SONOROS  ·  %d%%" % round(value)
     if save:
         _save_preferences()
@@ -1626,7 +1628,7 @@ func _set_music_volume(value: float, save := true):
     music_volume = value/100.0
     var bus = AudioServer.get_bus_index("Music")
     AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(music_volume,0.0001)))
-    AudioServer.set_bus_mute(bus,music_volume <= 0.0)
+    AudioServer.set_bus_mute(bus,music_volume <= 0.0 or music_muted)
     music_volume_label.text = "MÚSICA  ·  %d%%" % round(value)
     if save:
         _save_preferences()
@@ -1639,6 +1641,19 @@ func _osd():
         volume_osd.name = "VolumeOSD"
         add_child(volume_osd)
     return volume_osd
+
+## R34: liga/desliga só a música ou só os efeitos (os volumes guardados não mudam).
+func set_music_muted(value: bool):
+    music_muted = value
+    var bus = AudioServer.get_bus_index("Music")
+    AudioServer.set_bus_mute(bus, music_volume <= 0.0 or music_muted)
+    _save_preferences()
+
+func set_effects_muted(value: bool):
+    effects_muted = value
+    var bus = AudioServer.get_bus_index("Effects")
+    AudioServer.set_bus_mute(bus, volume <= 0.0 or effects_muted)
+    _save_preferences()
 
 ## SOM da Home: liga/desliga todo o áudio (bus Master). Volumes de música/efeitos ficam como estão.
 func toggle_sound():
@@ -1801,6 +1816,8 @@ func _load_preferences():
     music_volume = clampf(float(config.get_value("audio","music_volume",0.65)),0,1)
     premove_enabled = bool(config.get_value("game","premove",true))
     sound_muted = bool(config.get_value("audio","muted",false))
+    music_muted = bool(config.get_value("audio","music_muted",false))
+    effects_muted = bool(config.get_value("audio","effects_muted",false))
     badge_pref = String(config.get_value("profile","badge","auto"))
     title_pref = String(config.get_value("profile","title","auto"))
     frame_pref = String(config.get_value("profile","frame",""))
@@ -1813,6 +1830,8 @@ func _save_preferences():
     config.set_value("audio","volume",volume)
     config.set_value("audio","music_volume",music_volume)
     config.set_value("audio","muted",sound_muted)
+    config.set_value("audio","music_muted",music_muted)
+    config.set_value("audio","effects_muted",effects_muted)
     config.set_value("game","premove",premove_enabled)
     config.set_value("profile","badge",badge_pref)
     config.set_value("profile","title",title_pref)

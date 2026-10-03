@@ -44,16 +44,37 @@ func play_cue(id: String):
     var player = players[slot]
     slot = (slot+1)%players.size()
     player.stream = streams[id]
+    player.volume_db = -14
+    player.pitch_scale = 1.0
     player.play()
 
 func toggle_music():
     var index = AudioServer.get_bus_index("Music")
     AudioServer.set_bus_mute(index,not AudioServer.is_bus_mute(index))
 
+## R34: modos à parte (XEQUE, MARCHA REAL) trocam a música de fundo enquanto estão abertos.
+## "" = volta à música do tema (Home / partida de xadrez).
+var music_override := ""
+func set_music_override(path: String):
+    music_override = path
+    refresh_music()
+
+## R34: efeito sonoro de um modo (mesmo bus "Effects": volume e MUTAR EFEITOS valem para ele).
+func play_stream(stream: AudioStream, db := -8.0, pitch := 1.0):
+    if stream == null or players.is_empty(): return
+    var player = players[slot]
+    slot = (slot+1)%players.size()
+    player.stream = stream
+    player.volume_db = db
+    player.pitch_scale = pitch
+    player.play()
+    last_cue = String(stream.resource_path).get_file().get_basename()
+
 func refresh_music():
     # Home and its internal pages always use Madeira, regardless of preview art.
     var theme: String = stage.game.visual_theme if stage.mode in ["local","bot","online","casual"] else "wood"
     var path: String = preload("res://cosmetics/theme_catalog.gd").get_theme(theme).music_path
+    if not music_override.is_empty(): path = music_override
     if path == music_path: return
     var track = load(path) as AudioStreamMP3
     if track == null: return

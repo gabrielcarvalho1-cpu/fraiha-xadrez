@@ -15,6 +15,7 @@ const LAYOUTS := {
         "turn": Rect2(1525, 36, 350, 68), "meter": Rect2(1522, 158, 356, 142),
         "xeque": [Vector2(1700, 640), 0.92], "play": Rect2(1525, 757, 350, 80),
         "hint": [Vector2(1700, 912), 24], "help": Rect2(1752, 993, 54, 54), "menu": Rect2(1813, 993, 54, 54),
+        "music": Rect2(1630, 993, 54, 54), "fx": Rect2(1691, 993, 54, 54),
         "hand": [Vector2(960, 930), 0.212], "pile": [Vector2(960, 530), 0.128], "clock": [Vector2(960, 333), 0.22],
         "reveal": [Vector2(960, 528), 0.19], "mate_clock": [Vector2(960, 262), 0.36], "mate_title": [Vector2(960, 862), 196],
         "mate_line": [Vector2(960, 958), 33],
@@ -27,6 +28,7 @@ const LAYOUTS := {
         "turn": Rect2(350, 1361, 380, 62), "meter": Rect2(708, 1452, 300, 120),
         "xeque": [Vector2(184, 1846), 0.768], "play": Rect2(405, 1805, 630, 82),
         "hint": null, "help": Rect2(470, 22, 60, 60), "menu": Rect2(540, 22, 60, 60),
+        "music": Rect2(330, 22, 60, 60), "fx": Rect2(400, 22, 60, 60),
         "hand": [Vector2(540, 1664), 0.167], "pile": [Vector2(540, 988), 0.18], "clock": [Vector2(540, 703), 0.32],
         "reveal": [Vector2(540, 960), 0.25], "mate_clock": [Vector2(540, 690), 0.48], "mate_title": [Vector2(540, 1252), 128],
         "mate_line": [Vector2(540, 1326), 27],
@@ -39,6 +41,7 @@ const LAYOUTS := {
         "turn": Rect2(42, 342, 318, 62), "meter": Rect2(1590, 56, 320, 128),
         "xeque": [Vector2(1750, 360), 0.837], "play": Rect2(1581, 459, 326, 96),
         "hint": [Vector2(1750, 632), 22], "help": Rect2(1798, 2, 50, 48), "menu": Rect2(1856, 2, 50, 48),
+        "music": Rect2(1682, 2, 50, 48), "fx": Rect2(1740, 2, 50, 48),
         "hand": [Vector2(975, 772), 0.183], "pile": [Vector2(975, 413), 0.122], "clock": [Vector2(975, 248), 0.185],
         "reveal": [Vector2(975, 400), 0.16], "mate_clock": [Vector2(975, 222), 0.31], "mate_title": [Vector2(975, 690), 124],
         "mate_line": [Vector2(975, 800), 26],
@@ -202,6 +205,15 @@ func button_dark(r: Rect2, label: String, id: String, fs := 40):
     text(label, Vector2(r.position.x, r.position.y + r.size.y * 0.5 + f * 0.36), "ui_sp", f, Color("f6ecd2"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
     hit(r, id)
 
+## MÚSICA / EFEITOS: liga e desliga só a música ou só os efeitos sonoros.
+func sound_button(r: Rect2, kind: String):
+    var id := "mute_music" if kind == "music" else "mute_fx"
+    var off: bool = ui.Sound.music_muted(ui.hub) if kind == "music" else ui.Sound.effects_muted(ui.hub)
+    var hov: bool = ui.hover_id == id
+    panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+    ui.Sound.glyph(self, r.grow(-6), kind, off, Color("f6ecd2") if not off else Color("8d9092"))
+    hit(r, id)
+
 func square_button(r: Rect2, glyph: String, id: String):
     var hov: bool = ui.hover_id == id
     panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
@@ -280,6 +292,8 @@ func _draw_game():
     _draw_hint()
     square_button(lay.help, "?", "help")
     square_button(lay.menu, "menu", "menu")
+    sound_button(lay.music, "music")
+    sound_button(lay.fx, "fx")
     if not mate: _draw_hand()
     _draw_fly()
     if ui.phase in ["reveal", "clock", "safe"]: _draw_reveal(false)

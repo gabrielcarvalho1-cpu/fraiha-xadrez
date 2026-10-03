@@ -3,7 +3,7 @@ extends SceneTree
 ## cartas, JOGAR/XEQUE travados contra toque duplo, tempo esgotado, XEQUE-MATE, abandono e
 ## histórico comum (mode_id = xeque, ruleset_version = 1, sem ANALISAR).
 const Rules := preload("res://xeque/rules.gd")
-const BACKUP := ["user://match_history.json"]
+const BACKUP := ["user://match_history.json", "user://home_preferences.cfg"]
 var checks := 0
 var failures := 0
 var saved := {}
@@ -54,6 +54,8 @@ func run():
     await frames(6)
     var ui = hub.xeque
     check(ui != null and ui.visible and ui.mode == "tutorial", "XEQUE abre no tutorial")
+    var audio = stage.get_node_or_null("GameAudio")
+    check(audio != null and audio.music_path == "res://xeque/audio/musica_xeque.mp3" and audio.music.stream != null and bool(audio.music.stream.loop), "música do XEQUE tocando, em loop")
     check(hit_center(ui, "tut_play") != Vector2(-1, -1) and hit_center(ui, "tut_back") != Vector2(-1, -1), "tutorial com JOGAR AGORA e VOLTAR")
     ui.seed_override = 77
     ui._on_hit("tut_play")
@@ -67,6 +69,7 @@ func run():
     ui._begin_turn()
     await frames(2)
     check(not ui.can_human_play() and not ui.can_human_challenge(), "sem carta escolhida: JOGAR desabilitado; sem jogada anterior: XEQUE desabilitado")
+    check(ui.cues_played.has("your_turn"), "aviso sonoro na sua vez")
     ui.toggle_card(0); ui.toggle_card(1); ui.toggle_card(2); ui.toggle_card(3)
     check(ui.selected.size() == 3, "no máximo 3 cartas selecionadas")
     ui.toggle_card(1)
@@ -79,6 +82,7 @@ func run():
     touch(ui.view, ui, play_pos)
     check(g.hands[0].size() == before - 2 and g.plays.size() == 1, "toque duplo em JOGAR: uma jogada só (2 cartas)")
     check(not ui.bubble.is_empty() and int(ui.bubble.count) == 2, "balão \"2 × peça\" do jogador")
+    check(ui.cues_played.has("card_2") and audio.last_cue == "carta_baixar_2", "som de 2 cartas baixadas (bus de efeitos)")
     # ---------- toque na carta: o toque duplo não seleciona e desseleciona ----------
     g.turn = 0
     g.last_play = {"seat": 3, "cards": ["rei"], "count": 1}
@@ -104,9 +108,11 @@ func run():
     check(g.lives[3] == lives3 - 1 and not g.alive(3), "o motor já resolveu: Torre Velha eliminada no XEQUE-MATE (animação não é a autoridade)")
     ui.toggle_card(0)
     check(ui.selected.is_empty(), "durante a resolução nenhuma carta pode ser escolhida")
+    check(ui.cues_played.has("xeque"), "som do XEQUE")
     ui._advance_phase()
-    check(ui.phase == "clock" and ui.seat_status(3).id == "com_o_relogio", "Relógio de Xeque: placa COM O RELÓGIO")
+    check(ui.phase == "clock" and ui.seat_status(3).id == "com_o_relogio" and ui.cues_played.back() == "clock", "Relógio de Xeque: placa COM O RELÓGIO e som do relógio")
     ui._advance_phase()
+    check(ui.cues_played.back() == "mate", "som de explosão no XEQUE-MATE")
     check(ui.phase == "mate" and ui.seat_status(3).id == "xeque_mate" and ui.clock_visual(3) == "disparado", "XEQUE-MATE: relógio disparado e placa XEQUE-MATE!")
     await frames(2)
     ui.skip_presentation()
@@ -167,6 +173,25 @@ func run():
     var row = hub.history_list.get_node_or_null("HistoryRow")
     check(row != null and row.find_child("HistoryAnalyze", true, false) == null and hub.history_list.get_child_count() == 2, "filtro XEQUE: 2 partidas, sem ANALISAR")
     hub.history_filter = "all"
+    # ---------- MÚSICA / EFEITOS ----------
+    hub.open_xeque()
+    ui._on_hit("tut_play")
+    await frames(2)
+    var mbus := AudioServer.get_bus_index("Music")
+    var fbus := AudioServer.get_bus_index("Effects")
+    check(hit_center(ui, "mute_music") != Vector2(-1, -1) and hit_center(ui, "mute_fx") != Vector2(-1, -1), "botões MÚSICA e EFEITOS na partida")
+    ui._on_hit("mute_music")
+    check(hub.music_muted and AudioServer.is_bus_mute(mbus) and not AudioServer.is_bus_mute(fbus), "MÚSICA desliga só a música")
+    ui._on_hit("mute_fx")
+    check(hub.effects_muted and AudioServer.is_bus_mute(fbus), "EFEITOS desliga só os efeitos")
+    var cfg := ConfigFile.new()
+    cfg.load("user://home_preferences.cfg")
+    check(bool(cfg.get_value("audio", "music_muted", false)) and bool(cfg.get_value("audio", "effects_muted", false)), "escolha salva (vale depois de recarregar)")
+    ui._on_hit("mute_music"); ui._on_hit("mute_fx")
+    check(not AudioServer.is_bus_mute(mbus) and not AudioServer.is_bus_mute(fbus), "religar: música e efeitos voltam")
+    ui._on_hit("menu"); ui._on_hit("menu_quit"); ui._on_hit("quit_yes")
+    await frames(2)
+    check(audio.music_override == "" and audio.music_path != "res://xeque/audio/musica_xeque.mp3", "saindo do modo a música da Home volta")
     # ---------- formatos ----------
     hub.open_xeque()
     for sz in [Vector2i(1080, 1920), Vector2i(1950, 900), Vector2i(1920, 1080)]:

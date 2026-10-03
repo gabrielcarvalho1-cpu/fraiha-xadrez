@@ -11,6 +11,16 @@ const Rules := preload("res://marcha/rules.gd")
 const AI := preload("res://marcha/ai.gd")
 const Layout := preload("res://marcha/board_layout.gd")
 const Access := preload("res://marcha/marcha_access.gd")
+const Sound := preload("res://ui_v022/mode_sound.gd")
+const MUSIC := "res://marcha/audio/musica_marcha.mp3"    # música enviada pelo dono do projeto (loop)
+const SFX := {
+    "card": preload("res://marcha/audio/carta.wav"), "discard": preload("res://marcha/audio/descarte.wav"),
+    "step": preload("res://marcha/audio/passo.wav"), "exit": preload("res://marcha/audio/saida.wav"),
+    "capture": preload("res://marcha/audio/captura.wav"), "swap": preload("res://marcha/audio/troca.wav"),
+    "crown": preload("res://marcha/audio/coroa.wav"), "your_turn": preload("res://marcha/audio/sua_vez.wav"),
+    "victory": preload("res://marcha/audio/vitoria.wav"), "defeat": preload("res://marcha/audio/derrota.wav"),
+}
+const SFX_DB := {"step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0}
 
 const BOARD := preload("res://marcha/art/board.png")
 const BG := preload("res://marcha/art/table_bg.png")
@@ -124,6 +134,7 @@ func _ready():
 func open():
     visible = true
     root.visible = true
+    Sound.music_on(stage, MUSIC)
     mode = "lobby"
     menu_open = false
     tut_page = -1
@@ -135,6 +146,7 @@ func open():
 func close():
     visible = false
     root.visible = false
+    Sound.music_off(stage)
     mode = "lobby"
     g = null
     closed.emit()
@@ -218,6 +230,7 @@ func _begin_turn():
         await _play(g.turn, mv)
     else:
         busy = false
+        _cue("your_turn")              # aviso sonoro: é a sua vez
         if not g.has_any_move(0): _flash("Sem jogada possível: escolha uma carta para descartar.")
 
 func _play(seat: int, mv: Dictionary):
@@ -233,6 +246,7 @@ func _play(seat: int, mv: Dictionary):
         return
     plays += 1
     _clear_selection()
+    _cue("discard" if String(mv.get("kind", "")) == "discard" else "card")
     await _animate(events)
     busy = false
     if g == null or mode != "game": return
@@ -245,6 +259,7 @@ func _play(seat: int, mv: Dictionary):
 func _finish():
     mode = "over"
     busy = false
+    _cue("victory" if g.winner == 0 else "defeat")
     _record_history("win" if g.winner == 0 else "loss")
     _redraw()
 
@@ -434,12 +449,16 @@ func _animate(events: Array):
             "move":
                 var w: Array = e.pawn
                 var key := _key(w)
+                var si := 0
                 for step in e.path:
+                    _cue("step", 0.92 + 0.04 * (si % 4))
+                    si += 1
                     anim[key] = _cell_of(w[0], step)
                     _redraw()
                     await get_tree().create_timer(STEP_TIME).timeout
                 anim.erase(key)
             "exit":
+                _cue("exit")
                 var w: Array = e.pawn
                 var key := _key(w)
                 var a: Vector2 = Layout.home_center(w[0])
@@ -450,6 +469,7 @@ func _animate(events: Array):
                     await get_tree().create_timer(0.035).timeout
                 anim.erase(key)
             "capture":
+                _cue("capture")
                 var key := _key(e.pawn)
                 for i in range(6):
                     anim_alpha[key] = 1.0 - i / 6.0
@@ -457,6 +477,7 @@ func _animate(events: Array):
                     await get_tree().create_timer(0.05).timeout
                 anim_alpha.erase(key)
             "swap", "crown", "discard":
+                if String(e.type) != "discard": _cue(String(e.type))
                 _redraw()
                 await get_tree().create_timer(0.18).timeout
     anim.clear()
@@ -499,6 +520,12 @@ func on_press(p: Vector2):
                 best = w
         if not best.is_empty(): pick_pawn(best)
 
+var cues_played: Array = []      # testes: últimos efeitos pedidos
+func _cue(kind: String, pitch := 1.0):
+    cues_played.append(kind)
+    if cues_played.size() > 60: cues_played.pop_front()
+    if SFX.has(kind): Sound.play(stage, SFX[kind], float(SFX_DB.get(kind, -8.0)), pitch)
+
 func _on_hit(id: String):
     var audio = stage.get_node_or_null("GameAudio") if stage != null else null
     if audio != null and audio.has_method("play_cue"): audio.play_cue("ui")
@@ -512,6 +539,8 @@ func _on_hit(id: String):
         "play": confirm()
         "cancel": cancel()
         "help": tut_page = 0
+        "mute_music": Sound.toggle_music(hub)
+        "mute_fx": Sound.toggle_effects(hub)
         "menu": menu_open = not menu_open
         "menu_close": menu_open = false
         "menu_tutorial":
@@ -651,6 +680,12 @@ class TableView extends Control:
         else:
             for i in 3: draw_line(r.get_center() + Vector2(-9, -6 + i * 6), r.get_center() + Vector2(9, -6 + i * 6), ui.GOLD, 2.5)
         ui.hits.append({"rect": r, "id": id})
+    func sound_button(r: Rect2, kind: String):
+        var off: bool = ui.Sound.music_muted(ui.hub) if kind == "music" else ui.Sound.effects_muted(ui.hub)
+        draw_rect(r, Color("0a1611"))
+        draw_rect(r, ui.GOLD, false, 2.0)
+        ui.Sound.glyph(self, r.grow(-6), kind, off, ui.GOLD if not off else Color("6b6656"))
+        ui.hits.append({"rect": r, "id": "mute_music" if kind == "music" else "mute_fx"})
     func diamond(c: Vector2, rr: float, col: Color, filled := true):
         var pts := PackedVector2Array([c + Vector2(0, -rr), c + Vector2(rr, 0), c + Vector2(0, rr), c + Vector2(-rr, 0)])
         if filled: draw_colored_polygon(pts, col)
@@ -670,10 +705,17 @@ class TableView extends Control:
         if ui.g != null:
             sub = "RODADA %d · %d X %d PEÕES COROADOS" % [ui.g.round_no, ui.g.team_crowned(0), ui.g.team_crowned(1)]
         text(sub, Vector2(28, by - 12 if not ui.portrait else by - 22), "semi_sp2", 17 if not ui.portrait else 21, Color("d9a441"))
+        var bs := 50.0 if not ui.portrait else 64.0
+        var gap := 64.0 if not ui.portrait else 78.0
+        var right := w - (78.0 if not ui.portrait else 92.0)
+        var top := 16.0 if not ui.portrait else 26.0
         if ui.mode == "game":
-            var bs := 50.0 if not ui.portrait else 64.0
-            square_button(Rect2(w - (142.0 if not ui.portrait else 170.0), 16 if not ui.portrait else 26, bs, bs), "?", "help")
-            square_button(Rect2(w - (78.0 if not ui.portrait else 92.0), 16 if not ui.portrait else 26, bs, bs), "=", "menu")
+            square_button(Rect2(right - gap, top, bs, bs), "?", "help")
+            square_button(Rect2(right, top, bs, bs), "=", "menu")
+            right -= gap * 2
+        # MÚSICA / EFEITOS: no salão e na partida
+        sound_button(Rect2(right - gap, top, bs, bs), "music")
+        sound_button(Rect2(right, top, bs, bs), "fx")
 
     # ------------------------------------------------------------ placas dos jogadores
     func _plate(r: Rect2, seat: int, big := false):

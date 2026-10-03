@@ -16,6 +16,17 @@ const CROWN_LOST := preload("res://xeque/art/interface/coroa_perdida.png")
 const BTN_GOLD := preload("res://xeque/art/interface/botao_dourado.png")
 const BTN_DARK := preload("res://xeque/art/interface/botao_escuro.png")
 const GOLD_PIECES := preload("res://cosmetics/v025/gold_pieces.png")
+const Sound := preload("res://ui_v022/mode_sound.gd")
+const MUSIC := "res://xeque/audio/musica_xeque.mp3"      # música enviada pelo dono do projeto (loop)
+const SFX := {
+    "card_1": preload("res://xeque/audio/carta_baixar_1.wav"), "card_2": preload("res://xeque/audio/carta_baixar_2.wav"),
+    "card_3": preload("res://xeque/audio/carta_baixar_3.wav"), "your_turn": preload("res://xeque/audio/sua_vez.wav"),
+    "xeque": preload("res://xeque/audio/xeque.wav"), "reveal": preload("res://xeque/audio/revelar.wav"),
+    "clock": preload("res://xeque/audio/relogio.wav"), "safe": preload("res://xeque/audio/seguro.wav"),
+    "mate": preload("res://xeque/audio/xeque_mate.wav"), "elim": preload("res://xeque/audio/eliminado.wav"),
+    "victory": preload("res://xeque/audio/vitoria.wav"), "defeat": preload("res://xeque/audio/derrota.wav"),
+}
+const SFX_DB := {"your_turn": -9.0, "xeque": -6.0, "mate": -3.0, "victory": -7.0, "defeat": -7.0, "elim": -6.0}
 const FONT_UI := preload("res://xeque/art/fontes/Jersey20-Regular.woff2")
 const FONT_TITLE := preload("res://xeque/art/fontes/Jacquard24-Regular.woff2")
 const TUTORIAL_BG := preload("res://xeque/art/telas/tutorial_fundo.png")
@@ -133,6 +144,7 @@ func _ready():
 func open():
     visible = true
     root.visible = true
+    Sound.music_on(stage, MUSIC)
     mode = "tutorial"
     tutorial_from_game = false
     menu_open = false
@@ -144,6 +156,7 @@ func open():
 func close():
     visible = false
     root.visible = false
+    Sound.music_off(stage)
     mode = "tutorial"
     g = null
     phase = ""
@@ -215,8 +228,11 @@ func _begin_turn():
         _redraw()
         return
     if g.turn != 0: bot_wait = rng.randf_range(BOT_DELAY_MIN, BOT_DELAY_MAX)
+    else: _cue("your_turn")       # aviso sonoro: é a sua vez
+    last_tick_s = -1
     _redraw()
 
+var last_tick_s := -1
 func _process(delta):
     if not visible: return
     t += delta
@@ -233,6 +249,11 @@ func _process(delta):
             if g.turn == 0:
                 if not input_locked:
                     turn_left_ms -= int(delta * 1000.0)
+                    # últimos 5 segundos: tique a cada segundo
+                    var secs := int(ceil(turn_left_ms / 1000.0))
+                    if secs <= 5 and secs >= 1 and secs != last_tick_s:
+                        last_tick_s = secs
+                        _cue("tick")
                     if turn_left_ms <= 0:
                         turn_left_ms = 0
                         _timeout()
@@ -265,7 +286,7 @@ func _after_play(seat: int, pub: Dictionary):
         return
     bubble = {"seat": seat, "count": int(pub.count), "target": g.target}
     fly.append({"from": seat, "t": 0.0, "count": int(pub.count)})
-    _cue("card")
+    _cue("card_%d" % clampi(int(pub.count), 1, 3))
     if pub.has("forced"):
         _on_challenge(pub.forced, int(pub.forced.caller))
         return
@@ -308,8 +329,10 @@ func _on_challenge(r: Dictionary, caller: int):
     input_locked = true
     selected = []
     phase = "reveal"
+    get_tree().create_timer(0.35).timeout.connect(func(): if phase == "reveal": _cue("reveal"))
     phase_t = 0.0
     _cue("xeque")
+    last_tick_s = -1
     _redraw()
 
 func _advance_phase():
@@ -322,6 +345,7 @@ func _advance_phase():
             phase = "mate" if bool(result.mate) else "safe"
             _cue("mate" if bool(result.mate) else "safe")
         "safe", "mate":
+            if phase == "mate" and bool(result.get("eliminated", false)): _cue("elim")
             # com 1 vida o XEQUE-MATE já diz "eliminado": não precisa de outra tela
             if bool(result.get("eliminated", false)) and Rules.LIVES > 1: phase = "elim"
             else: _end_resolution()
@@ -413,6 +437,8 @@ func _on_hit(id: String):
         "play": human_play()
         "play_empty": _flash("Escolha de 1 a 3 cartas da sua mão.")
         "xeque": human_challenge()
+        "mute_music": Sound.toggle_music(hub)
+        "mute_fx": Sound.toggle_effects(hub)
         "help":
             tutorial_from_game = true
             mode = "tutorial"
@@ -441,10 +467,15 @@ func _flash(text: String):
     flash = text
     flash_t = 3.0
 
+var cues_played: Array = []      # testes: últimos efeitos pedidos
 func _cue(kind: String):
+    cues_played.append(kind)
+    if cues_played.size() > 40: cues_played.pop_front()
+    if SFX.has(kind):
+        Sound.play(stage, SFX[kind], float(SFX_DB.get(kind, -8.0)))
+        return
     var audio = stage.get_node_or_null("GameAudio") if stage != null else null
-    if audio != null and audio.has_method("play_cue"):
-        audio.play_cue({"card": "wood", "xeque": "check", "clock": "bell", "safe": "ui", "mate": "mate", "victory": "win", "defeat": "loss"}.get(kind, "ui"))
+    if audio != null and audio.has_method("play_cue"): audio.play_cue("ui")
 
 # ---------------------------------------------------------------- consultas para o desenho
 func clock_visual(seat: int) -> String:
