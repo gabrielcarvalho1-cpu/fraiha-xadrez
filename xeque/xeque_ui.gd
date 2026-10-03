@@ -792,6 +792,8 @@ func start_online(msg: Dictionary):
     online = true
     room_id = String(msg.get("room_id", ""))
     players = msg.get("players", []) if msg.get("players") is Array else []
+    var pc = stage.get("party_chat") if stage != null else null
+    if pc != null: pc.bind(room_id, "xeque", players.map(func(q): return String(q.get("name", ""))))     # R37.3 · chat da mesa
     if not visible:
         visible = true
         root.visible = true
@@ -931,14 +933,20 @@ func _online_send(action: Dictionary):
         _flash("Sem conexão com o servidor. Tente de novo.")
     _redraw()
 
+func _chat_unbind():
+    var pc = stage.get("party_chat") if stage != null else null
+    if pc != null: pc.unbind()
+
 func _online_leave():
     var acc = stage.get("account") if stage != null else null
+    _chat_unbind()
     if acc != null and acc.has_method("send_server"): acc.send_server({"type": "party_leave", "room_id": room_id})
     online = false
     ev_queue.clear()
 
 func online_lost(text: String):
     if not online: return
+    _chat_unbind()
     online = false
     ev_queue.clear()
     if mode == "game":

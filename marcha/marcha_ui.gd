@@ -1821,6 +1821,8 @@ func start_online(msg: Dictionary):
     room_id = String(msg.get("room_id", ""))
     if not resumed: pile = []
     players = msg.get("players", []) if msg.get("players") is Array else []
+    var pc = stage.get("party_chat") if stage != null else null
+    if pc != null: pc.bind(room_id, "marcha", names)     # R37.3 · chat da mesa
     names = DEFAULT_NAMES.duplicate()
     for i in mini(4, players.size()):
         if i > 0: names[i] = String(players[i].get("name", names[i]))
@@ -1975,8 +1977,13 @@ func _online_send(mv: Dictionary):
     busy = true
     _redraw()
 
+func _chat_unbind():
+    var pc = stage.get("party_chat") if stage != null else null
+    if pc != null: pc.unbind()
+
 func _online_leave():
     var acc = stage.get("account") if stage != null else null
+    _chat_unbind()
     if acc != null and acc.has_method("send_server"): acc.send_server({"type": "party_leave", "room_id": room_id})
     online = false
     ev_queue.clear()
@@ -1984,6 +1991,7 @@ func _online_leave():
 ## O servidor reiniciou / a partida não existe mais.
 func online_lost(text: String):
     if not online: return
+    _chat_unbind()
     online = false
     ev_queue.clear()
     if mode == "game":

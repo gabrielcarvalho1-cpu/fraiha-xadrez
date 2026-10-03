@@ -83,6 +83,16 @@ func run():
     check(mu.names[2] == "PeerParty" and mu.names[1] != "PeerParty", "o amigo aparece como ALIADO (em cima)")
     check(mu.g.hands[0].size() == 4 and mu.g.hands[2].all(func(c): return c == "2"), "minha mão real; a do amigo só como quantidade")
     await shot("2_marcha_online")
+    # R37.3 · chat da mesa: botão CHAT, escolha PARA TODOS / SÓ ALIADO
+    var pc = stage.party_chat
+    check(pc.active() and pc.toggle.visible and pc.to_row.visible, "MARCHA online: botão CHAT com PARA TODOS / SÓ ALIADO")
+    pc.set_open(true)
+    pc.set_to("ally")
+    pc.input.text = "oi aliado"
+    pc.send_current()
+    check(await wait_until(func(): return pc.messages.any(func(m): return String(m.text) == "oi aliado" and String(m.to) == "ally"), 5.0), "MARCHA online: mensagem para o aliado enviada e mostrada")
+    await shot("2b_marcha_chat")
+    pc.set_open(false)
     var my_moves := 0
     var server_ok := true
     var t0 := Time.get_ticks_msec()
@@ -111,6 +121,7 @@ func run():
     mu._on_hit("menu")
     mu._on_hit("menu_quit")
     check(not mu.online and mu.mode == "lobby", "SAIR DA PARTIDA deixa a mesa online")
+    check(not pc.active(), "saiu da mesa: o CHAT some")
     var hist: Array = stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real" and bool(e.get("online", false)) and String(e.get("room_id", "")) == rid)
     check(hist.size() == 1 and String(hist[0].result) == "abandon" and String(hist[0].ruleset_version) == "marcha-real-6", "histórico: partida online da Marcha (abandono, marcha-real-6)")
     mu.close()
@@ -123,6 +134,7 @@ func run():
     check(await wait_until(func(): return stage.hub.xeque != null and stage.hub.xeque.online and stage.hub.xeque.mode == "game", 10.0), "XEQUE abre online sozinho quando o amigo aceita")
     var xu = stage.hub.xeque
     check(xu.g.names[2] == "PeerParty" and xu.g.hands[0].size() == 5 and xu.g.hands[1].all(func(c): return c == "?"), "XEQUE: amigo na mesa; só a minha mão é conhecida")
+    check(pc.active() and not pc.to_row.visible and pc.to == "all", "XEQUE online: CHAT para todos")
     var acts := 0
     var challenged := false
     var t1 := Time.get_ticks_msec()

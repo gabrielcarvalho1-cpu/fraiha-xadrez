@@ -345,6 +345,8 @@ class Party {
     const seat = this.seatOf(room, uid);
     if (seat < 0 || room.seats[seat].left) return this.send(ws, { type: 'party_error', code: 'not_player', message: 'Você não está nesta partida.' });
     if (a === 'party_leave') { this.leave(room, uid); return this.send(ws, { type: 'party_left', room_id: room.id }); }
+    if (a === 'party_chat') return this.chat(ws, room, seat, m);
+    if (a === 'party_chat_sync') return this.send(ws, { type: 'party_chat_history', room_id: room.id, messages: (room.chat || []).filter(e => this.canSee(room, e, seat)).map(e => this.chatView(e, seat)) });
     if (a !== 'party_action') return this.send(ws, { type: 'party_error', code: 'invalid', message: 'Ação desconhecida.' });
     const reject = (code, message) => this.send(ws, { type: 'party_error', code, message, room_id: room.id, snapshot: this.snapshot(room, seat) });
     if (room.busy || room.turn_seat !== seat) return reject('not_your_turn', 'Aguarde a sua vez.');
@@ -357,6 +359,27 @@ class Party {
     const idx = Array.isArray(act.idx) ? act.idx.slice(0, X.MAX_PLAY).map(x => Math.trunc(Number(x))) : [];
     if (!this.xequePlay(room, seat, idx, 'player')) return reject('illegal', 'Jogada inválida.');
   }
+  // R37.3 · chat da mesa. XEQUE: todos. MARCHA REAL: todos ou só o aliado (to: 'ally').
+  // Mesmas regras do chat do xadrez (texto limpo, limite de mensagens, sem histórico depois da mesa).
+  chat(ws, room, seat, m) {
+    const { clean } = require('../chat');
+    const fail = (message, code) => this.send(ws, { type: 'party_chat_error', room_id: room.id, message, code });
+    const c = clean(m.text);
+    if (c.error) return fail(c.error, c.code);
+    const hub = this.backend && this.backend.chat;
+    const ok = hub ? hub.allow(room.seats[seat].uid, c.text, this.now()) : { ok: true };
+    if (ok.error) return fail(ok.error, ok.code);
+    const to = room.game === 'marcha' && m.to === 'ally' ? 'ally' : 'all';
+    room.chat = room.chat || []; room.chatSeq = (room.chatSeq || 0) + 1;
+    const entry = { id: room.chatSeq, from: seat, to, nickname: room.seats[seat].nickname, text: c.text, ts: new Date(this.now()).toISOString() };
+    room.chat.push(entry); if (room.chat.length > 60) room.chat.shift();
+    room.seats.forEach((s, abs) => {
+      if (s.kind !== 'human' || s.left || !this.canSee(room, entry, abs)) return;
+      this.toUser(s.uid, { type: 'party_chat_msg', room_id: room.id, ...this.chatView(entry, abs) });
+    });
+  }
+  canSee(room, e, abs) { return e.to === 'all' || abs === e.from || abs === (e.from + 2) % 4; }
+  chatView(e, abs) { return { id: e.id, from_seat: rot(e.from, abs), to: e.to, nickname: e.nickname, text: e.text, ts: e.ts }; }
   cleanup() {
     const now = this.now();
     for (const [id, r] of this.rooms) {

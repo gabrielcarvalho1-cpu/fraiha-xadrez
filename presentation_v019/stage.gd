@@ -52,6 +52,7 @@ var bot_side_name := "BRANCAS"
 var mobile_status: Label
 var mobile_promotion: PanelContainer
 var account
+var party_chat                   # R37.3 · social/party_chat.gd
 var profile_popup                # R37 · social/profile_popup.gd (cartão de perfil durante a partida)
 var account_ui
 var account_chip: Button
@@ -408,6 +409,10 @@ func _setup_account():
     profile_popup = preload("res://social/profile_popup.gd").new()
     add_child(profile_popup)
     profile_popup.bind(account)
+    # R37.3 · chat das mesas com amigo (XEQUE e MARCHA REAL online)
+    party_chat = preload("res://social/party_chat.gd").new()
+    add_child(party_chat)
+    party_chat.setup(account)
     _setup_analysis()
     account_ui.ready_for_ranked.connect(_open_ranked)
     ranked = preload("res://ranked/ranked_controller.gd").new()
