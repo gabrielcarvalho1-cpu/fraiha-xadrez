@@ -1,17 +1,17 @@
-"""Blefe Real · cartas do jogo a partir das cartas aprovadas (tools/blefe_src/, 720x1008).
+"""Xeque · cartas do jogo a partir das cartas aprovadas (tools/xeque_src/, 720x1008).
 Regra escolhida pelo dono do projeto: a mesa pede Rei, Rainha ou Cavalo e o PEÃO (Peão Coroado)
 é o coringa. As cartas aprovadas trazem outra regra impressa na faixa de legenda (Rainha=CORINGA,
 Rei=PERIGO, Peão=PEÇA). Só essa faixa (palavra colorida + linha pequena) é trocada; o resto da
 carta fica com os mesmos pixels. Os textos novos são os PRÓPRIOS pixels das outras cartas do
 pacote (CORINGA/"Vale como qualquer peça" da Rainha; PEÇA/"Pode ser a peça pedida" do Cavalo),
-com a palavra recolorida na cor de cada carta. Saída: tools/blefe_src/saida/carta_<id>.png (tools/blefe_assets.py gera as versões do jogo)"""
+com a palavra recolorida na cor de cada carta. Saída: tools/xeque_src/saida/carta_<id>.png (tools/xeque_assets.py gera as versões do jogo)"""
 import os
 import numpy as np
 from PIL import Image
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-SRC = os.path.join(ROOT, "tools/blefe_src")
-OUT = os.path.join(ROOT, "tools/blefe_src/saida")   # tamanho cheio; tools/blefe_assets.py reduz para o jogo
+SRC = os.path.join(ROOT, "tools/xeque_src")
+OUT = os.path.join(ROOT, "tools/xeque_src/saida")   # tamanho cheio; tools/xeque_assets.py reduz para o jogo
 Y0, Y1, YS = 860, 976, 922            # faixa da legenda; YS separa palavra / linha pequena
 X0, X1 = 34, 686
 
@@ -53,14 +53,14 @@ for n in ["rei", "rainha", "cavalo", "peao"]:
     Image.fromarray(img).save(os.path.join(OUT, "carta_%s.png" % n))
     print("carta_%s.png" % n, "(faixa de " + plan[n] + ")" if n in plan else "(sem alteração)")
 
-# ---- quantidade no selo do canto (×N): baralho do Blefe Real = 6 Rei, 6 Rainha, 6 Cavalo, 2 Peão.
+# ---- quantidade no selo do canto (×N): baralho do Xeque = 6 Rei, 6 Rainha, 6 Cavalo, 2 Peão.
 # O "×" vem dos pixels do Cavalo; o número é a mesma fonte do pacote (Jersey 20, corpo 56 — o "5"
 # do Cavalo bate 99% pixel a pixel com essa fonte).
 from PIL import ImageFont, ImageDraw
 from fontTools.ttLib import TTFont
 import tempfile
-_tt = os.path.join(tempfile.gettempdir(), "jersey20_blefe.ttf")
-_f = TTFont(os.path.join(ROOT, "blefe/art/fontes/Jersey20-Regular.woff2")); _f.flavor = None; _f.save(_tt)
+_tt = os.path.join(tempfile.gettempdir(), "jersey20_xeque.ttf")
+_f = TTFont(os.path.join(ROOT, "xeque/art/fontes/Jersey20-Regular.woff2")); _f.flavor = None; _f.save(_tt)
 FONT = ImageFont.truetype(_tt, 56)
 BX0, BX1, BY0, BY1 = 588, 652, 72, 118          # área do texto dentro do selo
 cav = load("cavalo")

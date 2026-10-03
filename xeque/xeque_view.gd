@@ -1,9 +1,9 @@
 extends Control
-## BLEFE REAL — desenho das telas. Tudo é desenhado em coordenadas da tela de referência do formato
+## XEQUE — desenho das telas. Tudo é desenhado em coordenadas da tela de referência do formato
 ## (PC 1920x1080, celular retrato 1080x1920, celular paisagem 1950x900) e escalado para a janela.
 ## As posições abaixo foram medidas nas telas de referência aprovadas (telas_referencia/*.jpg):
 ## a cena da mesa casa com o tabuleiro do JSON; relógio e cartas da mão foram ajustados pixel a pixel.
-const Rules := preload("res://blefe/rules.gd")
+const Rules := preload("res://xeque/rules.gd")
 
 # ---------------------------------------------------------------- medidas por formato
 const LAYOUTS := {
@@ -15,8 +15,8 @@ const LAYOUTS := {
         "turn": Rect2(1525, 36, 350, 68), "meter": Rect2(1522, 158, 356, 142),
         "xeque": [Vector2(1700, 640), 0.92], "play": Rect2(1525, 757, 350, 80),
         "hint": [Vector2(1700, 912), 24], "help": Rect2(1752, 993, 54, 54), "menu": Rect2(1813, 993, 54, 54),
-        "hand": [Vector2(960, 930), 0.212], "pile": [Vector2(960, 530), 0.128], "clock": [Vector2(960, 304), 0.30],
-        "reveal": [Vector2(960, 528), 0.19], "mate_clock": [Vector2(960, 250), 0.46], "mate_title": [Vector2(960, 862), 196],
+        "hand": [Vector2(960, 930), 0.212], "pile": [Vector2(960, 530), 0.128], "clock": [Vector2(960, 333), 0.22],
+        "reveal": [Vector2(960, 528), 0.19], "mate_clock": [Vector2(960, 262), 0.36], "mate_title": [Vector2(960, 862), 196],
         "mate_line": [Vector2(960, 958), 33],
     },
     "portrait": {
@@ -27,8 +27,8 @@ const LAYOUTS := {
         "turn": Rect2(350, 1361, 380, 62), "meter": Rect2(708, 1452, 300, 120),
         "xeque": [Vector2(184, 1846), 0.768], "play": Rect2(405, 1805, 630, 82),
         "hint": null, "help": Rect2(470, 22, 60, 60), "menu": Rect2(540, 22, 60, 60),
-        "hand": [Vector2(540, 1664), 0.167], "pile": [Vector2(540, 988), 0.18], "clock": [Vector2(540, 661), 0.4355],
-        "reveal": [Vector2(540, 960), 0.25], "mate_clock": [Vector2(540, 680), 0.62], "mate_title": [Vector2(540, 1252), 128],
+        "hand": [Vector2(540, 1664), 0.167], "pile": [Vector2(540, 988), 0.18], "clock": [Vector2(540, 703), 0.32],
+        "reveal": [Vector2(540, 960), 0.25], "mate_clock": [Vector2(540, 690), 0.48], "mate_title": [Vector2(540, 1252), 128],
         "mate_line": [Vector2(540, 1326), 27],
     },
     "landscape": {
@@ -39,8 +39,8 @@ const LAYOUTS := {
         "turn": Rect2(42, 342, 318, 62), "meter": Rect2(1590, 56, 320, 128),
         "xeque": [Vector2(1750, 360), 0.837], "play": Rect2(1581, 459, 326, 96),
         "hint": [Vector2(1750, 632), 22], "help": Rect2(1798, 2, 50, 48), "menu": Rect2(1856, 2, 50, 48),
-        "hand": [Vector2(975, 772), 0.183], "pile": [Vector2(975, 413), 0.122], "clock": [Vector2(975, 224), 0.2516],
-        "reveal": [Vector2(975, 400), 0.16], "mate_clock": [Vector2(975, 215), 0.40], "mate_title": [Vector2(975, 690), 124],
+        "hand": [Vector2(975, 772), 0.183], "pile": [Vector2(975, 413), 0.122], "clock": [Vector2(975, 248), 0.185],
+        "reveal": [Vector2(975, 400), 0.16], "mate_clock": [Vector2(975, 222), 0.31], "mate_title": [Vector2(975, 690), 124],
         "mate_line": [Vector2(975, 800), 26],
     },
 }
@@ -289,8 +289,8 @@ func _draw_game():
 func _draw_title():
     var lay := L()
     var tp: Array = lay.title
-    text("Blefe Real", tp[0], "title", tp[1], Color("f2c050"), -1, HORIZONTAL_ALIGNMENT_LEFT, 8, Color("2a1206"))
-    draw_string(font("title"), tp[0] + Vector2(0, -2), "Blefe Real", HORIZONTAL_ALIGNMENT_LEFT, -1, tp[1], Color(1, 0.93, 0.62, 0.35))
+    text("Xeque", tp[0], "title", tp[1], Color("f2c050"), -1, HORIZONTAL_ALIGNMENT_LEFT, 8, Color("2a1206"))
+    draw_string(font("title"), tp[0] + Vector2(0, -2), "Xeque", HORIZONTAL_ALIGNMENT_LEFT, -1, tp[1], Color(1, 0.93, 0.62, 0.35))
     var sp: Array = lay.sub
     var sub := "RODADA %d · BLEFE DE CARTAS" % ui.g.round_no if ui.layout != "portrait" else "RODADA %d" % ui.g.round_no
     text(sub, sp[0], "ui_sp4", sp[1], Color("caa14a"), -1, HORIZONTAL_ALIGNMENT_LEFT, 2, Color(0.07, 0.04, 0.02, 0.85))
@@ -321,7 +321,7 @@ func _draw_mesa_pede():
 func _draw_como_jogar(r: Rect2):
     panel(r)
     text("COMO JOGAR", r.position + Vector2(20, 36), "ui_sp4", 21, Color("e8b242"))
-    var steps := [["A mesa pede uma peça."], ["Baixe de 1 a 3 cartas", "viradas e diga que são", "essa peça."], ["Duvidou de alguém? *XEQUE!*"], ["Quem errou aciona o seu", "Relógio. Se disparar, perde", "uma coroa."]]
+    var steps := [["A mesa pede uma peça."], ["Baixe de 1 a 3 cartas", "viradas e diga que são", "essa peça."], ["Duvidou de alguém? *XEQUE!*"], ["Quem errou aciona o seu", "Relógio. Se disparar, é", "xeque-mate: está fora."]]
     var y := r.position.y + 67
     for i in steps.size():
         var nb := Rect2(r.position.x + 20, y - 12, 28, 28)
@@ -400,7 +400,10 @@ func _crowns(pos: Vector2, s: int, w: float, gap: float, eliminated := false):
     var lives: int = g.lives[s]
     # durante o XEQUE-MATE a coroa perdida pisca antes de apagar
     var losing: bool = ui.phase in ["mate", "elim"] and int(ui.result.loser) == s
-    for i in 3:
+    var n: int = Rules.LIVES
+    # o espaço é o das 3 coroas da arte; com 1 vida (regra da WePlay) a coroa fica centralizada
+    pos.x += (3 - n) * (w + gap) / 2.0
+    for i in n:
         var lost := i >= lives
         var tex: Texture2D = ui.CROWN_LOST if lost else ui.CROWN
         var mod := Color(0.55, 0.55, 0.55) if eliminated else Color.WHITE
@@ -580,21 +583,24 @@ func _draw_meter():
     panel(r)
     var compact: bool = ui.layout != "desktop"
     text("RELÓGIO DE XEQUE", r.position + Vector2(18, 33 if not compact else 31), "ui_sp4", 21 if not compact else 19, Color("e8b242"))
-    var used: int = 3 - ui.g.clock_left(who)
-    if ui.phase in ["reveal", "clock"] and int(ui.result.loser) == who: used = 3 - int(ui.result.clock_left_before)
+    var total: int = Rules.CLOCK_SLOTS
+    var used: int = total - ui.g.clock_left(who)
+    if ui.phase in ["reveal", "clock"] and int(ui.result.loser) == who: used = total - int(ui.result.clock_left_before)
+    var segs := total - 1                     # medidor de 5 casas da arte: apertos sobrevividos
     var lit := used
-    if vis == "disparado": lit = 3
+    if vis == "disparado": lit = segs
     var seg_col: Color = {"neutro": Color("e8b242"), "pulsando": Color("b068ff"), "perigo": Color("e02a36"), "quase": Color("e02a36"), "disparado": Color("e02a36")}[vis]
+    var gap := 6.0
     var sx := r.position.x + 18
-    var sw := (r.size.x - 36 - 2 * 8) / 3.0
+    var sw := (r.size.x - 36 - (segs - 1) * gap) / float(segs)
     var sy := r.position.y + (52 if not compact else 46)
     var shh := 26.0 if not compact else 22.0
     draw_rect(Rect2(sx - 3, sy - 3, r.size.x - 30, shh + 6), Color("0a1712"))
-    for i in 3:
-        var sr := Rect2(sx + i * (sw + 8), sy, sw, shh)
+    for i in segs:
+        var sr := Rect2(sx + i * (sw + gap), sy, sw, shh)
         draw_rect(sr, Color("10241b"))
         draw_rect(sr, Color("2d4a3c"), false, 2.0)
-        if i < lit or (vis == "pulsando" and i == used and int(ui.t * 5) % 2 == 0):
+        if i < lit or (ui.phase == "clock" and int(ui.result.loser) == who and i == used and int(ui.t * 5) % 2 == 0):
             draw_rect(sr.grow(-2), seg_col)
             draw_rect(Rect2(sr.position.x + 2, sr.position.y + 2, sr.size.x - 4, 4), seg_col.lightened(0.35))
     var words: String = {"neutro": "NEUTRO", "pulsando": "PULSANDO", "perigo": "EM PERIGO", "quase": "QUASE DISPARANDO", "disparado": "DISPAROU!"}[vis]
@@ -772,16 +778,16 @@ func _draw_mate():
     if ui.phase == "elim":
         line = "%s PERDEU A ÚLTIMA COROA · ELIMINADO" % name
     elif loser == int(r.accused):
-        line = "%s BLEFOU, O RELÓGIO DISPAROU · PERDEU UMA COROA" % name
+        line = "%s BLEFOU, O RELÓGIO DISPAROU · %s" % [name, "ELIMINADO" if Rules.LIVES == 1 else "PERDEU UMA COROA"]
     else:
-        line = "%s DUVIDOU À TOA, O RELÓGIO DISPAROU · PERDEU UMA COROA" % name
+        line = "%s DEU XEQUE À TOA, O RELÓGIO DISPAROU · %s" % [name, "ELIMINADO" if Rules.LIVES == 1 else "PERDEU UMA COROA"]
     var fs: int = ml[1]
-    var crowns_w := 3 * 44.0
+    var crowns_w := Rules.LIVES * 44.0
     fs = fit(line, "ui_sp4", fs, d.x - crowns_w - 120)
     var lw := tw(line, "ui_sp4", fs)
     var x0: float = ml[0].x - (lw + 30 + crowns_w) / 2.0
     text(line, Vector2(x0, ml[0].y), "ui_sp4", fs, Color("fff1d6"), -1, HORIZONTAL_ALIGNMENT_LEFT, 6, Color("2a0a06"))
-    _crowns(Vector2(x0 + lw + 30, ml[0].y - fs * 0.85), loser, 36.0, 8.0)
+    _crowns(Vector2(x0 + lw + 30 - (3 - Rules.LIVES) * 22.0, ml[0].y - fs * 0.85), loser, 36.0, 8.0)
 
 # ---------------------------------------------------------------- tutorial (salão do modo)
 func _draw_tutorial(d: Vector2):
@@ -795,10 +801,10 @@ func _draw_tutorial(d: Vector2):
     var title_pos := Vector2(150, 150) if not portrait else Vector2(86, 168)
     text("Como jogar", title_pos, "title", 104 if not portrait else 96, maroon, -1, HORIZONTAL_ALIGNMENT_LEFT, 6, Color("f6ecd2"))
     if not portrait:
-        text("Blefe Real", Vector2(0, 124), "ui_sp", 30, Color("5a3a22"), 1768, HORIZONTAL_ALIGNMENT_RIGHT)
+        text("Xeque", Vector2(0, 124), "ui_sp", 30, Color("5a3a22"), 1768, HORIZONTAL_ALIGNMENT_RIGHT)
         text("blefe de cartas no reino do xadrez", Vector2(0, 157), "ui_sp", 30, Color("5a3a22"), 1768, HORIZONTAL_ALIGNMENT_RIGHT)
     else:
-        text("Blefe Real · blefe de cartas no reino do xadrez", Vector2(90, 222), "ui_sp", 28, Color("5a3a22"))
+        text("Xeque · blefe de cartas no reino do xadrez", Vector2(90, 222), "ui_sp", 28, Color("5a3a22"))
     var panels := _tutorial_panels()
     var rects := []
     if not portrait:
@@ -808,7 +814,7 @@ func _draw_tutorial(d: Vector2):
     for i in 6: _tutorial_panel(rects[i], i + 1, panels[i], portrait)
     var foot_y := 975.0 if not portrait else 1712.0
     var fx := 150.0 if not portrait else 90.0
-    var parts := ["Como vencer: seja o ", "último jogador com coroa", "."]
+    var parts := ["Como vencer: seja o ", "último jogador de pé", "."]
     var x := fx
     var ffs := 38 if not portrait else 34
     for j in 3:
@@ -827,12 +833,12 @@ func _draw_tutorial(d: Vector2):
 
 func _tutorial_panels() -> Array:
     return [
-        {"title": "OBJETIVO", "text": "Cada jogador começa com *3 coroas*. Vence quem ficar por último com pelo menos uma.", "art": "crowns"},
+        {"title": "OBJETIVO", "text": "Quatro jogadores à mesa. Vence o *último jogador de pé*.", "art": "crowns"},
         {"title": "AS CARTAS", "text": "5 cartas para cada um. A mesa pede *Rei, Rainha ou Cavalo*. O *Peão Coroado* é coringa.", "art": "cards"},
         {"title": "SUA VEZ", "text": "Baixe de *1 a 3 cartas viradas* e diga que são a peça pedida. Pode ser verdade. Pode ser blefe.", "art": "backs"},
         {"title": "XEQUE", "text": "O próximo jogador joga ou aperta *XEQUE* na jogada anterior: as cartas dela são reveladas.", "art": "xeque"},
-        {"title": "RELÓGIO DE XEQUE", "text": "*Quem perde o desafio aciona o seu Relógio*: 3 posições, uma é xeque-mate. A cada aperto o perigo sobe.", "art": "clocks"},
-        {"title": "XEQUE-MATE", "text": "Se o Relógio disparar, é *xeque-mate*: perde uma coroa. Sem coroas, o jogador é eliminado.", "art": "mate"},
+        {"title": "RELÓGIO DE XEQUE", "text": "*Quem perde o desafio aciona o seu Relógio*: 6 posições, uma é xeque-mate. A cada aperto o perigo sobe.", "art": "clocks"},
+        {"title": "XEQUE-MATE", "text": "Se o Relógio disparar, é *xeque-mate*: o jogador está *fora da partida*.", "art": "mate"},
     ]
 
 func _tutorial_panel(r: Rect2, n: int, p: Dictionary, portrait: bool):
@@ -880,7 +886,14 @@ func _tutorial_art(a: Rect2, kind: String):
     var c := a.get_center()
     match kind:
         "crowns":
-            for i in 3: draw_texture_rect(ui.CROWN, Rect2(c + Vector2(-115 + i * 115 - 56, -48), Vector2(112, 94)), false)
+            # os 4 jogadores da mesa; só um fica de pé
+            var av := minf(a.size.y - 24, (a.size.x - 70) / 4.0)
+            for i in 4:
+                var ar := Rect2(c.x + (i - 1.5) * (av + 14) - av / 2.0, c.y - av / 2.0 + 4, av, av)
+                draw_rect(ar.grow(3), Color("120a06"))
+                draw_rect(ar.grow(2), Color("d8c08a"))
+                draw_texture_rect(ui.avatars[i] if ui.avatars.size() > i and ui.avatars[i] != null else ui.CARD_BACK, ar, false, Color.WHITE if i == 0 else Color(0.45, 0.45, 0.45))
+            draw_texture_rect(ui.CROWN, Rect2(c.x - 1.5 * (av + 14) - 20, c.y - av / 2.0 - 18, 40, 34), false)
         "cards":
             var names := ["rei", "rainha", "cavalo", "peao"]
             for i in 4:
@@ -906,15 +919,15 @@ func _tutorial_art(a: Rect2, kind: String):
             tex_center(ui.xeque_tex["normal"], Vector2(a.position.x + 10 + 216 * bsc, c.y), bsc)
             text("→", Vector2(x3 - 44, c.y + 12), "ui", 40, Color("e8b242"))
         "clocks":
-            var names2 := ["neutro", "perigo", "quase"]
+            var names2 := ["neutro", "perigo", "quase"]   # 6 posições: neutro → em perigo → quase disparando
             for i in 3:
                 tex_center(ui.clock_tex[names2[i]], c + Vector2((i - 1) * 140, 4), (a.size.y + 30) / 560.0)
                 if i < 2: text("→", Vector2(c.x + (i - 1) * 140 + 56, c.y + 12), "ui", 40, Color("e8b242"))
         "mate":
             tex_center(ui.clock_tex["disparado"], c + Vector2(-120, 4), (a.size.y + 40) / 560.0)
             text("→", Vector2(c.x - 30, c.y + 12), "ui", 40, Color("e8b242"))
-            for i in 3:
-                draw_texture_rect(ui.CROWN if i < 2 else ui.CROWN_LOST, Rect2(c.x + 20 + i * 62, c.y - 24, 56, 47), false)
+            draw_texture_rect(ui.CROWN_LOST, Rect2(c.x + 30, c.y - 34, 80, 67), false)
+            text("FORA", Vector2(c.x + 120, c.y + 12), "ui_sp4", 36, Color("ff5a52"))
 
 # ---------------------------------------------------------------- resultado
 func _draw_result(d: Vector2):
@@ -949,13 +962,13 @@ func _draw_result(d: Vector2):
     var ccx := fr.get_center().x
     text(nm, Vector2(ccx - 400, ny), "ui", 74, Color("f6ecd2"), 800, HORIZONTAL_ALIGNMENT_CENTER, 6)
     var crowns_left: int = g.lives[hero]
-    var sub := "ÚLTIMO DE PÉ · %d %s" % [crowns_left, "COROA RESTANTE" if crowns_left == 1 else "COROAS RESTANTES"]
+    var sub := "ÚLTIMO DE PÉ" if Rules.LIVES == 1 else "ÚLTIMO DE PÉ · %d %s" % [crowns_left, "COROA RESTANTE" if crowns_left == 1 else "COROAS RESTANTES"]
     if not won:
         sub = "VOCÊ FICOU EM %dº LUGAR" % g.placement(0)
     text(sub, Vector2(ccx - 460, ny + 52), "ui_sp4", 30, Color("e8b242"), 920, HORIZONTAL_ALIGNMENT_CENTER, 4)
-    for i in 3:
+    for i in Rules.LIVES:
         var lost := i >= crowns_left
-        draw_texture_rect(ui.CROWN_LOST if lost else ui.CROWN, Rect2(ccx - 180 + i * 133 - 48, ny + 92, 96, 81), false)
+        draw_texture_rect(ui.CROWN_LOST if lost else ui.CROWN, Rect2(ccx - (Rules.LIVES - 1) * 66.5 + i * 133 - 48, ny + 92, 96, 81), false)
     # faixa vermelha: xeque-mate final
     var last_loser := -1
     if not g.finish_order.is_empty(): last_loser = int(g.finish_order[g.finish_order.size() - 1])
@@ -990,8 +1003,8 @@ func _draw_result(d: Vector2):
         if s != 0: chip(Rect2(nx + tw(g.names[s], "ui", 34) + 10, rr.position.y + 12, 48, 28), "BOT", Color("9fd0ff"), Color("9fd0ff"), Color("13314f"), 16)
         var line := "Último de pé" if i == 0 else ("Xeque-mate final na rodada %d" % g.eliminated_round[s] if i == 1 else "Eliminad%s na rodada %d" % ["a" if s == 1 else "o", g.eliminated_round[s]])
         text(line, Vector2(nx, rr.position.y + 66), "ui_sp", 22, Color("c9d6cf"))
-        for c in 3:
-            draw_texture_rect(ui.CROWN_LOST if c >= g.lives[s] else ui.CROWN, Rect2(rr.end.x - 160 + c * 52, rr.get_center().y - 18, 42, 35), false)
+        for c in Rules.LIVES:
+            draw_texture_rect(ui.CROWN_LOST if c >= g.lives[s] else ui.CROWN, Rect2(rr.end.x - 56 - (Rules.LIVES - 1 - c) * 52, rr.get_center().y - 18, 42, 35), false)
     # botões
     if not portrait:
         button_gold(Rect2(265, 935, 485, 82), "JOGAR NOVAMENTE", "again", true, 54)

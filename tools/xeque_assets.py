@@ -1,12 +1,12 @@
-"""Blefe Real · versões do jogo das artes aprovadas (mesmos pixels, só reduzidas para o tamanho em
+"""Xeque · versões do jogo das artes aprovadas (mesmos pixels, só reduzidas para o tamanho em
 que aparecem na tela, para não serrilhar ao encolher no navegador):
   cartas 720x1008 -> 360x504 · relógio com efeito 1200x1120 -> 600x560.
-Rodar depois de tools/blefe_card_labels.py."""
+Rodar depois de tools/xeque_card_labels.py."""
 import os, glob
 from PIL import Image
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-SRC = os.path.join(ROOT, "tools/blefe_src")
-ART = os.path.join(ROOT, "blefe/art")
+SRC = os.path.join(ROOT, "tools/xeque_src")
+ART = os.path.join(ROOT, "xeque/art")
 os.makedirs(os.path.join(ART, "cartas"), exist_ok=True)
 for n in ["rei", "rainha", "cavalo", "peao"]:
     Image.open(os.path.join(SRC, "saida/carta_%s.png" % n)).resize((360, 504), Image.LANCZOS).save(os.path.join(ART, "cartas/carta_%s.png" % n))

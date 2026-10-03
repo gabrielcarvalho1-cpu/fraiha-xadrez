@@ -1,7 +1,7 @@
 extends SceneTree
-## BLEFE REAL · motor de regras, relógio e bots (sem interface). Sementes fixas para o sorteio.
-const Rules := preload("res://blefe/rules.gd")
-const AI := preload("res://blefe/ai.gd")
+## XEQUE · motor de regras, relógio e bots (sem interface). Sementes fixas para o sorteio.
+const Rules := preload("res://xeque/rules.gd")
+const AI := preload("res://xeque/ai.gd")
 var checks := 0
 var failures := 0
 
@@ -61,10 +61,10 @@ func run():
     check(g.turn == 1 and g.can_challenge(1) and not g.can_challenge(2), "só o próximo jogador pode dar XEQUE")
     check(g.challenge(0).is_empty(), "quem jogou não desafia a si mesmo")
     # ---------- XEQUE: mistura verdade + falso = blefe ----------
-    g.clocks[0] = [Rules.SAFE, Rules.SAFE, Rules.MATE]
+    g.clocks[0] = [Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.MATE]
     var r := g.challenge(1)
     check(not r.truthful and r.loser == 0 and r.false_cards == ["cavalo"], "Rainha + Cavalo = BLEFE: quem jogou perde (XEQUE correto)")
-    check(r.clock == Rules.SAFE and not r.mate and g.lives[0] == 3 and g.clock_left(0) == 2, "relógio SEGURO: sem perder Coroa, posição consumida")
+    check(r.clock == Rules.SAFE and not r.mate and g.alive(0) and g.clock_left(0) == 5, "relógio SEGURO: continua vivo, posição consumida")
     check(g.state == Rules.ROUND_END and g.next_starter == 0, "todo XEQUE encerra a rodada; quem perdeu começa a próxima")
     check(g.state_log.slice(-4) == [Rules.CHALLENGE, Rules.REVEAL, Rules.CLOCK_RESOLUTION, Rules.ROUND_END], "estados: CHALLENGE → REVEAL → CLOCK_RESOLUTION → ROUND_END")
     check(g.play(1, [0]).is_empty() and g.challenge(1).is_empty(), "rodada encerrada: nenhuma ação até a próxima rodada")
@@ -76,38 +76,55 @@ func run():
     g = new_game(5)
     force(g, 2, "rei", [["cavalo", "cavalo"], ["rei", "rainha"], ["rei", "peao", "cavalo"], ["rainha", "rainha"]])
     g.play(2, [0, 1])
-    g.clocks[3] = [Rules.MATE, Rules.SAFE, Rules.SAFE]
+    g.clocks[3] = [Rules.SAFE, Rules.MATE, Rules.SAFE, Rules.SAFE]
     r = g.challenge(3)
-    check(r.truthful and r.loser == 3, "Rei + Peão Coroado = VERDADE: quem deu XEQUE perde (XEQUE incorreto)")
-    check(r.mate and g.lives[3] == 2 and r.lost_crown, "XEQUE-MATE tira exatamente 1 Coroa")
-    check(g.clock_left(3) == 3 and count(g.clocks[3], Rules.MATE) == 1 and count(g.clocks[3], Rules.SAFE) == 2 and g.clock_cycles[3] == 2, "relógio reinicia (2 seguras + 1 xeque-mate) só para esse jogador")
+    check(r.truthful and r.loser == 3 and not r.mate and g.alive(3), "Rei + Peão Coroado = VERDADE: quem deu XEQUE perde (XEQUE incorreto)")
+    check(g.clock_left(3) == 3 and g.clock_left(2) == 6, "o relógio guarda o estado entre rodadas (só o de quem acionou anda)")
+    g.next_round()
+    force(g, 2, "rei", [["cavalo"], ["rei"], ["cavalo", "rainha"], ["rainha", "rainha"]])
+    g.play(2, [0])
+    g.clocks[2] = [Rules.SAFE, Rules.MATE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE]
+    r = g.challenge(3)
+    check(not r.truthful and r.loser == 2 and not r.mate and g.clock_left(2) == 5 and g.clock_left(3) == 3, "XEQUE correto: quem blefou aciona o relógio DELE")
+    g = new_game(6)
+    force(g, 2, "rei", [["cavalo"], ["rei"], ["rei", "peao"], ["rainha"]])
+    g.play(2, [0, 1])
+    g.clocks[3] = [Rules.MATE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE]
+    r = g.challenge(3)
+    check(r.truthful and r.mate and r.eliminated and not g.alive(3) and g.lives[3] == 0, "XEQUE-MATE (regra da WePlay): eliminado na hora")
+    check(g.hands[3].is_empty() and g.eliminated_round[3] == g.round_no and g.finish_order == [3], "eliminado sai da mesa e entra na ordem de eliminação")
     # ---------- relógio: ciclo sem reposição ----------
     g = new_game(9)
-    check(g.clocks.all(func(c): return c.size() == 3 and count(c, Rules.MATE) == 1), "relógio começa com 2 SEGURAS + 1 XEQUE-MATE")
-    check(is_equal_approx(g.clock_chance(1), 1.0 / 3.0), "1º acionamento: 1 em 3")
+    check(Rules.LIVES == 1 and Rules.CLOCK_SLOTS == 6, "regra da WePlay: 1 vida, relógio de 6 posições")
+    check(g.clocks.all(func(c): return c.size() == 6 and count(c, Rules.MATE) == 1), "relógio começa com 5 SEGURAS + 1 XEQUE-MATE")
+    check(is_equal_approx(g.clock_chance(1), 1.0 / 6.0), "1º acionamento: 1 em 6")
     var orders := {}
-    var mate_at := [0, 0, 0]
-    for sd in range(1, 301):
+    var mate_at := [0, 0, 0, 0, 0, 0]
+    for sd in range(1, 601):
         var gc := Rules.new()
         gc.setup(sd)
         var c: Array = gc.clocks[0]
         orders[str(c)] = true
         mate_at[c.find(Rules.MATE)] += 1
-    check(orders.size() == 3 and mate_at.all(func(n): return n > 70), "posição do XEQUE-MATE embaralhada (%s em 300 ciclos)" % str(mate_at))
-    g.clocks[1] = [Rules.SAFE, Rules.SAFE, Rules.MATE]
-    g._pull_clock(1)
-    check(is_equal_approx(g.clock_chance(1), 0.5), "depois de 1 segura: 1 em 2")
-    g._pull_clock(1)
-    check(is_equal_approx(g.clock_chance(1), 1.0) and g.clocks[1] == [Rules.MATE], "depois de 2 seguras: o próximo é XEQUE-MATE (1 em 1)")
+    check(orders.size() == 6 and mate_at.all(func(n): return n > 70), "posição do XEQUE-MATE embaralhada (%s em 600 ciclos)" % str(mate_at))
+    g.clocks[1] = [Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.MATE]
+    var chances := []
+    var all_safe := true
+    for i in 5:
+        chances.append(snappedf(g.clock_chance(1), 0.001))
+        if g._pull_clock(1) != Rules.SAFE: all_safe = false
+    check(all_safe and g.clock_left(1) == 1, "5 posições seguras consumidas, sem reposição")
+    check(chances == [snappedf(1.0 / 6, 0.001), snappedf(1.0 / 5, 0.001), 0.25, snappedf(1.0 / 3, 0.001), 0.5], "chance progride 1/6 → 1/5 → 1/4 → 1/3 → 1/2 (%s)" % str(chances))
+    check(is_equal_approx(g.clock_chance(1), 1.0) and g.clocks[1] == [Rules.MATE], "depois de 5 seguras: o próximo é XEQUE-MATE (1 em 1)")
     # ---------- eliminação, pular eliminado/sem cartas, vitória ----------
     g = new_game(21)
-    g.lives = [1, 3, 3, 3]
+    g.lives = [1, 1, 1, 1]
     force(g, 0, "cavalo", [["rei"], ["rei", "rei"], ["cavalo"], ["rainha", "rainha"]])
     g.play(0, [0])          # blefe; jogador 0 fica sem cartas
     check(g.turn == 1, "próximo é o jogador 1")
     g.clocks[0] = [Rules.MATE, Rules.SAFE, Rules.SAFE]
     r = g.challenge(1)
-    check(r.eliminated and g.lives[0] == 0 and not g.alive(0) and g.eliminated_round[0] == g.round_no, "0 Coroas: eliminado")
+    check(r.eliminated and g.lives[0] == 0 and not g.alive(0) and g.eliminated_round[0] == g.round_no, "XEQUE-MATE: eliminado")
     check(g.next_starter == 1, "eliminado não começa: o próximo vivo inicia a rodada")
     g.next_round()
     check(g.hands[0].is_empty() and g.hands[1].size() == 5, "eliminado não recebe cartas; vivos recebem 5")
@@ -132,7 +149,7 @@ func run():
     check(g.state == Rules.ROUND_END or g.state == Rules.MATCH_END, "rodada resolvida pelo XEQUE automático")
     # vitória
     g = new_game(24)
-    g.lives = [0, 1, 0, 2]
+    g.lives = [0, 1, 0, 1]
     g.finish_order = [0, 2]
     force(g, 1, "rei", [[], ["cavalo", "rei"], [], ["rei", "rei"]])
     g.play(1, [0])
@@ -215,7 +232,7 @@ func run():
     # suspeita cresce com declaração impossível
     g = new_game(50)
     force(g, 1, "rei", [["rei", "rei", "rei", "peao", "cavalo"], ["rainha", "cavalo", "rainha"], [], []])
-    g.lives = [3, 3, 3, 3]
+    g.lives = [1, 1, 1, 1]
     g.play(1, [0, 1, 2])
     var p3 := AI.p_last_play_true(g.public_state(2), ["rei", "rei", "rei", "peao", "peao"])
     var p_low := AI.p_last_play_true(g.public_state(2), ["cavalo", "cavalo", "rainha", "rainha", "cavalo"])

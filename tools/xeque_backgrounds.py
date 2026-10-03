@@ -1,5 +1,5 @@
-"""Blefe Real · fundos das telas de Tutorial e Resultado, tirados das próprias telas de referência
-aprovadas (tools/blefe_src/telas/05_tutorial.jpg e 06_resultado.jpg), só sem o conteúdo, para o jogo
+"""Xeque · fundos das telas de Tutorial e Resultado, tirados das próprias telas de referência
+aprovadas (tools/xeque_src/telas/05_tutorial.jpg e 06_resultado.jpg), só sem o conteúdo, para o jogo
 desenhar painéis, textos e botões vivos por cima nas mesmas posições:
   • tutorial_fundo.png: mesma moldura de madeira e pergaminho; o pergaminho por baixo dos painéis é
     preenchido com a cor do próprio pergaminho em volta (preenchimento por convolução normalizada).
@@ -9,8 +9,8 @@ import os
 import numpy as np
 from PIL import Image, ImageFilter
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-SRC = os.path.join(ROOT, "tools/blefe_src/telas")
-OUT = os.path.join(ROOT, "blefe/art/telas")
+SRC = os.path.join(ROOT, "tools/xeque_src/telas")
+OUT = os.path.join(ROOT, "xeque/art/telas")
 os.makedirs(OUT, exist_ok=True)
 
 from scipy.ndimage import gaussian_filter

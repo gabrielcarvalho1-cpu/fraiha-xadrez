@@ -1,9 +1,9 @@
-# R33 · BLEFE REAL
+# R33 · XEQUE (antes "Blefe Real")
 
 Modo de blefe de cartas, isolado do xadrez. 1 humano + 3 bots, partida completa: Home → tutorial →
 partida → XEQUE → Relógio de Xeque → XEQUE-MATE → eliminações → vitória/derrota → histórico.
 
-`mode_id = blefe_real` · `ruleset_version = 1`. Sem Stockfish, sem Ranked/Elo/PL, sem servidor,
+`mode_id = xeque` · `ruleset_version = 1`. Sem Stockfish, sem Ranked/Elo/PL, sem servidor,
 sem migração. Nada do xadrez foi alterado além da linha nova da Home e do filtro do histórico.
 
 ## Decisões do dono do projeto (R33)
@@ -11,7 +11,7 @@ sem migração. Nada do xadrez foi alterado além da linha nova da Home e do fil
   2 Peão Coroado = coringa), peça da rodada Rei/Rainha/Cavalo, Relógio de Xeque POR JOGADOR com
   3 posições (2 seguras + 1 xeque-mate, sem reposição).
 * As cartas aprovadas traziam outra regra impressa: só a faixa da legenda foi trocada (e o selo ×N).
-* Nome "Blefe Real" (as telas de referência diziam "Marcha Real", que já é o modo de corrida da R32);
+* Nome "Xeque" (as telas de referência diziam "Marcha Real", que já é o modo de corrida da R32);
   nova linha na Home, logo abaixo da MARCHA REAL.
 
 ## Arquitetura
@@ -55,26 +55,38 @@ relógio, coroa, eliminação, vitória); a tela só apresenta (revelar → rel�
 | `mesa/mesa_cena_com_tapete.png` | Cena da partida (posição/escala medidas nas 3 telas de referência) |
 | `relogio/relogio_{neutro,pulsando,perigo,quase,disparado}.png` | Relógio no centro (3 → neutro, 2 → perigo, 1 → quase; pulsando ao acionar; disparado no XEQUE-MATE) |
 | `cartas/carta_{rei,rainha,cavalo,peao}.png` + `carta_verso.png` | Mão, pilha, revelação, tutorial (faixa da legenda trocada, ver abaixo) |
-| `cartas/carta_{bispo,torre}.png` | Não usadas (fora do baralho do Blefe Real) |
+| `cartas/carta_{bispo,torre}.png` | Não usadas (fora do baralho do Xeque) |
 | `interface/botao_xeque_*.png` (5 estados) | Botão XEQUE (normal, hover, pressionado, desabilitado, ativado) |
 | `interface/botao_dourado.png` / `botao_escuro.png` | JOGAR CARTAS, JOGAR AGORA, JOGAR NOVAMENTE / VOLTAR, VER TUTORIAL, VOLTAR AO MENU (texto vivo por cima) |
 | `interface/coroa.png` / `coroa_perdida.png` | Coroas das placas, do XEQUE-MATE e do resultado |
 | `interface/referencia_placas_jogador.png`, `referencia_coroas.png` | Referência dos 8 estados da placa (montada no jogo, como diz a ESPECIFICAÇÃO §10) |
-| `fontes/Jersey20`, `Jacquard24` (OFL) | Textos e títulos ("Blefe Real", "Xeque-Mate", "Vitória") |
+| `fontes/Jersey20`, `Jacquard24` (OFL) | Textos e títulos ("Xeque", "Xeque-Mate", "Vitória") |
 | `telas_referencia/05_tutorial.jpg`, `06_resultado.jpg` | Fundos do tutorial e do resultado (o próprio pergaminho/raios, sem o conteúdo) |
 | `telas_referencia/01..04` | Medidas e comparação lado a lado |
 
-Ferramentas (repetíveis): `tools/blefe_card_labels.py` (legenda + selo ×N), `tools/blefe_assets.py`
-(reduz para o tamanho de tela, botões sem texto), `tools/blefe_backgrounds.py` (fundos),
+Ferramentas (repetíveis): `tools/xeque_card_labels.py` (legenda + selo ×N), `tools/xeque_assets.py`
+(reduz para o tamanho de tela, botões sem texto), `tools/xeque_backgrounds.py` (fundos),
 `tools/home_menu_11rows.py` (Home com 11 linhas; substitui `home_menu_10rows.py`).
 
 Telas sem referência própria (desenhadas com os mesmos painéis/cores/fontes): tutorial e resultado no
 celular em pé, derrota, menu ≡, confirmação de saída, aviso "relógio não disparou".
 
 ## Testes
-* `tests/blefe_rules_test.gd` (53): baralho, distribuição, validação, XEQUE certo/errado, coringa,
+* `tests/xeque_rules_test.gd` (53): baralho, distribuição, validação, XEQUE certo/errado, coringa,
   relógio sem reposição e reinício, coroas, eliminação, pular sem cartas/eliminados, XEQUE automático,
   vitória, timeout, estado público sem informação privada, bots legais, 120 partidas sem travar, perfis.
-* `tests/blefe_ui_test.gd` (33): Home, tutorial, seleção (máx. 3), toque duplo (JOGAR, XEQUE, carta),
+* `tests/xeque_ui_test.gd` (33): Home, tutorial, seleção (máx. 3), toque duplo (JOGAR, XEQUE, carta),
   XEQUE → relógio → xeque-mate, timeout, partida inteira, histórico (mode_id/ruleset_version, posição,
   duração, vencedor, estado final), jogar de novo, abandono com confirmação, filtro, 3 formatos.
+
+## R33.1 · ajustes pedidos pelo dono do projeto
+* Nome do modo: **XEQUE** (era "Blefe Real"); questionar a jogada também é XEQUE. `mode_id = xeque`.
+* Lógica igual ao jogo de mentiras da WePlay (estilo Liar's Bar): cada jogador tem o próprio
+  Relógio de Xeque com **6 posições e 1 XEQUE-MATE** (o tambor do revólver), consumidas sem
+  reposição e guardadas entre as rodadas (1/6 → 1/5 → … → 1/1). **XEQUE-MATE elimina na hora**
+  (1 vida; a coroa da placa só mostra vivo/eliminado). Quem acionou o relógio começa a rodada seguinte.
+* Medidor do relógio com as 5 casas da arte (apertos sobrevividos) e os estados da especificação
+  (0 neutro, 1–2 pulsando, 3 em perigo, 4–5 quase disparando).
+* Relógio menor sobre a mesa (≈73% do tamanho da referência) e no XEQUE-MATE (≈78%).
+* Home: logo reduzido para 82% (`tools/home_menu_11rows.py` → `home_forest_v5.png`), painel sobe e
+  termina onde terminava na arte original — o chão de pedra embaixo do painel voltou a aparecer.

@@ -1,8 +1,8 @@
 extends SceneTree
-## BLEFE REAL na interface: entrada pela Home, tutorial, partida completa contra 3 bots, seleção de
+## XEQUE na interface: entrada pela Home, tutorial, partida completa contra 3 bots, seleção de
 ## cartas, JOGAR/XEQUE travados contra toque duplo, tempo esgotado, XEQUE-MATE, abandono e
-## histórico comum (mode_id = blefe_real, ruleset_version = 1, sem ANALISAR).
-const Rules := preload("res://blefe/rules.gd")
+## histórico comum (mode_id = xeque, ruleset_version = 1, sem ANALISAR).
+const Rules := preload("res://xeque/rules.gd")
 const BACKUP := ["user://match_history.json"]
 var checks := 0
 var failures := 0
@@ -49,11 +49,11 @@ func run():
     var hub = stage.hub
     # ---------- Home ----------
     var titles: Array = hub.menu_buttons.map(func(b): return hub.title_of(b))
-    check(titles.size() == 11 and titles[5] == "BLEFE REAL", "Home: BLEFE REAL logo abaixo da MARCHA REAL (11 linhas)")
+    check(titles.size() == 11 and titles[5] == "XEQUE", "Home: XEQUE logo abaixo da MARCHA REAL (11 linhas)")
     hub.menu_buttons[5].pressed.emit()
     await frames(6)
-    var ui = hub.blefe
-    check(ui != null and ui.visible and ui.mode == "tutorial", "BLEFE REAL abre no tutorial")
+    var ui = hub.xeque
+    check(ui != null and ui.visible and ui.mode == "tutorial", "XEQUE abre no tutorial")
     check(hit_center(ui, "tut_play") != Vector2(-1, -1) and hit_center(ui, "tut_back") != Vector2(-1, -1), "tutorial com JOGAR AGORA e VOLTAR")
     ui.seed_override = 77
     ui._on_hit("tut_play")
@@ -93,7 +93,7 @@ func run():
     g.target = "rainha"
     g.last_play = {"seat": 3, "cards": ["rei", "rainha"], "count": 2}
     g.plays.append(g.last_play)
-    g.clocks[3] = [Rules.MATE, Rules.SAFE, Rules.SAFE]
+    g.clocks[3] = [Rules.MATE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE]
     var lives3: int = g.lives[3]
     await frames(2)
     var xp := hit_center(ui, "xeque")
@@ -101,7 +101,7 @@ func run():
     touch(ui.view, ui, xp)
     touch(ui.view, ui, xp)
     check(ui.phase == "reveal" and ui.input_locked and int(ui.result.loser) == 3 and not bool(ui.result.truthful), "XEQUE: revela, blefe pego (Rei + Rainha), entradas travadas")
-    check(g.lives[3] == lives3 - 1, "o motor já resolveu: Torre Velha perdeu 1 Coroa (animação não é a autoridade)")
+    check(g.lives[3] == lives3 - 1 and not g.alive(3), "o motor já resolveu: Torre Velha eliminada no XEQUE-MATE (animação não é a autoridade)")
     ui.toggle_card(0)
     check(ui.selected.is_empty(), "durante a resolução nenhuma carta pode ser escolhida")
     ui._advance_phase()
@@ -110,7 +110,7 @@ func run():
     check(ui.phase == "mate" and ui.seat_status(3).id == "xeque_mate" and ui.clock_visual(3) == "disparado", "XEQUE-MATE: relógio disparado e placa XEQUE-MATE!")
     await frames(2)
     ui.skip_presentation()
-    check(ui.phase == "" and g.round_no >= 2 and g.state == Rules.TURN_WAITING and g.turn == 3, "nova rodada começa por quem perdeu o desafio")
+    check(ui.phase == "" and g.round_no >= 2 and g.state == Rules.TURN_WAITING and g.turn == 0 and g.hands[3].is_empty(), "eliminada: a nova rodada começa pelo próximo vivo, sem cartas para ela")
     # ---------- tempo esgotado ----------
     g.turn = 0
     g.last_play = {"seat": 2, "cards": ["cavalo"], "count": 1}
@@ -139,8 +139,8 @@ func run():
     check(ui.mode == "over" and g.state == Rules.MATCH_END and g.winner >= 0, "partida inteira termina (%d passos, %d rodadas)" % [guard, g.round_no])
     check(g.alive_seats().size() == 1 and g.placement(g.winner) == 1, "último com Coroa é o vencedor")
     var mh = stage.match_history
-    var rows: Array = mh.entries.filter(func(e): return String(e.get("mode_id", "")) == "blefe_real")
-    check(rows.size() == 1 and String(rows[0].ruleset_version) == "1" and String(rows[0].mode) == "blefe" and String(rows[0].result) in ["win", "loss"], "histórico comum: mode_id blefe_real, ruleset_version 1")
+    var rows: Array = mh.entries.filter(func(e): return String(e.get("mode_id", "")) == "xeque")
+    check(rows.size() == 1 and String(rows[0].ruleset_version) == "1" and String(rows[0].mode) == "xeque" and String(rows[0].result) in ["win", "loss"], "histórico comum: mode_id xeque, ruleset_version 1")
     check(int(rows[0].players) == 4 and int(rows[0].placement) >= 1 and rows[0].has("duration_s") and int(rows[0].data.winner_player_id) == g.winner and rows[0].data.final.size() == 4, "histórico: jogadores, posição final, duração, vencedor e estado final dos 4")
     await frames(2)
     check(hit_center(ui, "again") != Vector2(-1, -1) and hit_center(ui, "over_menu") != Vector2(-1, -1), "resultado: JOGAR NOVAMENTE e VOLTAR AO MENU")
@@ -157,18 +157,18 @@ func run():
     ui._on_hit("menu_quit")
     ui._on_hit("quit_yes")
     await frames(2)
-    rows = mh.entries.filter(func(e): return String(e.get("mode_id", "")) == "blefe_real")
+    rows = mh.entries.filter(func(e): return String(e.get("mode_id", "")) == "xeque")
     check(not ui.visible and ui.g == null and rows.size() == 2 and String(rows[0].result) == "abandon", "confirmar: abandono registrado, partida encerrada (sem partida fantasma)")
     # ---------- histórico ----------
     hub.show_page("history")
-    hub.history_filter = "blefe"
+    hub.history_filter = "xeque"
     hub.refresh_history()
     await frames(2)
     var row = hub.history_list.get_node_or_null("HistoryRow")
-    check(row != null and row.find_child("HistoryAnalyze", true, false) == null and hub.history_list.get_child_count() == 2, "filtro BLEFE REAL: 2 partidas, sem ANALISAR")
+    check(row != null and row.find_child("HistoryAnalyze", true, false) == null and hub.history_list.get_child_count() == 2, "filtro XEQUE: 2 partidas, sem ANALISAR")
     hub.history_filter = "all"
     # ---------- formatos ----------
-    hub.open_blefe()
+    hub.open_xeque()
     for sz in [Vector2i(1080, 1920), Vector2i(1950, 900), Vector2i(1920, 1080)]:
         root.size = sz
         await frames(3)

@@ -33,7 +33,7 @@ func run():
     hub.entitlements.clear_server()
     # ---------- Home ----------
     var titles: Array = hub.menu_buttons.map(func(b): return hub.title_of(b))
-    check(titles.size() == 11 and titles[4] == "MARCHA REAL" and titles[5] == "BLEFE REAL" and titles[9] == "HISTÓRICO DE PARTIDAS" and titles[8] == "CONHEÇA O FRAIHA", "Home: MARCHA REAL, BLEFE REAL e HISTÓRICO DE PARTIDAS (abaixo de CONHEÇA O FRAIHA)")
+    check(titles.size() == 11 and titles[4] == "MARCHA REAL" and titles[5] == "XEQUE" and titles[9] == "HISTÓRICO DE PARTIDAS" and titles[8] == "CONHEÇA O FRAIHA", "Home: MARCHA REAL, XEQUE e HISTÓRICO DE PARTIDAS (abaixo de CONHEÇA O FRAIHA)")
     var ok_rows := true
     for i in range(1, hub.menu_buttons.size()):
         if hub.menu_buttons[i].position.y < hub.menu_buttons[i - 1].position.y + hub.menu_buttons[i - 1].size.y: ok_rows = false

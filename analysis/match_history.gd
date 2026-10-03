@@ -3,7 +3,7 @@ extends Node
 ## ranqueada, local e contra amigo) fica guardada NESTE aparelho com os lances, para rever a análise
 ## (se já foi analisada) ou analisar depois (usa a cota de análise; Club = ilimitado).
 ## user://match_history.json — últimas MAX partidas. Não é placar oficial: PL/Ranked continuam no servidor.
-## Camada COMUM a todos os modos: cada registro tem mode_id (xadrez = "chess", "marcha_real", "blefe_real"…),
+## Camada COMUM a todos os modos: cada registro tem mode_id (xadrez = "chess", "marcha_real", "xeque"…),
 ## ruleset_version e os dados próprios do modo (xadrez: "record" com os lances, para análise).
 signal changed
 
@@ -73,7 +73,7 @@ func record_of(e: Dictionary):
     return Record.from_dict(d) if d is Dictionary else null
 
 static func mode_name(mode: String) -> String:
-    return {"bot": "Contra o computador", "casual": "Online casual", "ranked": "Ranqueada", "local": "Local", "friend": "Contra amigo", "marcha": "Marcha Real", "blefe": "Blefe Real"}.get(mode, mode)
+    return {"bot": "Contra o computador", "casual": "Online casual", "ranked": "Ranqueada", "local": "Local", "friend": "Contra amigo", "marcha": "Marcha Real", "xeque": "Xeque"}.get(mode, mode)
 
 static func result_name(result: String, mode: String) -> String:
     if mode == "local": return "PARTIDA LOCAL"

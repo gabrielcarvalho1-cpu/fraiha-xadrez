@@ -17,10 +17,10 @@ const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
 const APP_VERSION = "0.33"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
-const FOREST = preload("res://ui_v022/assets/home_forest_v4.png")   # R33: menu de 11 linhas (tools/home_menu_11rows.py)
+const FOREST = preload("res://ui_v022/assets/home_forest_v5.png")   # R33.1: logo menor + menu de 11 linhas (tools/home_menu_11rows.py)
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
-const MENU_ROWS := [Vector2(338.9, 43.1), Vector2(387.6, 43.9), Vector2(436.4, 56.9), Vector2(498.1, 44.7), Vector2(548.5, 44.7), Vector2(598.9, 44.7), Vector2(649.2, 44.7), Vector2(700.4, 45.5), Vector2(752.4, 45.5), Vector2(803.6, 44.7), Vector2(854.8, 45.5)]
-const MENU_SCALE := 0.8125
+const MENU_ROWS := [Vector2(288.8, 42.8), Vector2(337.2, 43.6), Vector2(385.7, 56.5), Vector2(447.0, 44.4), Vector2(497.0, 44.4), Vector2(547.0, 44.4), Vector2(597.0, 44.4), Vector2(647.9, 45.2), Vector2(699.5, 45.2), Vector2(750.3, 44.4), Vector2(801.2, 45.2)]
+const MENU_SCALE := 0.8068
 const FOREST_V2 = FOREST
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
@@ -287,7 +287,7 @@ func _build():
     # transparente por cima — a arte original fica intacta. Só aparece com a arte oficial.
     var details = TextureRect.new()
     details.name = "ForestDetails"
-    details.texture = preload("res://ui_v022/assets/home_forest_v3_details.png")
+    details.texture = preload("res://ui_v022/assets/home_forest_v5_details.png")
     details.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     details.stretch_mode = TextureRect.STRETCH_SCALE
     details.size = DESIGN
@@ -321,10 +321,10 @@ func _build():
     theme_frame.hide()
     # JOGAR LOCAL saiu da Home pública; o modo continua disponível internamente (play_local_requested).
     # R32: + MARCHA REAL (novo modo) e + HISTÓRICO DE PARTIDAS (abaixo de CONHEÇA O FRAIHA)
-    # R33: + BLEFE REAL (novo modo de blefe de cartas), logo abaixo da MARCHA REAL
-    var titles = ["JOGAR CONTRA O COMPUTADOR", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "MARCHA REAL", "BLEFE REAL", "AMIGOS", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "HISTÓRICO DE PARTIDAS", "SAIR"]
+    # R33: + XEQUE (novo modo de blefe de cartas), logo abaixo da MARCHA REAL
+    var titles = ["JOGAR CONTRA O COMPUTADOR", "JOGAR ONLINE", "JOGAR RANQUEADO", "LIGAS E RANKING", "MARCHA REAL", "XEQUE", "AMIGOS", "CONFIGURAÇÕES", "CONHEÇA O FRAIHA", "HISTÓRICO DE PARTIDAS", "SAIR"]
     var subtitles = ["Treine e evolua seu jogo", "Partida casual · fila automática", "Compita, evolua e conquiste seu lugar", "Acompanhe seu progresso", "Novo modo · cartas e corrida", "Novo modo · blefe de cartas", "Amigos, mensagens e convites", "Áudio, vídeo e preferências", "Sobre o projeto", "Suas partidas e análises", "Até a próxima partida!"]
-    var actions = [func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), open_marcha, open_blefe, func(): friends_requested.emit(), func(): show_page("settings"), func(): show_page("about"), func(): show_page("history"), func(): quit_requested.emit()]
+    var actions = [func(): show_page("bot"), func(): play_online_requested.emit(), func(): ranked_requested.emit(), func(): show_page("ranking"), open_marcha, open_xeque, func(): friends_requested.emit(), func(): show_page("settings"), func(): show_page("about"), func(): show_page("history"), func(): quit_requested.emit()]
     var icons = [1,2,3,3,5,5,0,4,5,5,6]
     for i in range(titles.size()):
         var row: Vector2 = MENU_ROWS[i]
@@ -1152,7 +1152,7 @@ func _refresh_avatars():
 var history_list: VBoxContainer = null
 var history_filter := "all"
 var history_filter_buttons := {}
-const HISTORY_FILTERS := [["all", "TODAS"], ["bot", "COMPUTADOR"], ["casual", "ONLINE"], ["ranked", "RANQUEADAS"], ["local", "LOCAL"], ["marcha", "MARCHA REAL"], ["blefe", "BLEFE REAL"]]
+const HISTORY_FILTERS := [["all", "TODAS"], ["bot", "COMPUTADOR"], ["casual", "ONLINE"], ["ranked", "RANQUEADAS"], ["local", "LOCAL"], ["marcha", "MARCHA REAL"], ["xeque", "XEQUE"]]
 
 func _build_history_page():
     var panel = _wide_page("history", "HISTÓRICO DE PARTIDAS")
@@ -1205,7 +1205,7 @@ func build_history_list(parent: VBoxContainer, compact: bool):
         shown += 1
         parent.add_child(_history_row(entry, compact, st, mh))
     if shown == 0:
-        var empty = _label(parent, "Nenhuma partida aqui ainda. As partidas terminadas (contra o computador, online, ranqueadas, locais, da Marcha Real e do Blefe Real) aparecem neste histórico; as de xadrez ficam prontas para analisar.", 16, MUTED)
+        var empty = _label(parent, "Nenhuma partida aqui ainda. As partidas terminadas (contra o computador, online, ranqueadas, locais, da Marcha Real e do Xeque) aparecem neste histórico; as de xadrez ficam prontas para analisar.", 16, MUTED)
         empty.name = "HistoryEmpty"
 
 func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
@@ -1240,7 +1240,7 @@ func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
         _label(info, head, 18, colm).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
         var dm := Time.get_datetime_dict_from_unix_time(int(e.get("finished_at", e.get("started_at", 0))))
         var data: Dictionary = e.get("data", {}) if e.get("data") is Dictionary else {}
-        if String(e.get("mode_id", "")) == "blefe_real":
+        if String(e.get("mode_id", "")) == "xeque":
             var dur := int(e.get("duration_s", 0))
             _label(info, "%02d/%02d/%d %02d:%02d  ·  %d rodadas  ·  %dº de %d  ·  %d:%02d min" % [dm.day, dm.month, dm.year, dm.hour, dm.minute, int(data.get("rounds", e.get("plies", 0))), int(e.get("placement", 0)), int(e.get("players", 4)), dur / 60, dur % 60], 14, MUTED).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
             _label(info, "Modo de blefe · sem análise de lances", 14, MUTED)
@@ -1719,13 +1719,13 @@ func open_club():
 
 ## R32 · MARCHA REAL (novo modo; Club ilimitado, sem Club 1 partida por dia).
 var marcha = null
-var blefe = null
-func open_blefe():
-    if blefe == null:
-        blefe = load("res://blefe/blefe_ui.gd").new()
-        blefe.setup(self, get_parent())
-        get_parent().add_child(blefe)
-    blefe.open()
+var xeque = null
+func open_xeque():
+    if xeque == null:
+        xeque = load("res://xeque/xeque_ui.gd").new()
+        xeque.setup(self, get_parent())
+        get_parent().add_child(xeque)
+    xeque.open()
 
 func open_marcha():
     if marcha == null:
@@ -1930,7 +1930,7 @@ func public_cosmetics() -> Dictionary:
 # ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
 # Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo
 # (retrato, nickname, liga/PL, barra, insígnia, texto da conta) e as áreas de clique.
-const REF_MENU_RECT = Rect2(614,336,446,570)
+const REF_MENU_RECT = Rect2(614,286,446,566)
 var ref_nodes: Array = []
 var ref_mode := false
 var desk_profile := {}
@@ -2128,7 +2128,7 @@ func _build_reference_chrome():
         button.focus_exited.connect(func(): hover.hide())
         # R32: linhas novas da arte v3 (moldura sem texto): título, subtítulo e ícone vivos por cima
         var title := title_of(button)
-        if title in ["MARCHA REAL", "BLEFE REAL", "HISTÓRICO DE PARTIDAS"]:
+        if title in ["MARCHA REAL", "XEQUE", "HISTÓRICO DE PARTIDAS"]:
             var cap = Control.new()
             cap.name = "RefCaption"
             cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2138,11 +2138,11 @@ func _build_reference_chrome():
             t1.position = Vector2(103, 1)
             t1.size = Vector2(300, 24)
             t1.autowrap_mode = TextServer.AUTOWRAP_OFF
-            var t2 = _label(cap, {"MARCHA REAL": "Novo modo · cartas e corrida", "BLEFE REAL": "Novo modo · blefe de cartas"}.get(title, "Suas partidas e análises"), 13, Color("e8e2d0"))
+            var t2 = _label(cap, {"MARCHA REAL": "Novo modo · cartas e corrida", "XEQUE": "Novo modo · blefe de cartas"}.get(title, "Suas partidas e análises"), 13, Color("e8e2d0"))
             t2.position = Vector2(103, 22)
             t2.size = Vector2(300, 20)
             t2.autowrap_mode = TextServer.AUTOWRAP_OFF
-            if title in ["MARCHA REAL", "BLEFE REAL"]:
+            if title in ["MARCHA REAL", "XEQUE"]:
                 var tag = preload("res://monetization/premium_art.gd").Stamp.new("NOVO", "new", 11)
                 tag.position = Vector2(300, 6)
                 tag.mouse_filter = Control.MOUSE_FILTER_IGNORE

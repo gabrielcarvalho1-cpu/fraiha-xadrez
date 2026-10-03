@@ -1,25 +1,25 @@
 extends CanvasLayer
-## BLEFE REAL — tela do modo (tutorial/salão, partida, XEQUE, Relógio de Xeque, XEQUE-MATE e resultado).
+## XEQUE — tela do modo (tutorial/salão, partida, XEQUE, Relógio de Xeque, XEQUE-MATE e resultado).
 ## As artes aprovadas do pacote (mesa, cartas, relógio, coroas, botões e fontes) são usadas como
 ## camadas; placas, painéis, textos, áreas de toque e estados são desenhados por cima, nas posições
 ## medidas das telas de referência (PC 1920x1080, celular retrato 1080x1920, celular paisagem 1950x900).
-## A interface NÃO decide regra: toda ação é pedida ao motor (blefe/rules.gd). Os bots recebem só o
-## estado público e a própria mão (blefe/ai.gd). A animação nunca é a autoridade do estado.
+## A interface NÃO decide regra: toda ação é pedida ao motor (xeque/rules.gd). Os bots recebem só o
+## estado público e a própria mão (xeque/ai.gd). A animação nunca é a autoridade do estado.
 signal closed
 
-const Rules := preload("res://blefe/rules.gd")
-const AI := preload("res://blefe/ai.gd")
-const SCENE := preload("res://blefe/art/mesa/mesa_cena_com_tapete.png")
-const CARD_BACK := preload("res://blefe/art/cartas/carta_verso.png")
-const CROWN := preload("res://blefe/art/interface/coroa.png")
-const CROWN_LOST := preload("res://blefe/art/interface/coroa_perdida.png")
-const BTN_GOLD := preload("res://blefe/art/interface/botao_dourado.png")
-const BTN_DARK := preload("res://blefe/art/interface/botao_escuro.png")
+const Rules := preload("res://xeque/rules.gd")
+const AI := preload("res://xeque/ai.gd")
+const SCENE := preload("res://xeque/art/mesa/mesa_cena_com_tapete.png")
+const CARD_BACK := preload("res://xeque/art/cartas/carta_verso.png")
+const CROWN := preload("res://xeque/art/interface/coroa.png")
+const CROWN_LOST := preload("res://xeque/art/interface/coroa_perdida.png")
+const BTN_GOLD := preload("res://xeque/art/interface/botao_dourado.png")
+const BTN_DARK := preload("res://xeque/art/interface/botao_escuro.png")
 const GOLD_PIECES := preload("res://cosmetics/v025/gold_pieces.png")
-const FONT_UI := preload("res://blefe/art/fontes/Jersey20-Regular.woff2")
-const FONT_TITLE := preload("res://blefe/art/fontes/Jacquard24-Regular.woff2")
-const TUTORIAL_BG := preload("res://blefe/art/telas/tutorial_fundo.png")
-const RESULT_BG := preload("res://blefe/art/telas/resultado_fundo.png")
+const FONT_UI := preload("res://xeque/art/fontes/Jersey20-Regular.woff2")
+const FONT_TITLE := preload("res://xeque/art/fontes/Jacquard24-Regular.woff2")
+const TUTORIAL_BG := preload("res://xeque/art/telas/tutorial_fundo.png")
+const RESULT_BG := preload("res://xeque/art/telas/resultado_fundo.png")
 ## peças douradas do conjunto Ouro do jogo (as mesmas desenhadas nas cartas)
 const PIECE_REGION := {"rei": Rect2(1524, 15, 197, 399), "rainha": Rect2(1227, 59, 198, 354), "cavalo": Rect2(623, 69, 220, 345), "peao": Rect2(63, 148, 170, 265)}
 
@@ -94,7 +94,7 @@ const PHASE_TIME := {"reveal": 1.7, "clock": 1.4, "safe": 1.4, "mate": 2.6, "eli
 
 func _init():
     layer = 64
-    name = "BlefeReal"
+    name = "Xeque"
     rng.randomize()
 
 func setup(p_hub, p_stage):
@@ -102,9 +102,9 @@ func setup(p_hub, p_stage):
     stage = p_stage
 
 func _ready():
-    for n in ["rei", "rainha", "cavalo", "peao"]: cards[n] = load("res://blefe/art/cartas/carta_%s.png" % n)
-    for s in ["neutro", "pulsando", "perigo", "quase", "disparado"]: clock_tex[s] = load("res://blefe/art/relogio/relogio_%s.png" % s)
-    for s in ["normal", "hover", "pressionado", "desabilitado", "ativado"]: xeque_tex[s] = load("res://blefe/art/interface/botao_xeque_%s.png" % s)
+    for n in ["rei", "rainha", "cavalo", "peao"]: cards[n] = load("res://xeque/art/cartas/carta_%s.png" % n)
+    for s in ["neutro", "pulsando", "perigo", "quase", "disparado"]: clock_tex[s] = load("res://xeque/art/relogio/relogio_%s.png" % s)
+    for s in ["normal", "hover", "pressionado", "desabilitado", "ativado"]: xeque_tex[s] = load("res://xeque/art/interface/botao_xeque_%s.png" % s)
     for n in PIECE_REGION:
         var a := AtlasTexture.new()
         a.atlas = GOLD_PIECES
@@ -116,11 +116,11 @@ func _ready():
         fv.spacing_glyph = pair[2]
         fonts[pair[0]] = fv
     root = Control.new()
-    root.name = "BlefeRoot"
+    root.name = "XequeRoot"
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(root)
-    view = preload("res://blefe/blefe_view.gd").new()
+    view = preload("res://xeque/xeque_view.gd").new()
     view.ui = self
     view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_child(view)
@@ -322,7 +322,8 @@ func _advance_phase():
             phase = "mate" if bool(result.mate) else "safe"
             _cue("mate" if bool(result.mate) else "safe")
         "safe", "mate":
-            if bool(result.get("eliminated", false)): phase = "elim"
+            # com 1 vida o XEQUE-MATE já diz "eliminado": não precisa de outra tela
+            if bool(result.get("eliminated", false)) and Rules.LIVES > 1: phase = "elim"
             else: _end_resolution()
         "elim":
             _end_resolution()
@@ -361,7 +362,7 @@ func _record_history(res: String) -> Dictionary:
     if res == "abandon":
         place = g.alive_seats().size()      # sai no lugar em que estava
     return mh.add_entry({
-        "mode_id": Rules.MODE_ID, "ruleset_version": Rules.RULESET_VERSION, "mode": "blefe",
+        "mode_id": Rules.MODE_ID, "ruleset_version": Rules.RULESET_VERSION, "mode": "xeque",
         "result": res, "reason": "abandono" if res == "abandon" else "xeque-mate",
         "player": "Você", "opponent": "%s, %s e %s" % [g.names[1], g.names[2], g.names[3]],
         "started_at": started_unix, "finished_at": int(Time.get_unix_time_from_system()),
@@ -453,7 +454,8 @@ func clock_visual(seat: int) -> String:
     var left := g.clock_left(seat)
     if phase in ["reveal", "clock"] and int(result.get("loser", -1)) == seat:
         left = int(result.clock_left_before)
-    return {3: "neutro", 2: "perigo", 1: "quase"}.get(left, "neutro")
+    # mesmo mapa da especificação do pacote: 0 apertos = neutro, 1–2 pulsando, 3 perigo, 4–5 quase
+    return {6: "neutro", 5: "pulsando", 4: "pulsando", 3: "perigo", 2: "quase", 1: "quase"}.get(left, "neutro")
 
 ## De quem é o relógio mostrado no centro e no medidor.
 func clock_focus() -> int:
@@ -475,7 +477,7 @@ func seat_status(s: int) -> Dictionary:
     if not bubble.is_empty() and int(bubble.seat) == s:
         var said := "JOGOU %d" % int(bubble.count) if layout == "portrait" else "DISSE: " + g.declared_text(int(bubble.count), String(bubble.target))
         return {"text": said, "id": "declarou"}
-    if g.lives[s] == 1: return {"text": "EM RISCO", "id": "em_risco"}
+    if g.clock_left(s) <= 2: return {"text": "EM RISCO", "id": "em_risco"}   # chance de 1/2 ou mais
     if s == 0 and layout == "portrait": return {"text": "AGUARDE", "id": "aguardando"}
     return {"text": "AGUARDANDO", "id": "aguardando"}
 

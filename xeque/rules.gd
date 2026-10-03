@@ -1,10 +1,10 @@
 extends RefCounted
-## BLEFE REAL · motor de regras (único). Humano, bots e tempo esgotado só PEDEM ações aqui;
+## XEQUE · motor de regras (único). Humano, bots e tempo esgotado só PEDEM ações aqui;
 ## a interface e a IA nunca decidem regra. Nada do xadrez (regras, Ranked, Elo, PL, Stockfish) é usado.
+## Mesma lógica do jogo de mentiras da WePlay (estilo Liar's Bar); "duvidar" aqui é XEQUE.
 ##
 ## Regras (ruleset 1):
 ##   • 4 lugares (0 = você embaixo, 1 esquerda, 2 cima, 3 direita), sentido horário 0→1→2→3.
-##   • 3 Coroas por jogador. 0 Coroas = eliminado (o lugar fica na mesa, marcado).
 ##   • Baralho de 20: 6 Rei, 6 Rainha, 6 Cavalo, 2 Peão Coroado (coringa). 5 cartas por jogador vivo;
 ##     o que sobra fica fora da rodada.
 ##   • A rodada sorteia a PEÇA DA RODADA (Rei, Rainha ou Cavalo). Verdadeira = a peça da rodada ou o Peão.
@@ -12,15 +12,15 @@ extends RefCounted
 ##     ou XEQUE na jogada imediatamente anterior (se existir). Não existe passar.
 ##   • XEQUE revela só a última jogada: todas verdadeiras → quem chamou perde o desafio;
 ##     pelo menos uma falsa → quem jogou perde. Todo XEQUE encerra a rodada.
-##   • Quem perde o desafio aciona o SEU Relógio de Xeque: ciclo de 3 posições (2 seguras + 1
-##     XEQUE-MATE) em ordem embaralhada e consumida SEM reposição (1/3 → 1/2 → 1). XEQUE-MATE tira
-##     1 Coroa e embaralha um ciclo novo só daquele jogador.
-##   • Próxima rodada começa por quem perdeu o desafio (ou o próximo vivo, se ele foi eliminado).
+##   • Quem perde o desafio aciona o SEU Relógio de Xeque (o revólver da WePlay): 6 posições, 1 é
+##     XEQUE-MATE, em ordem embaralhada e consumida SEM reposição (1/6 → 1/5 → … → 1/1). O relógio
+##     guarda o estado entre as rodadas. XEQUE-MATE = eliminado na hora (LIVES = 1).
+##   • Próxima rodada começa por quem acionou o relógio (ou o próximo vivo, se ele foi eliminado).
 ##   • Sem cartas: fica fora dos turnos até o fim da rodada. Se só 1 jogador (ou nenhum) ainda tem
 ##     cartas, a última jogada é resolvida por XEQUE automático do próximo jogador vivo.
-##   • Último jogador com Coroa vence.
+##   • Último jogador vivo vence.
 
-const MODE_ID := "blefe_real"
+const MODE_ID := "xeque"
 const RULESET_VERSION := "1"
 const KING := "rei"
 const QUEEN := "rainha"
@@ -29,10 +29,10 @@ const JOKER := "peao"               # Peão Coroado
 const TARGETS := [KING, QUEEN, KNIGHT]
 const DECK_COUNTS := {KING: 6, QUEEN: 6, KNIGHT: 6, JOKER: 2}
 const SEATS := 4
-const LIVES := 3
+const LIVES := 1                    # WePlay: XEQUE-MATE elimina na hora
 const HAND := 5
 const MAX_PLAY := 3
-const CLOCK_SLOTS := 3
+const CLOCK_SLOTS := 6              # 6 posições, 1 XEQUE-MATE (o tambor do revólver)
 const SAFE := "safe"
 const MATE := "mate"
 const NAMES := {KING: "Rei", QUEEN: "Rainha", KNIGHT: "Cavalo", JOKER: "Peão Coroado"}
@@ -94,7 +94,7 @@ func setup(seed: int = 0, p_names: Array = []):
     start_round(rng.randi_range(0, SEATS - 1))
 
 # ---------------------------------------------------------------- relógio
-## Ciclo novo: 2 seguras + 1 XEQUE-MATE, embaralhadas (sem reposição).
+## Ciclo novo: 5 seguras + 1 XEQUE-MATE, embaralhadas (sem reposição).
 func reset_clock(seat: int):
     var c := []
     for i in CLOCK_SLOTS - 1: c.append(SAFE)
@@ -105,11 +105,11 @@ func reset_clock(seat: int):
     clocks[seat] = c
     clock_cycles[seat] += 1
 
-## Posições que ainda restam no relógio do jogador (público: 3, 2 ou 1).
+## Posições que ainda restam no relógio do jogador (público: 6 … 1).
 func clock_left(seat: int) -> int:
     return clocks[seat].size()
 
-## Chance de XEQUE-MATE no próximo acionamento (1/3 → 1/2 → 1).
+## Chance de XEQUE-MATE no próximo acionamento (1/6 → 1/5 → … → 1).
 func clock_chance(seat: int) -> float:
     return 1.0 / float(maxi(1, clocks[seat].size()))
 

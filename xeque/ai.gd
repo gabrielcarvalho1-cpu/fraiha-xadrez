@@ -1,9 +1,9 @@
 extends RefCounted
-## BLEFE REAL · bots. A decisão recebe SÓ o estado público (Rules.public_state) e a própria mão.
+## XEQUE · bots. A decisão recebe SÓ o estado público (Rules.public_state) e a própria mão.
 ## Nunca vê a mão de ninguém, o conteúdo das cartas viradas nem a ordem do Relógio de Xeque.
 ## Devolve um PEDIDO de ação; quem valida e executa é o motor de regras (o mesmo do humano).
 
-const Rules := preload("res://blefe/rules.gd")
+const Rules := preload("res://xeque/rules.gd")
 
 ## Perfis: honestidade ao jogar, gosto pelo blefe, coragem no XEQUE.
 const PROFILES := {
@@ -63,12 +63,12 @@ static func decide(pub: Dictionary, hand: Array, profile: String, rng: RandomNum
     var may_challenge := bool(pub.get("can_challenge", false))
     if may_challenge and not lp.is_empty():
         var suspicion := 1.0 - p_last_play_true(pub, hand)
-        # se o MEU relógio está na última posição, errar o XEQUE custa uma Coroa: mais cautela
+        # relógio do jogador perto do fim (1/2 ou pior): errar o XEQUE pode eliminar → mais cautela
         var my_left := int(pub.clock_left[me])
         var their_left := int(pub.clock_left[int(lp.seat)])
         var need := float(pr.threshold)
-        if my_left == 1: need += 0.12
-        if their_left == 1: need -= 0.05
+        if my_left <= 2: need += 0.12 if my_left == 1 else 0.06
+        if their_left <= 2: need -= 0.05
         if hand.is_empty(): need -= 1.0
         # quem acabou de esvaziar a mão já não pode ser pego depois: duvidar agora vale mais
         if int(pub.hand_counts[int(lp.seat)]) == 0: need -= 0.08
