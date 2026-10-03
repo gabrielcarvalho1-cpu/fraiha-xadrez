@@ -54,7 +54,29 @@ func run():
     social.open_invite(peer_id, social.data["friends"][0])
     check(social.box.find_child("Invite_marcha", true, false) != null and social.box.find_child("Invite_xeque", true, false) != null, "tela de convite tem MARCHA REAL e XEQUE")
     await shot("1_convite_modos")
-    social.box.find_child("Invite_marcha", true, false).pressed.emit()
+    # perfil do amigo: nickname numa linha só (antes ficava letra por letra na vertical)
+    social.open_profile(peer_id)
+    await wait_until(func(): return social.screen == "profile" and social.profile.has("nickname"), 5.0)
+    for k in 4: await process_frame
+    var nk = social.box.find_child("ProfileNickname", true, false)
+    check(nk != null and nk.size.y < 60.0 and nk.size.x > 100.0, "perfil do amigo: nome numa linha (%s)" % (str(nk.size) if nk != null else "?"))
+    social.close()
+    # R35.1 · CONVIDAR AMIGO de dentro da MARCHA REAL (lobby do modo)
+    stage.hub.open_marcha()
+    await wait_until(func(): return stage.hub.marcha != null and stage.hub.marcha.is_open(), 3.0)
+    stage.hub.marcha.tut_page = -1
+    stage.hub.marcha._on_hit("lobby_invite")
+    check(await wait_until(func(): return social.is_open() and social.screen == "invite_friends", 5.0), "MARCHA REAL → CONVIDAR AMIGO abre a lista de amigos por cima do modo")
+    check(social.layer > stage.hub.marcha.layer and stage.invite_ui.layer > stage.hub.marcha.layer, "lista e cartão do convite ficam por cima da tela do modo")
+    await wait_until(func(): return social.box.find_child("PickFriend_PeerParty", true, false) != null, 6.0)
+    await shot("1b_convidar_no_modo")
+    var pick_row = social.box.find_child("PickFriend_PeerParty", true, false)
+    var inv_btn: Button = null
+    if pick_row != null:
+        for b in pick_row.find_children("*", "Button", true, false):
+            if b.text == "CONVIDAR": inv_btn = b
+    check(inv_btn != null, "amigo online com botão CONVIDAR")
+    if inv_btn != null: inv_btn.pressed.emit()
     check(await wait_until(func(): return stage.hub.marcha != null and stage.hub.marcha.online and stage.hub.marcha.mode == "game", 10.0), "amigo aceitou: MARCHA REAL abre online sozinha")
     var mu = stage.hub.marcha
     check(not social.is_open(), "a tela de Amigos fecha quando a mesa abre")

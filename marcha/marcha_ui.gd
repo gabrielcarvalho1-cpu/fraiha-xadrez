@@ -727,6 +727,7 @@ func _on_hit(id: String):
             access.refresh()
         "lobby_play": start_game()
         "lobby_tutorial": tut_page = 0
+        "lobby_invite": invite_friend()
         "lobby_back", "over_back": close()
         "lobby_club":
             close()
@@ -1242,7 +1243,8 @@ class TableView extends Control:
             var by := 1450.0
             if ok: gold_button(Rect2(60, by, 960, 100), "JOGAR AGORA", 44, "lobby_play")
             else: gold_button(Rect2(60, by, 960, 100), "CONHECER CLUB FRAIHA", 40, "lobby_club")
-            dark_button(Rect2(60, by + 120, 960, 84), "COMO JOGAR", 34, "lobby_tutorial")
+            dark_button(Rect2(60, by + 120, 470, 84), "COMO JOGAR", 32, "lobby_tutorial")
+            gold_button(Rect2(550, by + 120, 470, 84), "CONVIDAR AMIGO", 32, "lobby_invite")
             dark_button(Rect2(60, by + 222, 960, 84), "VOLTAR", 34, "lobby_back")
         else:
             var by2 := 700.0
@@ -1250,6 +1252,9 @@ class TableView extends Control:
             else: gold_button(Rect2(70, by2, 520, 96), "CONHECER CLUB FRAIHA", 36, "lobby_club")
             dark_button(Rect2(620, by2 + 8, 300, 80), "COMO JOGAR", 30, "lobby_tutorial")
             dark_button(Rect2(950, by2 + 8, 200, 80), "VOLTAR", 30, "lobby_back")
+            # R35.1 · jogar com um amigo (vocês em dupla contra 2 bots, mesa online)
+            gold_button(Rect2(70, by2 + 120, 520, 80), "CONVIDAR AMIGO", 34, "lobby_invite")
+            text("Vocês dois em dupla contra 2 bots · online", Vector2(620, by2 + 170), "semi", 22, Color("d9c79a"))
 
     # ------------------------------------------------------------ fim, menu, tutorial, aviso
     func _shade():
@@ -1578,3 +1583,13 @@ func online_lost(text: String):
         g = null
     _flash(text)
     _redraw()
+
+
+## R35.1 · CONVIDAR AMIGO de dentro do modo: abre a lista de amigos (Amigos) já no convite da MARCHA REAL.
+func invite_friend():
+    var social = stage.get("social_ui") if stage != null else null
+    var acc = stage.get("account") if stage != null else null
+    if acc == null or not acc.has_profile():
+        _flash("Entre na sua conta para convidar amigos.")
+        return
+    if social != null and social.has_method("open_invite_picker"): social.open_invite_picker("marcha")

@@ -25,8 +25,10 @@ const SFX := {
     "clock": preload("res://xeque/audio/relogio.wav"), "safe": preload("res://xeque/audio/seguro.wav"),
     "mate": preload("res://xeque/audio/xeque_mate.wav"), "elim": preload("res://xeque/audio/eliminado.wav"),
     "victory": preload("res://xeque/audio/vitoria.wav"), "defeat": preload("res://xeque/audio/derrota.wav"),
+    # R35.1 · vozes (tools/xeque_voice.py): "XEQUE!" a cada desafio, "XEQUE-MATE!" quando alguém cai
+    "voice_xeque": preload("res://xeque/audio/voz_xeque.wav"), "voice_mate": preload("res://xeque/audio/voz_xeque_mate.wav"),
 }
-const SFX_DB := {"your_turn": -9.0, "xeque": -6.0, "mate": -3.0, "victory": -7.0, "defeat": -7.0, "elim": -6.0}
+const SFX_DB := {"voice_xeque": -1.0, "voice_mate": 0.0, "your_turn": -9.0, "xeque": -6.0, "mate": -3.0, "victory": -7.0, "defeat": -7.0, "elim": -6.0}
 const FONT_UI := preload("res://xeque/art/fontes/Jersey20-Regular.woff2")
 const FONT_TITLE := preload("res://xeque/art/fontes/Jacquard24-Regular.woff2")
 const TUTORIAL_BG := preload("res://xeque/art/telas/tutorial_fundo.png")
@@ -407,6 +409,7 @@ func _on_challenge(r: Dictionary, caller: int):
     get_tree().create_timer(0.35).timeout.connect(func(): if phase == "reveal": _cue("reveal"))
     phase_t = 0.0
     _cue("xeque")
+    get_tree().create_timer(0.12).timeout.connect(func(): if phase == "reveal": _cue("voice_xeque"))
     last_tick_s = -1
     _redraw()
 
@@ -419,6 +422,7 @@ func _advance_phase():
         "clock":
             phase = "mate" if bool(result.mate) else "safe"
             _cue("mate" if bool(result.mate) else "safe")
+            if bool(result.mate): get_tree().create_timer(0.35).timeout.connect(func(): if phase == "mate": _cue("voice_mate"))
         "safe", "mate":
             if phase == "mate" and bool(result.get("eliminated", false)): _cue("elim")
             # com 1 vida o XEQUE-MATE já diz "eliminado": não precisa de outra tela
@@ -538,6 +542,7 @@ func _on_hit(id: String):
         "tut_play", "again":
             if online and mode == "tutorial" and tutorial_from_game: _resume_from_tutorial()
             else: start_game()
+        "tut_invite": invite_friend()
         "over_tutorial":
             tutorial_from_game = false
             mode = "tutorial"
@@ -771,3 +776,13 @@ func online_lost(text: String):
         phase = ""
     _flash(text)
     _redraw()
+
+
+## R35.1 · CONVIDAR (amigo) na tela inicial do XEQUE: lista de amigos já no convite do XEQUE.
+func invite_friend():
+    var social = stage.get("social_ui") if stage != null else null
+    var acc = stage.get("account") if stage != null else null
+    if acc == null or not acc.has_profile():
+        _flash("Entre na sua conta para convidar amigos.")
+        return
+    if social != null and social.has_method("open_invite_picker"): social.open_invite_picker("xeque")

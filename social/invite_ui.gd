@@ -25,7 +25,7 @@ func setup(service, avatar_callable: Callable = Callable(), hide_fn: Callable = 
     account = service
     avatar_for = avatar_callable
     hidden_when = hide_fn
-    layer = 58
+    layer = 67   # R35.1: acima das telas dos modos (convite feito/recebido dentro da MARCHA REAL e do XEQUE)
     panel = PanelContainer.new()
     panel.name = "InviteCard"
     var style = StyleBoxFlat.new()

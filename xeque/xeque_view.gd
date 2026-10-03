@@ -277,7 +277,8 @@ func _draw_game():
     if lay.como != null: _draw_como_jogar(lay.como)
     var mate: bool = ui.phase in ["mate", "elim"]
     # relógio do centro (o de quem está em foco)
-    if not mate: _draw_center_clock()
+    # R35.1 · a torre-relógio só aparece quando alguém errou (o relógio é acionado); fora disso a mesa fica livre
+    if not mate and ui.phase in ["clock", "safe"]: _draw_center_clock()
     _draw_pile()
     for s in 4:
         if mate and s == int(ui.result.loser): continue
@@ -413,7 +414,9 @@ func _draw_center_clock():
     elif vis == "quase":
         shake = Vector2(sin(ui.t * 40.0), 0) * 1.2
     var pulse := 1.0 + (0.02 * sin(ui.t * 9.0) if vis in ["pulsando", "quase"] or ui.phase == "clock" else 0.0)
-    tex_center(tex, pos + shake, c[1] * 2.0 * pulse)      # versões do jogo têm metade do tamanho do arquivo aprovado
+    var grow := 1.0
+    if ui.phase == "clock": grow = 0.55 + 0.45 * ease(clampf(ui.phase_t / 0.3, 0.0, 1.0), -2.0)   # entra crescendo
+    tex_center(tex, pos + shake, c[1] * 2.0 * pulse * grow)      # versões do jogo têm metade do tamanho do arquivo aprovado
 
 func _draw_pile():
     var g = ui.g
@@ -911,11 +914,13 @@ func _draw_tutorial(d: Vector2):
         else: button_dark(Rect2(90, 1752, 900, 96), "VOLTAR À PARTIDA", "tut_back", 46)
     else:
         if not portrait:
-            button_dark(Rect2(1120, 914, 254, 92), "VOLTAR", "tut_back", 58)
+            button_dark(Rect2(880, 914, 220, 92), "VOLTAR", "tut_back", 50)
+            button_dark(Rect2(1120, 914, 256, 92), "CONVIDAR", "tut_invite", 46)
             button_gold(Rect2(1396, 912, 372, 96), "JOGAR AGORA", "tut_play", true, 58)
         else:
-            button_dark(Rect2(90, 1752, 320, 96), "VOLTAR", "tut_back", 50)
-            button_gold(Rect2(430, 1750, 560, 100), "JOGAR AGORA", "tut_play", true, 52)
+            button_dark(Rect2(90, 1752, 250, 96), "VOLTAR", "tut_back", 44)
+            button_dark(Rect2(356, 1752, 290, 96), "CONVIDAR", "tut_invite", 44)
+            button_gold(Rect2(662, 1750, 328, 100), "JOGAR", "tut_play", true, 50)
 
 func _tutorial_panels() -> Array:
     return [

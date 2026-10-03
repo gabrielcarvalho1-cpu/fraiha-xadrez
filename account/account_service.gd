@@ -42,6 +42,7 @@ var busy := false
 var socket: WebSocketPeer
 var socket_open := false
 var retry_in := 0.0
+var retry_step := 0      # R35.1: reconexão rápida no 1º tropeço (celular troca de rede/antena), depois espaça
 var ping_in := 10.0 # heartbeat: o servidor usa o ping para presença (silêncio de 45 s encerra a conexão)
 var refresh_in := -1.0
 # Convidado (Online Casual sem conta): identidade só no servidor, recuperável pelo token.
@@ -413,6 +414,7 @@ func _process(delta):
     if state == WebSocketPeer.STATE_OPEN:
         if not socket_open:
             socket_open = true
+            retry_step = 0
             if signed_in():
                 _log("acct_auth enviado")
                 _send({"type": "acct_auth", "access_token": access_token})
@@ -429,7 +431,8 @@ func _process(delta):
         socket_open = false
         server_ready = false
         guest_ready = false
-        retry_in = 3.0
+        retry_in = [0.6, 1.5, 3.0, 5.0][mini(retry_step, 3)]
+        retry_step += 1
         server_message.emit({"type": "link_lost"})
         changed.emit()
 

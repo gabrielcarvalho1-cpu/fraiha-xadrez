@@ -456,6 +456,8 @@ func _setup_account():
     social_ui.name = "SocialUI"
     add_child(social_ui)
     social_ui.setup(account, hub.avatar_texture)
+    # R35.1 · JOGAR ONLINE (casual) → CONVIDAR AMIGO: lista de amigos e escolha do ritmo (Ranqueado não tem)
+    casual_ui.invite_requested.connect(func(): social_ui.open_invite_picker("chess"))
     account.changed.connect(func(): if social_ui.is_open() and not account.has_profile() and not account.account_pending(): social_ui.hide_ui())
     invite_ui = preload("res://social/invite_ui.gd").new()
     invite_ui.name = "InviteUI"

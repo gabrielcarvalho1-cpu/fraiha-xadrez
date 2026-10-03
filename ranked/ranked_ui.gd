@@ -2,6 +2,7 @@ extends CanvasLayer
 ## Telas de partida online (Ranked e Casual): modalidades, busca, adversário encontrado,
 ## HUD com relógios e resultado. Só exibe o que o servidor informa; não calcula PL nem resultado.
 ## kind = "ranked" (PL, conta) | "casual" (sem PL, aceita convidado).
+signal invite_requested   # R35.1: CONVIDAR AMIGO (só no JOGAR ONLINE casual; nunca no Ranqueado)
 signal back_requested
 signal play_requested
 const Mobile = preload("res://ui_v022/mobile_layout.gd")
@@ -240,6 +241,9 @@ func _show(which: String):
             for item in mode_list():
                 if rated(): _mode_card(grid, item)
                 else: _casual_card(grid, item)
+            if not rated():
+                var inv = _button(box, "CONVIDAR AMIGO PARA UMA PARTIDA", func(): invite_requested.emit(), true)
+                inv.name = "InviteFriendButton"
             notice = _label("", 15, Color("ff9d86"), true)
             footer.show()
             _button(footer, "VOLTAR", func():

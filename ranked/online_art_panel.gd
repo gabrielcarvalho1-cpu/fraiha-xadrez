@@ -11,11 +11,13 @@ const ICON_RANKED := preload("res://ui_v022/assets/online_tab_icon_ranked.png")
 const TAB_L := Rect2(127, 257, 430, 75)
 const TAB_R := Rect2(562, 257, 435, 75)
 const BACK := Rect2(352, 882, 420, 85)
+const INVITE := Rect2(402, 344, 320, 42)    # R35.1: CONVIDAR AMIGO (só na aba CASUAL)
 const CARD_DX := 512.0
 const CARD_DY := 230.0
 var ui   # ranked_ui dona deste painel
 var queue_hits: Array = []
 var hover := ""
+var invite_hit: Button
 
 func setup(owner):
     ui = owner
@@ -26,6 +28,7 @@ func setup(owner):
         queue_hits.append(_hit(r, "q%d" % i, func(): _queue(i)))
     _hit(TAB_L, "tab_l", func(): _tab("casual"))
     _hit(TAB_R, "tab_r", func(): _tab("ranked"))
+    invite_hit = _hit(INVITE, "invite", func(): if not ui.rated(): ui.invite_requested.emit())
     _hit(BACK, "back", func():
         var b = ui.footer.find_child("BackButton", true, false)
         if b != null: b.pressed.emit())
@@ -71,6 +74,7 @@ func layout(viewport_size: Vector2):
     for i in 4:
         var b := _real_button(i)
         queue_hits[i].disabled = b == null or b.disabled
+    invite_hit.visible = not ui.rated()
     queue_redraw()
 
 func _fit(font: Font, text: String, fs: int, width: float) -> int:
@@ -115,11 +119,18 @@ func _draw():
     var sub := "RANQUEADA  ·  CADA RITMO TEM LIGA E PL PRÓPRIOS" if rated else "PARTIDA CASUAL  ·  ESCOLHA O RITMO E ENTRE NA FILA"
     _center(font, sub, 564, 224, 19, 520, Color("f1e6c8"))
     # Descrição (+ aviso de conexão/erro da própria ranked_ui).
-    var desc := "Cada ritmo tem liga, PL e estatísticas próprios. Cores sorteadas pelo servidor." if rated else "Partida casual contra outro jogador: escolha o ritmo e entre na fila.\nNão vale PL e não altera o Ranked."
+    var desc := "Cada ritmo tem liga, PL e estatísticas próprios. Cores sorteadas pelo servidor." if rated else "Partida casual: escolha o ritmo e entre na fila — ou chame um amigo. Não vale PL."
     var lines := desc.split("\n")
     var notice_text: String = ui.notice.text if is_instance_valid(ui.notice) else ""
     if notice_text.is_empty() and not rated and not ui.account.online_ready(): notice_text = "Conectando ao servidor…"
     var y := 352.0 if lines.size() + (1 if not notice_text.is_empty() else 0) > 2 else (360.0 if lines.size() > 1 or not notice_text.is_empty() else 372.0)
+    if not rated:
+        # casual: no lugar da descrição fica o botão CONVIDAR AMIGO; o aviso (conexão/erro) vai para
+        # a faixa livre entre os cartões e o VOLTAR
+        if not notice_text.is_empty():
+            _center(font, notice_text, 564, 866, 16, 700, Color("ffb08f") if ui.notice.text != "" else Color("f1d58a"))
+        lines = PackedStringArray()
+        notice_text = ""
     for line in lines:
         _center(font, line, 564, y, 19, 640, Color("f4ecd8"))
         y += 23
@@ -148,3 +159,10 @@ func _draw():
         elif hover == "q%d" % i:
             draw_rect(r.grow(-6), Color(1.0, 0.88, 0.5, 0.10))
     if hover == "back": draw_rect(BACK.grow(-12), Color(1.0, 0.88, 0.5, 0.08))
+    if not rated:
+        # R35.1 · CONVIDAR AMIGO (casual): botão verde e ouro no mesmo estilo dos cartões
+        var ir := INVITE
+        draw_rect(ir, Color("0d2a1a") if hover != "invite" else Color("174a2c"))
+        draw_rect(ir, Color("d9a441"), false, 2.0)
+        draw_rect(ir.grow(-4), Color(0.85, 0.64, 0.25, 0.35), false, 1.0)
+        _center(TITLE_FONT, "CONVIDAR AMIGO", ir.get_center().x, ir.get_center().y + 8, 24, ir.size.x - 20, Color("f6d27a"), 4, Color(0.1, 0.05, 0.0, 0.8))

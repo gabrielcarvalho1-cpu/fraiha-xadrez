@@ -53,6 +53,7 @@ var dm_to_end := true
 # Convites (Casual entre amigos): escolha do tempo; o cartão do convite fica em invite_ui.gd
 const INVITE_MODES = [["casual_3min", "RELÂMPAGO", 3], ["casual_5min", "RÁPIDA", 5], ["casual_10min", "NORMAL", 10], ["casual_20min", "CONVENCIONAL", 20]]
 var invite_peer: Dictionary = {}
+var picker_game := ""          # R35.1: convite aberto de dentro de um modo ("chess" | "marcha" | "xeque")
 var invite_sending := false
 # Presença (Etapa 7): estado publicado pelo servidor; revisão por amigo e época (reinício do servidor).
 var presence: Dictionary = {}      # uid -> {"state": String, "rev": int}
@@ -62,7 +63,7 @@ var reconnecting := false
 func setup(service, avatar_callable: Callable = Callable()):
     account = service
     avatar_for = avatar_callable
-    layer = 55
+    layer = 66   # R35.1: por cima das telas dos modos (MARCHA REAL / XEQUE), que convidam daqui
     dim = ColorRect.new()
     dim.color = Color(0.02, 0.04, 0.03, 0.82)
     dim.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -121,6 +122,7 @@ func hide_ui():
     if is_instance_valid(search_input) and search_input.has_focus(): search_input.release_focus()
 
 func close():
+    picker_game = ""
     hide_ui()
     closed.emit()
 
@@ -135,7 +137,8 @@ func _back():
         "list": close()
         "confirm": _show(String(confirm.get("return", "profile")))
         "dm": close_dm()
-        "invite_pick": _show("profile")
+        "invite_pick": _show("invite_friends" if not picker_game.is_empty() else "profile")
+        "invite_friends": close()
         "profile": _show("search" if not last_query.is_empty() and profile.get("from_search", false) else "list")
         _: _show("list")
 
@@ -190,6 +193,7 @@ func _on_message(msg: Dictionary):
             _merge_list_presence(String(msg.get("presence_epoch", "")))
             has_list = true
             if screen == "list": _show("list")
+            elif screen == "invite_friends": _show("invite_friends")
         "social_search":
             results = _arr(msg, "results")
             last_query = String(msg.get("query", last_query))
@@ -427,6 +431,7 @@ func _show(which: String):
         "confirm": _build_confirm()
         "dm": _build_dm()
         "invite_pick": _build_invite_pick()
+        "invite_friends": _build_invite_friends()
     if reconnecting and is_instance_valid(notice) and not notice.visible: notice_text("Reconectando…", GOLD)
     dim.show(); panel.show()
     _layout()
@@ -506,6 +511,12 @@ func _build_profile(narrow: bool):
     info.add_child(nick_row)
     var nick = _label(nick_row, String(profile.get("nickname", "")), 24, Color("f4edda"), narrow)
     nick.name = "ProfileNickname"
+    # R35.1 · nickname numa linha só (antes quebrava letra a letra: o rótulo ficava com largura 0)
+    nick.autowrap_mode = TextServer.AUTOWRAP_OFF
+    nick.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    nick.clip_text = true
+    nick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    nick.custom_minimum_size.x = 120
     _seal(nick_row, profile, 44)
     var ttl := Cosmetics.title_text(String(profile.get("title", "")))
     if not ttl.is_empty(): _label(info, ttl.to_upper(), 15, GOLD, narrow).name = "ProfileTitle"
@@ -834,23 +845,27 @@ func open_invite(uid: String, peer: Dictionary):
 func send_invite(mode: String, game := "chess"):
     if invite_sending: return
     invite_sending = true
-    _show("invite_pick")
+    _show("invite_friends" if picker_game in ["marcha", "xeque"] else "invite_pick")
     var msg := {"type": "invite_send", "user_id": String(invite_peer.get("user_id", "")), "mode": mode}
     if game != "chess": msg["game"] = game     # R35: MARCHA REAL / XEQUE (mesa online com bots)
     if not _send(msg):
         invite_sending = false
-        _show("invite_pick")
+        _show("invite_friends" if picker_game in ["marcha", "xeque"] else "invite_pick")
         notice_text("Sem conexão. Tente de novo em instantes.")
 
 func _on_invite(msg: Dictionary):
-    if screen != "invite_pick": return
+    if screen != "invite_pick" and screen != "invite_friends": return
     invite_sending = false
     if String(msg.get("type", "")) == "invite_sent":
+        if not picker_game.is_empty():
+            # convite feito de dentro do modo: fecha a lista; o cartão do convite mostra a espera
+            close()
+            return
         # O cartão do convite (com CANCELAR e contagem) aparece no topo; volta ao perfil.
         _show("profile")
         notice_text("Convite enviado para %s." % String(invite_peer.get("nickname", "")), Color("9fe0a8"))
     else:
-        _show("invite_pick")
+        _show(screen if screen == "invite_friends" else "invite_pick")
         notice_text(String(msg.get("message", "Não foi possível convidar.")))
 
 func _build_invite_pick():
@@ -878,6 +893,9 @@ func _build_invite_pick():
         b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         b.disabled = invite_sending
     # R35 · modos de cartas: vocês dois + 2 bots no servidor (não gasta a partida grátis do dia)
+    if picker_game == "chess":
+        if invite_sending: _label(box, "Enviando convite…", 14, GOLD, true)
+        return
     _label(box, "Ou um modo de cartas (vocês dois + 2 bots):", 15, GOLD)
     var grid2 = GridContainer.new()
     grid2.columns = 1 if _narrow() else 2
@@ -959,3 +977,49 @@ func _on_presence(msg: Dictionary):
             if touched.has(dm_id):
                 var lbl = box.find_child("DmPresence", true, false)
                 if lbl != null: lbl.text = _dm_presence_text()   # sem reconstruir: não perde o texto digitado
+
+
+# ---------- R35.1 · CONVIDAR AMIGO de dentro de cada modo (JOGAR ONLINE, MARCHA REAL, XEQUE) ----------
+const GAME_NAMES := {"chess": "JOGAR ONLINE · xadrez casual", "marcha": "MARCHA REAL · vocês em dupla contra 2 bots", "xeque": "XEQUE · vocês dois + 2 bots"}
+func open_invite_picker(game: String):
+    picker_game = game
+    invite_sending = false
+    notice_text("")
+    _show("invite_friends")
+    _request_list()
+
+func _build_invite_friends():
+    _label(box, "CONVIDAR AMIGO", 20, Color("f4edda"), true)
+    _label(box, String(GAME_NAMES.get(picker_game, "")), 15, GOLD, true)
+    _label(box, "Toque em CONVIDAR ao lado de um amigo online. O convite vale 60 s.", 13, DIM_TEXT, true)
+    if not account.has_profile():
+        _label(box, "Entre na sua conta para convidar amigos.", 15, ERROR, true)
+        return
+    if not has_list:
+        _label(box, "Carregando amigos…", 15, GOLD, true)
+        return
+    var friends: Array = data["friends"]
+    if friends.is_empty():
+        _label(box, "Você ainda não tem amigos. Abra AMIGOS na tela inicial e busque pelo nickname.", 14, DIM_TEXT, true)
+        return
+    var order := {"online": 0, "in_match": 1, "offline": 2}
+    var list := friends.duplicate()
+    list.sort_custom(func(a, b): return int(order.get(String(a.get("presence", "offline")), 2)) < int(order.get(String(b.get("presence", "offline")), 2)))
+    for f in list:
+        var fid := String(f.get("user_id", ""))
+        var pres := String(f.get("presence", "offline"))
+        var finfo: Dictionary = f
+        var label: String = {"online": "Online", "in_match": "Em partida", "offline": "Offline"}.get(pres, "Offline")
+        var col: Color = PRESENCE.get(pres, PRESENCE["offline"])[1]
+        var acts := []
+        if pres == "online" and not invite_sending: acts = [["CONVIDAR", func(): _picker_invite(fid, finfo), true]]
+        var row = _row(f, label, col, acts)
+        row.name = "PickFriend_" + String(f.get("nickname", ""))
+    if invite_sending: _label(box, "Enviando convite…", 14, GOLD, true)
+
+func _picker_invite(uid: String, peer: Dictionary):
+    if picker_game == "chess":
+        open_invite(uid, peer)        # escolher o ritmo (3/5/10/20 min)
+        return
+    invite_peer = _peer(uid, peer)
+    send_invite(picker_game, picker_game)
