@@ -3,8 +3,8 @@ extends Control
 ## A fonte da verdade é o próprio tabuleiro (game.pieces): o que falta de cada cor em relação ao conjunto
 ## inicial foi capturado (peão promovido conta como peão que saiu, e a peça nova entra no material).
 ## Valores das peças como no Chess.com: peão 1, cavalo 3, bispo 3, torre 5, dama 9 (rei não conta).
-## Duas faixas: a do ADVERSÁRIO (peças suas que ele capturou) e a SUA (peças dele que você capturou),
-## cada uma com o total de pontos capturados; quem está na frente mostra "+N" (diferença dos dois totais).
+## Duas faixas: a do ADVERSÁRIO (peças suas que ele capturou) e a SUA (peças dele que você capturou).
+## Sem somatória: só quem está na frente mostra "+N", a vantagem de material exatamente naquele momento.
 
 const VALUES := {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0}
 const START := {"P": 8, "N": 2, "B": 2, "R": 2, "Q": 1}
@@ -47,10 +47,7 @@ static func summarize(pieces: Dictionary) -> Dictionary:
             if kind == "P": missing = maxi(0, 8 - int(count[c].get("P", 0)) - extras)
             else: missing = maxi(0, int(START[kind]) - int(count[c].get(kind, 0)))
             for k in missing: captured_by[other].append(c + kind)
-    var points := {"w": 0, "b": 0}
-    for c in ["w", "b"]:
-        for code in captured_by[c]: points[c] += int(VALUES.get(String(code).substr(1, 1), 0))
-    return {"material": material, "captured_by": captured_by, "points": points, "diff": int(material.w) - int(material.b)}
+    return {"material": material, "captured_by": captured_by, "diff": int(material.w) - int(material.b)}
 
 ## Cor do jogador (embaixo do tabuleiro).
 func my_color() -> String:
@@ -69,16 +66,16 @@ func _draw():
     var sm := summarize(game.pieces)
     var me := my_color()
     var them := "b" if me == "w" else "w"
-    var mine: int = int(sm.points[me])
-    var theirs: int = int(sm.points[them])
-    _row(top_rect, sm.captured_by[them], theirs, theirs - mine, "ADVERSÁRIO")
-    _row(bottom_rect, sm.captured_by[me], mine, mine - theirs, "VOCÊ")
+    # R38.6 · só a VANTAGEM do momento (material no tabuleiro, como no Chess.com), nunca a soma do que foi capturado
+    var adv: int = int(sm.diff) if me == "w" else -int(sm.diff)
+    _row(top_rect, sm.captured_by[them], -adv, "ADVERSÁRIO")
+    _row(bottom_rect, sm.captured_by[me], adv, "VOCÊ")
 
-## Uma faixa: ícones das peças que aquele jogador capturou (agrupadas por tipo; encolhem para caber todas),
-## o total de pontos dele ("13 pts") e, para quem está na frente, "+N" (diferença entre os dois totais).
-func _row(r: Rect2, codes: Array, pts: int, adv: int, who: String):
+## Uma faixa: ícones das peças que aquele jogador capturou (agrupadas por tipo; encolhem para caber todas)
+## e, só para quem está na frente agora, "+N" = vantagem de material no momento (sem somatória).
+func _row(r: Rect2, codes: Array, adv: int, who: String):
     if r.size.x <= 0.0 or r.size.y <= 0.0: return
-    if compact and codes.is_empty(): return       # celular: sem faixa vazia
+    if compact and codes.is_empty() and adv <= 0: return       # celular: sem faixa vazia
     var bg := StyleBoxFlat.new()
     bg.bg_color = Color(0.04, 0.10, 0.07, 0.8)
     bg.border_color = Color("8a7442")
@@ -89,17 +86,13 @@ func _row(r: Rect2, codes: Array, pts: int, adv: int, who: String):
     var cy := r.get_center().y
     var fs := int(r.size.y * (0.5 if compact else 0.42))
     var pad := 6.0 if compact else 10.0
-    # texto da direita: "VOCÊ · 13 pts" (no celular só "13 pts") e o "+N" dourado de quem está na frente
-    var ptxt := "%d %s" % [pts, "pt" if pts == 1 else "pts"]
-    var lw := font.get_string_size(ptxt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-    var lx := r.end.x - pad - lw
-    draw_string(font, Vector2(lx, cy + fs * 0.36), ptxt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(CREAM, 0.95))
-    var right := lx - 8.0
+    # na ponta direita: quem é (só no PC) e o "+N" dourado de quem está na frente agora
+    var right := r.end.x - pad
     if not compact:
         var tfs := int(fs * 0.62)
         var tw := font.get_string_size(who, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x
-        draw_string(font, Vector2(lx - 8.0 - tw, cy + tfs * 0.36), who, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(CREAM, 0.5))
-        right = lx - 16.0 - tw
+        draw_string(font, Vector2(right - tw, cy + tfs * 0.36), who, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color(CREAM, 0.5))
+        right -= tw + 10.0
     if adv > 0:
         var at := "+%d" % adv
         var aw := font.get_string_size(at, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 14.0
@@ -133,14 +126,8 @@ func _row(r: Rect2, codes: Array, pts: int, adv: int, who: String):
         draw_circle(pr.get_center() + Vector2(0, ic * 0.04), ic * 0.44, Color(0.93, 0.86, 0.68, 0.55) if dark_piece else Color(0.02, 0.05, 0.03, 0.55))
         draw_texture_rect(tex, pr, false)
 
-## Vantagem exibida para a cor = pontos que ela capturou − pontos que o outro capturou (testes).
+## Vantagem exibida para a cor = material dela no tabuleiro − material do adversário, agora (testes).
 func advantage_for(color: String) -> int:
     if game == null: return 0
-    var pts: Dictionary = summarize(game.pieces).points
-    var other := "b" if color == "w" else "w"
-    return int(pts[color]) - int(pts[other])
-
-## Pontos capturados exibidos para a cor (testes).
-func points_for(color: String) -> int:
-    if game == null: return 0
-    return int(summarize(game.pieces).points[color])
+    var d := int(summarize(game.pieces).diff)
+    return d if color == "w" else -d
