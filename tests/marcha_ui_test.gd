@@ -161,7 +161,7 @@ func run():
     var sl: Dictionary = pp.stats_line()
     check(sl.win_pct == 60 and sl.loss_pct == 40 and pp.button_label() == "ADICIONAR AMIGO", "R37: cartão mostra 60% de vitória / 40% de derrota e ADICIONAR AMIGO")
     pp.close()
-    # R37.2 · uma peça só na Muralha (as outras são damas no Salão ou estão na base): carta já pronta nela
+    # R38.5 · peça na Muralha + peça no Salão: automático só quando a do Salão NÃO pode andar com a carta
     var keep_s: Array = g.pawns.duplicate(true)
     g.pawns[0][0] = {"zone": "track", "pos": 12}
     g.pawns[0][1] = {"zone": "lane", "pos": 0}
@@ -174,12 +174,29 @@ func run():
         ui._clear_selection()
         ui.pick_card(0)
         var pd: Dictionary = ui.pending
+        var movers := []
+        for m in g.legal_moves(0, 0):
+            if m.kind in ["burn", "exit"]: continue
+            var w: Array = m.parts[0].pawn if m.kind == "split" else m.pawn
+            if not movers.has(w): movers.append(w)
         var on_it: bool = not pd.is_empty() and ((pd.get("pawn", []) == [0, 0]) or (pd.kind == "split" and pd.parts[0].pawn == [0, 0]))
         if rk == "10": on_it = ui.choice_open or on_it
-        if not on_it:
+        var ok_rk: bool = on_it if movers.size() == 1 else (pd.is_empty() and not ui.sel_pawn == [0, 0])
+        if not ok_rk:
             all_auto = false
-            print("DBG sem auto: ", rk, " ", pd, " choice=", ui.choice_open)
-    check(all_auto, "R37.2: com UMA peça na Muralha (dama no Salão não conta) 3, 6, -4, 2, 8, 9, Q e 7 já ficam prontos nela")
+            print("DBG auto errado: ", rk, " ", pd, " movers=", movers, " choice=", ui.choice_open)
+    check(all_auto, "R38.5: carta que só UMA peça pode jogar fica pronta nela; se a do Salão também pode andar, nada é escolhido sozinho")
+    # o caso relatado: carta 2, peão recém-saído na Muralha e outro no Salão que ainda anda 3 → o jogador escolhe
+    g.pawns[0][1] = {"zone": "lane", "pos": 0}
+    g.pawns[0][0] = {"zone": "track", "pos": ui.Layout.gate_index(0)}
+    g.hands[0] = ["2", "3", "3", "3"]
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(ui.pending.is_empty() and ui.sel_pawn.is_empty() and ui.awaiting_play(), "R38.5: 2 com peão recém-saído + peão no Salão: nada automático")
+    ui.confirm()
+    var c25: Array = ui.candidate_pawns()
+    check(c25.has([0, 0]) and c25.has([0, 1]), "R38.5: depois de JOGAR CARTA as duas peças podem ser escolhidas")
+    ui._clear_selection()
     g.pawns = keep_s
     ui._clear_selection()
     # R38.3 · J com só 2 peças na mesa: NADA automático — 1º toque no seu peão, 2º na peça que troca
@@ -320,7 +337,7 @@ func run():
     t0 = Time.get_ticks_msec()
     while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 30000: await process_frame
     check(ui.g.turn == 0 and g.log.size() >= 4, "os 3 bots jogaram e a vez voltou (%d registros)" % g.log.size())
-    check(ui.cues_played.has("your_turn") and (ui.cues_played.has("step") or ui.cues_played.has("discard")), "sons: passos dos peões e aviso da sua vez")
+    check(ui.cues_played.has("your_turn") and (ui.cues_played.has("step") or ui.cues_played.has("discard") or ui.cues_played.has("exit")), "sons: jogadas dos bots (passos, saída ou descarte) e aviso da sua vez")
     # 7 dividido pela interface
     g.pawns[0][0] = {"zone": "track", "pos": 5}
     g.pawns[0][1] = {"zone": "track", "pos": 20}

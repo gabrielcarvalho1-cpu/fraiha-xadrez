@@ -597,9 +597,8 @@ func _commit_choice():
 ## escolhido: não precisa tocar nele. Vale para toda carta que age sobre o peão (10 = ANDAR 10
 ## já marcado, J = só falta escolher a peça para trocar). Saída do Pátio conta como outra opção.
 func sole_pawn() -> Array:
-    # R37.2 · peça única = a única que pode fazer algo com esta carta. As damas que já estão no Salão e
-    # só se arrastam lá dentro não contam como "outra peça em jogo" (se houver UMA peça na Muralha que
-    # pode andar, é ela; tocar na dama continua possível).
+    # R38.5 · peça única = a ÚNICA peça que pode fazer algo com esta carta. Se uma peça no Salão (chegada)
+    # também pode andar com ela, são duas opções: o jogador escolhe (antes a da Muralha era escolhida sozinha).
     var who := []
     for m in my_moves():
         if m.kind == "burn": continue
@@ -609,8 +608,6 @@ func sole_pawn() -> Array:
         var w: Array = m.parts[0].pawn if m.kind == "split" else m.pawn
         if not who.has(w): who.append(w)
     if who.size() == 1: return who[0]
-    var on_track := who.filter(func(w): return g.pawns[w[0]][w[1]].zone == "track")
-    if on_track.size() == 1: return on_track[0]
     return []
 
 func _auto_sole_pawn():
