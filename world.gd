@@ -78,8 +78,10 @@ var check_flash := 0.0
 # Antes o tabuleiro trocava o dicionário `pieces` de uma vez (peça "teletransportava") e o último lance
 # tinha só um tom fraco fixo. Agora show_move() anima a(s) peça(s) que mudaram de casa a partir do
 # tabuleiro ANTERIOR e do já aplicado (o resultado vem das regras: bot, servidor ou partida local).
-const MOVE_ANIM := 0.32          # adversário / bot / remoto
-const OWN_MOVE_ANIM := 0.18      # lance do próprio jogador por clique (arrastar não anima de novo)
+const MOVE_ANIM := 0.55          # R38: adversário / bot / remoto (antes 0,32 — chegava "de repente")
+const OWN_MOVE_ANIM := 0.32      # R38: lance do próprio jogador por clique (antes 0,18); arrastar não anima de novo
+const MOVE_PER_SQUARE := 0.035   # R38: lances longos levam um pouco mais (até +0,25 s)
+const MOVE_LIFT := 0.16          # R38: a peça sobe um pouco no meio do caminho (fração da casa)
 const LAST_MOVE_HOLD := 1.6      # destaque forte do lance recebido
 const LAST_MOVE_FADE := 0.6
 const HL_FROM := Color(1.0, 0.70, 0.22)    # origem: dourado/âmbar suave
@@ -489,7 +491,9 @@ func _draw():
             continue
         _piece(square_center(pos),pieces[pos])
     for m in move_anim:
-        _piece(m.from.lerp(m.to, _ease_move(move_anim_t)), m.code)
+        # R38 · desliza em arco suave (sobe um pouco e assenta na casa)
+        var lift := Vector2(0, -sin(PI * move_anim_t) * TILE * MOVE_LIFT)
+        _piece(m.from.lerp(m.to, _ease_move(move_anim_t)) + lift, m.code)
     if pre_on:
         # A peça já aparece na casa do pré-move (como no Chess.com).
         _piece(square_center(premove_to),pieces[premove_from])
@@ -786,7 +790,8 @@ func show_move(before: Dictionary, from: Vector2i, to: Vector2i, emphasize: bool
         var code := String(before[sq])
         if code.substr(0, 1) != color and String(pieces.get(sq, "")) != code:
             move_fades.append({"code": code, "at": square_center(sq)})
-    move_anim_len = MOVE_ANIM if emphasize else OWN_MOVE_ANIM
+    var dist := maxf(absf(to.x - from.x), absf(to.y - from.y))
+    move_anim_len = (MOVE_ANIM if emphasize else OWN_MOVE_ANIM) + minf(0.25, maxf(0.0, dist - 1.0) * MOVE_PER_SQUARE)
     move_anim_t = 0.0
     queue_redraw()
 

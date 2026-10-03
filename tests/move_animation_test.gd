@@ -54,7 +54,7 @@ func run():
     var mid: float = world._ease_move(world.move_anim_t)
     check(world.move_anim_t > 0.0 and world.move_anim_t < 1.0 and mid > 0.0 and mid < 1.0, "normal: durante o lance a peça está entre as casas")
     var ms = await wait_anim()
-    check(world.MOVE_ANIM >= 0.25 and world.MOVE_ANIM <= 0.4, "normal: duração configurada %d ms (alvo 250–400 ms)" % int(world.MOVE_ANIM * 1000))
+    check(world.MOVE_ANIM >= 0.45 and world.MOVE_ANIM <= 0.7, "normal: duração configurada %d ms (R38: alvo 450–700 ms, mais fácil de acompanhar)" % int(world.MOVE_ANIM * 1000))
     check(ms >= 120 and ms <= 700, "normal: animação realmente leva tempo (%d ms medidos após 4 frames)" % ms)
     check(world.move_hidden.is_empty() and world.move_anim.is_empty(), "normal: ao terminar a peça fica na casa (nada escondido)")
     check(world.last_move_emph and world.last_move_age < 1.0, "normal: destaque forte do lance do adversário ativo")
