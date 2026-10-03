@@ -100,7 +100,9 @@ var anim_alpha := {}
 var choice_open := false         # R35.1 · caixa "o que você quer fazer?" (cartas de 2 funções: A e 10)
 var card_mode := ""               # função escolhida: "" | "move" | "exit" | "burn"
 var ace_steps := 0                # R37 · Ás: 11 ou 1 (0 = ainda não escolhido)
-var five_seat := -1               # R37 · 5: de que cor é a peça que vai andar (-1 = ainda não escolhida)
+var five_seat := -1               # R37 · 5: de que cor é a peça que vai andar (-1 = qualquer; R38.2: não pergunta mais)
+var card_played := false          # R38.2 · a carta já foi JOGADA na mesa; agora o jogador toca na(s) peça(s)
+var split_chosen := false         # R38.2 · 7: o jogador já escolheu a divisão (botões 7 / 6+1 / …)
 var flies: Array = []             # R37.3 · cartas voando até a mesa: [{"rank", "from": Rect2 (tela de referência), "t", "idx"}]
 var pile: Array = []              # R37.3 · monte da mesa: [{"rank", "dead": bool}] — "dead" = descartada sem jogada (cor apagada)
 var swap_glow: Array = []         # R35.1 · as duas peças da troca (J) brilham durante a animação
@@ -292,8 +294,9 @@ func pile_rect() -> Rect2:
 ## R37.3 · a(s) carta(s) jogada(s) voam até a mesa antes das peças andarem.
 ## idxs: posições na SUA mão (escondidas enquanto voam); vazio = carta de outro jogador (sai da placa dele).
 var fly_hide: Array = []
-func _fly_cards(seat: int, ranks: Array, idxs: Array):
+func _fly_cards(seat: int, ranks: Array, idxs: Array, staged := false):
     if ranks.is_empty(): return
+    if staged and seat == 0 and ranks.size() == 1: return     # R38.2: a carta já está na mesa (JOGAR CARTA antes da peça)
     flies = []
     var n: int = g.hands[0].size()
     for k in ranks.size():
@@ -330,7 +333,7 @@ func _play(seat: int, mv: Dictionary):
         if String(mv.get("kind", "")) == "discard_all":
             played = g.hands[seat].duplicate()
             idxs = range(played.size())
-        await _fly_cards(seat, played, idxs)
+        await _fly_cards(seat, played, idxs, seat == 0 and card_played)
     var rank0: String = g.hands[seat][int(mv.card)] if int(mv.get("card", -1)) >= 0 and int(mv.card) < g.hands[seat].size() else ""
     var events: Array = g.apply(seat, mv)
     if events.is_empty():
@@ -430,6 +433,8 @@ func _clear_selection():
     card_mode = ""
     ace_steps = 0
     five_seat = -1
+    card_played = false
+    split_chosen = false
 
 ## Jogadas da carta escolhida, já filtradas pela função escolhida na caixa (Ás: sair / 11 / 1; 5: a cor).
 func my_moves() -> Array:
@@ -540,13 +545,7 @@ func two_choices() -> Array:
         return [["exit", "TIRAR UM PEÃO DA BASE", exit_why, can_exit],
             ["move11", "ANDAR 11 CASAS", "um peão seu avança 11" if can11 else "nenhum peão pode andar 11", can11],
             ["move1", "ANDAR 1 CASA", "um peão seu avança 1" if can1 else "nenhum peão pode andar 1", can1]]
-    if rank == "5":
-        var out := []
-        for s in 4:
-            var n := mv.filter(func(m): return int(m.pawn[0]) == s).size()
-            var label := String(Rules.KINGDOMS[s]).to_upper() + (" (VOCÊ)" if s == 0 else (" (ALIADO)" if s == 2 else ""))
-            out.append(["seat%d" % s, label, ("%d peça(s) pode(m) andar 5" % n) if n > 0 else "nenhuma peça desta cor pode andar 5", n > 0])
-        return out
+    # R38.2 · o 5 não pergunta mais a cor: JOGAR CARTA e depois toque direto na peça (de qualquer cor)
     return []
 
 ## Título da caixa de escolha.
@@ -630,7 +629,7 @@ func pick_burn():
 func candidate_pawns() -> Array:
     var out := []
     if g == null or sel_card < 0 or g.turn != 0 or busy or choice_open: return out
-    if card_mode == "burn": return out
+    if card_mode == "burn" or awaiting_play(): return out      # R38.2: primeiro JOGAR CARTA, depois a peça
     var mv := my_moves()
     var rank: String = g.hands[0][sel_card]
     if rank == "J" and not sel_pawn.is_empty():
@@ -666,6 +665,7 @@ func pick_pawn(w: Array):
                 sel_target = w
                 pending = m
         _redraw()
+        _after_pick()
         return
     if rank == "7" and split_first > 0 and split_first < 7 and not sel_pawn.is_empty() and w != sel_pawn:
         for m in mv:
@@ -673,10 +673,12 @@ func pick_pawn(w: Array):
                 sel_second = w
                 pending = m
         _redraw()
+        _after_pick()
         return
     sel_pawn = w
     sel_target = []
     split_first = 0
+    split_chosen = false
     sel_second = []
     pending = {}
     var mine := mv.filter(func(m): return m.kind != "burn" and (m.parts[0].pawn if m.kind == "split" else m.pawn) == w)
@@ -697,6 +699,7 @@ func pick_pawn(w: Array):
     elif rank != "J" and not mine.is_empty():
         pending = mine[0]
     _redraw()
+    _after_pick()
 
 ## 7: quantas casas vão para o 1º peão (7 = tudo nele).
 func split_options() -> Array:
@@ -712,15 +715,44 @@ func split_options() -> Array:
 
 func pick_split(a: int):
     split_first = a
+    split_chosen = true
     sel_second = []
     pending = {}
     if a == 7:
         for m in my_moves():
             if m.parts.size() == 1 and m.parts[0].pawn == sel_pawn: pending = m
     _redraw()
+    _after_pick()
+
+## R38.2 · a carta escolhida ainda precisa de peça(s): primeiro JOGAR CARTA (ela vai para a mesa), depois
+## o toque na peça. Verdadeiro enquanto falta escolher peça/divisão para a jogada ficar completa.
+func needs_pieces() -> bool:
+    if g == null or sel_card < 0 or sel_card >= g.hands[0].size() or choice_open or card_mode == "burn": return false
+    if String(pending.get("kind", "")) in ["discard", "exit", "burn"]: return false
+    if pending.is_empty(): return not my_moves().is_empty()
+    if g.hands[0][sel_card] == "7" and not split_chosen and sel_second.is_empty() and split_options().size() > 1: return true
+    return false
+
+## A carta foi escolhida mas ainda não foi jogada, e a jogada depende de tocar em peça(s).
+func awaiting_play() -> bool:
+    return not card_played and needs_pieces()
+
+## JOGAR CARTA habilitado.
+func can_play() -> bool:
+    return g != null and g.turn == 0 and not busy and not waiting_server and (awaiting_play() or not pending.is_empty())
+
+## Depois que a carta foi jogada, a jogada fica pronta no último toque e já acontece (sem 2º JOGAR CARTA).
+func _after_pick():
+    if card_played and not pending.is_empty() and not needs_pieces(): confirm()
 
 func confirm():
-    if busy or pending.is_empty() or g == null or g.turn != 0: return
+    if busy or g == null or g.turn != 0: return
+    if awaiting_play():
+        card_played = true
+        _cue("card")
+        _redraw()
+        return
+    if pending.is_empty(): return
     if online:
         _online_send(pending)
         return
@@ -754,11 +786,12 @@ func help_line() -> String:
     var head := Rules.card_label(rank)
     if pending.get("kind", "") == "discard": return head + " · descartar" + (" (ou todas)" if can_discard_all() else "")
     if choice_open: return head + " · escolha o que fazer"
+    if awaiting_play(): return head + " · toque em JOGAR CARTA e depois na peça"
     match rank:
         "A", "K":
             if not pending.is_empty() and pending.kind == "exit": return head + " · seu peão sai da base"
             if rank == "K": return head + " · tira um peão da base"
-            if ace_steps > 0: return head + " · anda %d casa%s: toque no peão" % [ace_steps, "s" if ace_steps > 1 else ""]
+            if ace_steps > 0 and card_played: return head + " · anda %d casa%s: toque no peão" % [ace_steps, "s" if ace_steps > 1 else ""]
             return head + " · sai da base, anda 11 ou anda 1"
         "J":
             if not pending.is_empty(): return head + " · troca pronta: toque em JOGAR CARTA"
@@ -769,9 +802,11 @@ func help_line() -> String:
             if ten_choice(): return head + " · anda 10 casas ou faz %s descartar" % names[g.burn_target(0)]
         "7":
             if split_first > 0 and split_first < 7: return head + " · %d casas + %d casas: escolha o 2º peão" % [split_first, 7 - split_first]
+            if card_played and sel_pawn.is_empty(): return head + " · toque no 1º peão"
+            if card_played and needs_pieces(): return head + " · escolha a divisão das 7 casas"
             return head + " · até 2 peças dividem 7 casas"
         "5":
-            if five_seat >= 0: return head + " · toque na peça %s que vai andar 5" % String(Rules.KINGDOMS[five_seat]).to_upper()
+            if card_played and pending.is_empty(): return head + " · toque na peça (de qualquer cor) que vai andar 5"
             return head + " · qualquer peça anda 5 casas"
         "4": return head + " · seu peão volta 4 casas"
     return head + " · seu peão avança %d casas" % int(Rules.STEPS.get(rank, 0))
@@ -1065,13 +1100,13 @@ const TUTORIAL := [
     {"title": "AS CARTAS", "img": "res://marcha/art/tutorial/cartas_todas.png",
         "text": "Na sua vez você joga UMA carta da mão (4 cartas por rodada). A carta diz o que fazer na faixa de ação e na frase embaixo da ilustração: K tira um peão da base. A tira um peão da base, anda 11 ou anda 1 (você escolhe). Q anda 12; 10, 9, 8, 6, 3 e 2 andam o número. Carta com ABATER derruba um adversário; com CHEGADA leva um peão ao Salão."},
     {"title": "CARTAS ESPECIAIS", "img": "res://marcha/art/simbolos_de_acao.png",
-        "text": "J troca seu peão de lugar com outra peça.\n7 divide as 7 casas entre até 2 peões seus.\n5 move QUALQUER peça da mesa 5 casas: escolha a cor e toque na peça.\n-4 só volta 4 casas (logo depois do Portão, volta para perto da Entrada do Salão).\nSem jogada possível: descarte uma carta."},
+        "text": "J troca seu peão de lugar com outra peça (peão que acabou de sair, parado no Portão, não troca).\n7 divide as 7 casas entre até 2 peões seus.\n5 move QUALQUER peça da mesa 5 casas: jogue a carta e toque na peça (a do aliado ou do oponente que acabou de sair não; a sua, sim).\n-4 só volta 4 casas (logo depois do Portão, volta para perto da Entrada do Salão).\nSem jogada possível: descarte uma carta."},
     {"title": "CAPTURA E PROTEÇÃO", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png",
         "text": "Cair na casa de outro peão manda esse peão de volta ao Pátio (cuidado: vale até para o aliado).\n\nPeão parado no PRÓPRIO Portão (escudo) bloqueia a casa: ninguém passa por cima nem cai nela — trava todos que vêm atrás."},
     {"title": "COROAÇÃO E VITÓRIA", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png",
         "text": "Na Entrada do Salão o peão entra no Salão do Trono e vira DAMA — o número de casas precisa caber.\n\nQuem coroar os 4 peões passa a jogar com os peões do aliado. Vence a dupla que coroar os 8."},
     {"title": "COMO JOGAR NA TELA", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png",
-        "text": "1 Toque numa carta da mão: ela sobe e a linha de ajuda diz o que ela faz.\n2 Toque num peão com aro dourado: o caminho aparece em pontos de ouro.\n3 Toque em JOGAR CARTA. CANCELAR desfaz a escolha.\nVocê tem 30 segundos por vez."},
+        "text": "1 Toque numa carta da mão: ela sobe e a linha de ajuda diz o que ela faz.\n2 Toque em JOGAR CARTA: ela vai para a mesa.\n3 Toque na peça com aro dourado (no 7, escolha a divisão e o 2º peão): a jogada acontece. CANCELAR devolve a carta.\nVocê tem 30 segundos por vez."},
 ]
 
 # ================================================================= desenho
@@ -1283,6 +1318,14 @@ class TableView extends Control:
             if bool(it.dead):
                 draw_line(Vector2(-cs.x * 0.36, -cs.y * 0.3), Vector2(cs.x * 0.36, cs.y * 0.3), Color(0.55, 0.06, 0.06, 0.75), 14.0)
                 draw_line(Vector2(cs.x * 0.36, -cs.y * 0.3), Vector2(-cs.x * 0.36, cs.y * 0.3), Color(0.55, 0.06, 0.06, 0.75), 14.0)
+        # R38.2 · carta JOGADA esperando a peça: fica por cima do monte, com brilho dourado
+        if ui.card_played and ui.sel_card >= 0 and ui.sel_card < g.hands[0].size():
+            var cs2 := Vector2(270, 378)
+            draw_set_transform(ui.origin + (br.position + Vector2(800, 805) * s) * ui.k, 0.04, Vector2(ui.k * s, ui.k * s))
+            var lr := Rect2(-cs2 / 2.0, cs2)
+            var pz := 0.5 + 0.5 * sin(ui.t * 5.0)
+            for gl in 5: draw_rect(lr.grow(4 + gl * 5), Color(1.0, 0.82, 0.3, (0.30 - gl * 0.05) * (0.6 + 0.4 * pz)), false, 5.0)
+            draw_texture_rect(Crisp.at(ui.cards[String(g.hands[0][ui.sel_card])], cs2 * s * ui.k), lr, false)
         draw_set_transform(ui.origin + br.position * ui.k, 0.0, Vector2(ui.k * s, ui.k * s))
         # caminho da jogada escolhida
         var dots: Array = []
@@ -1448,6 +1491,7 @@ class TableView extends Control:
         var n := hand.size()
         for i in n:
             if ui.fly_hide.has(i): continue          # R37.3: esta carta está voando para a mesa
+            if ui.card_played and i == ui.sel_card: continue     # R38.2: já foi jogada (está na mesa)
             var r: Rect2 = ui.card_rect(i, n)
             var selected: bool = i == ui.sel_card
             var rot := 0.0
@@ -1568,7 +1612,7 @@ class TableView extends Control:
             _draw_turn_box(Rect2(20, 1700, 212, 60))
             _draw_hand()
             dark_button(Rect2(20, 1810, 330, 86), "CANCELAR", 34, "cancel", not ui.pending.is_empty() or ui.sel_card >= 0)
-            gold_button(Rect2(370, 1810, 690, 86), "DESCARTAR CARTA" if ui.pending.get("kind", "") == "discard" else "JOGAR CARTA", 38, "play", not ui.pending.is_empty() and g.turn == 0 and not ui.busy)
+            gold_button(Rect2(370, 1810, 690, 86), "DESCARTAR CARTA" if ui.pending.get("kind", "") == "discard" else "JOGAR CARTA", 38, "play", ui.can_play())
         else:
             _plate(Rect2(40, 120, 390, 122), 2)
             _plate(Rect2(40, 262, 390, 122), 1)
@@ -1590,7 +1634,7 @@ class TableView extends Control:
             _draw_hand()
             _draw_split(Vector2(1484, 836), 50.0)
             if ui.can_discard_all(): dark_button(Rect2(1482, 812, 398, 58), "DESCARTAR TODAS (%d)" % g.hands[0].size(), 28, "discard_all")
-            gold_button(Rect2(1482, 880, 398, 86), "DESCARTAR CARTA" if ui.pending.get("kind", "") == "discard" else "JOGAR CARTA", 40, "play", not ui.pending.is_empty() and g.turn == 0 and not ui.busy)
+            gold_button(Rect2(1482, 880, 398, 86), "DESCARTAR CARTA" if ui.pending.get("kind", "") == "discard" else "JOGAR CARTA", 40, "play", ui.can_play())
             dark_button(Rect2(1482, 985, 398, 64), "CANCELAR", 30, "cancel", not ui.pending.is_empty() or ui.sel_card >= 0)
 
     # ------------------------------------------------------------ lobby
@@ -1913,6 +1957,7 @@ func _run_event(msg: Dictionary):
             busy = true
             waiting_server = false
             var mv: Dictionary = msg.get("move", {})
+            var staged := card_played and int(msg.get("seat", 0)) == 0
             _clear_selection()
             _snap_origin()          # R37: posições de antes (a animação sai daqui, em pulinhos)
             var seat_ev := int(msg.get("seat", 0))
@@ -1924,7 +1969,7 @@ func _run_event(msg: Dictionary):
                 for e in msg.get("events", []): if String(e.get("type", "")) == "discard": flown.append(String(e.rank))
                 idxs_ev = range(flown.size())
             if seat_ev != 0 or idxs_ev.any(func(q): return int(q) >= g.hands[0].size()): idxs_ev = []
-            await _fly_cards(seat_ev, flown, idxs_ev)
+            await _fly_cards(seat_ev, flown, idxs_ev, staged)
             _apply_snapshot(snap)
             plays += 1
             _cue("discard" if String(mv.get("kind", "")) in ["discard", "discard_all"] else "card")

@@ -129,15 +129,17 @@ func run():
     g.hands[0] = ["K", "3", "8", "2"]
     ui.pick_card(0)
     check(not ui.choice_open and not ui.pending.is_empty() and ui.pending.kind == "exit" and ui.help_line().contains("base"), "R37: Rei tira peão da base direto (sem escolher peão)")
-    # 5: escolhe a cor e depois a peça
+    # R38.2 · 5: sem perguntar a cor — JOGAR CARTA e depois toque direto na peça (de qualquer cor)
     g.pawns[1][0] = {"zone": "track", "pos": 30}
     g.pawns[2][0] = {"zone": "track", "pos": 50}
     g.hands[0] = ["5", "3", "8", "2"]
     ui.pick_card(0)
-    var five: Array = ui.two_choices()
-    check(ui.choice_open and five.size() == 4 and ui.choice_title().contains("QUAL PEÇA"), "R37: 5 pergunta \"você quer mover qual peça?\" com as 4 cores")
-    ui._on_hit("choice_seat1")
-    check(not ui.choice_open and ui.five_seat == 1 and not ui.pending.is_empty() and ui.pending.pawn == [1, 0], "R37: escolheu RUBI → a peça Rubi (única) já fica pronta para andar 5")
+    check(not ui.choice_open and ui.two_choices().is_empty() and ui.awaiting_play() and ui.candidate_pawns().is_empty() and ui.can_play() and ui.help_line().contains("JOGAR CARTA"), "R38.2: 5 não pergunta a cor; primeiro JOGAR CARTA (peças ainda sem aro)")
+    ui.confirm()
+    var c5: Array = ui.candidate_pawns()
+    check(ui.card_played and not ui.busy and c5.has([1, 0]) and c5.has([2, 0]), "R38.2: 5 jogado na mesa → peças de qualquer cor ficam com aro para o toque")
+    ui._on_hit("cancel")
+    check(not ui.card_played and ui.sel_card < 0, "R38.2: CANCELAR devolve a carta jogada para a mão")
     ui._clear_selection()
     # R37 · cartão de perfil: passar o mouse na placa de um bot abre o cartão de bot (sem placar)
     ui._redraw()
@@ -245,6 +247,8 @@ func run():
     g.pawns[2][0] = {"zone": "track", "pos": 50}
     g.hands[0] = ["J", "3", "8", "2"]
     ui.pick_card(0)
+    check(ui.candidate_pawns().is_empty() and ui.awaiting_play(), "R38.2: J — antes de JOGAR CARTA nenhuma peça recebe toque")
+    ui.confirm()
     var c1: Array = ui.candidate_pawns()
     check(c1.has([0, 0]) and c1.has([0, 1]) and not c1.has([1, 0]) and ui.help_line().contains("SEU peão"), "J: 1º toque só nos SEUS peões")
     ui.pick_pawn([0, 1])
@@ -252,6 +256,7 @@ func run():
     check(c2.has([1, 0]) and c2.has([2, 0]) and ui.help_line().contains("2º toque"), "J: depois do 1º toque, as peças do amigo e do adversário")
     ui.pick_pawn([0, 0])
     check(ui.sel_pawn == [0, 0] and ui.pending.is_empty(), "J: tocar outro peão seu troca a 1ª escolha")
+    ui.card_played = false        # (abaixo a troca é aplicada à mão para medir a animação)
     ui.pick_pawn([1, 0])
     check(not ui.pending.is_empty() and ui.pending.kind == "swap" and ui.sel_target == [1, 0] and ui.help_line().contains("JOGAR CARTA"), "J: 2º toque prepara a troca (as duas ficam brilhando)")
     # animação da troca: as duas peças viajam e brilham; leva de 1,0 a 2,4 s
@@ -293,6 +298,7 @@ func run():
     g.pawns[3][0] = {"zone": "track", "pos": 45}
     ui._clear_selection()
     ui.pick_card(0)
+    ui.confirm()
     check(ui.sel_pawn == [0, 0] and ui.pending.is_empty() and ui.candidate_pawns().size() >= 2, "J com peça única: seu peão já escolhido, só falta a peça para trocar")
     g.hands[0] = keep_hand
     g.pawns = keep_pawns
@@ -322,12 +328,35 @@ func run():
     check(not ui.pending.is_empty() and ui.pending.parts.size() == 2 and int(ui.pending.parts[1].steps) == 3, "7 dividido 4 + 3 entre dois peões")
     ui._on_hit("cancel")
     check(ui.pending.is_empty() and ui.sel_card < 0, "CANCELAR limpa a escolha")
+    # R38.2 · o caso da foto: 2 peões (um no Portão), 7 → JOGAR CARTA → toque no 1º → 5+2 → toque no 2º = joga
+    for i in 4: g.pawns[0][i] = {"zone": "home", "pos": i}
+    g.pawns[0][0] = {"zone": "track", "pos": 26}
+    g.pawns[0][1] = {"zone": "track", "pos": 0}
+    g.hands[0] = ["7", "3", "8", "2"]
+    ui._clear_selection()
+    ui.pick_card(0)
+    check(ui.awaiting_play() and ui.pending.is_empty(), "R38.2: 7 com 2 peões: primeiro JOGAR CARTA")
+    ui._on_hit("play")
+    var br7: Rect2 = ui.board_rect()
+    var sc7: float = br7.size.x / ui.Layout.SIZE
+    ui.on_press(br7.position + ui.pawn_point(0, 0) * sc7)
+    check(ui.sel_pawn == [0, 0] and ui.split_options().has(5) and ui.help_line().contains("divisão"), "R38.2: toque no 1º peão → escolher a divisão")
+    ui._on_hit("split_5")
+    check(ui.candidate_pawns().has([0, 1]), "R38.2: 5+2 → o peão do Portão é o 2º")
+    var hand7: int = g.hands[0].size()
+    ui.on_press(br7.position + ui.pawn_point(0, 1) * sc7)
+    check(ui.sel_second == [0, 1] or ui.busy or g.hands[0].size() < hand7, "R38.2: toque no 2º peão (no Portão) aceito")
+    t0 = Time.get_ticks_msec()
+    while ui.busy and Time.get_ticks_msec() - t0 < 6000: await process_frame
+    check(int(g.pawns[0][0].pos) == 31 and int(g.pawns[0][1].pos) == 2, "R38.2: 7 = 5 + 2 jogado sem 2º JOGAR CARTA (26→31, 0→2)")
+    t0 = Time.get_ticks_msec()
+    while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 15000: await process_frame
     # sair e tentar de novo no mesmo dia (sem Club)
     ui._on_hit("menu")
     ui._on_hit("menu_quit")
     await frames(3)
     var mq: Array = stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real")
-    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-6" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
+    check(mq.size() == 1 and String(mq[0].result) == "abandon" and String(mq[0].ruleset_version) == "marcha-real-7" and String(mq[0].mode) == "marcha", "Marcha abandonada entra no histórico comum (mode_id + ruleset_version)")
     var again: bool = await ui.access.request_start()
     check(not again, "sem Club: 2ª partida no mesmo dia bloqueada")
     hub.entitlements.apply_server({"is_founder": false, "club_active": true, "club_expires_at": "2099-01-01T00:00:00Z"})

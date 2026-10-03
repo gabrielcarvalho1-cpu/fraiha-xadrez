@@ -5,7 +5,7 @@
 // Mudou regra no .gd → muda aqui também e regenera o fixture (tools/marcha_parity_fixture.gd).
 const { rngFrom } = require('./rng');
 
-const RULESET_VERSION = 'marcha-real-6';   // R37.3: 5 não anda peça parada no próprio Portão; descartar todas as cartas sem jogada
+const RULESET_VERSION = 'marcha-real-7';   // R38.2: J nunca troca peão parado no Portão (nem o seu); 5 anda o seu peão do Portão, nunca o alheio
 const TRACK = 76;
 const ARM = 19;
 const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -111,12 +111,12 @@ class Marcha {
         for (let i = 0; i < 4; i++) if (this.pawns[who][i].zone === 'track' && this.backwardPath(who, i, 4).ok) out.push({ card: cardIdx, rank, kind: 'back', pawn: [who, i], steps: 4 });
         break;
       case '5':
-        for (let s = 0; s < 4; s++) for (let i = 0; i < 4; i++) if (this.pawns[s][i].zone === 'track' && this.pawns[s][i].pos !== gateIndex(s) && this.forwardPath(s, i, 5, teamOf(s) === teamOf(seat)).ok) out.push({ card: cardIdx, rank, kind: 'move', pawn: [s, i], steps: 5 });
+        for (let s = 0; s < 4; s++) for (let i = 0; i < 4; i++) if (this.pawns[s][i].zone === 'track' && (s === who || this.pawns[s][i].pos !== gateIndex(s)) && this.forwardPath(s, i, 5, teamOf(s) === teamOf(seat)).ok) out.push({ card: cardIdx, rank, kind: 'move', pawn: [s, i], steps: 5 });
         break;
       case 'J':
         for (let i = 0; i < 4; i++) {
           const a = this.pawns[who][i];
-          if (a.zone !== 'track') continue;      // R37.2: o seu peão no próprio Portão PODE trocar
+          if (a.zone !== 'track' || gateIndex(who) === a.pos) continue;      // R38.2: peão que acabou de sair (no Portão) não troca
           for (let s = 0; s < 4; s++) for (let j = 0; j < 4; j++) {
             if (s === who) continue;
             const b = this.pawns[s][j];

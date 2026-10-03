@@ -25,7 +25,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-6"   # R37.3: 5 não anda peça parada no próprio Portão; descartar todas as cartas sem jogada
+const RULESET_VERSION := "marcha-real-7"   # R38.2: J nunca troca peão parado no Portão (nem o seu); 5 anda o seu peão do Portão, nunca o alheio
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -211,13 +211,14 @@ func legal_moves(seat: int, card_idx: int) -> Array:
         "5":
             for s in 4:
                 for i in 4:
-                    # R37.3: peça que acabou de sair (parada no PRÓPRIO Portão) não anda com o 5
-                    if pawns[s][i].zone == "track" and int(pawns[s][i].pos) != Layout.gate_index(s) and forward_path(s, i, 5, team_of(s) == team_of(seat)).ok:
+                    # R38.2: peça do ALIADO ou do OPONENTE que acabou de sair (parada no próprio Portão) não anda
+                    # com o 5; o SEU peão parado no seu Portão anda 5 normalmente
+                    if pawns[s][i].zone == "track" and (s == who or int(pawns[s][i].pos) != Layout.gate_index(s)) and forward_path(s, i, 5, team_of(s) == team_of(seat)).ok:
                         out.append({"card": card_idx, "rank": rank, "kind": "move", "pawn": [s, i], "steps": 5})
         "J":
             for i in 4:
                 var a: Dictionary = pawns[who][i]
-                if a.zone != "track": continue      # R37.2: o seu peão que acabou de sair (no Portão) PODE trocar
+                if a.zone != "track" or Layout.gate_index(who) == a.pos: continue      # R38.2: peão que acabou de sair (no Portão) não troca
                 for s in 4:
                     for j in 4:
                         if s == who: continue

@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-6", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-7", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
     var h1: int = g.hands[1].size()
@@ -201,7 +201,11 @@ func _initialize():
     fj.pawns[3][0] = {"zone": "track", "pos": Layout.gate_index(3)}
     fj.hands[0] = ["J"]
     var mj: Array = fj.legal_moves(0, 0)
-    check(mj.any(func(m): return m.pawn == [0, 0] and m.target == [1, 0]), "R37.2: J com o peão que acabou de sair (no Portão) troca com outra peça")
+    check(not mj.any(func(m): return m.pawn == [0, 0]), "R38.2: J NÃO troca o seu peão que acabou de sair (parado no seu Portão)")
+    check(mj.is_empty(), "R38.2: sem outro peão seu na Muralha, o J não tem troca")
+    fj.pawns[0][1] = {"zone": "track", "pos": 12}
+    mj = fj.legal_moves(0, 0)
+    check(mj.any(func(m): return m.pawn == [0, 1] and m.target == [1, 0]), "J troca o seu peão que já andou com outra peça")
     check(not mj.any(func(m): return m.target == [3, 0]), "R37.2: J não troca com a peça que acabou de sair (parada no Portão dela)")
     check(mj.all(func(m): return int(m.pawn[0]) == 0), "J sempre usa o peão de quem joga (nunca troca duas peças dos outros)")
     fj.pawns[0][0] = {"zone": "home", "pos": 0}
@@ -228,7 +232,12 @@ func _initialize():
     f8.pawns[1][1] = {"zone": "track", "pos": 40}
     f8.hands[0] = ["5"]
     var m8: Array = f8.legal_moves(0, 0)
-    check(not m8.any(func(m): return m.pawn == [1, 0]) and m8.any(func(m): return m.pawn == [1, 1]), "R37.3: 5 não anda a peça que acabou de sair (parada no próprio Portão)")
+    check(not m8.any(func(m): return m.pawn == [1, 0]) and m8.any(func(m): return m.pawn == [1, 1]), "R37.3: 5 não anda a peça do OPONENTE que acabou de sair (parada no próprio Portão)")
+    f8.pawns[2][0] = {"zone": "track", "pos": Layout.gate_index(2)}     # aliado acabou de sair
+    f8.pawns[0][0] = {"zone": "track", "pos": Layout.gate_index(0)}     # o seu acabou de sair
+    m8 = f8.legal_moves(0, 0)
+    check(not m8.any(func(m): return m.pawn == [2, 0]), "R38.2: 5 não anda a peça do ALIADO que acabou de sair")
+    check(m8.any(func(m): return m.pawn == [0, 0]), "R38.2: 5 anda o SEU peão parado no seu Portão")
     var f9 = Rules.new()
     f9.setup(57)
     f9.hands[0] = ["Q", "9", "8"]                     # todos na base: nenhuma carta tem jogada
