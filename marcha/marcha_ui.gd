@@ -1381,7 +1381,8 @@ func _apply_snapshot(snap: Dictionary):
     g.turn = int(snap.get("turn", 0))
     g.round_no = int(snap.get("round_no", 1))
     g.winner = int(snap.get("winner", -1))
-    g.log = (snap.get("log", []) as Array).map(func(x): return String(x))
+    var me := String(players[0].get("name", "")) if not players.is_empty() else ""
+    g.log = (snap.get("log", []) as Array).map(func(x): return ("Você" + String(x).substr(me.length())) if not me.is_empty() and String(x).begins_with(me + " ") else String(x))
     for s in 4: g.names[s] = "Você" if s == 0 else names[s]
     if snap.has("turn_left_ms"): turn_left_ms = int(snap.turn_left_ms) if bool(snap.get("my_turn", false)) else TURN_MS
     var conn: Array = snap.get("players_connected", [])
