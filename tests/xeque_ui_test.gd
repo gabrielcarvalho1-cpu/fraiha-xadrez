@@ -62,6 +62,14 @@ func run():
     await frames(3)
     var g: Rules = ui.g
     check(ui.mode == "game" and g != null and g.hands[0].size() == 5 and g.state == Rules.TURN_WAITING, "JOGAR AGORA: partida com 5 cartas na mão")
+    # R36 · antes da 1ª rodada o baralho é apresentado (6/6/6/2) e o jogo espera
+    check(ui.intro_anim >= 0.0 and ui.cues_played.has("deck_intro"), "R36: apresentação do baralho antes da 1ª rodada (com som)")
+    var dl0: float = ui.deal_anim
+    ui._process(1.0)
+    check(ui.intro_anim >= 0.0 and ui.deal_anim == dl0, "R36: durante a apresentação a distribuição espera")
+    ui._process(ui.INTRO_T)
+    check(ui.intro_anim < 0.0, "R36: apresentação termina sozinha (%.1f s)" % ui.INTRO_T)
+    check(Rules.DECK_COUNTS == {"rei": 6, "rainha": 6, "cavalo": 6, "peao": 2}, "R36: baralho 6 Rei / 6 Rainha / 6 Cavalo / 2 Peão")
     check(g.names[1] == "Dama de Ferro" and g.names[2] == "Sir Gambito" and g.names[3] == "Torre Velha", "3 bots da referência à mesa")
     # ---------- vez do humano: seleção, JOGAR travado ----------
     g.turn = 0
@@ -108,11 +116,11 @@ func run():
     check(g.lives[3] == lives3 - 1 and not g.alive(3), "o motor já resolveu: Torre Velha eliminada no XEQUE-MATE (animação não é a autoridade)")
     ui.toggle_card(0)
     check(ui.selected.is_empty(), "durante a resolução nenhuma carta pode ser escolhida")
-    check(ui.cues_played.has("xeque"), "som do XEQUE")
+    check(ui.cues_played.has("xeque_hit") and ui.shake_amp > 0.0 and not ui.slam.is_empty(), "som do XEQUE (impacto R36)")
     ui._advance_phase()
-    check(ui.phase == "clock" and ui.seat_status(3).id == "com_o_relogio" and ui.cues_played.back() == "clock", "Relógio de Xeque: placa COM O RELÓGIO e som do relógio")
+    check(ui.phase == "clock" and ui.seat_status(3).id == "com_o_relogio" and ui.cues_played.has("clock_tension"), "Relógio de Xeque: placa COM O RELÓGIO e som do relógio")
     ui._advance_phase()
-    check(ui.cues_played.back() == "mate", "som de explosão no XEQUE-MATE")
+    check(ui.cues_played.has("mate_boom") and ui.shake_amp > 10.0 and not ui.particles.is_empty(), "XEQUE-MATE: explosão (som, tremor e estilhaços)")
     check(ui.phase == "mate" and ui.seat_status(3).id == "xeque_mate" and ui.clock_visual(3) == "disparado", "XEQUE-MATE: relógio disparado e placa XEQUE-MATE!")
     await frames(2)
     ui.skip_presentation()
@@ -127,9 +135,9 @@ func run():
     check(ui.deal_anim >= 0.0 and ui.deal_order.size() == g.hands.reduce(func(acc, h): return acc + h.size(), 0) and ui.mesa_round == g.round_no, "rodada nova: primeiro a DISTRIBUIÇÃO das cartas (uma a uma)")
     check(ui.deal_landed(0) == 0, "no começo da distribuição a mão ainda está vazia")
     var tl0: int = ui.turn_left_ms
-    ui._process(0.9)
+    ui._process(1.2)
     check(ui.turn_left_ms == tl0 and ui.deal_landed(0) > 0 and ui.deal_landed(0) < n0, "distribuição em andamento: cartas chegando aos poucos; o tempo da vez não corre")
-    ui._process(1.0)
+    ui._process(1.3)
     check(ui.deal_anim < 0.0 and ui.mesa_anim >= 0.0, "depois da distribuição vem a carta da MESA")
     ui._process(0.5)
     check(ui.turn_left_ms == tl0, "durante a animação da MESA o tempo da vez não corre")
@@ -157,7 +165,7 @@ func run():
     check(g.alive_seats().size() == 1 and g.placement(g.winner) == 1, "último com Coroa é o vencedor")
     var mh = stage.match_history
     var rows: Array = mh.entries.filter(func(e): return String(e.get("mode_id", "")) == "xeque")
-    check(rows.size() == 1 and String(rows[0].ruleset_version) == "1" and String(rows[0].mode) == "xeque" and String(rows[0].result) in ["win", "loss"], "histórico comum: mode_id xeque, ruleset_version 1")
+    check(rows.size() == 1 and String(rows[0].ruleset_version) == "2" and String(rows[0].mode) == "xeque" and String(rows[0].result) in ["win", "loss"], "histórico comum: mode_id xeque, ruleset_version 2")
     check(int(rows[0].players) == 4 and int(rows[0].placement) >= 1 and rows[0].has("duration_s") and int(rows[0].data.winner_player_id) == g.winner and rows[0].data.final.size() == 4, "histórico: jogadores, posição final, duração, vencedor e estado final dos 4")
     await frames(2)
     check(hit_center(ui, "again") != Vector2(-1, -1) and hit_center(ui, "over_menu") != Vector2(-1, -1), "resultado: JOGAR NOVAMENTE e VOLTAR AO MENU")

@@ -93,29 +93,55 @@ func run():
     r = g.challenge(3)
     check(r.truthful and r.mate and r.eliminated and not g.alive(3) and g.lives[3] == 0, "XEQUE-MATE (regra da WePlay): eliminado na hora")
     check(g.hands[3].is_empty() and g.eliminated_round[3] == g.round_no and g.finish_order == [3], "eliminado sai da mesa e entra na ordem de eliminação")
-    # ---------- relógio: ciclo sem reposição ----------
+    # ---------- relógio (ruleset 2): chance crescente por nível ----------
     g = new_game(9)
-    check(Rules.LIVES == 1 and Rules.CLOCK_SLOTS == 6, "regra da WePlay: 1 vida, relógio de 6 posições")
-    check(g.clocks.all(func(c): return c.size() == 6 and count(c, Rules.MATE) == 1), "relógio começa com 5 SEGURAS + 1 XEQUE-MATE")
-    check(is_equal_approx(g.clock_chance(1), 1.0 / 6.0), "1º acionamento: 1 em 6")
-    var orders := {}
-    var mate_at := [0, 0, 0, 0, 0, 0]
-    for sd in range(1, 601):
-        var gc := Rules.new()
-        gc.setup(sd)
-        var c: Array = gc.clocks[0]
-        orders[str(c)] = true
-        mate_at[c.find(Rules.MATE)] += 1
-    check(orders.size() == 6 and mate_at.all(func(n): return n > 70), "posição do XEQUE-MATE embaralhada (%s em 600 ciclos)" % str(mate_at))
-    g.clocks[1] = [Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.SAFE, Rules.MATE]
+    check(Rules.LIVES == 1 and Rules.CLOCK_SLOTS == 6 and Rules.RULESET_VERSION == "2", "1 vida, relógio de 6 níveis, ruleset 2")
+    check(g.clocks.all(func(c): return c.size() == 6 and c.all(func(x): return x == Rules.PENDING)), "relógio começa no 1º nível (nada sorteado antes da hora)")
+    check(is_equal_approx(g.clock_chance(1), 0.12), "1º acionamento: 12% (raro, mas pode estourar)")
     var chances := []
-    var all_safe := true
     for i in 5:
         chances.append(snappedf(g.clock_chance(1), 0.001))
-        if g._pull_clock(1) != Rules.SAFE: all_safe = false
-    check(all_safe and g.clock_left(1) == 1, "5 posições seguras consumidas, sem reposição")
-    check(chances == [snappedf(1.0 / 6, 0.001), snappedf(1.0 / 5, 0.001), 0.25, snappedf(1.0 / 3, 0.001), 0.5], "chance progride 1/6 → 1/5 → 1/4 → 1/3 → 1/2 (%s)" % str(chances))
-    check(is_equal_approx(g.clock_chance(1), 1.0) and g.clocks[1] == [Rules.MATE], "depois de 5 seguras: o próximo é XEQUE-MATE (1 em 1)")
+        g.forced_roll = 0.99
+        g._pull_clock(1)
+    check(chances == [0.12, 0.2, 0.3, 0.45, 0.65], "chance sobe a cada nível: 12% → 20% → 30% → 45% → 65% (%s)" % str(chances))
+    g.forced_roll = 0.99
+    check(is_equal_approx(g.clock_chance(1), 1.0) and g._pull_clock(1) == Rules.MATE, "6º nível: XEQUE-MATE certo")
+    # frequência real (sorteio do motor): cada nível estoura perto da chance anunciada
+    var hits := [0, 0, 0, 0, 0, 0]
+    var tries := [0, 0, 0, 0, 0, 0]
+    var gs := Rules.new()
+    gs.setup(4242)
+    for k in 6000:
+        var lv: int = gs.clock_level(0)
+        tries[lv] += 1
+        if gs._pull_clock(0) == Rules.MATE:
+            hits[lv] += 1
+            gs.reset_clock(0)
+    var ok_rates := true
+    var rates := []
+    for lv in 5:
+        var rate := float(hits[lv]) / maxf(1.0, tries[lv])
+        rates.append(snappedf(rate, 0.01))
+        if absf(rate - float(Rules.CLOCK_CHANCES[lv])) > 0.035: ok_rates = false
+    check(ok_rates and float(hits[0]) / tries[0] <= 0.15, "sorteio confere com a tabela (níveis 1–5: %s); 1º nível ≤ 15%%" % str(rates))
+    # mesma semente → mesma sequência de sorteios (RNG único do motor, testável)
+    var seq := func(sd: int) -> String:
+        var q := Rules.new()
+        q.setup(sd)
+        var out := ""
+        for k in 40:
+            q.reset_clock(0)
+            out += "M" if q._pull_clock(0) == Rules.MATE else "s"
+        return out
+    check(seq.call(99) == seq.call(99) and seq.call(99) != seq.call(100), "sorteio do relógio reproduzível com a semente")
+    check(Rules.deck_size() == 20 and Rules.DECK_COUNTS == {"rei": 6, "rainha": 6, "cavalo": 6, "peao": 2}, "baralho 6/6/6/2 = 20 (fonte única para a UI)")
+    # resultado do XEQUE informa chance e sorteio; depois de estourar o relógio volta ao 1º nível
+    g = new_game(10)
+    force(g, 2, "rei", [["cavalo"], ["rei"], ["rei", "peao"], ["rainha"]])
+    g.play(2, [0, 1])
+    g.forced_roll = 0.05
+    r = g.challenge(3)
+    check(r.mate and is_equal_approx(float(r.chance), 0.12) and is_equal_approx(float(r.roll), 0.05), "XEQUE-MATE no 1º nível (azar!): resultado traz chance 12% e o sorteio")
     # ---------- eliminação, pular eliminado/sem cartas, vitória ----------
     g = new_game(21)
     g.lives = [1, 1, 1, 1]

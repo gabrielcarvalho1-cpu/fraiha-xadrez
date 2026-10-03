@@ -67,15 +67,16 @@ for (const st of xf.steps) {
   const p = X.pLastPlayTrue(pub, g.hands[seat]);
   if (Math.abs(p - Number(st.p_true)) > 1e-9) { if (pBad++ < 3) console.log('p diff', xn, p, st.p_true); }
   const act = st.action;
+  const rr = st.result && (st.result.roll !== undefined ? st.result.roll : (st.result.forced ? st.result.forced.roll : undefined));
+  if (rr !== undefined && Number(rr) >= 0) g.nextRoll = Number(rr);       // mesmo sorteio do relógio que o Godot fez
   const res = act.action === 'challenge' ? g.challenge(seat) : g.play(seat, ints(act.idx));
   const r = st.result;
   const resKey = o => !o ? 'null' : JSON.stringify(o.caller !== undefined
-    ? [int(o.caller), int(o.accused), o.cards, !!o.truthful, int(o.loser), o.clock, !!o.mate, !!o.eliminated, int(o.winner), int(o.next_starter)]
+    ? [int(o.caller), int(o.accused), o.cards, !!o.truthful, int(o.loser), o.clock, !!o.mate, !!o.eliminated, int(o.winner), int(o.next_starter), Math.round(Number(o.chance) * 100)]
     : [int(o.seat), int(o.count), o.declared, o.forced ? [int(o.forced.loser), o.forced.clock, !!o.forced.mate, int(o.forced.winner)] : null]);
   if (resKey(res) !== resKey(r)) { if (rBad++ < 3) console.log('result diff', xn, resKey(res), resKey(r)); }
   const a = st.after;
-  const mateNow = (res && (res.mate || (res.forced && res.forced.mate)));
-  const clocksKey = c => JSON.stringify(mateNow ? c.map(x => x.length) : c);
+  const clocksKey = c => JSON.stringify(c);
   const afterKey = (o, cl) => JSON.stringify([o.state, int(o.turn), ints(o.lives), o.hands, int(o.winner), ints(o.eliminated_round), ints(o.finish_order), o.public_log, int(o.next_starter)]) + clocksKey(cl);
   if (afterKey(a, a.clocks) !== afterKey({ ...g, turn: g.turn, lives: g.lives }, g.clocks)) { if (aBad++ < 3) console.log('after diff', xn); }
 }

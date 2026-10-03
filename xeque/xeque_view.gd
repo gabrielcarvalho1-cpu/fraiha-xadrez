@@ -240,12 +240,14 @@ func _draw():
     var dsg: Vector2 = ui.design
     if ui.mode in ["tutorial", "over"] and ui.layout == "landscape": dsg = Vector2(1920, 1080)
     ui.k = minf(vs.x / dsg.x, vs.y / dsg.y)
-    ui.origin = (vs - dsg * ui.k) / 2.0
+    ui.origin = (vs - dsg * ui.k) / 2.0 + ui.shake_offset() * ui.k      # R36: tremor de tela
     draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
     match ui.mode:
         "game": _draw_game()
         "tutorial": _draw_tutorial(dsg)
         "over": _draw_result(dsg)
+    if ui.mode in ["game", "over"]: _draw_fx()
+    if ui.mode == "game" and ui.intro_anim >= 0.0: _draw_intro()
     if ui.menu_open: _draw_menu()
     if ui.confirm_quit: _draw_confirm()
     if not ui.flash.is_empty(): _draw_flash()
@@ -296,7 +298,7 @@ func _draw_game():
     if not mate: _draw_hand()
     _draw_fly()
     if ui.phase in ["reveal", "clock", "safe"]: _draw_reveal(false)
-    if ui.deal_anim >= 0.0: _draw_deal()
+    if ui.deal_anim >= 0.0 and ui.intro_anim < 0.0: _draw_deal()
     if ui.mesa_anim >= 0.0 and ui.phase == "": _draw_mesa_anim()
     if ui.phase == "safe": _draw_safe()
     if mate: _draw_mate()
@@ -697,6 +699,11 @@ func _draw_meter():
     text(words, Vector2(r.position.x + 18, ty), "ui_sp4", fit(words, "ui_sp4", fs, r.size.x * 0.62), wcol)
     var owner: String = ui.g.names[who]
     text(owner, Vector2(r.position.x, ty), "ui", fit(owner, "ui", 20, r.size.x * 0.34), Color("c9d6cf"), r.size.x - 18, HORIZONTAL_ALIGNMENT_RIGHT)
+    # R36 · chance do próximo acionamento de quem está em foco (12% → 100%)
+    var ch: float = ui.g.clock_chance(who) if vis != "disparado" else 1.0
+    var ct := "%d%%" % roundi(ch * 100.0)
+    var ccol := Color("e8b242").lerp(Color("ff4a42"), clampf((ch - 0.12) / 0.6, 0.0, 1.0))
+    text(ct, Vector2(r.position.x, r.position.y + (33 if not compact else 31)), "ui_sp", 22 if not compact else 19, ccol, r.size.x - 18, HORIZONTAL_ALIGNMENT_RIGHT)
 
 func _draw_xeque_button(active: bool):
     var x: Array = L().xeque
@@ -769,8 +776,17 @@ func _draw_hand():
             for gi in 4: draw_rect(Rect2(-sz / 2.0, sz).grow(3 + gi * 3), Color(1, 0.85, 0.35, a * (0.5 - gi * 0.11)), false, 3.0)
             draw_rect(Rect2(-sz / 2.0, sz).grow(2), Color("ffd257"), false, 3.0)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+        if hand[i] == Rules.JOKER:
+            # R36 · Peão = CORINGA: aura verde-dourada pulsando em volta da carta (vale como qualquer peça)
+            draw_set_transform(ui.origin + Vector2(it.c) * ui.k, it.rot, Vector2(ui.k, ui.k))
+            var pj := 0.5 + 0.5 * sin(ui.t * 5.0 + i)
+            for gj in 4: draw_rect(Rect2(-sz / 2.0, sz).grow(4 + gj * 4 + pj * 3), Color(0.35, 1.0, 0.55, 0.30 - gj * 0.07), false, 4.0)
+            draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         var mod := Color.WHITE if my_turn or g.turn != 0 else Color(0.9, 0.9, 0.9)
         tex_center(tex, it.c, it.sc, it.rot, mod)
+        if hand[i] == Rules.JOKER:
+            var tagc := Vector2(it.c) + Vector2(0, -sz.y / 2.0 - 16)
+            chip(Rect2(tagc - Vector2(62, 15), Vector2(124, 30)), "CORINGA", Color("1d7a4a"), Color("ffd257"), Color("fff1c2"), 18)
         if my_turn:
             hit(Rect2(Vector2(it.c) - sz / 2.0, sz), "card_%d" % i)
         if ui.hover_id == "card_%d" % i and my_turn and not (i in ui.selected):
@@ -834,7 +850,8 @@ func _draw_safe():
     var name: String = ui.g.names[int(r.loser)]
     var w := 0.0
     var l1 := "O RELÓGIO NÃO DISPAROU"
-    var l2 := "%s ESCAPOU · CHANCE DE XEQUE-MATE AGORA: %s" % [name.to_upper(), "1 EM %d" % ui.g.clock_left(int(r.loser)) if ui.g.clock_left(int(r.loser)) > 1 else "CERTA"]
+    var nxt: float = ui.g.clock_chance(int(r.loser))
+    var l2 := "%s ESCAPOU · PRÓXIMO ACIONAMENTO: %s" % [name.to_upper(), ("%d%% DE XEQUE-MATE" % roundi(nxt * 100.0)) if nxt < 1.0 else "XEQUE-MATE CERTO"]
     var fs: int = ml[1]
     w = maxf(tw(l1, "ui_sp4", fs + 10), tw(l2, "ui_sp", fs - 4)) + 60
     var c: Vector2 = ml[0] - Vector2(0, fs * 1.6)
@@ -854,13 +871,29 @@ func _draw_mate():
     _draw_xeque_button(true)
     var mc: Array = L().mate_clock
     var shake := Vector2(sin(ui.t * 70.0), cos(ui.t * 53.0)) * (4.0 if ui.phase_t < 0.6 else 1.0)
-    tex_center(ui.clock_tex["disparado"], mc[0] + shake, mc[1] * 2.0)
+    # R36 · onda de choque e clarão saindo do relógio
+    var pt: float = ui.phase_t
+    for k in 3:
+        var tk := pt - k * 0.18
+        if tk > 0.0 and tk < 1.1:
+            var rad := 40.0 + tk * 1100.0
+            draw_arc(mc[0], rad, 0, TAU, 72, Color(1.0, 0.75 - k * 0.2, 0.4 - k * 0.1, (1.0 - tk / 1.1) * 0.85), 26.0 * (1.0 - tk / 1.1) + 3.0)
+    if pt < 0.5:
+        for gl in 6: draw_circle(mc[0], (90.0 + gl * 60.0) * (0.6 + pt), Color(1.0, 0.85, 0.5, (0.5 - pt) * (0.28 - gl * 0.04)))
+    var pop := 1.0 + 0.55 * maxf(0.0, 1.0 - pt / 0.25)
+    tex_center(ui.clock_tex["disparado"], mc[0] + shake, mc[1] * 2.0 * pop)
     if ui.phase == "mate": _draw_reveal(true)
     var mt: Array = L().mate_title
     var title := "Xeque-Mate" if ui.phase == "mate" else "Eliminado"
     var tfs: int = mt[1]
     tfs = fit(title, "title", tfs, d.x - 80)
-    text(title, Vector2(0, mt[0].y), "title", tfs, Color("fff1d6"), d.x, HORIZONTAL_ALIGNMENT_CENTER, 14, Color("2a0a06"))
+    # R36 · o título cai pesado (escala 2,4 → 1) e treme junto com a tela
+    var ts := 1.0 + 1.4 * pow(maxf(0.0, 1.0 - (pt - 0.15) / 0.3), 2.0) if pt > 0.15 else 0.0
+    if ts > 0.0:
+        var tc := Vector2(d.x / 2.0, mt[0].y - tfs * 0.35)
+        draw_set_transform(ui.origin + tc * ui.k, 0.0, Vector2(ui.k * ts, ui.k * ts))
+        text(title, Vector2(-d.x / 2.0, tfs * 0.35), "title", tfs, Color("fff1d6"), d.x, HORIZONTAL_ALIGNMENT_CENTER, 14, Color("2a0a06"))
+        draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
     var ml: Array = L().mate_line
     var name := String(ui.g.names[loser]).to_upper()
     var line := ""
@@ -925,10 +958,10 @@ func _draw_tutorial(d: Vector2):
 func _tutorial_panels() -> Array:
     return [
         {"title": "OBJETIVO", "text": "Quatro jogadores à mesa. Vence o *último jogador de pé*.", "art": "crowns"},
-        {"title": "AS CARTAS", "text": "5 cartas para cada um. A mesa pede *Rei, Rainha ou Cavalo*. O *Peão Coroado* é coringa.", "art": "cards"},
+        {"title": "AS CARTAS", "text": "*%d cartas*: %d Rei, %d Rainha, %d Cavalo e %d Peão Coroado, o *CORINGA*. %d para cada um." % [Rules.deck_size(), Rules.DECK_COUNTS[Rules.KING], Rules.DECK_COUNTS[Rules.QUEEN], Rules.DECK_COUNTS[Rules.KNIGHT], Rules.DECK_COUNTS[Rules.JOKER], Rules.HAND], "art": "cards"},
         {"title": "SUA VEZ", "text": "Baixe de *1 a 3 cartas viradas* e diga que são a peça pedida. Pode ser verdade. Pode ser blefe.", "art": "backs"},
         {"title": "XEQUE", "text": "O próximo jogador joga ou aperta *XEQUE* na jogada anterior: as cartas dela são reveladas.", "art": "xeque"},
-        {"title": "RELÓGIO DE XEQUE", "text": "*Quem perde o desafio aciona o seu Relógio*: 6 posições, uma é xeque-mate. A cada aperto o perigo sobe.", "art": "clocks"},
+        {"title": "RELÓGIO DE XEQUE", "text": "*Quem perde o desafio aciona o seu Relógio*: pode estourar já no 1º aperto (%d%%) e o perigo sobe a cada nível, até %d%%." % [roundi(Rules.CLOCK_CHANCES[0] * 100.0), roundi(Rules.CLOCK_CHANCES[-1] * 100.0)], "art": "clocks"},
         {"title": "XEQUE-MATE", "text": "Se o Relógio disparar, é *xeque-mate*: o jogador está *fora da partida*.", "art": "mate"},
     ]
 
@@ -1033,8 +1066,26 @@ func _draw_result(d: Vector2):
     var title := "Vitória" if won else "Derrota"
     var tcol := Color("f6c24a") if won else Color("e0574a")
     var cx := d.x / 2.0
-    text(title, Vector2(0, 214 if not portrait else 230), "title", 232 if not portrait else 190, tcol, d.x, HORIZONTAL_ALIGNMENT_CENTER, 10, Color("2a1206"))
-    draw_string(font("title"), Vector2(0, 208 if not portrait else 224), title, HORIZONTAL_ALIGNMENT_CENTER, d.x, 232 if not portrait else 190, Color(1, 0.95, 0.7, 0.25))
+    var ot: float = ui.over_t
+    # R36 · raios girando atrás do título (vitória) / pulso vermelho escuro (derrota)
+    var tyb := 214.0 if not portrait else 230.0
+    var tc := Vector2(cx, tyb - 80)
+    if won:
+        var grow := clampf(ot / 0.7, 0.0, 1.0)
+        for i in 20:
+            var a := ot * 0.3 + TAU * i / 20.0
+            var ln := (700.0 + 160.0 * (i % 3)) * grow
+            draw_colored_polygon(PackedVector2Array([tc, tc + Vector2.from_angle(a - 0.06) * ln, tc + Vector2.from_angle(a + 0.06) * ln]), Color(1.0, 0.84, 0.35, 0.12 + 0.05 * (i % 2)))
+    else:
+        var pul := 0.5 + 0.5 * sin(ot * 2.4)
+        draw_rect(Rect2(Vector2(-3000, -3000), Vector2(8000, 8000)), Color(0.35, 0.02, 0.02, 0.10 + 0.08 * pul))
+    # título entra pesado (escala 2,2 → 1) com um tremor curto
+    var ts := 1.0 + 1.2 * pow(maxf(0.0, 1.0 - ot / 0.35), 2.0)
+    var tsh := Vector2(sin(ot * 80.0), cos(ot * 61.0)) * 10.0 * maxf(0.0, 1.0 - (ot - 0.3) / 0.4) if ot > 0.3 else Vector2.ZERO
+    draw_set_transform(ui.origin + (tc + tsh) * ui.k, 0.0, Vector2(ui.k * ts, ui.k * ts))
+    text(title, Vector2(-d.x / 2.0, tyb - tc.y), "title", 232 if not portrait else 190, tcol, d.x, HORIZONTAL_ALIGNMENT_CENTER, 10, Color("2a1206"))
+    draw_string(font("title"), Vector2(-d.x / 2.0, tyb - 6 - tc.y), title, HORIZONTAL_ALIGNMENT_CENTER, d.x, 232 if not portrait else 190, Color(1, 0.95, 0.7, 0.25))
+    draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
     var hero: int = 0 if won else g.winner
     # retrato grande do vencedor (você, se venceu)
     var fr := Rect2(420, 330, 282, 282) if not portrait else Rect2(399, 300, 282, 282)
@@ -1138,3 +1189,98 @@ func _draw_flash():
     var r := Rect2(d.x / 2.0 - w / 2.0, d.y * 0.36, w, 56)
     panel(r)
     text(ui.flash, Vector2(r.position.x, r.get_center().y + 10), "ui_sp", fs, Color("f6ecd2"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+
+
+# ---------------------------------------------------------------- R36 · efeitos de tela
+func _draw_fx():
+    var d: Vector2 = ui.design
+    var big := Rect2(Vector2(-3000, -3000), Vector2(8000, 8000))
+    # partículas: estilhaços, faíscas, fumaça, confete
+    for q in ui.particles:
+        var a: float = clampf(q.life / q.max, 0.0, 1.0)
+        var c: Color = q.col
+        match String(q.kind):
+            "smoke":
+                draw_circle(q.p, float(q.size) * (1.6 - a * 0.6), Color(c.r, c.g, c.b, c.a * a * 0.8))
+            "spark":
+                draw_line(q.p, q.p - Vector2(q.v) * 0.03, Color(c.r, c.g, c.b, a), float(q.size) * 0.6)
+                draw_circle(q.p, float(q.size) * 0.5, Color(1, 1, 0.9, a))
+            "confetti", "ash":
+                var u := Vector2.from_angle(q.rot) * float(q.size) * 0.5
+                var v := Vector2.from_angle(q.rot + PI / 2) * float(q.size) * 0.3 * absf(sin(q.rot * 2.0))
+                draw_colored_polygon(PackedVector2Array([q.p - u - v, q.p + u - v, q.p + u + v, q.p - u + v]), Color(c.r, c.g, c.b, a if q.kind == "confetti" else a * 0.7))
+            _:
+                var u2 := Vector2.from_angle(q.rot) * float(q.size)
+                var v2 := Vector2.from_angle(q.rot + 2.2) * float(q.size) * 0.6
+                draw_colored_polygon(PackedVector2Array([q.p + u2, q.p + v2, q.p - u2 * 0.7]), Color(c.r, c.g, c.b, a))
+    # carimbo grande ("XEQUE!")
+    if not ui.slam.is_empty():
+        var st: float = ui.slam.t
+        var sc := 1.0 + 2.2 * pow(maxf(0.0, 1.0 - st / 0.22), 2.0)
+        var al := clampf(1.0 - (st - 1.0) / 0.6, 0.0, 1.0)
+        var cc := Vector2(d.x / 2.0, d.y * 0.42)
+        draw_set_transform(ui.origin + cc * ui.k, -0.06, Vector2(ui.k * sc, ui.k * sc))
+        var txt: String = ui.slam.text
+        var col: Color = ui.slam.col
+        var fs := 210 if ui.layout != "portrait" else 170
+        for i in 3: draw_rect(Rect2(-d.x, -fs * 0.62 - i * 6, d.x * 2, fs * 1.1 + i * 12), Color(0.1, 0.0, 0.0, 0.10 * al))
+        text(txt, Vector2(-d.x / 2.0 + 8, fs * 0.36 + 8), "title", fs, Color(0, 0, 0, 0.55 * al), d.x, HORIZONTAL_ALIGNMENT_CENTER)
+        text(txt, Vector2(-d.x / 2.0, fs * 0.36), "title", fs, Color(col.r, col.g, col.b, al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 16, Color(0.16, 0.02, 0.0, al))
+        if String(ui.slam.sub) != "":
+            text(String(ui.slam.sub), Vector2(-d.x / 2.0, fs * 0.36 + 70), "ui_sp4", 44, Color(1, 0.94, 0.8, al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 8, Color(0.16, 0.02, 0.0, al))
+        draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+    # tensão do relógio: borda vermelha pulsando no ritmo do coração
+    if ui.phase == "clock":
+        var hb := pow(maxf(0.0, sin(ui.phase_t * TAU / 0.62)), 6.0)
+        for i in 8: draw_rect(Rect2(Vector2(-i * 14, -i * 14), d + Vector2(i * 28, i * 28)), Color(0.8, 0.05, 0.05, (0.10 + 0.18 * hb) * (1.0 - i / 8.0)), false, 30.0)
+    # clarão
+    if ui.flash_col.a > 0.01: draw_rect(big, ui.flash_col)
+
+## Apresentação do baralho (antes da 1ª rodada): as 4 cartas entram em leque com a quantidade de cada uma.
+func _draw_intro():
+    var d: Vector2 = ui.design
+    var t: float = ui.intro_anim
+    var fade_in := clampf(t / 0.3, 0.0, 1.0)
+    var fade_out := clampf((ui.INTRO_T - t) / 0.4, 0.0, 1.0)
+    var al := fade_in * fade_out
+    draw_rect(Rect2(Vector2(-3000, -3000), Vector2(8000, 8000)), Color(0.02, 0.03, 0.02, 0.78 * al))
+    var portrait: bool = ui.layout == "portrait"
+    text("O BARALHO DESTA PARTIDA", Vector2(0, d.y * (0.2 if not portrait else 0.22)), "title", 86 if not portrait else 70, Color(1, 0.86, 0.45, al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 10, Color(0.1, 0.05, 0, al))
+    # a fonte é o motor: Rules.DECK_COUNTS / Rules.HAND (a UI não guarda números próprios)
+    var kinds: Array = Rules.TARGETS + [Rules.JOKER]
+    var counts: Dictionary = Rules.DECK_COUNTS
+    var cw := 300.0 if not portrait else 230.0
+    var sc := cw / 360.0
+    var gap := 40.0 if not portrait else 18.0
+    var total := 4 * cw + 3 * gap
+    var y := d.y * (0.52 if not portrait else 0.5)
+    for i in 4:
+        var ti := clampf((t - 0.25 - i * 0.18) / 0.35, 0.0, 1.0)
+        if ti <= 0.0: continue
+        var e := 1.0 - pow(1.0 - ti, 3.0)
+        var x := d.x / 2.0 - total / 2.0 + cw / 2.0 + i * (cw + gap)
+        var c := Vector2(x, y + (1.0 - e) * 260.0)
+        var rot := deg_to_rad((i - 1.5) * 4.0) * e
+        var tex: Texture2D = ui.cards[kinds[i]]
+        var sz := tex.get_size() * sc
+        draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k, ui.k))
+        if kinds[i] == Rules.JOKER:
+            var pul := 0.5 + 0.5 * sin(ui.t * 6.0)
+            for gl in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(6 + gl * 6 + pul * 4), Color(0.3, 1.0, 0.55, (0.20 - gl * 0.035) * al), false, 6.0)
+        draw_rect(Rect2(-sz / 2.0 + Vector2(8, 10), sz), Color(0, 0, 0, 0.45 * al))
+        draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false, Color(1, 1, 1, al))
+        draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+        # quantidade grande embaixo (entra com um pulo)
+        var tn := clampf((t - 0.7 - i * 0.18) / 0.25, 0.0, 1.0)
+        if tn > 0.0:
+            var bump := 1.0 + 0.6 * (1.0 - tn)
+            var label := ("%d ×" % counts[kinds[i]]) if kinds[i] != Rules.JOKER else ("%d × CORINGA" % counts[kinds[i]])
+            var fs := int((64 if not portrait else 48) * bump)
+            text(label, Vector2(x - cw, y + sz.y / 2.0 + 70), "ui_sp4", fs, Color("7cf0a0") if kinds[i] == Rules.JOKER else Color("ffd257"), cw * 2.0, HORIZONTAL_ALIGNMENT_CENTER, 8, Color(0.1, 0.05, 0, al))
+    var foot_al := al * clampf((t - 1.4) / 0.4, 0.0, 1.0)
+    var foot := "%d CARTAS  ·  %d PARA CADA JOGADOR" % [Rules.deck_size(), Rules.HAND]
+    if portrait:
+        text(foot, Vector2(0, d.y * 0.68), "ui_sp4", 32, Color(0.95, 0.92, 0.82, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))
+        text("O PEÃO VALE COMO QUALQUER PEÇA", Vector2(0, d.y * 0.68 + 46), "ui_sp4", 32, Color(0.49, 0.94, 0.63, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))
+    else:
+        text(foot + "  ·  O PEÃO VALE COMO QUALQUER PEÇA", Vector2(0, d.y * 0.9), "ui_sp4", 38, Color(0.95, 0.92, 0.82, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))

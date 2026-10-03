@@ -3,7 +3,8 @@ extends RefCounted
 ## a interface e a IA nunca decidem regra. Nada do xadrez (regras, Ranked, Elo, PL, Stockfish) é usado.
 ## Mesma lógica do jogo de mentiras da WePlay (estilo Liar's Bar); "duvidar" aqui é XEQUE.
 ##
-## Regras (ruleset 1):
+## Regras (ruleset 2):
+##   • Baralho: 6 Rei, 6 Rainha, 6 Cavalo e 2 Peão Coroado (CORINGA) = 20 cartas.
 ##   • 4 lugares (0 = você embaixo, 1 esquerda, 2 cima, 3 direita), sentido horário 0→1→2→3.
 ##   • Baralho de 20: 6 Rei, 6 Rainha, 6 Cavalo, 2 Peão Coroado (coringa). 5 cartas por jogador vivo;
 ##     o que sobra fica fora da rodada.
@@ -12,16 +13,17 @@ extends RefCounted
 ##     ou XEQUE na jogada imediatamente anterior (se existir). Não existe passar.
 ##   • XEQUE revela só a última jogada: todas verdadeiras → quem chamou perde o desafio;
 ##     pelo menos uma falsa → quem jogou perde. Todo XEQUE encerra a rodada.
-##   • Quem perde o desafio aciona o SEU Relógio de Xeque (o revólver da WePlay): 6 posições, 1 é
-##     XEQUE-MATE, em ordem embaralhada e consumida SEM reposição (1/6 → 1/5 → … → 1/1). O relógio
-##     guarda o estado entre as rodadas. XEQUE-MATE = eliminado na hora (LIVES = 1).
+##   • Quem perde o desafio aciona o SEU Relógio de Xeque: 6 níveis. Em cada acionamento o relógio pode
+##     estourar (XEQUE-MATE) com a chance do nível: 12% → 20% → 30% → 45% → 65% → 100% (ruleset 2).
+##     O relógio guarda o nível entre as rodadas e volta ao 1º depois de estourar. XEQUE-MATE =
+##     eliminado na hora (LIVES = 1).
 ##   • Próxima rodada começa por quem acionou o relógio (ou o próximo vivo, se ele foi eliminado).
 ##   • Sem cartas: fica fora dos turnos até o fim da rodada. Se só 1 jogador (ou nenhum) ainda tem
 ##     cartas, a última jogada é resolvida por XEQUE automático do próximo jogador vivo.
 ##   • Último jogador vivo vence.
 
 const MODE_ID := "xeque"
-const RULESET_VERSION := "1"
+const RULESET_VERSION := "2"      # R36: relógio com chance crescente por nível (12% → 100%)
 const KING := "rei"
 const QUEEN := "rainha"
 const KNIGHT := "cavalo"
@@ -32,7 +34,11 @@ const SEATS := 4
 const LIVES := 1                    # WePlay: XEQUE-MATE elimina na hora
 const HAND := 5
 const MAX_PLAY := 3
-const CLOCK_SLOTS := 6              # 6 posições, 1 XEQUE-MATE (o tambor do revólver)
+const CLOCK_SLOTS := 6              # 6 níveis; o último é XEQUE-MATE certo
+## R36 · chance de XEQUE-MATE em cada nível do relógio (1º acionamento … 6º). Pode estourar em qualquer
+## nível; no 1º é raro (12%), e a cada nível que passa fica mais perigoso.
+const CLOCK_CHANCES := [0.12, 0.20, 0.30, 0.45, 0.65, 1.0]
+const PENDING := "?"                # nível ainda não sorteado (o sorteio é na hora de acionar)
 const SAFE := "safe"
 const MATE := "mate"
 const NAMES := {KING: "Rei", QUEEN: "Rainha", KNIGHT: "Cavalo", JOKER: "Peão Coroado"}
@@ -71,6 +77,12 @@ var public_log: Array = []         # histórico público ("Dama de Ferro disse 2
 var reveals: Array = []            # revelações públicas: {seat, cards, target, truthful}
 var last_result := {}
 
+## total de cartas do baralho (a UI e a apresentação leem daqui)
+static func deck_size() -> int:
+    var n := 0
+    for k in DECK_COUNTS: n += int(DECK_COUNTS[k])
+    return n
+
 func _set_state(s: String):
     state = s
     state_log.append(s)
@@ -94,14 +106,10 @@ func setup(seed: int = 0, p_names: Array = []):
     start_round(rng.randi_range(0, SEATS - 1))
 
 # ---------------------------------------------------------------- relógio
-## Ciclo novo: 5 seguras + 1 XEQUE-MATE, embaralhadas (sem reposição).
+## Ciclo novo: 6 níveis ainda não sorteados. (Testes podem fixar SAFE/MATE num nível.)
 func reset_clock(seat: int):
     var c := []
-    for i in CLOCK_SLOTS - 1: c.append(SAFE)
-    c.append(MATE)
-    for i in range(c.size() - 1, 0, -1):
-        var j := rng.randi_range(0, i)
-        var t = c[i]; c[i] = c[j]; c[j] = t
+    for i in CLOCK_SLOTS: c.append(PENDING)
     clocks[seat] = c
     clock_cycles[seat] += 1
 
@@ -109,14 +117,27 @@ func reset_clock(seat: int):
 func clock_left(seat: int) -> int:
     return clocks[seat].size()
 
-## Chance de XEQUE-MATE no próximo acionamento (1/6 → 1/5 → … → 1).
-func clock_chance(seat: int) -> float:
-    return 1.0 / float(maxi(1, clocks[seat].size()))
+## Nível do próximo acionamento (0 = primeiro).
+func clock_level(seat: int) -> int:
+    return clampi(CLOCK_SLOTS - clocks[seat].size(), 0, CLOCK_SLOTS - 1)
 
-## Aciona o relógio (consome a próxima posição; o resultado já estava definido no embaralhamento).
+## Chance de XEQUE-MATE no próximo acionamento (12% → 20% → 30% → 45% → 65% → 100%).
+func clock_chance(seat: int) -> float:
+    return float(CLOCK_CHANCES[clock_level(seat)])
+
+var last_roll := -1.0                # sorteio do último acionamento (0..1), para o registro e a paridade
+var forced_roll := -1.0              # testes de paridade: sorteio vindo de fora
+## Aciona o relógio: sorteia com a chance do nível atual e consome o nível.
 func _pull_clock(seat: int) -> String:
-    var r: String = clocks[seat].pop_front()
-    return r
+    var chance := clock_chance(seat)
+    var slot: String = clocks[seat].pop_front()
+    if slot == SAFE or slot == MATE:          # nível fixado (testes)
+        last_roll = -1.0
+        return slot
+    var roll := forced_roll if forced_roll >= 0.0 else rng.randf()
+    forced_roll = -1.0
+    last_roll = roll
+    return MATE if roll < chance else SAFE
 
 # ---------------------------------------------------------------- consulta
 static func is_true_card(card: String, round_target: String) -> bool:
@@ -249,6 +270,7 @@ func _resolve_challenge(caller: int, forced: bool) -> Dictionary:
     public_log.append("XEQUE de %s: %s" % [names[caller], "VERDADE" if truthful else "BLEFE"])
     _set_state(CLOCK_RESOLUTION)
     var left_before := clock_left(loser)
+    var chance_before := clock_chance(loser)
     var pulled := _pull_clock(loser)
     var mate := pulled == MATE
     var lost_crown := false
@@ -277,7 +299,7 @@ func _resolve_challenge(caller: int, forced: bool) -> Dictionary:
     last_result = {
         "caller": caller, "accused": accused, "cards": cards, "target": target,
         "truthful": truthful, "false_cards": false_cards, "loser": loser, "forced": forced,
-        "clock_left_before": left_before, "clock": pulled, "mate": mate, "lost_crown": lost_crown,
+        "clock_left_before": left_before, "chance": chance_before, "roll": last_roll, "clock": pulled, "mate": mate, "lost_crown": lost_crown,
         "lives_after": lives[loser], "eliminated": eliminated, "winner": winner,
         "next_starter": next_starter, "round": round_no,
     }

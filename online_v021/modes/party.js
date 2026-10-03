@@ -19,13 +19,14 @@ const num = (v, d) => (v !== undefined && v !== '' && Number.isFinite(Number(v))
 const T = {
   turnMs: num(env.FRAIHA_PARTY_TURN_MS, 30000),          // vez do jogador (igual ao jogo local)
   marchaBotMs: num(env.FRAIHA_PARTY_MARCHA_BOT_MS, 950),
-  xequeBotMin: num(env.FRAIHA_PARTY_XEQUE_BOT_MIN_MS, 1000), xequeBotMax: num(env.FRAIHA_PARTY_XEQUE_BOT_MAX_MS, 2200),
+  xequeBotMin: num(env.FRAIHA_PARTY_XEQUE_BOT_MIN_MS, 1600), xequeBotMax: num(env.FRAIHA_PARTY_XEQUE_BOT_MAX_MS, 3000),   // R36: ritmo mais calmo
   awayMs: num(env.FRAIHA_PARTY_AWAY_MS, 1500),           // jogador desconectado: o bot joga por ele depois disso
   stepMs: num(env.FRAIHA_PARTY_STEP_MS, 180),            // animação: 0,18 s por casa (marcha_ui.gd STEP_TIME)
   swapMs: num(env.FRAIHA_PARTY_SWAP_MS, 3200),           // troca do J (marcha_ui.gd: 0,35 + até 2,4 + 0,35 s)
-  mesaMs: num(env.FRAIHA_PARTY_MESA_MS, 3800),           // distribuição (DEAL_T 1,8 s) + carta da MESA (MESA_T 1,9 s) no xeque_ui.gd
-  revealMs: num(env.FRAIHA_PARTY_REVEAL_MS, 1700), clockMs: num(env.FRAIHA_PARTY_CLOCK_MS, 1400),
-  safeMs: num(env.FRAIHA_PARTY_SAFE_MS, 1400), mateMs: num(env.FRAIHA_PARTY_MATE_MS, 2600),
+  mesaMs: num(env.FRAIHA_PARTY_MESA_MS, 4400),           // distribuição (DEAL_T 2,4 s) + carta da MESA (MESA_T 1,9 s) no xeque_ui.gd
+  introMs: num(env.FRAIHA_PARTY_INTRO_MS, 3200),         // apresentação do baralho antes da 1ª rodada (INTRO_T)
+  revealMs: num(env.FRAIHA_PARTY_REVEAL_MS, 2600), clockMs: num(env.FRAIHA_PARTY_CLOCK_MS, 2400),
+  safeMs: num(env.FRAIHA_PARTY_SAFE_MS, 2000), mateMs: num(env.FRAIHA_PARTY_MATE_MS, 3800),
   keepEndedMs: 120000,
 };
 const GAMES = { marcha: { name: 'MARCHA REAL' }, xeque: { name: 'XEQUE' } };
@@ -72,7 +73,7 @@ class Party {
     for (const s of seats) if (s.kind === 'human') this.byUser.set(s.uid, id);
     for (const s of seats) if (s.kind === 'human') this.toUser(s.uid, this.startMsg(room, this.seatOf(room, s.uid)));
     if (game === 'marcha') this.marchaBegin(room);
-    else this.later(room, T.mesaMs, () => this.xequeBegin(room));     // a carta da MESA aparece primeiro
+    else this.later(room, T.introMs + T.mesaMs, () => this.xequeBegin(room));     // baralho, distribuição e carta da MESA primeiro
     return room;
   }
   startMsg(room, v) {

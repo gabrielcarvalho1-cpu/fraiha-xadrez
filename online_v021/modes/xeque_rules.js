@@ -3,12 +3,13 @@
 // de xeque/ai.gd. A IA recebe só o estado público + a própria mão (igual ao Godot).
 const { rngFrom } = require('./rng');
 
-const MODE_ID = 'xeque', RULESET_VERSION = '1';
+const MODE_ID = 'xeque', RULESET_VERSION = '2';   // R36: relógio com chance crescente por nível
 const KING = 'rei', QUEEN = 'rainha', KNIGHT = 'cavalo', JOKER = 'peao';
 const TARGETS = [KING, QUEEN, KNIGHT];
 const DECK_COUNTS = { [KING]: 6, [QUEEN]: 6, [KNIGHT]: 6, [JOKER]: 2 };
 const SEATS = 4, LIVES = 1, HAND = 5, MAX_PLAY = 3, CLOCK_SLOTS = 6;
-const SAFE = 'safe', MATE = 'mate';
+const SAFE = 'safe', MATE = 'mate', PENDING = '?';
+const CLOCK_CHANCES = [0.12, 0.20, 0.30, 0.45, 0.65, 1.0];   // chance de estourar em cada nível (1º … 6º)
 const NAMES = { [KING]: 'Rei', [QUEEN]: 'Rainha', [KNIGHT]: 'Cavalo', [JOKER]: 'Peão Coroado' };
 const PLURAL = { [KING]: 'Reis', [QUEEN]: 'Rainhas', [KNIGHT]: 'Cavalos', [JOKER]: 'Peões Coroados' };
 const S = { SETUP: 'SETUP', ROUND_START: 'ROUND_START', TURN_WAITING: 'TURN_WAITING', CARDS_PLAYED: 'CARDS_PLAYED', CHALLENGE: 'CHALLENGE', REVEAL: 'REVEAL', CLOCK_RESOLUTION: 'CLOCK_RESOLUTION', CHECKMATE: 'CHECKMATE', ROUND_END: 'ROUND_END', MATCH_END: 'MATCH_END' };
@@ -26,11 +27,22 @@ class Xeque {
     this.startRound(this.rng.int(0, SEATS - 1));
   }
   resetClock(seat) {
-    const c = []; for (let i = 0; i < CLOCK_SLOTS - 1; i++) c.push(SAFE); c.push(MATE);
-    for (let i = c.length - 1; i > 0; i--) { const j = this.rng.int(0, i); const t = c[i]; c[i] = c[j]; c[j] = t; }
+    const c = []; for (let i = 0; i < CLOCK_SLOTS; i++) c.push(PENDING);
     this.clocks[seat] = c; this.clock_cycles[seat] += 1;
   }
   clockLeft(seat) { return this.clocks[seat].length; }
+  clockLevel(seat) { return Math.min(CLOCK_SLOTS - 1, Math.max(0, CLOCK_SLOTS - this.clocks[seat].length)); }
+  clockChance(seat) { return CLOCK_CHANCES[this.clockLevel(seat)]; }
+  // aciona o relógio: sorteia com a chance do nível e consome o nível (nextRoll: só testes de paridade)
+  pullClock(seat) {
+    const chance = this.clockChance(seat);
+    const slot = this.clocks[seat].shift();
+    if (slot === SAFE || slot === MATE) { this.last_roll = -1; return slot; }
+    const roll = this.nextRoll !== undefined ? this.nextRoll : this.rng.float();
+    this.nextRoll = undefined;
+    this.last_roll = roll;
+    return roll < chance ? MATE : SAFE;
+  }
   alive(seat) { return this.lives[seat] > 0; }
   aliveSeats() { const o = []; for (let s = 0; s < SEATS; s++) if (this.alive(s)) o.push(s); return o; }
   withCards() { const o = []; for (let s = 0; s < SEATS; s++) if (this.alive(s) && this.hands[s].length) o.push(s); return o; }
@@ -97,7 +109,8 @@ class Xeque {
     this.public_log.push(`XEQUE de ${this.names[caller]}: ${truthful ? 'VERDADE' : 'BLEFE'}`);
     this.state = S.CLOCK_RESOLUTION;
     const leftBefore = this.clockLeft(loser);
-    const pulled = this.clocks[loser].shift();
+    const chanceBefore = this.clockChance(loser);
+    const pulled = this.pullClock(loser);
     const mate = pulled === MATE;
     let lostCrown = false, eliminated = false;
     if (mate) {
@@ -109,7 +122,7 @@ class Xeque {
     const aliveNow = this.aliveSeats();
     if (aliveNow.length === 1) { this.winner = aliveNow[0]; this.next_starter = -1; this.state = S.MATCH_END; }
     else { this.next_starter = this.alive(loser) ? loser : this.nextSeat(loser); this.state = S.ROUND_END; }
-    this.last_result = { caller, accused, cards, target: this.target, truthful, false_cards: falseCards, loser, forced, clock_left_before: leftBefore, clock: pulled, mate, lost_crown: lostCrown, lives_after: this.lives[loser], eliminated, winner: this.winner, next_starter: this.next_starter, round: this.round_no };
+    this.last_result = { caller, accused, cards, target: this.target, truthful, false_cards: falseCards, loser, forced, clock_left_before: leftBefore, chance: chanceBefore, roll: this.last_roll, clock: pulled, mate, lost_crown: lostCrown, lives_after: this.lives[loser], eliminated, winner: this.winner, next_starter: this.next_starter, round: this.round_no };
     return this.last_result;
   }
   publicState(viewer = -1) {
@@ -195,4 +208,4 @@ function chooseCards(pub, hand, pr, rng) {
   return out;
 }
 
-module.exports = { Xeque, decide, pLastPlayTrue, PROFILES, S, MODE_ID, RULESET_VERSION, SEATS, MAX_PLAY, isTrueCard };
+module.exports = { Xeque, decide, pLastPlayTrue, PROFILES, S, MODE_ID, RULESET_VERSION, SEATS, MAX_PLAY, isTrueCard, CLOCK_CHANCES };

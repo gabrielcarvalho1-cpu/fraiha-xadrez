@@ -27,8 +27,13 @@ const SFX := {
     "victory": preload("res://xeque/audio/vitoria.wav"), "defeat": preload("res://xeque/audio/derrota.wav"),
     # R35.1 · vozes (tools/xeque_voice.py): "XEQUE!" a cada desafio, "XEQUE-MATE!" quando alguém cai
     "voice_xeque": preload("res://xeque/audio/voz_xeque.wav"), "voice_mate": preload("res://xeque/audio/voz_xeque_mate.wav"),
+    # R36 · efeitos mais fortes (tools/xeque_sfx_r36.py)
+    "xeque_hit": preload("res://xeque/audio/xeque_impacto.wav"), "flip": preload("res://xeque/audio/virar_carta.wav"),
+    "clock_tension": preload("res://xeque/audio/relogio_tensao.wav"), "relief": preload("res://xeque/audio/seguro_alivio.wav"),
+    "mate_boom": preload("res://xeque/audio/xeque_mate_boom.wav"), "defeat_final": preload("res://xeque/audio/derrota_final.wav"),
+    "victory_final": preload("res://marcha/audio/vitoria_final.wav"), "deck_intro": preload("res://xeque/audio/baralho_intro.wav"),
 }
-const SFX_DB := {"voice_xeque": -1.0, "voice_mate": 0.0, "your_turn": -9.0, "xeque": -6.0, "mate": -3.0, "victory": -7.0, "defeat": -7.0, "elim": -6.0}
+const SFX_DB := {"xeque_hit": -2.0, "mate_boom": 0.0, "clock_tension": -4.0, "relief": -5.0, "victory_final": -4.0, "defeat_final": -4.0, "deck_intro": -6.0, "flip": -6.0, "voice_xeque": -1.0, "voice_mate": 0.0, "your_turn": -9.0, "xeque": -6.0, "mate": -3.0, "victory": -7.0, "defeat": -7.0, "elim": -6.0}
 const FONT_UI := preload("res://xeque/art/fontes/Jersey20-Regular.woff2")
 const FONT_TITLE := preload("res://xeque/art/fontes/Jacquard24-Regular.woff2")
 const TUTORIAL_BG := preload("res://xeque/art/telas/tutorial_fundo.png")
@@ -52,8 +57,8 @@ const GREY := Color("6b6f72")
 
 const TURN_MS := 30000
 const LOW_TIME_MS := 8000
-const BOT_DELAY_MIN := 1.0
-const BOT_DELAY_MAX := 2.2
+const BOT_DELAY_MIN := 1.6       # R36: ritmo mais calmo (antes 1,0–2,2 s)
+const BOT_DELAY_MAX := 3.0
 ## lugares: 0 você (embaixo), 1 esquerda, 2 cima, 3 direita (sentido horário)
 const SEAT_NAMES := ["Você", "Dama de Ferro", "Sir Gambito", "Torre Velha"]
 const SEAT_PROFILE := ["", "cauteloso", "equilibrado", "blefador"]
@@ -100,7 +105,8 @@ var started_ms := 0
 var recorded := false
 var flash := ""
 var flash_t := 0.0
-var rng := RandomNumberGenerator.new()
+var rng := RandomNumberGenerator.new()           # ritmo dos bots (gameplay local)
+var fx_rng := RandomNumberGenerator.new()        # R36: só cosmético (partículas); nunca mexe no sorteio do jogo
 var seed_override := 0            # testes: semente fixa
 # ---- R35 · partida ONLINE com amigo (o servidor é a autoridade; aqui só pedimos ações e animamos)
 var online := false
@@ -108,7 +114,40 @@ var room_id := ""
 var players: Array = []           # [{name, bot, connected, left}] já girados (você = 0)
 var ev_queue: Array = []
 
-const PHASE_TIME := {"reveal": 1.7, "clock": 1.4, "safe": 1.4, "mate": 2.6, "elim": 1.6}
+const PHASE_TIME := {"reveal": 2.6, "clock": 2.4, "safe": 2.0, "mate": 3.8, "elim": 2.0}   # R36: mais tempo para cada momento
+## R36 · atrasos dos efeitos dentro de cada fase (segundos) e força do tremor — tudo num lugar só.
+## Espelho no servidor: online_v021/modes/party.js (T.revealMs/clockMs/safeMs/mateMs/introMs/mesaMs).
+const FX_DELAY := {"flip": 0.55, "voice_xeque": 0.12, "voice_mate": 0.45, "mate_red_flash": 0.12}
+const FX_SHAKE := {"xeque": 18.0, "clock": 4.0, "mate": 38.0}
+## R36 · efeitos de tela (motion): tremor, clarão, partículas e o "carimbo" de texto grande
+var shake_amp := 0.0
+var flash_col := Color(1, 1, 1, 0)
+var particles: Array = []         # {p, v, life, max, col, size, kind}
+var slam := {}                    # {text, sub, t, col}
+var over_t := 0.0
+## apresentação do baralho antes da 1ª rodada (quantas cartas de cada peça existem)
+const INTRO_T := 3.2
+var intro_anim := -1.0
+
+func fx_shake(amp: float):
+    shake_amp = maxf(shake_amp, amp)
+
+func fx_flash(col: Color):
+    flash_col = col
+
+func fx_burst(at: Vector2, n: int, cols: Array, speed: float, size := 8.0, gravity := 900.0, kind := "shard", life := 1.4):
+    for i in n:
+        var a := fx_rng.randf_range(0, TAU)
+        var sp := fx_rng.randf_range(speed * 0.35, speed)
+        particles.append({"p": at, "v": Vector2.from_angle(a) * sp + Vector2(0, -speed * 0.25), "life": life * fx_rng.randf_range(0.6, 1.0), "max": life,
+            "col": cols[i % cols.size()], "size": size * fx_rng.randf_range(0.5, 1.4), "kind": kind, "rot": fx_rng.randf_range(0, TAU), "spin": fx_rng.randf_range(-9, 9), "g": gravity})
+
+func fx_slam(txt: String, sub: String, col: Color):
+    slam = {"text": txt, "sub": sub, "t": 0.0, "col": col}
+
+func shake_offset() -> Vector2:
+    if shake_amp <= 0.05: return Vector2.ZERO
+    return Vector2(sin(t * 73.0) + sin(t * 31.0) * 0.5, cos(t * 59.0) + cos(t * 23.0) * 0.5) * shake_amp
 
 func _init():
     layer = 64
@@ -215,7 +254,9 @@ func start_game():
     g = Rules.new()
     var names := SEAT_NAMES.duplicate()
     g.setup(seed_override if seed_override != 0 else 0, names)
-    if seed_override != 0: rng.seed = seed_override * 31
+    if seed_override != 0:
+        rng.seed = seed_override * 31
+        fx_rng.seed = seed_override * 7
     mode = "game"
     menu_open = false
     confirm_quit = false
@@ -228,14 +269,22 @@ func start_game():
     started_unix = int(Time.get_unix_time_from_system())
     started_ms = Time.get_ticks_msec()
     mesa_round = -1
+    particles = []
+    slam = {}
+    _start_intro()
     _begin_turn()
+
+## R36 · antes da 1ª rodada: o baralho é apresentado (quantidades lidas de Rules.DECK_COUNTS)
+func _start_intro():
+    intro_anim = 0.0
+    _cue("deck_intro")
 
 ## R34.1: a cada rodada nova a carta da MESA aparece grande no centro e voa para o painel A MESA PEDE.
 const MESA_T := 1.9
 var mesa_anim := -1.0             # segundos da animação (-1 = parada)
 ## R35.1 · rodada nova: primeiro as cartas são DISTRIBUÍDAS (voam do centro para cada jogador, uma a uma),
 ## depois a carta da MESA aparece. O tempo da vez e os bots esperam as duas.
-const DEAL_T := 1.8
+const DEAL_T := 2.4                # R36: distribuição mais lenta (antes 1,8 s)
 const DEAL_FLIGHT := 0.38         # cada carta leva 0,38 s do centro até o jogador
 var deal_anim := -1.0
 var deal_order: Array = []        # [{seat, slot}] na ordem em que as cartas saem
@@ -272,8 +321,38 @@ func _process(delta):
     if flash_t > 0.0:
         flash_t -= delta
         if flash_t <= 0.0: flash = ""
-    for f in fly: f.t += delta * 1.5      # R35.1: cartas jogadas voam para a mesa sem pressa (~0,7 s)
+    for f in fly: f.t += delta * 1.1      # R36: cartas jogadas voam para a mesa sem pressa (~0,9 s)
     fly = fly.filter(func(f): return f.t < 1.0)
+    # efeitos de tela
+    shake_amp = maxf(0.0, shake_amp - delta * maxf(8.0, shake_amp * 2.2))
+    flash_col.a = maxf(0.0, flash_col.a - delta * 1.6)
+    for q in particles:
+        q.life -= delta
+        q.v.y += float(q.g) * delta
+        q.v *= 1.0 - minf(0.9, delta * (2.5 if q.kind == "smoke" else 0.6))
+        q.p += q.v * delta
+        q.rot += float(q.spin) * delta
+    particles = particles.filter(func(q): return q.life > 0.0)
+    if not slam.is_empty():
+        slam.t += delta
+        if slam.t > 1.6: slam = {}
+    if mode == "over":
+        over_t += delta
+        # R36 · fim de partida: chuva de confete (vitória) ou de cinzas (derrota) por alguns segundos
+        if g != null and over_t < 7.0:
+            var won: bool = g.winner == 0
+            var rate := (90.0 if over_t < 2.5 else 35.0) if won else 22.0
+            var n := int(rate * delta + fx_rng.randf())
+            for i in n:
+                var cols := [Color("ffd257"), Color("f3ead2"), Color("e3283a"), Color("35c27c"), Color("6fb4ee")] if won else [Color(0.35, 0.3, 0.28), Color(0.55, 0.2, 0.15), Color(0.2, 0.18, 0.17)]
+                particles.append({"p": Vector2(fx_rng.randf_range(0, design.x), -30), "v": Vector2(fx_rng.randf_range(-60, 60), fx_rng.randf_range(180, 360) * (1.0 if won else 0.45)),
+                    "life": 6.0, "max": 6.0, "col": cols[i % cols.size()], "size": fx_rng.randf_range(10, 20) if won else fx_rng.randf_range(5, 10),
+                    "kind": "confetti" if won else "ash", "rot": fx_rng.randf_range(0, TAU), "spin": fx_rng.randf_range(-7, 7), "g": 40.0 if won else 10.0})
+    if intro_anim >= 0.0:
+        intro_anim += delta
+        if intro_anim >= INTRO_T: intro_anim = -1.0
+        _redraw()
+        return
     if deal_anim >= 0.0:
         var before := deal_landed(0)
         deal_anim += delta
@@ -406,10 +485,14 @@ func _on_challenge(r: Dictionary, caller: int):
     input_locked = true
     selected = []
     phase = "reveal"
-    get_tree().create_timer(0.35).timeout.connect(func(): if phase == "reveal": _cue("reveal"))
+    get_tree().create_timer(FX_DELAY.flip).timeout.connect(func(): if phase == "reveal": _cue("flip"))
     phase_t = 0.0
-    _cue("xeque")
-    get_tree().create_timer(0.12).timeout.connect(func(): if phase == "reveal": _cue("voice_xeque"))
+    _cue("xeque_hit")
+    # R36 · XEQUE! com impacto: tremor, clarão e o carimbo grande na tela
+    fx_shake(FX_SHAKE.xeque)
+    fx_flash(Color(1, 0.95, 0.85, 0.65))
+    fx_slam("XEQUE!", ("DE " + String(g.names[caller]).to_upper()) if g != null and caller >= 0 and caller < g.names.size() else "", Color("ff4a3a"))
+    get_tree().create_timer(FX_DELAY.voice_xeque).timeout.connect(func(): if phase == "reveal": _cue("voice_xeque"))
     last_tick_s = -1
     _redraw()
 
@@ -418,11 +501,26 @@ func _advance_phase():
     match phase:
         "reveal":
             phase = "clock"
-            _cue("clock")
+            _cue("clock_tension")
+            fx_shake(FX_SHAKE.clock)
         "clock":
             phase = "mate" if bool(result.mate) else "safe"
-            _cue("mate" if bool(result.mate) else "safe")
-            if bool(result.mate): get_tree().create_timer(0.35).timeout.connect(func(): if phase == "mate": _cue("voice_mate"))
+            if bool(result.mate):
+                # R36 · o relógio ESTOURA: clarão branco → vermelho, tremor forte, estilhaços, fumaça e onda de choque
+                _cue("mate_boom")
+                fx_shake(FX_SHAKE.mate)
+                fx_flash(Color(1, 1, 1, 1.0))
+                var mc: Vector2 = view.L().mate_clock[0] if view != null else design / 2.0
+                fx_burst(mc, 90, [Color("2a2420"), Color("6b5a44"), Color("e8b242"), Color("ff5a3a"), Color("ffd257")], 1300.0, 10.0, 1100.0, "shard", 1.8)
+                fx_burst(mc, 26, [Color(0.25, 0.22, 0.2, 0.7), Color(0.4, 0.33, 0.28, 0.6)], 420.0, 60.0, -60.0, "smoke", 2.2)
+                fx_burst(mc, 40, [Color("fff1a8"), Color("ffb347")], 900.0, 5.0, 300.0, "spark", 0.9)
+                get_tree().create_timer(FX_DELAY.voice_mate).timeout.connect(func(): if phase == "mate": _cue("voice_mate"))
+                get_tree().create_timer(FX_DELAY.mate_red_flash).timeout.connect(func(): if phase == "mate": fx_flash(Color(1.0, 0.12, 0.06, 0.75)))
+            else:
+                _cue("relief")
+                fx_flash(Color(0.45, 1.0, 0.6, 0.35))
+                var cc: Vector2 = view.L().clock[0] if view != null else design / 2.0
+                fx_burst(cc, 36, [Color("ffd257"), Color("fff1c2"), Color("7cf0a0")], 520.0, 6.0, 260.0, "spark", 1.1)
         "safe", "mate":
             if phase == "mate" and bool(result.get("eliminated", false)): _cue("elim")
             # com 1 vida o XEQUE-MATE já diz "eliminado": não precisa de outra tela
@@ -453,7 +551,9 @@ func _finish():
     mode = "over"
     phase = ""
     _record_history("win" if g.winner == 0 else "loss")
-    _cue("victory" if g.winner == 0 else "defeat")
+    over_t = 0.0
+    particles = []
+    _cue("victory_final" if g.winner == 0 else "defeat_final")
     _redraw()
 
 # ---------------------------------------------------------------- histórico comum
@@ -643,6 +743,9 @@ func start_online(msg: Dictionary):
         started_unix = int(Time.get_unix_time_from_system())
         started_ms = Time.get_ticks_msec()
         mesa_round = -1
+        particles = []
+        slam = {}
+        if int(msg.get("snapshot", {}).get("round", 1)) <= 1: _start_intro()
     mode = "game"
     _apply_snapshot(msg.get("snapshot", {}))
     if bool(msg.get("ended", false)) or g.state == Rules.MATCH_END: _finish()
@@ -673,7 +776,7 @@ func _apply_snapshot(snap: Dictionary):
             for k in counts[s]: h.append("?")          # cartas dos outros: só a quantidade
             g.hands.append(h)
         var c := []
-        for k in clk[s]: c.append(Rules.SAFE)          # posições restantes (o conteúdo é segredo do servidor)
+        for k in clk[s]: c.append(Rules.PENDING)       # níveis restantes (o sorteio é do servidor)
         g.clocks.append(c)
     var lp: Dictionary = snap.get("last_play", {})
     g.last_play = {} if lp.is_empty() else {"seat": int(lp.seat), "count": int(lp.count), "cards": []}
