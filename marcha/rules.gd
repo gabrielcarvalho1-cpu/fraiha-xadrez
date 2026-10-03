@@ -25,7 +25,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-8"   # R38.3: J só a partir de peão SEU; baralho de 52 em ciclos 4 → 4 → 5
+const RULESET_VERSION := "marcha-real-9"   # R38.4: o J pode usar o SEU peão que acabou de sair (no seu Portão)
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -229,11 +229,12 @@ func legal_moves(seat: int, card_idx: int) -> Array:
                     if pawns[s][i].zone == "track" and (s == who or int(pawns[s][i].pos) != Layout.gate_index(s)) and forward_path(s, i, 5, team_of(s) == team_of(seat)).ok:
                         out.append({"card": card_idx, "rank": rank, "kind": "move", "pawn": [s, i], "steps": 5})
         "J":
-            # R38.3 · a troca sempre parte de um peão SEU, ativo na Muralha (nunca do aliado, mesmo depois de
-            # coroar os 4); peão parado no próprio Portão (acabou de sair) não troca nem é trocado.
+            # R38.4 · a troca sempre parte de um peão SEU na Muralha (nunca do aliado, mesmo depois de coroar
+            # os 4) — inclusive o seu que acabou de sair (no seu Portão). A peça dos OUTROS parada no Portão
+            # dela (acabou de sair) não pode ser trocada.
             for i in 4:
                 var a: Dictionary = pawns[seat][i]
-                if a.zone != "track" or Layout.gate_index(seat) == a.pos: continue
+                if a.zone != "track": continue
                 for s in 4:
                     for j in 4:
                         if s == seat: continue

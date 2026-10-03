@@ -5,7 +5,7 @@
 // Mudou regra no .gd → muda aqui também e regenera o fixture (tools/marcha_parity_fixture.gd).
 const { rngFrom } = require('./rng');
 
-const RULESET_VERSION = 'marcha-real-8';   // R38.3: J só a partir de peão SEU; baralho de 52 em ciclos 4 → 4 → 5
+const RULESET_VERSION = 'marcha-real-9';   // R38.4: o J pode usar o SEU peão que acabou de sair (no seu Portão)
 const TRACK = 76;
 const ARM = 19;
 const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -120,8 +120,8 @@ class Marcha {
         break;
       case 'J':
         for (let i = 0; i < 4; i++) {
-          const a = this.pawns[seat][i];      // R38.3: sempre um peão SEU (nunca do aliado); o do Portão não troca
-          if (a.zone !== 'track' || gateIndex(seat) === a.pos) continue;
+          const a = this.pawns[seat][i];      // R38.4: sempre um peão SEU (nunca do aliado), inclusive o que acabou de sair
+          if (a.zone !== 'track') continue;
           for (let s = 0; s < 4; s++) for (let j = 0; j < 4; j++) {
             if (s === seat) continue;
             const b = this.pawns[s][j];

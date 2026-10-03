@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-8", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-9", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
     var h1: int = g.hands[1].size()
@@ -202,8 +202,7 @@ func _initialize():
     fj.pawns[3][0] = {"zone": "track", "pos": Layout.gate_index(3)}
     fj.hands[0] = ["J"]
     var mj: Array = fj.legal_moves(0, 0)
-    check(not mj.any(func(m): return m.pawn == [0, 0]), "R38.2: J NÃO troca o seu peão que acabou de sair (parado no seu Portão)")
-    check(mj.is_empty(), "R38.2: sem outro peão seu na Muralha, o J não tem troca")
+    check(mj.any(func(m): return m.pawn == [0, 0] and m.target == [1, 0]), "R38.4: J USA o seu peão que acabou de sair (parado no seu Portão) para trocar")
     fj.pawns[0][1] = {"zone": "track", "pos": 12}
     mj = fj.legal_moves(0, 0)
     check(mj.any(func(m): return m.pawn == [0, 1] and m.target == [1, 0]), "J troca o seu peão que já andou com outra peça")

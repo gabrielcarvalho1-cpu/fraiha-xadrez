@@ -123,7 +123,7 @@ func run():
     check(not mu.online and mu.mode == "lobby", "SAIR DA PARTIDA deixa a mesa online")
     check(not pc.active(), "saiu da mesa: o CHAT some")
     var hist: Array = stage.match_history.entries.filter(func(e): return String(e.get("mode_id", "")) == "marcha_real" and bool(e.get("online", false)) and String(e.get("room_id", "")) == rid)
-    check(hist.size() == 1 and String(hist[0].result) == "abandon" and String(hist[0].ruleset_version) == "marcha-real-8", "histórico: partida online da Marcha (abandono, marcha-real-8)")
+    check(hist.size() == 1 and String(hist[0].result) == "abandon" and String(hist[0].ruleset_version) == "marcha-real-9", "histórico: partida online da Marcha (abandono, marcha-real-9)")
     mu.close()
     await wait_until(func(): return false, 1.5)
     # -------- XEQUE

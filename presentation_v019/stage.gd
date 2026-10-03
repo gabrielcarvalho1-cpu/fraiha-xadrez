@@ -1107,7 +1107,7 @@ func _layout_material_desktop():
     var board := Rect2(game.position + game.ORIGIN * game.scale.x, Vector2.ONE * game.BOARD * game.scale.x)
     var vs := get_viewport_rect().size
     var strips := mode in ["ranked", "casual"]
-    var w := 460.0 if strips else 320.0
+    var w := 460.0
     var x := board.end.x + 28.0
     if x + w > vs.x - 8.0: x = maxf(8.0, board.position.x - w - 28.0)
     var top_y := board.position.y + (74.0 if strips else 0.0)
