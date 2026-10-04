@@ -102,7 +102,12 @@ static func _hero(hub, parent: VBoxContainer, owned: bool, real := false):
     var t := Art.label(v, "PACOTE FUNDADOR FRAIHA", hub.fs(46), Art.GOLD, Art.FONT_BOLD)
     t.add_theme_constant_override("outline_size", 8)
     t.add_theme_color_override("font_outline_color", Color(0.16, 0.08, 0.0, 0.95))
-    var lim := Art.label(v, "Primeiros %d Fundadores do FRAIHA" % Catalog.FOUNDER_LIMIT, hub.fs(20), Color("ffe6a0"), Art.FONT_SEMI)
+    var rem: int = hub.founder_remaining() if hub.has_method("founder_remaining") else -1
+    var lim_n: int = hub.founder_limit() if hub.has_method("founder_limit") else Catalog.FOUNDER_LIMIT
+    var lim_text := "Primeiros %d Fundadores do FRAIHA" % lim_n
+    if rem == 0: lim_text += "  ·  VAGAS ESGOTADAS"
+    elif rem > 0: lim_text += "  ·  RESTAM %d %s" % [rem, "VAGA" if rem == 1 else "VAGAS"]
+    var lim := Art.label(v, lim_text, hub.fs(20), Color("ffe6a0"), Art.FONT_SEMI)
     lim.name = "FounderLimit"
     if owned:
         v.add_child(hub.status_badge("FUNDADOR DO REINO"))
@@ -123,11 +128,13 @@ static func _hero(hub, parent: VBoxContainer, owned: bool, real := false):
         v.add_child(pay)
         pay.add_child(Art.Stamp.new("PAGAMENTO ÚNICO", "info", 15))
         pay.add_child(Art.Stamp.new("SEM MENSALIDADE", "info", 15))
-        var cta := Art.Cta.new("TORNAR-SE FUNDADOR", "gold", 70 * maxf(hub.k, 0.85), int(25 * maxf(hub.k, 0.85)))
+        var sold_out := rem == 0 and not Catalog.is_mock()
+        var cta := Art.Cta.new("VAGAS ESGOTADAS" if sold_out else "TORNAR-SE FUNDADOR", "dark" if sold_out else "gold", 70 * maxf(hub.k, 0.85), int(25 * maxf(hub.k, 0.85)))
         cta.name = "BecomeFounder"
-        cta.icon_kind = "crown"
-        cta.shimmer = true
-        cta.pressed.connect(func(): hub.open_payment("founder"))
+        cta.icon_kind = "" if sold_out else "crown"
+        cta.shimmer = not sold_out
+        cta.disabled = sold_out
+        if not sold_out: cta.pressed.connect(func(): hub.open_payment("founder"))
         v.add_child(cta)
 
 static func _reward(hub, parent: VBoxContainer):

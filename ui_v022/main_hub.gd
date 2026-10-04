@@ -2241,6 +2241,8 @@ func bind_account(acc):
     acc.avatar_failed.connect(func(_code, msg):
         _avatar_message("A foto ficou salva neste aparelho, mas a conta não a recebeu: " + msg, true))
     acc.entitlements_changed.connect(func(data): if entitlements != null: entitlements.apply_server(data))
+    # R39 · saiu da conta (ou trocou): as vantagens da conta anterior não ficam nesta sessão
+    acc.changed.connect(func(): if entitlements != null and entitlements.real_known and not acc.has_profile(): entitlements.clear_server())
     # R31: identidade (avatar, ícone, título, moldura) sincronizada com a conta — agrupa mudanças em 1,2 s.
     _cosmetics_timer = Timer.new()
     _cosmetics_timer.name = "CosmeticsSync"

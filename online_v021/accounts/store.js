@@ -150,6 +150,31 @@ class MemoryStore {
     p.status = status; if (status === 'paid') p.paid_at = new Date().toISOString();
     return { ...p };
   }
+  // R39: reembolso/contestação — só paid → refunded (uma vez).
+  async markRefund(provider, ref) {
+    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === 'paid');
+    if (!p) return null;
+    p.status = 'refunded';
+    return { ...p };
+  }
+  // R39: retira o que o pagamento reembolsado liberou (mesma regra da função 0010).
+  async revokeEntitlement(userId, productId) {
+    this.entitlements = this.entitlements || new Map();
+    const e = { ...(this.entitlements.get(userId) || {}) };
+    const cut = (iso, days) => iso ? new Date(new Date(iso).getTime() - days * 86400000).toISOString() : null;
+    if (productId === 'founder') { e.is_founder = false; e.founder_since = null; e.club_expires_at = cut(e.club_expires_at, FOUNDER_CLUB_DAYS); }
+    else if (productId === 'club_monthly') e.club_expires_at = cut(e.club_expires_at, CLUB_MONTH_DAYS);
+    else return null;
+    if (!e.club_expires_at || new Date(e.club_expires_at) <= new Date()) { e.club_active = false; e.club_expires_at = null; }
+    e.updated_at = new Date().toISOString();
+    this.entitlements.set(userId, e);
+    return this.getEntitlements(userId);
+  }
+  // R39: quantos Fundadores existem (limite de vagas).
+  async countFounders() {
+    let n = 0; for (const e of (this.entitlements || new Map()).values()) if (e.is_founder) n++;
+    return n;
+  }
   // ---------- R31: identidade cosmética (avatar, selo, título, moldura) ----------
   async setCosmetics(userId, v) {
     const p = this.profiles.get(userId);
@@ -364,8 +389,24 @@ class SupabaseStore {
     return rows[0];
   }
   async getPayment(provider, ref) {
-    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&select=payment_id,user_id,product_id,status,paid_at&limit=1');
+    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&select=payment_id,user_id,product_id,status,paid_at,amount_cents&limit=1');
     return rows[0] || null;
+  }
+  // R39: reembolso/contestação — só paid → refunded (uma vez).
+  async markRefund(provider, ref) {
+    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.paid&select=payment_id,user_id,product_id,status',
+      { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'refunded' }) });
+    return rows[0] || null;
+  }
+  // R39: retira o direito de um pagamento reembolsado (função fraiha_revoke_entitlement, migração 0010).
+  async revokeEntitlement(userId, productId) {
+    await this.req('/rpc/fraiha_revoke_entitlement', { method: 'POST', body: JSON.stringify({ p_user: userId, p_product: productId }) });
+    return this.getEntitlements(userId);
+  }
+  // R39: quantos Fundadores existem (limite de vagas). Sem a tabela (0005) conta 0.
+  async countFounders() {
+    try { const rows = await this.req('/entitlements?is_founder=eq.true&select=user_id'); return Array.isArray(rows) ? rows.length : 0; }
+    catch (e) { if (/42P01|PGRST205|does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message))) return 0; throw e; }
   }
   async markPayment(provider, ref, status) {
     const patch = { status }; if (status === 'paid') patch.paid_at = new Date().toISOString();

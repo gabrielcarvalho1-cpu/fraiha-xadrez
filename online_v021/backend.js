@@ -121,6 +121,7 @@ class Backend {
     this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,
       needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind,
       entitlements: entitlements ? { is_founder: !!entitlements.is_founder, club_active: !!entitlements.club_active, club_expires_at: entitlements.club_expires_at || null } : null,
+      founder_perks: this.payments ? this.payments.founderPerks(entitlements) : null,
       cosmetics: look ? { avatar_id: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame } : null,
       analysis, bots });
   }

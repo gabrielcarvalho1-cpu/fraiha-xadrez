@@ -446,7 +446,11 @@ func _receive(msg: Dictionary):
         ranked = msg.ranked if msg.get("ranked") is Dictionary else {}
         needs_nickname = bool(msg.get("needs_nickname", false))
         persistent_backend = bool(msg.get("persistent", false))
-        if msg.get("entitlements") is Dictionary: entitlements_changed.emit(msg.entitlements)
+        if msg.get("entitlements") is Dictionary:
+            # R39 · extras do Fundador (link do grupo) chegam junto, só para quem é Fundador de verdade
+            var ent: Dictionary = (msg.entitlements as Dictionary).duplicate()
+            ent["founder_perks"] = msg.get("founder_perks") if msg.get("founder_perks") is Dictionary else {}
+            entitlements_changed.emit(ent)
         if msg.get("bots") is Dictionary: bot_progress_changed.emit((msg.bots as Dictionary).merged({"new_bot": null}))
         if msg.get("cosmetics") is Dictionary: cosmetics_state.emit(msg.cosmetics)
         if needs_nickname and not pending_nickname.is_empty():

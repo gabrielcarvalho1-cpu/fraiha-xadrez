@@ -229,7 +229,7 @@ func run():
         if c.done: done += 1
     check(ch.size() == 5 and done == 4, "desafios da semana acompanhados (4 de 5 sem o 'Analista')")
     # ---------- textos dos pacotes ----------
-    check(Catalog.FOUNDER_WHATSAPP_URL == "https://chat.whatsapp.com/DAsWxKiLOO8F37YJGSwhLc", "WhatsApp dos Fundadores configurado")
+    check(not load("res://monetization/monetization_catalog.gd").get_script_constant_map().has("FOUNDER_WHATSAPP_URL"), "R39: WhatsApp dos Fundadores vem do servidor (não fica no jogo)")
     var soon := 0
     for b in preload("res://monetization/club_ui.gd").BENEFITS:
         if b[3] != "DISPONÍVEL": soon += 1

@@ -78,8 +78,8 @@ static func _hero(hub, parent: VBoxContainer, active: String):
     chips.add_theme_constant_override("h_separation", 8)
     chips.add_theme_constant_override("v_separation", 6)
     v.add_child(chips)
-    chips.add_child(Art.Stamp.new("ASSINATURA MENSAL", "info", 15))
-    chips.add_child(Art.Stamp.new("CANCELE QUANDO QUISER", "info", 15))
+    chips.add_child(Art.Stamp.new("30 DIAS POR VEZ", "info", 15))
+    chips.add_child(Art.Stamp.new("SEM RENOVAÇÃO AUTOMÁTICA", "info", 15))
     var t := Art.label(v, "CLUB FRAIHA", hub.fs(48), Art.GOLD, Art.FONT_BOLD)
     t.add_theme_constant_override("outline_size", 8)
     t.add_theme_color_override("font_outline_color", Color(0.05, 0.12, 0.05, 0.95))
@@ -93,17 +93,33 @@ static func _hero(hub, parent: VBoxContainer, active: String):
         mc.name = "ClubOpenMyClub"
         mc.icon_kind = "chart"
         mc.pressed.connect(func(): hub.show_page("myclub"))
+        mc.custom_minimum_size.x = 260 * maxf(hub.k, 0.8)
         go.add_child(mc)
         var pz := Art.Cta.new("PERSONALIZAR", "gold", 58 * maxf(hub.k, 0.85), int(20 * maxf(hub.k, 0.85)))
         pz.name = "ClubPersonalize"
         pz.icon_kind = "brush"
         pz.pressed.connect(func(): hub.show_page("personalize"))
+        pz.custom_minimum_size.x = 220 * maxf(hub.k, 0.8)
         go.add_child(pz)
     if active == "server":
         v.add_child(hub.status_badge("CLUB FRAIHA ATIVO"))
         var exp := String(hub.main_hub.entitlements.club_expires_at()) if hub.main_hub != null else ""
-        var on := Art.label(v, "Todos os recursos do Club estão liberados na sua conta." + ("  Válido até %s." % exp.substr(0, 10) if not exp.is_empty() else ""), hub.fs(19), Art.CREAM)
+        var left: int = hub.main_hub.entitlements.club_days_left() if hub.main_hub != null else -1
+        var when := ("  Válido até %s/%s/%s" % [exp.substr(8, 2), exp.substr(5, 2), exp.substr(0, 4)]) if exp.length() >= 10 else ""
+        if left >= 0: when += " (%s)." % ("último dia" if left <= 1 else "faltam %d dias" % left)
+        var on := Art.label(v, "Todos os recursos do Club estão liberados na sua conta." + when, hub.fs(19), Art.CREAM)
         on.name = "ClubActiveText"
+        if left >= 0 and left <= 5:
+            var warn := Art.label(v, "Seu Club está acabando. Renove para não perder as vantagens.", hub.fs(17), Color("ffd27a"), Art.FONT_SEMI)
+            warn.name = "ClubRenewWarning"
+        # R39 · sem cobrança automática: renovar soma +30 dias ao que ainda resta
+        if not Catalog.is_mock():
+            var renew := Art.Cta.new("RENOVAR · +30 DIAS", "green", 62 * maxf(hub.k, 0.85), int(22 * maxf(hub.k, 0.85)))
+            renew.name = "RenewClub"
+            renew.icon_kind = "book"
+            renew.pressed.connect(func(): hub.open_payment("club_monthly"))
+            v.add_child(renew)
+            Art.label(v, "%s por mais 30 dias, somados aos que ainda restam. PIX ou cartão." % Catalog.planned_price("club_monthly"), hub.fs(15), Art.MUTED)
         return
     if active == "subscription":
         v.add_child(hub.status_badge("CLUB FRAIHA ATIVO"))
@@ -124,7 +140,7 @@ static func _hero(hub, parent: VBoxContainer, active: String):
         v.add_child(hub.status_badge("%d DIAS DE CLUB · BENEFÍCIO FUNDADOR · SIMULAÇÃO" % Catalog.FOUNDER_CLUB_DAYS))
         Art.label(v, "Benefício simulado do Pacote Fundador. Não é uma assinatura.", hub.fs(16), Color("f2a070"))
     v.add_child(hub.price_block("club_monthly", true))
-    var cta := Art.Cta.new("ASSINAR CLUB FRAIHA", "green", 70 * maxf(hub.k, 0.85), int(25 * maxf(hub.k, 0.85)))
+    var cta := Art.Cta.new("ATIVAR CLUB FRAIHA", "green", 70 * maxf(hub.k, 0.85), int(25 * maxf(hub.k, 0.85)))
     cta.name = "SubscribeClub"
     cta.icon_kind = "book"
     cta.shimmer = true

@@ -51,6 +51,24 @@ const sql = q => execSync(`${PSQL} -At -c "${q.replace(/"/g, '\\"')}"`).toString
   const m1 = await st.markPayment('test', 'ch_9', 'paid'), m2 = await st.markPayment('test', 'ch_9', 'paid');
   check(m1 && m1.user_id === B && m2 === null, 'payments: pending → paid só uma vez');
   check((await st.getPayment('test', 'ch_9')).status === 'paid', 'payments: status consultado');
+  // R39 · 0010: reembolso só paid → refunded (1x) e retira o direito; contagem de Fundadores
+  check((await st.getPayment('test', 'ch_9')).amount_cents === 1990, 'R39: getPayment traz o valor (conferência do pagamento)');
+  const rf1 = await st.markRefund('test', 'ch_9'), rf2 = await st.markRefund('test', 'ch_9');
+  check(rf1 && rf1.status === 'refunded' && rf2 === null, 'R39: payments paid → refunded só uma vez');
+  check(await st.countFounders() === 1, 'R39: countFounders conta os Fundadores (1)');
+  const d0 = (new Date((await st.getEntitlements(A)).club_expires_at) - Date.now()) / 86400e3;   // 90 (founder + club + founder)
+  e = await st.revokeEntitlement(A, 'club_monthly');
+  const d3 = (new Date(e.club_expires_at) - Date.now()) / 86400e3;
+  check(e.is_founder && e.club_active && Math.abs(d0 - 30 - d3) < 0.1, 'R39: fraiha_revoke_entitlement(club_monthly) tira 30 dias (%a → %b)'.replace('%a', d0.toFixed(0)).replace('%b', d3.toFixed(0)));
+  e = await st.revokeEntitlement(A, 'founder');
+  const d4 = (new Date(e.club_expires_at) - Date.now()) / 86400e3;
+  check(!e.is_founder && e.club_active && Math.abs(d3 - 30 - d4) < 0.1 && sql(`select founder_since is null from public.entitlements where user_id='${A}'`) === 't', 'R39: revoke founder: deixa de ser Fundador e perde os 30 dias do bônus');
+  e = await st.revokeEntitlement(A, 'club_monthly');
+  check(!e.club_active && !e.club_expires_at, 'R39: Club que chega a zero fica inativo');
+  check(await st.countFounders() === 0, 'R39: countFounders volta a 0');
+  const anonRv = await fetch('http://127.0.0.1:' + port + '/rpc/fraiha_revoke_entitlement', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + jwt({ role: 'authenticated', sub: B }) }, body: JSON.stringify({ p_user: A, p_product: 'founder' }) });
+  check(anonRv.status === 401 || anonRv.status === 403 || anonRv.status === 404, 'R39: jogador autenticado NÃO executa o revoke (%d)'.replace('%d', anonRv.status));
+  await st.grantEntitlement(A, 'founder', 'pix');
   // 3) cosméticos + Destaque social
   const r = await st.setCosmetics(A, { avatar_id: 'fundador', badge: 'fundador', title: 'fundador', frame: 'fundador' });
   check(r.profile && r.profile.profile_badge === 'fundador' && !r.partial, 'setCosmetics grava ícone/título/moldura/avatar');

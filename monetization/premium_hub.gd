@@ -1,7 +1,7 @@
 extends CanvasLayer
 ## FRAIHA PREMIUM — sobreposição aberta a partir de CONFIGURAÇÕES.
 ## Navegação: Produto (Fundador/Club) → Hub Premium → Configurações.
-## MONETIZAÇÃO V1: tudo é SIMULAÇÃO (PAYMENT_MODE = "mock"); nenhum pagamento é processado.
+## R39: build publicada = pagamento REAL (Mercado Pago, PIX + cartão, pelo servidor); editor/testes = simulação.
 signal closed
 
 const Art := preload("res://monetization/premium_art.gd")
@@ -11,6 +11,7 @@ const Gateway := preload("res://monetization/payment_gateway.gd")
 const FounderUI := preload("res://monetization/founder_ui.gd")
 const ClubUI := preload("res://monetization/club_ui.gd")
 const PaymentUI := preload("res://monetization/payment_mock_ui.gd")
+const PaymentRealUI := preload("res://monetization/payment_real_ui.gd")
 const PersonalizeUI := preload("res://monetization/personalize_ui.gd")
 const MyClubUI := preload("res://monetization/my_club_ui.gd")
 const Mobile := preload("res://ui_v022/mobile_layout.gd")
@@ -37,6 +38,8 @@ var view := Vector2(1920, 1080)
 var narrow := false      # celular retrato / telas estreitas: 1 coluna
 var compact := false     # pouca altura (celular paisagem)
 var k := 1.0             # escala de fonte
+var offer := {}          # R39 · resposta do servidor (payment_offer): vagas de Fundador, provedor pronto
+var _offer_bound = null
 
 func _init(monetization_state = null):
     layer = 60
@@ -54,7 +57,33 @@ func open(page_id := "hub"):
     entry_page = page_id
     visible = true
     root.visible = true
+    _request_offer()
     show_page(page_id)
+
+## R39 · pagamento real: o servidor diz se o Mercado Pago está ligado e quantas vagas de Fundador restam.
+func _account():
+    return main_hub.account if main_hub != null else null
+
+func _request_offer():
+    if Catalog.is_mock(): return
+    var acc = _account()
+    if acc == null: return
+    if _offer_bound != acc and acc.has_signal("server_message"):
+        acc.server_message.connect(_on_server)
+        _offer_bound = acc
+    if acc.has_method("has_profile") and acc.has_profile(): acc.send_server({"type": "payment_offer"})
+
+func _on_server(msg: Dictionary):
+    if String(msg.get("type", "")) != "payment_offer": return
+    offer = msg
+    if visible and modal == null and page in ["hub", "founder", "club"]: _rebuild()
+
+## Vagas de Fundador restantes (-1 = ainda não sabemos).
+func founder_remaining() -> int:
+    return int(offer.get("founder_remaining", -1)) if offer.has("founder_remaining") else -1
+
+func founder_limit() -> int:
+    return int(offer.get("founder_limit", Catalog.FOUNDER_LIMIT))
 
 func close():
     close_modal()
@@ -180,6 +209,8 @@ func _relayout():
     back_button.custom_minimum_size = Vector2(150 if narrow else (210 if compact else 260), 42 if compact else (52 if narrow else 58))
     back_button.font_size = 16 if narrow or compact else 19
     var stamp: Control = header.get_node("HeaderTestStamp")
+    stamp.visible = Catalog.is_mock()
+    banner.visible = Catalog.is_mock()
     stamp.font_size = 12 if narrow or compact else 15
     stamp._measure()
     var bl: Label = banner.find_child("TestBannerText", true, false)
@@ -340,7 +371,7 @@ func _hub_card_club() -> Control:
     var tv := VBoxContainer.new()
     tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     top.add_child(tv)
-    tv.add_child(Art.Stamp.new("ASSINATURA MENSAL", "info", int(13 * maxf(k, 0.9))))
+    tv.add_child(Art.Stamp.new("30 DIAS POR VEZ", "info", int(13 * maxf(k, 0.9))))
     Art.label(tv, "CLUB FRAIHA", fs(32), Art.GOLD, Art.FONT_BOLD)
     Art.label(v, "JOGUE.  ENTENDA.  EVOLUA.", fs(22), Color("bfe8a8"), Art.FONT_BOLD)
     if club_real():
@@ -424,16 +455,20 @@ func price_block(product_id: String, monthly: bool) -> Control:
     row.add_theme_constant_override("h_separation", 12)
     row.add_theme_constant_override("v_separation", 4)
     v.add_child(row)
-    var price := Art.label(row, Catalog.charge_price(product_id) + (" / MÊS" if monthly else ""), fs(46), Color("fff1c0"), Art.FONT_BOLD)
+    var price := Art.label(row, Catalog.charge_price(product_id) + ((" / MÊS" if Catalog.is_mock() else " · 30 DIAS") if monthly else ""), fs(46), Color("fff1c0"), Art.FONT_BOLD)
     price.name = "TestPrice"
     price.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     price.autowrap_mode = TextServer.AUTOWRAP_OFF
     price.add_theme_constant_override("outline_size", 6)
     price.add_theme_color_override("font_outline_color", Color(0.18, 0.1, 0.0, 0.9))
-    row.add_child(Art.Stamp.new("MODO TESTE", "test", 14))
-    var planned := "Preço planejado futuramente: %s%s" % [Catalog.planned_price(product_id), " / mês" if monthly else " · pagamento único"]
-    var pl := Art.label(v, planned, fs(16), Art.MUTED)
-    pl.name = "PlannedPrice"
+    if Catalog.is_mock():
+        row.add_child(Art.Stamp.new("MODO TESTE", "test", 14))
+        var planned := "Preço planejado futuramente: %s%s" % [Catalog.planned_price(product_id), " / mês" if monthly else " · pagamento único"]
+        var pl := Art.label(v, planned, fs(16), Art.MUTED)
+        pl.name = "PlannedPrice"
+    else:
+        var how := Art.label(v, ("PIX ou cartão · sem renovação automática" if monthly else "PIX ou cartão · pagamento único"), fs(16), Art.MUTED)
+        how.name = "PriceHow"
     return v
 
 func status_badge(text: String) -> Control:
@@ -527,12 +562,32 @@ func close_modal():
         modal.queue_free()
     modal = null
 
-## Fluxo de pagamento simulado (escolha → PIX/Cartão → confirmação).
+## Pagamento: real (Mercado Pago pelo servidor) na build publicada; simulado no editor/testes.
 func open_payment(product_id: String):
     var host := _modal_host()
-    var ui := PaymentUI.new()
+    var ui = PaymentUI.new() if Catalog.is_mock() else PaymentRealUI.new()
     host.add_child(ui)
     ui.setup(self, product_id)
+
+## R39 · pagamento confirmado pelo SERVIDOR (webhook → acct_state): festa + boas-vindas com o que foi liberado.
+func payment_confirmed(product_id: String):
+    _request_offer()
+    _rebuild()
+    scroll.scroll_vertical = 0
+    _celebrate()
+    var founder := product_id == "founder"
+    var title := "BEM-VINDO, FUNDADOR DO REINO!" if founder else "CLUB FRAIHA ATIVO!"
+    var lines := []
+    if founder:
+        lines = ["Selo e título \"Fundador do Reino\"", "Avatar e moldura exclusivos de Fundador", "Universo e peças do Fundador", "30 dias de Club FRAIHA inclusos", "Grupo dos Fundadores no WhatsApp"]
+    else:
+        lines = ["Análises ilimitadas", "MEU CLUB: estatísticas, treino dos seus erros e desafios", "Marcha Real sem limite diário", "Selo, avatares, moldura, universo e peças do Club"]
+    var body := "Pagamento confirmado pelo Mercado Pago. Já está liberado na sua conta:\n\n• " + "\n• ".join(lines)
+    if not founder and main_hub != null and main_hub.entitlements != null:
+        var exp := String(main_hub.entitlements.club_expires_at())
+        if not exp.is_empty(): body += "\n\nVálido até %s/%s/%s." % [exp.substr(8, 2), exp.substr(5, 2), exp.substr(0, 4)]
+    var f := open_confirm(title, body, "FECHAR", "PERSONALIZAR AGORA", func(): show_page("personalize"), "founder" if founder else "club")
+    f.name = "WelcomeModal"
 
 ## Modal simples de confirmação (2 botões) ou aviso (1 botão quando cancel_text vazio).
 func open_confirm(title: String, body: String, cancel_text: String, ok_text: String, on_ok: Callable, tone := "test") -> Control:
@@ -547,7 +602,7 @@ func open_confirm(title: String, body: String, cancel_text: String, ok_text: Str
     var v := VBoxContainer.new()
     v.add_theme_constant_override("separation", 14)
     f.add_child(v)
-    v.add_child(Art.Stamp.new("MODO TESTE", "test", 13))
+    if Catalog.is_mock(): v.add_child(Art.Stamp.new("MODO TESTE", "test", 13))
     var tl := Art.label(v, title, fs(30), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
     tl.name = "ConfirmTitle"
     var bl := Art.label(v, body, fs(19), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
@@ -586,9 +641,10 @@ func _celebrate():
     tw.tween_interval(2.4)
     tw.tween_callback(func(): if is_instance_valid(burst): burst.queue_free())
 
-## WhatsApp dos Fundadores: abre FOUNDER_WHATSAPP_URL; vazio → aviso (nunca inventa link).
+## WhatsApp dos Fundadores: o link vem do SERVIDOR só para Fundador de verdade; sem link → aviso.
 func open_founder_group():
-    var url := String(Catalog.FOUNDER_WHATSAPP_URL).strip_edges()
+    var url := ""
+    if main_hub != null and main_hub.entitlements != null: url = String(main_hub.entitlements.founder_group_url()).strip_edges()
     if url.begins_with("https://"):
         last_opened_url = url
         if url_opener.is_valid(): url_opener.call(url)

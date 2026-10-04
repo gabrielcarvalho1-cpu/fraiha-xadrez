@@ -48,13 +48,13 @@ const { startServer, client, check, summary } = require('./helpers.cjs');
   c.send({ type: 'acct_refresh' });
   st = await c.next('acct_state');
   check(st.entitlements.club_active === false, 'tentativa de pagamento não ativou nada');
-  // webhook HTTP sem provedor → 400 (nunca ativa)
+  // webhook HTTP sem provedor → recusado (nunca ativa)
   const http = require('http');
   const code = await new Promise(resolve => {
     const req = http.request({ host: '127.0.0.1', port: s.port, path: '/webhooks/payments', method: 'POST' }, res => resolve(res.statusCode));
     req.on('error', () => resolve(-1)); req.end('{}');
   });
-  check(code === 400, 'webhook sem provedor responde 400');
+  check(code === 401 || code === 400, 'webhook sem provedor é recusado (' + code + ')');
   c.close(); s.stop();
   summary('ANALYSIS_PAYMENTS');
 })().catch(e => { console.error(e); process.exitCode = 1; });
