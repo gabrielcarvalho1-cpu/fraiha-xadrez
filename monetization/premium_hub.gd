@@ -71,6 +71,8 @@ func _request_offer():
     if _offer_bound != acc and acc.has_signal("server_message"):
         acc.server_message.connect(_on_server)
         _offer_bound = acc
+        # direitos mudaram (pagamento confirmado, vencimento, outra aba): a página atrás do modal acompanha
+        if main_hub.entitlements != null: main_hub.entitlements.changed.connect(func(): if visible: _rebuild())
     if acc.has_method("has_profile") and acc.has_profile(): acc.send_server({"type": "payment_offer"})
 
 func _on_server(msg: Dictionary):
