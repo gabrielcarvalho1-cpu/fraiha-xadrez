@@ -139,7 +139,8 @@ func promote(kind: String) -> bool:
 
 func _apply(move: Dictionary) -> bool:
     if not active or game.game_over: return false
-    if guard.is_valid() and bool(guard.call()): return false
+    # R42: o modo LOCAL (2 humanos) usa este controlador só como juiz de regras, sem engine.
+    if not local_mode and guard.is_valid() and bool(guard.call()): return false
     var before: Dictionary = rules.board.duplicate()
     var moving_color: String = rules.turn
     if not rules.play(move): return false
@@ -186,7 +187,7 @@ func _sync_view():
     game.queue_redraw()
 
 func _process(delta: float):
-    if active and guard.is_valid() and bool(guard.call()): stop()
+    if active and not local_mode and guard.is_valid() and bool(guard.call()): stop()
     if worker != null and worker.is_started() and not worker.is_alive():
         var result = worker.wait_to_finish()
         worker = null

@@ -47,12 +47,25 @@ class Backend {
     this.now = opts.now || (() => Date.now());
     this.setTimer = opts.setTimer || setTimeout;
     this.clearTimer = opts.clearTimer || clearTimeout;
+    const deliver = (ws, o) => {
+      const s = this.session(ws);
+      if (!s.closed && (ws.readyState === undefined || ws.readyState === 1)) opts.send(ws, o);
+    };
     this.send = (ws, o) => {
       const op = this.operations.getStore();
       if (op && op.active && !this.current(op.ws, op.revision)) return;
-      if (op && op.active && !op.auth && !this.ready(op.ws, op.revision)) return;
-      const s = this.session(ws);
-      if (!s.closed && (ws.readyState === undefined || ws.readyState === 1)) opts.send(ws, o);
+      if (op && op.active && !op.auth && !this.ready(op.ws, op.revision)) {
+        // R42: revalidação de rotina (a cada 60 s) em andamento no meio de uma operação longa
+        // (ex.: pagamento esperando o Mercado Pago): a resposta espera a revalidação e só é
+        // entregue se a sessão continuar válida — não é descartada. Login/troca de conta: descarta.
+        if (this.session(op.ws).authPending) return;
+        const { ws: opWs, revision } = op;
+        this.operations.run(null, () => this.ensureSession(opWs)).then(ok => {
+          if (ok && this.current(opWs, revision)) deliver(ws, o);
+        }, () => {});
+        return;
+      }
+      deliver(ws, o);
     };
     this.ranked = null; // conectado em attachRanked()
     this.casual = null; // conectado em attachCasual()
