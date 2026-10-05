@@ -20,6 +20,23 @@ const PRODUCTS = {
 };
 const METHODS = ['pix', 'card'];
 const STATUS_POLL_MS = 8000;     // consulta ao provedor quando o jogador pergunta (no máximo 1x a cada 8 s por pedido)
+const CARD_ATTEMPTS = 6;         // tentativas de cartão no jogo por pedido (cartão recusado → pode tentar outro)
+// R40 · Motivos de recusa do cartão (status_detail do Mercado Pago) em português, para o jogador.
+const CARD_REJECT = {
+  cc_rejected_insufficient_amount: 'Saldo ou limite insuficiente neste cartão. Tente outro cartão ou pague com PIX.',
+  cc_rejected_bad_filled_security_code: 'Código de segurança (CVV) incorreto. Confira e tente de novo.',
+  cc_rejected_bad_filled_date: 'Data de validade incorreta. Confira e tente de novo.',
+  cc_rejected_bad_filled_card_number: 'Número do cartão incorreto. Confira e tente de novo.',
+  cc_rejected_bad_filled_other: 'Algum dado do cartão está incorreto. Confira e tente de novo.',
+  cc_rejected_call_for_authorize: 'O banco pediu autorização para esta compra. Ligue para o banco do cartão ou pague com PIX.',
+  cc_rejected_card_disabled: 'Este cartão está bloqueado ou inativo. Fale com o banco ou use outro cartão.',
+  cc_rejected_duplicated_payment: 'Este pagamento já foi feito agora há pouco. Confira a sua conta antes de tentar de novo.',
+  cc_rejected_high_risk: 'O pagamento foi recusado pela análise de segurança. Tente outro cartão ou pague com PIX.',
+  cc_rejected_max_attempts: 'Muitas tentativas com este cartão. Use outro cartão ou pague com PIX.',
+  cc_rejected_blacklist: 'Este cartão não pode ser usado. Tente outro cartão ou pague com PIX.',
+  cc_rejected_card_type_not_allowed: 'Este tipo de cartão não é aceito. Tente outro cartão ou pague com PIX.',
+};
+const CARD_REJECT_DEFAULT = 'O cartão foi recusado pelo banco. Nada foi cobrado. Tente outro cartão ou pague com PIX.';
 
 class NoProvider {
   constructor() { this.name = 'none'; }
@@ -95,6 +112,7 @@ class Payments {
         return this.fail(ws, 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes.', 'server_error');
       }
     }
+    if (a === 'payment_card_pay') return this.cardPay(ws, m);
     if (a === 'payment_status') {
       const ref = String(m.charge_id || '');
       let row = this.store.getPayment ? await this.store.getPayment(this.provider.name, ref) : null;
@@ -109,6 +127,46 @@ class Payments {
       return this.send(ws, { type: 'payment_update', charge: { id: ref, status: row.status, product_id: row.product_id } });
     }
     return this.fail(ws, 'Ação de pagamento desconhecida.', 'bad_request');
+  }
+
+  // R40 · Cartão no jogo: o navegador manda o TOKEN do formulário seguro do Mercado Pago; o servidor
+  // cria o pagamento com o preço do servidor, no pedido (ref) que pertence a este jogador.
+  async cardPay(ws, m) {
+    const ref = String(m.charge_id || '');
+    const reply = (status, extra = {}) => this.send(ws, { type: 'payment_card_result', charge_id: ref, status, ...extra });
+    const row = this.store.getPayment ? await this.store.getPayment(this.provider.name, ref) : null;
+    if (!row || row.user_id !== ws.user.id || (row.method && row.method !== 'card')) return reply('error', { message: 'Pedido de pagamento não encontrado. Feche e comece de novo.' });
+    if (row.status === 'paid') return reply('approved');
+    if (row.status !== 'pending') return reply('error', { message: 'Este pedido não está mais aberto. Feche e comece de novo.' });
+    if (!this.provider.payCard) return reply('error', { message: 'Pagamento com cartão no jogo indisponível. Use a página do Mercado Pago.' });
+    const token = String(m.token || ''), pm = String(m.payment_method_id || '');
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(token) || !/^[a-z0-9_]{2,40}$/.test(pm)) return reply('rejected', { message: 'Dados do cartão incompletos. Confira e tente de novo.' });
+    this.cardAttempts = this.cardAttempts || new Map();
+    const n = (this.cardAttempts.get(ref) || 0) + 1;
+    if (n > CARD_ATTEMPTS) return reply('rejected', { message: 'Muitas tentativas neste pedido. Feche e comece de novo, ou pague com PIX.' });
+    this.cardAttempts.set(ref, n);
+    const product = PRODUCTS[row.product_id];
+    if (!product) return reply('error', { message: 'Produto inválido.' });
+    const amountCents = Number(row.amount_cents) || product.amount_cents;
+    let ev;
+    try {
+      ev = await this.provider.payCard({ ref, token, paymentMethodId: pm, issuerId: String(m.issuer_id || '').replace(/[^0-9]/g, '').slice(0, 12),
+        amountCents, title: product.title, email: ws.user.email, idType: String(m.id_type || '').replace(/[^A-Za-z]/g, '').slice(0, 8),
+        idNumber: String(m.id_number || '').replace(/[^0-9]/g, '').slice(0, 20), deviceId: String(m.device_id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 120),
+        userId: ws.user.id, productId: row.product_id });
+    } catch (e) {
+      if (e.status && e.status >= 400 && e.status < 500) { console.warn('payment_card_pay recusado pela API', e.message); return reply('rejected', { message: CARD_REJECT_DEFAULT }); }
+      console.error('payment_card_pay', e && e.message);
+      return reply('error', { message: 'O Mercado Pago não respondeu agora. Nada foi cobrado. Tente de novo em instantes.' });
+    }
+    if (ev.status === 'paid') {
+      await this.apply(ev);
+      const after = await this.store.getPayment(this.provider.name, ref);
+      if (after && after.status === 'paid') return reply('approved');
+      return reply('error', { message: 'Pagamento aprovado, mas a confirmação ainda não chegou. Aguarde alguns segundos: a vantagem aparece sozinha.' });
+    }
+    if (ev.status === 'pending') return reply('pending', { message: 'Pagamento em análise pelo Mercado Pago. Assim que for aprovado, a vantagem aparece sozinha.' });
+    return reply('rejected', { detail: ev.detail || '', message: CARD_REJECT[ev.detail] || CARD_REJECT_DEFAULT });
   }
 
   // Aplica um evento do provedor (webhook ou consulta). Idempotente: cada transição acontece uma vez.

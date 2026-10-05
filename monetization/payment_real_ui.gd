@@ -1,11 +1,14 @@
 extends CenterContainer
 ## R39 · PAGAMENTO REAL (Mercado Pago): escolha PIX/Cartão → cobrança criada pelo SERVIDOR →
 ##   PIX: QR Code + Copia e Cola + "abrir no Mercado Pago"; Cartão: abre o checkout do Mercado Pago.
+## R40 · Cartão DENTRO DO JOGO (Web): formulário seguro do Mercado Pago por cima do jogo (card_form_web.gd);
+##   o servidor cria o pagamento com o token. Sem Public Key / fora da Web / formulário falhou → página do MP.
 ##   Enquanto espera: "aguardando pagamento" (consulta o servidor a cada poucos segundos e no botão JÁ PAGUEI).
 ##   Confirmado (webhook → servidor → acct_state) → tela de boas-vindas com as vantagens liberadas.
 ## O jogo NUNCA confirma pagamento sozinho e nunca vê dado de cartão nem chave do provedor.
 const Art := preload("res://monetization/premium_art.gd")
 const Catalog := preload("res://monetization/monetization_catalog.gd")
+const CardForm := preload("res://monetization/card_form_web.gd")
 const POLL_SECONDS := 5.0
 
 var hub
@@ -22,6 +25,10 @@ var status_label: Label
 var copied_label: Label
 var url_opener: Callable     # testes: substitui a abertura de link
 var clipboard_writer: Callable
+var card_form_factory: Callable   # testes: formulário de cartão falso (fora do navegador)
+var card_form: Node
+var card_form_failed := false
+var card_note: Label
 
 func setup(owner_hub, product: String):
     hub = owner_hub
@@ -37,6 +44,7 @@ func setup(owner_hub, product: String):
     _show("choose")
 
 func _exit_tree():
+    if card_form != null: card_form.close()
     var acc = _account()
     if acc != null and acc.has_signal("server_message") and acc.server_message.is_connected(_on_server): acc.server_message.disconnect(_on_server)
 
@@ -98,7 +106,7 @@ func _choose(v: VBoxContainer):
     if _club():
         Art.label(v, "Sem renovação automática: quando os 30 dias acabarem, você renova se quiser.", hub.fs(16), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
     v.add_child(_option("pix", "PIX", "Aprovação na hora · QR Code ou Copia e Cola", "PAGAR COM PIX", true))
-    v.add_child(_option("card", "CARTÃO", "Crédito ou débito na página segura do Mercado Pago", "PAGAR COM CARTÃO", false))
+    v.add_child(_option("card", "CARTÃO", ("Crédito aqui mesmo no jogo, no formulário seguro do Mercado Pago" if _inline_possible() else "Crédito ou débito na página segura do Mercado Pago"), "PAGAR COM CARTÃO", false))
     Art.label(v, "O FRAIHA nunca vê os dados do seu cartão. O recibo vai para o e-mail da sua conta.", hub.fs(14), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
     var cancel := Art.Cta.new("CANCELAR", "dark", 54, 18)
     cancel.name = "PaymentCancel"
@@ -154,7 +162,7 @@ func start(m: String):
 
 func _creating(v: VBoxContainer):
     Art.label(v, "PREPARANDO O PAGAMENTO…", hub.fs(28), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
-    Art.label(v, ("Gerando o seu PIX no Mercado Pago." if method == "pix" else "Abrindo o checkout seguro do Mercado Pago."), hub.fs(18), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
+    Art.label(v, ("Gerando o seu PIX no Mercado Pago." if method == "pix" else ("Preparando o formulário seguro do Mercado Pago." if _inline_possible() else "Abrindo o checkout seguro do Mercado Pago.")), hub.fs(18), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
     var spin := Spinner.new()
     spin.custom_minimum_size = Vector2(64, 64)
     spin.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -239,6 +247,7 @@ func copy_code():
 
 # ------------------------------------------------------------ 2b. Cartão
 func _card(v: VBoxContainer):
+    card_note = null
     var top := HBoxContainer.new()
     top.alignment = BoxContainer.ALIGNMENT_CENTER
     top.add_theme_constant_override("separation", 12)
@@ -249,14 +258,87 @@ func _card(v: VBoxContainer):
     t.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     t.autowrap_mode = TextServer.AUTOWRAP_OFF
     Art.label(v, _price_text(), hub.fs(20), Color("fff1c0"), Art.FONT_SEMI, HORIZONTAL_ALIGNMENT_CENTER)
-    Art.label(v, "O pagamento acontece na página segura do Mercado Pago (nova aba). Depois de pagar, volte para o jogo: a vantagem é liberada sozinha.", hub.fs(17), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
-    var go := Art.Cta.new("ABRIR PAGAMENTO COM CARTÃO", "green" if _club() else "gold", 64 * maxf(hub.k, 0.85), 21)
-    go.name = "CardOpenCheckout"
-    go.icon_kind = "card"
-    go.shimmer = true
-    go.pressed.connect(func(): _open_url(String(charge.get("checkout_url", ""))))
-    v.add_child(go)
+    if _inline_ready():
+        Art.label(v, "Preencha os dados do cartão no formulário seguro do Mercado Pago, aqui mesmo no jogo. A vantagem é liberada assim que o pagamento for aprovado.", hub.fs(17), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
+        var form := Art.Cta.new("PREENCHER DADOS DO CARTÃO", "green" if _club() else "gold", 64 * maxf(hub.k, 0.85), 21)
+        form.name = "CardOpenForm"
+        form.icon_kind = "card"
+        form.shimmer = true
+        form.pressed.connect(open_card_form)
+        v.add_child(form)
+        card_note = Art.label(v, "", hub.fs(16), Color("ffe6a0"), Art.FONT_SEMI, HORIZONTAL_ALIGNMENT_CENTER)
+        card_note.name = "CardFormNote"
+        if not String(charge.get("checkout_url", "")).is_empty():
+            var page := Art.Cta.new("PREFIRO PAGAR NA PÁGINA DO MERCADO PAGO", "dark", 46, 15)
+            page.name = "CardOpenCheckout"
+            page.pressed.connect(func(): _open_url(String(charge.get("checkout_url", ""))))
+            v.add_child(page)
+    else:
+        var msg := "O pagamento acontece na página segura do Mercado Pago (nova aba). Depois de pagar, volte para o jogo: a vantagem é liberada sozinha."
+        if card_form_failed: msg = "Não foi possível abrir o formulário do cartão aqui no jogo. " + msg
+        Art.label(v, msg, hub.fs(17), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
+        var go := Art.Cta.new("ABRIR PAGAMENTO COM CARTÃO", "green" if _club() else "gold", 64 * maxf(hub.k, 0.85), 21)
+        go.name = "CardOpenCheckout"
+        go.icon_kind = "card"
+        go.shimmer = true
+        go.pressed.connect(func(): _open_url(String(charge.get("checkout_url", ""))))
+        v.add_child(go)
     _waiting_block(v)
+
+# ------------------------------------------------------------ R40 · cartão dentro do jogo
+func _inline_possible() -> bool:
+    return CardForm.available() or card_form_factory.is_valid()
+
+func _inline_ready() -> bool:
+    return _inline_possible() and not card_form_failed and not String(charge.get("public_key", "")).is_empty()
+
+func open_card_form():
+    if not _inline_ready(): return
+    if card_form == null:
+        card_form = card_form_factory.call() if card_form_factory.is_valid() else CardForm.new()
+        card_form.name = "CardForm"
+        add_child(card_form)
+        card_form.submitted.connect(_on_card_submitted)
+        card_form.failed.connect(_on_card_failed)
+        card_form.closed.connect(func(): _note("Formulário fechado. Toque em PREENCHER DADOS DO CARTÃO para continuar."))
+    var acc = _account()
+    _note("")
+    CardForm.release_game_focus(get_viewport())
+    card_form.open(String(charge.get("public_key", "")), int(charge.get("amount_cents", 0)), String(acc.email) if acc != null else "",
+        String(Catalog.product(product_id).get("name", "FRAIHA")).to_upper(), _price_text())
+
+func _note(text: String):
+    if card_note != null and is_instance_valid(card_note): card_note.text = text
+
+func _on_card_submitted(d: Dictionary):
+    var acc = _account()
+    var msg := {"type": "payment_card_pay", "charge_id": String(charge.get("id", ""))}
+    for k in ["token", "payment_method_id", "issuer_id", "id_type", "id_number", "device_id"]: msg[k] = String(d.get(k, ""))
+    if acc == null or not acc.send_server(msg):
+        card_form.resolve_reject("Sem conexão com o servidor. Verifique a internet e tente de novo.")
+        return
+    _note("Processando o pagamento no Mercado Pago…")
+
+func _on_card_failed(_reason: String):
+    card_form_failed = true
+    if step == "card": _show("card")
+
+func _on_card_result(msg: Dictionary):
+    if String(msg.get("charge_id", "")) != String(charge.get("id", "-")) or card_form == null: return
+    var text := String(msg.get("message", ""))
+    match String(msg.get("status", "")):
+        "approved":
+            card_form.resolve_ok()
+            card_form.close()
+            _paid()
+        "pending":
+            card_form.resolve_ok()
+            card_form.close()
+            _note(text)
+            if status_label != null: status_label.text = "Pagamento em análise pelo Mercado Pago…"
+        _:
+            card_form.resolve_reject(text if not text.is_empty() else "O cartão foi recusado. Nada foi cobrado. Tente outro cartão ou pague com PIX.")
+            _note(text)
 
 func _waiting_block(v: VBoxContainer):
     var row := HBoxContainer.new()
@@ -288,6 +370,7 @@ func _waiting_block(v: VBoxContainer):
     other.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     other.pressed.connect(func():
         poll.stop()
+        if card_form != null: card_form.close()
         _show("choose"))
     btns.add_child(other)
     var close := Art.Cta.new("FECHAR", "dark", 52, 16)
@@ -366,14 +449,18 @@ func _on_server(msg: Dictionary):
             if step != "creating": return
             charge = msg.get("charge", {}) if msg.get("charge") is Dictionary else {}
             if String(charge.get("product_id", product_id)) != product_id: return
+            card_form_failed = false
             _show("pix" if String(charge.get("method", method)) == "pix" else "card")
             poll.start()
+            if step == "card" and _inline_ready(): open_card_form.call_deferred()
         "payment_error":
             if step not in ["creating", "pix", "card"]: return
             poll.stop()
             error_code = String(msg.get("code", ""))
             error_text = String(ERRORS.get(error_code, String(msg.get("message", "Não foi possível iniciar o pagamento."))))
             _show("error")
+        "payment_card_result":
+            _on_card_result(msg)
         "payment_update":
             var c = msg.get("charge", {})
             if not (c is Dictionary) or String(c.get("id", "")) != String(charge.get("id", "-")): return
@@ -386,7 +473,9 @@ func _on_server(msg: Dictionary):
                     if status_label != null: status_label.text = "Aguardando a confirmação do pagamento…"
 
 func _paid():
+    if step == "done": return
     poll.stop()
+    if card_form != null: card_form.close()
     step = "done"
     var h = hub
     var pid := product_id

@@ -29,9 +29,18 @@ const srv = http.createServer((req, res) => {
       if (!p) return json(res, 404, { message: 'ref desconhecida' });
       p.status = 'approved'; return json(res, 200, { ok: true, id: p.id });
     }
+    if (req.method === 'GET' && url.pathname === '/__cards') return json(res, 200, [...payments.values()].filter(p => p.payment_method_id && p.payment_method_id !== 'pix'));
     if (req.method === 'GET' && url.pathname === '/__last') return json(res, 200, { ref: [...payments.values(), ...[...prefs.values()].map(x => ({ external_reference: x.external_reference }))].map(x => x.external_reference).pop() || '' });
     if (req.headers.authorization !== 'Bearer TEST-TOKEN') return json(res, 401, { message: 'unauthorized' });
     if (req.method === 'POST' && url.pathname === '/v1/payments') {
+      if (body.token) {   // R40: cartão no jogo (token do Card Payment Brick). TOKEN "...reject..." = recusado por saldo.
+        const rej = /reject/.test(body.token), bad = /cvv/.test(body.token);
+        const p = { id: nextId++, status: rej || bad ? 'rejected' : 'approved', status_detail: rej ? 'cc_rejected_insufficient_amount' : (bad ? 'cc_rejected_bad_filled_security_code' : 'accredited'),
+          transaction_amount: body.transaction_amount, currency_id: 'BRL', external_reference: body.external_reference, payment_method_id: body.payment_method_id,
+          installments: body.installments, binary_mode: body.binary_mode, payer: body.payer, issuer_id: body.issuer_id,
+          _session: req.headers['x-meli-session-id'] || '', _idem: req.headers['x-idempotency-key'] || '' };
+        payments.set(String(p.id), p); return json(res, 201, p);
+      }
       const p = { id: nextId++, status: 'pending', transaction_amount: body.transaction_amount, currency_id: 'BRL', external_reference: body.external_reference,
         point_of_interaction: { transaction_data: { qr_code: '00020126580014br.gov.bcb.pix0136TESTE' + body.external_reference.slice(0, 8), qr_code_base64: PNG, ticket_url: 'https://www.mercadopago.com.br/payments/' + nextId + '/ticket' } } };
       payments.set(String(p.id), p); return json(res, 201, p);

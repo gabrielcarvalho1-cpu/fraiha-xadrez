@@ -3,6 +3,9 @@
 //
 //  PIX    → POST /v1/payments (payment_method_id 'pix'): devolve QR (imagem base64) + Copia e Cola.
 //  Cartão → POST /checkout/preferences (Checkout Pro, página do Mercado Pago): devolve o link (init_point).
+//  Cartão no jogo (R40) → o formulário seguro do Mercado Pago (Card Payment Brick) roda no navegador e
+//            devolve só um TOKEN de uso único; o servidor cria o pagamento (POST /v1/payments com o token),
+//            sempre com o PREÇO DO SERVIDOR. Número/CVV nunca passam pelo FRAIHA.
 //  Webhook → a notificação só diz "o pagamento X mudou"; o servidor CONSULTA o pagamento na API
 //            (GET /v1/payments/X) e só confia no que a API responde (status, valor, external_reference).
 //            Com segredo configurado, a assinatura x-signature é conferida (HMAC-SHA256 do manifesto
@@ -12,6 +15,8 @@
 //   FRAIHA_PAYMENT_PROVIDER   = mercadopago
 //   FRAIHA_MP_ACCESS_TOKEN    = Access Token da aplicação (produção: APP_USR-…; teste: credencial de teste)
 //   FRAIHA_MP_WEBHOOK_SECRET  = "Assinatura secreta" da tela de Webhooks da aplicação
+//   FRAIHA_MP_PUBLIC_KEY      = Public Key da aplicação (pública: vai para o formulário de cartão no jogo).
+//                               Sem ela, o cartão continua na página do Mercado Pago (Checkout Pro).
 //   FRAIHA_PUBLIC_URL         = URL pública HTTPS deste servidor (ex.: https://fraiha-xadrez-staging.onrender.com)
 //   FRAIHA_GAME_URL           = para onde o checkout do cartão volta (padrão https://jogar.fraihaxadrez.com)
 //   FRAIHA_PIX_MINUTES        = validade do PIX em minutos (padrão 30)
@@ -37,6 +42,7 @@ class MercadoPago {
     this.name = 'mercadopago';
     this.token = String(env.FRAIHA_MP_ACCESS_TOKEN || '').trim();
     this.secret = String(env.FRAIHA_MP_WEBHOOK_SECRET || '').trim();
+    this.publicKey = String(env.FRAIHA_MP_PUBLIC_KEY || '').trim();
     this.api = String(env.FRAIHA_MP_API || 'https://api.mercadopago.com').replace(/\/+$/, '');
     this.publicUrl = String(env.FRAIHA_PUBLIC_URL || '').replace(/\/+$/, '');
     this.gameUrl = String(env.FRAIHA_GAME_URL || 'https://jogar.fraihaxadrez.com');
@@ -47,12 +53,13 @@ class MercadoPago {
   // O que falta configurar (para o log do servidor; nunca mostra valores).
   missing() { return ['FRAIHA_MP_ACCESS_TOKEN', 'FRAIHA_PUBLIC_URL'].filter(k => !(k === 'FRAIHA_MP_ACCESS_TOKEN' ? this.token : this.publicUrl)); }
 
-  async call(method, path, body, idem) {
+  async call(method, path, body, idem, extraHeaders) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
     try {
       const headers = { Authorization: 'Bearer ' + this.token, 'Content-Type': 'application/json' };
       if (idem) headers['X-Idempotency-Key'] = idem;
+      if (extraHeaders) Object.assign(headers, extraHeaders);
       const res = await fetch(this.api + path, { method, headers, body: body ? JSON.stringify(body) : undefined, signal: ctl.signal });
       const text = await res.text();
       let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = null; }
@@ -94,7 +101,9 @@ class MercadoPago {
         expires: true, expiration_date_to: brt(expires), metadata,
       }, ref);
       if (!pref.init_point) { const e = new Error('mercadopago: preferência sem init_point'); e.code = 'provider_error'; throw e; }
-      return { id: ref, method: 'card', status: 'pending', checkout_url: String(pref.init_point), expires_at: new Date(expires).toISOString() };
+      const out = { id: ref, method: 'card', status: 'pending', checkout_url: String(pref.init_point), expires_at: new Date(expires).toISOString() };
+      if (this.publicKey) out.public_key = this.publicKey;   // formulário de cartão dentro do jogo (Web)
+      return out;
     }
     const e = new Error('método inválido'); e.code = 'bad_request'; throw e;
   }
@@ -141,6 +150,26 @@ class MercadoPago {
     const list = Array.isArray(r.results) ? r.results : [];
     const pick = list.find(p => p.status === 'approved') || list.find(p => p.status === 'refunded' || p.status === 'charged_back') || list[0];
     return pick ? this.event(pick) : null;
+  }
+
+  // R40 · Cartão no jogo: cria o pagamento com o token do Card Payment Brick.
+  // amountCents vem do SERVIDOR (preço do produto); nada do valor enviado pelo navegador é usado.
+  // binary_mode: aprova ou recusa na hora (sem "em análise"), então o jogador sabe o resultado no ato.
+  async payCard({ ref, token, paymentMethodId, issuerId, amountCents, title, email, idType, idNumber, deviceId, userId, productId }) {
+    if (!this.ready()) { const e = new Error('Mercado Pago sem configuração: ' + this.missing().join(', ')); e.code = 'provider_not_configured'; throw e; }
+    const body = {
+      transaction_amount: Math.round(amountCents) / 100, token, description: title, installments: 1,
+      payment_method_id: paymentMethodId, payer: { email }, external_reference: ref,
+      notification_url: this.publicUrl + '/webhooks/payments', statement_descriptor: 'FRAIHA XADREZ', binary_mode: true,
+      metadata: { fraiha_ref: ref, user_id: userId, product_id: productId },
+    };
+    if (issuerId) body.issuer_id = issuerId;
+    if (idType && idNumber) body.payer.identification = { type: idType, number: idNumber };
+    const extra = deviceId ? { 'X-meli-session-id': deviceId } : null;
+    // Idempotência pelo token: o mesmo token (clique repetido) nunca vira duas cobranças.
+    const idem = ref + ':card:' + crypto.createHash('sha256').update(token).digest('hex').slice(0, 24);
+    const p = await this.call('POST', '/v1/payments', body, idem, extra);
+    return this.event(p);
   }
 
   event(p) {

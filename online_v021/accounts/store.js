@@ -389,7 +389,7 @@ class SupabaseStore {
     return rows[0];
   }
   async getPayment(provider, ref) {
-    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&select=payment_id,user_id,product_id,status,paid_at,amount_cents&limit=1');
+    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&select=payment_id,user_id,product_id,method,status,paid_at,amount_cents&limit=1');
     return rows[0] || null;
   }
   // R39: reembolso/contestação — só paid → refunded (uma vez).

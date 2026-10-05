@@ -1,10 +1,16 @@
-# Pagamentos reais — Mercado Pago (PIX + cartão) · R39
+# Pagamentos reais — Mercado Pago (PIX + cartão) · R39 / R40
 
 ## Como funciona
 1. O jogador escolhe Pacote Fundador ou Club FRAIHA e a forma de pagamento (PIX ou cartão).
 2. O **servidor** cria a cobrança no Mercado Pago com o Access Token (que só existe no Render):
    - **PIX**: `POST /v1/payments` → QR Code + PIX Copia e Cola (validade de 30 min por padrão).
-   - **Cartão**: Checkout Pro (`POST /checkout/preferences`) → o jogo abre a página segura do Mercado Pago.
+   - **Cartão no jogo (R40, versão Web)**: o formulário seguro do Mercado Pago (Card Payment Brick) abre por cima
+     do jogo. Os campos de número/validade/CVV são do próprio Mercado Pago; o jogo recebe só um **token de uso
+     único** e o servidor cria o pagamento (`POST /v1/payments`) com o **preço do servidor**, à vista (1x),
+     aprovação imediata (`binary_mode`). Recusado → motivo em português e o jogador pode tentar outro cartão
+     (até 6 tentativas por pedido).
+   - **Cartão na página do Mercado Pago**: Checkout Pro (`POST /checkout/preferences`). É o caminho da versão
+     desktop, de quando o formulário não carrega e de quando `FRAIHA_MP_PUBLIC_KEY` não está configurada.
 3. O Mercado Pago avisa o servidor em `POST /webhooks/payments`. O servidor confere a assinatura
    (`x-signature`), **consulta o pagamento na API** e só libera se status = aprovado, valor e moeda (BRL)
    iguais ao preço. Se o aviso atrasar, o botão **JÁ PAGUEI** faz o servidor consultar o Mercado Pago.
@@ -39,6 +45,7 @@ O jogo nunca vê chave, segredo nem dado de cartão. O cliente nunca confirma pa
 | `FRAIHA_PAYMENT_PROVIDER` | `mercadopago` |
 | `FRAIHA_MP_ACCESS_TOKEN` | Access Token (produção ou teste) |
 | `FRAIHA_MP_WEBHOOK_SECRET` | Assinatura secreta dos Webhooks |
+| `FRAIHA_MP_PUBLIC_KEY` | **Public Key** (pública; R40: formulário de cartão dentro do jogo). Sem ela, o cartão abre a página do MP. |
 | `FRAIHA_PUBLIC_URL` | `https://<seu-servidor-render>` (sem barra no fim) |
 | `FRAIHA_GAME_URL` | `https://jogar.fraihaxadrez.com` (volta do checkout do cartão) |
 | `FRAIHA_FOUNDER_LIMIT` | `100` (opcional) |
@@ -52,6 +59,9 @@ Aplicar só com autorização — o banco é o mesmo de staging e produção.
 ## Testar sem dinheiro de verdade
 - `node tests/server/mercadopago_test.cjs` — servidor contra um Mercado Pago falso (27 verificações).
 - `tests/run_payment_client.sh` — o jogo com pagamento real contra o Mercado Pago falso.
+- `node tests/server/card_inline_test.cjs` — R40: cartão no jogo no servidor (token, preço do servidor, recusa, tentativas).
+- `tests/run_payment_client.sh --card` — R40: fluxo do cartão no jogo (Godot).
+- `python3 tests/web/card_form_e2e.py` — R40: formulário no Chromium (desktop, celular retrato e paisagem), com SDK falso.
 - Com as **credenciais de teste** do Mercado Pago no Render de staging, dá para pagar com os usuários e
   cartões de teste do próprio Mercado Pago.
 
