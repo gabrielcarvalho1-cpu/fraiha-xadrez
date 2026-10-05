@@ -15,7 +15,7 @@ Estas regras adaptam a referência do Claude. Caminhos e comportamento atual dev
 
 ## Progresso, produto e persistência
 
-- FRAIHA nunca é pay-to-win. Convidados não jogam Ranked. Alteração de ladder/modos/ligas exige escopo próprio e confirmação do contrato atual.
+- FRAIHA nunca é pay-to-win. Verificar no checkout atual se convidados não jogam Ranked antes de tratar essa restrição como verdade. Alteração de ladder/modos/ligas exige escopo próprio e confirmação do contrato atual.
 - Primeira vitória válida pode desbloquear recompensa: vitória confirmada e recompensa nova são sinais diferentes. Servidor confirma → apresentação de vitória → recompensa/progressão. Repetição não concede novamente.
 - Benefício premium só está completo com todas as camadas necessárias: UI, servidor, banco, entitlement, sincronização social ou integração. Simulação/local não comprova benefício completo.
 - Benefícios derivados/acumuláveis definem extensão, expiração e concessão idempotente. Cota server-side é consumida quando a partida começa; F5 não cria tentativa extra; respeitar contrato Club atual.

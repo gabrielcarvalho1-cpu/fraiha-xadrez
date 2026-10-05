@@ -10,7 +10,7 @@ Adaptação da referência `fraiha-dev` do Claude para Codex. Carregar esta skil
 ## Começar pelo escopo real
 
 1. Ler o `AGENTS.md` da raiz e instruções aplicáveis aos arquivos da tarefa. As restrições atuais do usuário prevalecem sobre a referência exportada.
-2. Confirmar worktree do Orca, branch `codex/*`, HEAD e status. Nunca editar a pasta principal dos pacotes `APLICAR-RXX`. Nunca commitar ou fazer push em `dev/web-alpha`. Uma nova branch nasce de `origin/dev/web-alpha` após fetch, conforme a autorização e o escopo.
+2. Confirmar worktree do Orca, branch `codex/*`, HEAD e status. Toda branch do Codex usa `codex/*`. Nunca editar a pasta principal dos pacotes `APLICAR-RXX`. Nunca trabalhar diretamente, commitar ou fazer push em `dev/web-alpha`. Toda nova worktree deve partir de `origin/dev/web-alpha` após `git fetch origin`, conforme a autorização e o escopo.
 3. Consultar `docs/mapa-projeto-2026-10-05.md` como mapa datado; verificar no código/configuração as informações relevantes. Não presumir servidor ativo pela numeração das pastas, README ou checkpoints RXX.
 4. Procurar a implementação e a fonte de verdade existentes antes de criar módulos. Reproduzir o problema quando aplicável; definir como o resultado será comprovado.
 
@@ -22,7 +22,7 @@ Adaptação da referência `fraiha-dev` do Claude para Codex. Carregar esta skil
 - Criar ou editar qualquer SQL em `supabase/migrations/` exige autorização específica. Nunca alterar Supabase, Render ou Cloudflare no escopo atual, nem staging desses serviços.
 - Cada autorização vale só para a ação e a tarefa em que foi dada. Commit depende de pedido; push/merge não decorrem de autorização de commit.
 - Nunca ler secrets durante inventários ou divulgar valores. Cliente Godot/Web não recebe credenciais privadas ou service role.
-- Engine proibida em qualquer partida humana ativa: negar a operação na arquitetura. Club/Fundador não liberam análise durante PvP; marcação para revisão somente registra.
+- Engine/Stockfish proibida durante partida ativa de PvP entre humanos: negar a operação na arquitetura. Partidas contra bot podem usar engine/bot conforme o modo. Análise de PvP humano só após o fim da partida. Club/Fundador não liberam análise durante PvP; marcação para revisão somente registra.
 
 ## Escolher a referência necessária
 

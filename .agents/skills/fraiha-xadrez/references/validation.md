@@ -17,7 +17,7 @@ Aplicar conforme o comportamento afetado; não executar durante inventário some
 
 ## Engines e bots
 
-- Fair play é bloqueio arquitetural de qualquer engine durante PvP ativo, inclusive análise acionada indiretamente.
+- Fair play é bloqueio arquitetural de engine/Stockfish durante partida ativa de PvP entre humanos, inclusive análise acionada indiretamente. Partidas contra bot podem usar engine/bot conforme o modo. Análise de PvP humano só após o fim da partida.
 - Arquivos WASM existentes não provam execução: Worker → JS/WASM → `uciok` → `readyok` → posição/busca → `bestmove`.
 - Registrar `ANALYSIS ENGINE = STOCKFISH | FALLBACK` e `BOT ENGINE = STOCKFISH | FALLBACK` com evidência. Perfis de análise e bot são independentes; não compartilhar parâmetros automaticamente.
 - Consultar `analysis/ENGINE.md` e `analysis/LICENSES.md`; origem, versão, hash e obrigações de distribuição de binários devem ser verificadas. Não interpretar esta skill como parecer de licença.
@@ -28,7 +28,7 @@ Aplicar conforme o comportamento afetado; não executar durante inventário some
 
 - Descobrir comandos reais e efeitos de cada teste. Suites de integração podem iniciar servidores ou depender de serviços; não executá-las cegamente.
 - Definir comportamento esperado antes da mudança. Usar testes existentes, fixtures, invariantes ou QA independente para regras críticas; evitar teste que apenas espelhe a implementação.
-- Marcha/XEQUE têm fixtures de paridade: verificar mesmas ações, alvos, destinos, estado e eventos. Não regenerar fixture apenas para aceitar uma divergência. Editar regras da Marcha exige autorização explícita para os arquivos protegidos.
+- Verificar no checkout atual se Marcha/XEQUE têm fixtures de paridade antes de tratar sua existência como verdade; verificar mesmas ações, alvos, destinos, estado e eventos. Não regenerar fixture apenas para aceitar uma divergência. Editar regras da Marcha exige autorização explícita para os arquivos protegidos.
 - Regras com UI: comparar valor do motor e exibido após transições. RNG: seed e extremos/invariantes. Ações: zero/uma/múltiplas alternativas e alvos protegidos/alterados.
 - Async: requisições duplicadas, respostas antigas fora de ordem, callbacks depois da saída e reconnect concorrente. Esperar estado/evento; delay não corrige race condition.
 - Falha após mudança: comparar com a base no mesmo ambiente e classificar NEW REGRESSION, PRE-EXISTING, FLAKY ou ENVIRONMENTAL com evidência. Falhas intermitentes exigem repetições, preferencialmente intercaladas, e taxas medidas.
