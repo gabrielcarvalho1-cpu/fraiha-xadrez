@@ -37,6 +37,29 @@ function brt(ms) {
   return d + '-03:00';
 }
 
+// R40.1 · Detalhes do item (recomendação do Mercado Pago para a análise antifraude aprovar mais).
+const DESCRIPTIONS = {
+  founder: 'Pacote Fundador FRAIHA Xadrez: selo, título, avatar, moldura e 30 dias de Club (compra única, sem vantagem em partida)',
+  club_monthly: 'Club FRAIHA Xadrez: 30 dias de análises e treino (sem renovação automática, sem vantagem em partida)',
+};
+function itemInfo(productId, title, amount) {
+  return { id: productId, title, description: DESCRIPTIONS[productId] || title, category_id: 'virtual_goods', quantity: 1, unit_price: amount };
+}
+
+// Proteção: se a API recusar os detalhes extras (400 citando additional_info/category/item/descriptor),
+// tenta UMA vez sem eles — a cobrança nunca deixa de sair por causa de um campo opcional.
+async function withOptional(send, body, strip) {
+  try { return await send(body, ''); }
+  catch (e) {
+    if (e.status === 400 && /additional_info|category|items?\b|statement_descriptor|descriptor/i.test(String(e.message))) {
+      console.warn('[pagamentos] Mercado Pago recusou campo opcional; repetindo sem ele:', e.message);
+      return send(strip(body), ':sem-extras');   // outra chave de idempotência (a 1ª ficou guardada como erro)
+    }
+    throw e;
+  }
+}
+const stripExtras = (b) => { const c = { ...b }; delete c.additional_info; delete c.statement_descriptor; return c; };
+
 class MercadoPago {
   constructor(env = process.env) {
     this.name = 'mercadopago';
@@ -79,11 +102,12 @@ class MercadoPago {
     const metadata = { fraiha_ref: ref, user_id: userId, product_id: productId };
     if (method === 'pix') {
       const expires = Date.now() + this.pixMinutes * 60 * 1000;
-      const p = await this.call('POST', '/v1/payments', {
+      const p = await withOptional((b, k) => this.call('POST', '/v1/payments', b, ref + k), {
         transaction_amount: amount, description: title, payment_method_id: 'pix',
         payer: { email }, external_reference: ref, notification_url,
-        date_of_expiration: brt(expires), metadata,
-      }, ref);
+        date_of_expiration: brt(expires), metadata, statement_descriptor: 'FRAIHA XADREZ',
+        additional_info: { items: [itemInfo(productId, title, amount)] },
+      }, stripExtras);
       const td = (p.point_of_interaction && p.point_of_interaction.transaction_data) || {};
       if (!td.qr_code) { const e = new Error('mercadopago: PIX sem qr_code'); e.code = 'provider_error'; throw e; }
       return { id: ref, provider_payment_id: String(p.id || ''), method: 'pix', status: 'pending',
@@ -92,14 +116,14 @@ class MercadoPago {
     }
     if (method === 'card') {
       const expires = Date.now() + 24 * 3600 * 1000;
-      const pref = await this.call('POST', '/checkout/preferences', {
-        items: [{ id: productId, title, quantity: 1, unit_price: amount, currency_id: 'BRL' }],
+      const pref = await withOptional((b, k) => this.call('POST', '/checkout/preferences', b, ref + k), {
+        items: [{ ...itemInfo(productId, title, amount), currency_id: 'BRL' }],
         payer: { email }, external_reference: ref, notification_url,
         back_urls: { success: this.gameUrl, pending: this.gameUrl, failure: this.gameUrl }, auto_return: 'approved',
         payment_methods: { excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }] },
         statement_descriptor: 'FRAIHA XADREZ',
         expires: true, expiration_date_to: brt(expires), metadata,
-      }, ref);
+      }, (b) => ({ ...b, items: b.items.map(({ id, title, quantity, unit_price, currency_id }) => ({ id, title, quantity, unit_price, currency_id })), statement_descriptor: undefined }));
       if (!pref.init_point) { const e = new Error('mercadopago: preferência sem init_point'); e.code = 'provider_error'; throw e; }
       const out = { id: ref, method: 'card', status: 'pending', checkout_url: String(pref.init_point), expires_at: new Date(expires).toISOString() };
       if (this.publicKey) out.public_key = this.publicKey;   // formulário de cartão dentro do jogo (Web)
@@ -162,13 +186,14 @@ class MercadoPago {
       payment_method_id: paymentMethodId, payer: { email }, external_reference: ref,
       notification_url: this.publicUrl + '/webhooks/payments', statement_descriptor: 'FRAIHA XADREZ', binary_mode: true,
       metadata: { fraiha_ref: ref, user_id: userId, product_id: productId },
+      additional_info: { items: [itemInfo(productId, title, Math.round(amountCents) / 100)] },
     };
     if (issuerId) body.issuer_id = issuerId;
     if (idType && idNumber) body.payer.identification = { type: idType, number: idNumber };
     const extra = deviceId ? { 'X-meli-session-id': deviceId } : null;
     // Idempotência pelo token: o mesmo token (clique repetido) nunca vira duas cobranças.
     const idem = ref + ':card:' + crypto.createHash('sha256').update(token).digest('hex').slice(0, 24);
-    const p = await this.call('POST', '/v1/payments', body, idem, extra);
+    const p = await withOptional((b, k) => this.call('POST', '/v1/payments', b, idem + k, extra), body, stripExtras);
     return this.event(p);
   }
 

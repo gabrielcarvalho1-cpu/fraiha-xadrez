@@ -37,7 +37,7 @@ const srv = http.createServer((req, res) => {
         const rej = /reject/.test(body.token), bad = /cvv/.test(body.token);
         const p = { id: nextId++, status: rej || bad ? 'rejected' : 'approved', status_detail: rej ? 'cc_rejected_insufficient_amount' : (bad ? 'cc_rejected_bad_filled_security_code' : 'accredited'),
           transaction_amount: body.transaction_amount, currency_id: 'BRL', external_reference: body.external_reference, payment_method_id: body.payment_method_id,
-          installments: body.installments, binary_mode: body.binary_mode, payer: body.payer, issuer_id: body.issuer_id,
+          installments: body.installments, binary_mode: body.binary_mode, payer: body.payer, issuer_id: body.issuer_id, additional_info: body.additional_info,
           _session: req.headers['x-meli-session-id'] || '', _idem: req.headers['x-idempotency-key'] || '' };
         payments.set(String(p.id), p); return json(res, 201, p);
       }

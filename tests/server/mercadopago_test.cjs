@@ -80,6 +80,7 @@ const settle = (ms = 150) => new Promise(r => setTimeout(r, ms));
   check(call && call.body.payment_method_id === 'pix' && call.body.transaction_amount === 49.9 && call.body.payer.email === 'AnaPix@dev.local' && call.body.external_reference === ch.id && call.idem === ch.id, 'PIX criado no Mercado Pago com valor 49,90, e-mail da conta, referência interna e chave de idempotência');
   check(/\/webhooks\/payments$/.test(call.body.notification_url) && /-03:00$/.test(call.body.date_of_expiration), 'PIX com notification_url do servidor e validade no horário de Brasília');
   check(!JSON.stringify(ch).includes('TEST-TOKEN'), 'nenhuma chave do Mercado Pago vai para o jogo');
+  check(call.body.additional_info.items[0].category_id === 'virtual_goods' && call.body.additional_info.items[0].unit_price === 49.9 && call.body.statement_descriptor === 'FRAIHA XADREZ', 'R40.1: PIX leva os detalhes do item e o nome na fatura');
   const pixId = String(mp.nextId - 1);
   // status ainda pendente
   ana.send({ type: 'payment_status', charge_id: ch.id });
@@ -117,6 +118,7 @@ const settle = (ms = 150) => new Promise(r => setTimeout(r, ms));
   ana.send({ type: 'payment_create', product_id: 'club_monthly', method: 'card' });
   ch = (await ana.next('payment_charge', 5000)).charge;
   const pref = mp.prefs[mp.prefs.length - 1];
+  check(pref.items[0].category_id === 'virtual_goods' && /Club FRAIHA|Fundador/.test(pref.items[0].description), 'R40.1: página do Mercado Pago (cartão) leva categoria e descrição do item');
   check(ch.method === 'card' && ch.checkout_url.includes('pref_id=') && pref.items[0].unit_price === 19.9 && pref.items[0].currency_id === 'BRL' && pref.external_reference === ch.id && pref.back_urls.success, 'cartão: link do checkout do Mercado Pago (19,90 BRL, referência interna, volta para o jogo)');
   // 1ª tentativa recusada, 2ª aprovada (mesmo checkout)
   const cardRej = String(mp.nextId++); mp.payments.set(cardRej, { id: Number(cardRej), status: 'rejected', transaction_amount: 19.9, currency_id: 'BRL', external_reference: ch.id });

@@ -43,6 +43,8 @@ const get = (port, p) => new Promise((ok, ko) => http.get({ host: '127.0.0.1', p
   const c1 = cards[cards.length - 1];
   check(c1.transaction_amount === 19.9 && c1.installments === 1 && c1.binary_mode === true, 'preço SEMPRE do servidor (19,90, ignora 0,01 do navegador), 1x, aprovação imediata (binary_mode)');
   check(c1.payer.email === 'BiaCard@dev.local' && c1.payer.identification.number === '12345678909' && c1.issuer_id === '24' && c1._session === 'dev-abc', 'e-mail da conta, CPF só com números, banco emissor e device id (antifraude) enviados');
+  const it = c1.additional_info && c1.additional_info.items && c1.additional_info.items[0];
+  check(it && it.id === 'club_monthly' && it.category_id === 'virtual_goods' && it.quantity === 1 && it.unit_price === 19.9 && /Club FRAIHA/.test(it.description), 'R40.1: detalhes do item enviados ao Mercado Pago (antifraude): categoria, descrição, quantidade e preço');
   check(c1._idem === ch.id + ':card:' + require('crypto').createHash('sha256').update('tok-reject-0001').digest('hex').slice(0, 24), 'idempotência pelo token: clique repetido com o mesmo cartão nunca cobra duas vezes');
   bia.send({ type: 'payment_status', charge_id: ch.id });
   let up = await bia.next('payment_update');
