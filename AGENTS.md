@@ -14,10 +14,10 @@ Durante o mapeamento, não editar código, configurações ou dependências; nã
 
 ## Isolamento obrigatório
 
-- Trabalhar somente na worktree `C:\Users\Usuário\Documents\Codex\orca-worktrees\codex-setup-rules`, branch `codex/setup-rules`, nesta tarefa.
-- Nunca editar a pasta principal `C:\Users\Usuário\Documents\Codex\2026-09-20\referenced-chatgpt-conversation-this-is-an\work\v024\project`: é nela que o usuário aplica os pacotes `APLICAR-RXX` do Claude.
+- Trabalhar somente na worktree atribuída pelo Orca. Toda branch do Codex deve usar `codex/*`.
+- Nunca editar diretamente a pasta principal onde o Claude trabalha: é nela que o usuário aplica os pacotes `APLICAR-RXX` do Claude.
 - O acesso à pasta principal foi autorizado apenas para verificar o Git, executar fetch e criar a worktree. Não aplicar pacotes, limpar, copiar mudanças locais ou executar scripts nela.
-- Worktrees compartilham objetos e referências Git, mas têm arquivos de trabalho separados. Não mudar a branch da pasta principal. Em tarefas futuras, usar outra worktree do Orca com branch `codex/*`, criada da referência remota atualizada.
+- Worktrees compartilham objetos e referências Git, mas têm arquivos de trabalho separados. Não mudar a branch da pasta principal. Toda nova worktree deve partir de `origin/dev/web-alpha` após `git fetch origin`.
 
 ## Áreas protegidas
 
@@ -40,7 +40,7 @@ Durante o mapeamento, não editar código, configurações ou dependências; nã
 ## Estado atual e Git
 
 - Antes de qualquer alteração no projeto, verificar branch, HEAD, status e diff relevante. Se houver estado inesperado que comprometa a tarefa, relatar antes de agir.
-- Nunca commitar nem fazer push na `dev/web-alpha`. Branches do Codex são sempre `codex/*`, criadas a partir de `origin/dev/web-alpha` após `git fetch origin`. Confirmar branch e caminho antes de qualquer escrita ou commit.
+- Nunca trabalhar diretamente na `dev/web-alpha`, commitar nem fazer push nela. Branches do Codex são sempre `codex/*`, criadas a partir de `origin/dev/web-alpha` após `git fetch origin`. Confirmar branch e caminho antes de qualquer escrita ou commit.
 - Não descartar mudanças locais nem executar limpeza para obter uma árvore limpa. Nunca usar automaticamente `reset --hard`, `clean -fd`/`-fdx`, restore/checkout amplo, remoção de stash ou sobrescrita de trabalho existente.
 - Distinguir artefatos gerados pelo Godot de mudanças reais; não presumir que arquivos modificados são descartáveis. Não tocar em código modificado fora do escopo.
 - Antes de remoção ou movimentação ampla autorizada, verificar rastreados/não rastreados, caminho absoluto e destinos reais de symlinks/junctions.
