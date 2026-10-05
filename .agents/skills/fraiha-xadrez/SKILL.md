@@ -11,7 +11,7 @@ Adaptação da referência `fraiha-dev` do Claude para Codex. Carregar esta skil
 
 1. Ler o `AGENTS.md` da raiz e instruções aplicáveis aos arquivos da tarefa. As restrições atuais do usuário prevalecem sobre a referência exportada.
 2. Confirmar worktree do Orca, branch `codex/*`, HEAD e status. Nunca editar a pasta principal dos pacotes `APLICAR-RXX`. Nunca commitar ou fazer push em `dev/web-alpha`. Uma nova branch nasce de `origin/dev/web-alpha` após fetch, conforme a autorização e o escopo.
-3. Consultar `docs/CODEX-PROJECT-MAP.md` como mapa datado; verificar no código/configuração as informações relevantes. Não presumir servidor ativo pela numeração das pastas, README ou checkpoints RXX.
+3. Consultar `docs/mapa-projeto-2026-10-05.md` como mapa datado; verificar no código/configuração as informações relevantes. Não presumir servidor ativo pela numeração das pastas, README ou checkpoints RXX.
 4. Procurar a implementação e a fonte de verdade existentes antes de criar módulos. Reproduzir o problema quando aplicável; definir como o resultado será comprovado.
 
 ## Restrições que mudam decisões

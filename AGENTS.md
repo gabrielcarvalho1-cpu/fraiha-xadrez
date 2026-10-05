@@ -10,7 +10,7 @@ As instruções do usuário e as regras da plataforma prevalecem sobre este arqu
 
 A sequência solicitada é: preparar este `AGENTS.md` → mapear o projeto somente em leitura → adaptar a referência para a skill `$fraiha-xadrez`.
 
-Durante o mapeamento, não editar código, configurações ou dependências; não executar testes, builds, exportações ou scripts que possam gerar arquivos; não iniciar servidores nem acessar serviços com efeitos de escrita. Salvar o relatório em `docs/CODEX-PROJECT-MAP.md` na worktree isolada; essa documentação de configuração é a exceção autorizada de escrita nesta etapa. Trabalhar exclusivamente na worktree do Orca. Preservar e conciliar instruções existentes.
+Durante o mapeamento, não editar código, configurações ou dependências; não executar testes, builds, exportações ou scripts que possam gerar arquivos; não iniciar servidores nem acessar serviços com efeitos de escrita. Salvar o relatório em `docs/mapa-projeto-2026-10-05.md` na worktree isolada; essa documentação de configuração é a exceção autorizada de escrita nesta etapa. Trabalhar exclusivamente na worktree do Orca. Preservar e conciliar instruções existentes.
 
 ## Isolamento obrigatório
 
