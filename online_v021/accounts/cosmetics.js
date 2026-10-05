@@ -68,4 +68,12 @@ function effective(p, ent) {
   };
 }
 
-module.exports = { validate, effective, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, CLUB_AVATARS, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };
+// R41 · Parte pública da identidade que viaja para os outros jogadores (mesa, convite, festa, DM).
+// Recebe ws.identity ({badge,title,frame,founder,club}) ou um perfil público (pub) e normaliza.
+function look(o) {
+  o = o || {};
+  return { badge: BADGES.includes(o.badge) ? o.badge : '', title: TITLES.includes(o.title) ? o.title : '',
+    frame: FRAMES.includes(o.frame) ? o.frame : 'liga', founder: !!o.founder, club: !!o.club };
+}
+
+module.exports = { look, validate, effective, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, CLUB_AVATARS, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };

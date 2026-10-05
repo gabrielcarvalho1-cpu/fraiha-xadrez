@@ -12,6 +12,8 @@ const AI := preload("res://marcha/ai.gd")
 const Layout := preload("res://marcha/board_layout.gd")
 const Access := preload("res://marcha/marcha_access.gd")
 const Sound := preload("res://ui_v022/mode_sound.gd")
+const Cosmetics := preload("res://profile/premium_cosmetics.gd")
+const PlayerPortrait := preload("res://profile/player_portrait.gd")
 const MUSIC := "res://marcha/audio/musica_marcha.mp3"    # música enviada pelo dono do projeto (loop)
 const SFX := {
     "card": preload("res://marcha/audio/carta.wav"), "discard": preload("res://marcha/audio/descarte.wav"),
@@ -975,6 +977,19 @@ func _popup_close():
     if pp != null: pp.close()
     _hover_seat = -1
 
+## R41 · Identidade pública (selo/título/moldura) de quem está no lugar `seat`. Bots: {}.
+func seat_look(seat: int) -> Dictionary:
+    if seat == 0: return PlayerPortrait.self_info(hub)
+    if online and seat < players.size() and not bool(players[seat].get("bot", false)): return players[seat]
+    return {}
+
+## Avatar do amigo humano na mesa online (null = usar o retrato do bot).
+func seat_avatar(seat: int) -> Texture2D:
+    if not online or seat >= players.size() or bool(players[seat].get("bot", false)): return null
+    if hub == null or not hub.has_method("avatar_texture"): return null
+    var av := String(players[seat].get("avatar", ""))
+    return hub.avatar_texture(av) if not av.is_empty() else hub.avatar_texture("warrior")
+
 ## Dados do jogador da placa `seat` para o cartão (você, bot ou amigo da mesa online).
 func seat_info(seat: int) -> Dictionary:
     var acc = stage.get("account") if stage != null else null
@@ -985,6 +1000,7 @@ func seat_info(seat: int) -> Dictionary:
         info.user_id = String(pl.get("user_id", ""))
         info.bot = bool(pl.get("bot", false))
         if hub != null and hub.has_method("avatar_texture") and not info.bot: info.avatar = hub.avatar_texture(String(pl.get("avatar", ""))) if seat != 0 else (my_portrait if my_portrait != null else portraits.voce)
+        if not info.bot: info.merge(seat_look(seat))
         else: info.avatar = portraits[BOTS[seat].portrait] if BOTS.has(seat) else null
     elif seat == 0:
         info.user_id = String(acc.user_id) if acc != null and acc.has_profile() else ""
@@ -1262,6 +1278,21 @@ class TableView extends Control:
         sound_button(Rect2(right, top, bs, bs), "fx")
 
     # ------------------------------------------------------------ placas dos jogadores
+    ## R41 · moldura (Club / Fundador) e selo do jogador humano sobre o retrato da placa.
+    func _look(pr: Rect2, look: Dictionary):
+        if look.is_empty(): return
+        match ui.Cosmetics.public_frame(look):
+            "club":
+                draw_rect(pr.grow(3), Color("e9b94a"), false, 4.0)
+                draw_rect(pr.grow(-1), Color("fff1c0"), false, 1.0)
+            "fundador":
+                draw_rect(pr.grow(4), Color("1b150e"), false, 5.0)
+                draw_rect(pr.grow(2), Color("d9a441"), false, 2.0)
+        var tex: Texture2D = ui.Cosmetics.badge_texture(ui.Cosmetics.public_badge(look))
+        if tex != null:
+            var side := clampf(pr.size.x * 0.42, 16.0, 44.0)
+            draw_texture_rect(tex, Rect2(pr.end - Vector2(side * 0.8, side * 0.8), Vector2(side, side)), false)
+
     func _plate(r: Rect2, seat: int, big := false):
         ui.hits.append({"rect": r, "id": "seat_%d" % seat})     # R37: cartão de perfil (mouse / toque)
         var g = ui.g
@@ -1277,7 +1308,9 @@ class TableView extends Control:
             if ui.my_portrait != null:
                 draw_texture_rect(ui.my_portrait, pr.grow(-ps * 0.075), false)
         else:
-            draw_texture_rect(ui.portraits[ui.BOTS[seat].portrait], pr, false)
+            var friend: Texture2D = ui.seat_avatar(seat)   # R41 · amigo online: o avatar dele
+            draw_texture_rect(friend if friend != null else ui.portraits[ui.BOTS[seat].portrait], pr, false)
+        _look(pr, ui.seat_look(seat))
         var x := pr.end.x + (10.0 if narrow else 12.0)
         # placas estreitas (celular em retrato): a referência usa letras e marcadores menores
         var sc := 0.8 if r.size.x < 300.0 else 1.0

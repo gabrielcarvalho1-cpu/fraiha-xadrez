@@ -64,6 +64,7 @@ const SEAT_NAMES := ["Você", "Dama de Ferro", "Sir Gambito", "Torre Velha"]
 const SEAT_PROFILE := ["", "cauteloso", "equilibrado", "blefador"]
 const SEAT_AVATAR := ["", "res://profile/avatars/ferro_reward.png", "res://profile/avatars/ouro_reward.png", "res://profile/avatars/bronze_reward.png"]
 const DEFAULT_YOU := "res://profile/avatars/prata_reward.png"
+const PlayerPortrait := preload("res://profile/player_portrait.gd")
 
 var hub = null
 var stage = null
@@ -226,6 +227,20 @@ func _load_avatars():
     var mine = hub.avatar_texture() if hub != null and hub.has_method("avatar_texture") else null
     avatars[0] = mine if mine != null else load(DEFAULT_YOU)
     for s in range(1, 4): avatars[s] = load(SEAT_AVATAR[s])
+    # R41 · mesa online: amigos humanos aparecem com o avatar deles
+    if online and hub != null and hub.has_method("avatar_texture"):
+        for s in range(1, mini(4, players.size())):
+            if bool(players[s].get("bot", false)): continue
+            var av := String(players[s].get("avatar", ""))
+            var t: Texture2D = hub.avatar_texture(av) if not av.is_empty() else hub.avatar_texture("warrior")
+            if t != null: avatars[s] = t
+    if view != null and view.get("grey_avatars") != null: view.grey_avatars.clear()
+
+## R41 · Identidade pública (selo/título/moldura) de quem está no lugar `seat`. Bots: {}.
+func seat_look(seat: int) -> Dictionary:
+    if seat == 0: return PlayerPortrait.self_info(hub)
+    if online and seat < players.size() and not bool(players[seat].get("bot", false)): return players[seat]
+    return {}
 
 func _input(event):
     if not visible: return
@@ -642,6 +657,7 @@ func seat_info(seat: int) -> Dictionary:
         info.user_id = String(players[seat].get("user_id", ""))
         info.bot = bool(players[seat].get("bot", false))
         if not info.bot and seat != 0: info.subtitle = "AMIGO"
+        if not info.bot: info.merge(seat_look(seat))
     elif seat == 0:
         info.user_id = String(acc.user_id) if acc != null and acc.has_profile() else ""
         info.bot = false
@@ -792,6 +808,7 @@ func start_online(msg: Dictionary):
     online = true
     room_id = String(msg.get("room_id", ""))
     players = msg.get("players", []) if msg.get("players") is Array else []
+    if visible: _load_avatars()   # R41 · já aberta (retomada): atualiza os avatares dos amigos
     var pc = stage.get("party_chat") if stage != null else null
     if pc != null: pc.bind(room_id, "xeque", players.map(func(q): return String(q.get("name", ""))))     # R37.3 · chat da mesa
     if not visible:

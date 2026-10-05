@@ -181,13 +181,23 @@ func _build():
     var head = HBoxContainer.new()
     head.add_theme_constant_override("separation", 10)
     box.add_child(head)
-    var av = TextureRect.new()
-    av.custom_minimum_size = Vector2(52, 52)
-    av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    var aid = String(other.get("avatar_id", "warrior"))
-    if avatar_for.is_valid(): av.texture = avatar_for.call(aid if aid in ["warrior", "archer", "mage", "paladin"] else "warrior")
-    head.add_child(av)
+    # R41 · retrato de quem convidou / foi convidado: avatar dele + moldura Club/Fundador + selo
+    var owner_hub = avatar_for.get_object() if avatar_for.is_valid() else null
+    if owner_hub != null and owner_hub.has_method("avatar_texture"):
+        var pp = preload("res://profile/player_portrait.gd").make(owner_hub, other, 52.0)
+        pp.name = "InvitePortrait"
+        pp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+        head.add_child(pp)
+    else:
+        var av = TextureRect.new()
+        av.custom_minimum_size = Vector2(52, 52)
+        av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        var aid = String(other.get("avatar_id", "warrior"))
+        if avatar_for.is_valid():
+            var t = avatar_for.call(aid)
+            av.texture = t if t != null else avatar_for.call("warrior")
+        head.add_child(av)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     head.add_child(col)

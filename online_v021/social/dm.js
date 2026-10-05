@@ -1,4 +1,5 @@
 'use strict';
+const { look: publicLook } = require('../accounts/cosmetics');
 // Mensagens privadas (DM) persistentes entre AMIGOS. O servidor é a autoridade:
 // valida amizade, bloqueio (nos dois sentidos), tamanho e conteúdo; o cliente só pede.
 // Mensagens: dm_open, dm_send, dm_read (cliente) -> dm_history, dm_msg, dm_unread, dm_read_ok, dm_error.
@@ -73,7 +74,7 @@ class DirectMessages {
       const rows = await st.getConversation(me, other, HISTORY + 1, before);
       const has_more = rows.length > HISTORY;
       const messages = has_more ? rows.slice(1) : rows;
-      return this.send(ws, { type: 'dm_history', user_id: other, peer: { user_id: peer.user_id, nickname: peer.nickname, avatar_id: peer.avatar_id, badge: peer.badge || '' },
+      return this.send(ws, { type: 'dm_history', user_id: other, peer: { user_id: peer.user_id, nickname: peer.nickname, avatar_id: peer.avatar_id, ...publicLook(peer) },
         messages, has_more, before_id: before, can_send: can.ok, reason: can.ok ? '' : can.message, reason_code: can.ok ? '' : can.code });
     }
     if (a === 'dm_send') {
@@ -84,7 +85,7 @@ class DirectMessages {
       const row = await st.addDirectMessage(me, other, c.text);
       const out = { type: 'dm_msg', message: row, client_ref: String(m.client_ref || '').slice(0, 40) };
       for (const s of this.sockets(me)) this.send(s, { ...out, user_id: other });
-      const from = { user_id: me, nickname: ws.profile.nickname, avatar_id: (ws.identity && ws.identity.avatar) || ws.profile.avatar_id, badge: (ws.identity && ws.identity.badge) || '' };
+      const from = { user_id: me, nickname: ws.profile.nickname, avatar_id: (ws.identity && ws.identity.avatar) || ws.profile.avatar_id, ...publicLook(ws.identity) };
       for (const s of this.sockets(other)) this.send(s, { type: 'dm_msg', message: row, user_id: me, from });
       await this.pushUnread(other);
       return;

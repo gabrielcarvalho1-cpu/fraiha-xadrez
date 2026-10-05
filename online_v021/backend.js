@@ -115,7 +115,7 @@ class Backend {
     const bots = profile && this.bots ? await this.bots.summary(u.id) : null;
     ws.profile = profile;
     const look = profile ? Cosmetics.effective(profile, entitlements) : null;
-    if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: look.avatar_id, badge: look.badge, title: look.title, guest: false }); }
+    if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame, founder: look.founder, club: look.club, guest: false }); }
     // nickname_next_change_at: calculado pelo SERVIDOR (cooldown de 30 dias); o cliente só exibe.
     const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile) } : null;
     this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,

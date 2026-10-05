@@ -89,3 +89,13 @@ static func title_text(id: String) -> String:
 static func public_badge(p: Dictionary) -> String:
     var b := String(p.get("badge", ""))
     return b if b in BADGES else ""
+
+## R41 · Título e moldura públicos de outro jogador (dados do servidor, já validados pelos direitos dele).
+static func public_title(p: Dictionary) -> String:
+    var t := String(p.get("title", ""))
+    return t if t in TITLES else ""
+
+static func public_frame(p: Dictionary) -> String:
+    var f := String(p.get("frame", "liga"))
+    return f if f in FRAMES else "liga"
+

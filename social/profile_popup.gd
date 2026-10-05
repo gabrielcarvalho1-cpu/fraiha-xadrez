@@ -19,6 +19,8 @@ const CLOSE_DELAY := 0.35
 const SIZE := Vector2(360, 258)
 const FONT := preload("res://marcha/art/fonts/oswald-latin-600-normal.woff")
 const FONT_B := preload("res://marcha/art/fonts/oswald-latin-700-normal.woff")
+const Cosmetics := preload("res://profile/premium_cosmetics.gd")
+const ClubFrame := preload("res://monetization/club_frame.gd")
 
 var account                       # account_service (social_card / social_request / social_accept)
 var view: Control
@@ -35,6 +37,8 @@ var _open_in := -1.0
 var _close_in := -1.0
 var _btn := Rect2()
 var _inside := false
+var _frame_node: Control          # R41 · moldura Club/Fundador sobre a foto
+var _seal_node: TextureRect       # R41 · selo no canto da foto
 
 func _init():
     layer = 96
@@ -202,11 +206,12 @@ func _draw_card():
     if tex != null: view.draw_texture_rect(tex, pr, false)
     else: view.draw_rect(pr, Color("17382a"))
     view.draw_rect(pr.grow(1), GOLD, false, 2.0)
+    _decorate_photo.call_deferred(pr)   # mexe em nós filhos: fora do desenho
     var name := String(card.get("nickname", info.get("name", "")))
     _txt(name, Vector2(102, 44), 26, CREAM, true, SIZE.x - 114)
     var sub := String(info.get("subtitle", ""))
     if state == "bot": sub = "BOT DO FRAIHA" + ((" · " + sub) if not sub.is_empty() else "")
-    elif String(card.get("title", "")) != "": sub = String(card.title).to_upper() + ((" · " + sub) if not sub.is_empty() else "")
+    elif not Cosmetics.public_title(card).is_empty(): sub = Cosmetics.title_text(Cosmetics.public_title(card)).to_upper() + ((" · " + sub) if not sub.is_empty() else "")
     _txt(sub, Vector2(102, 70), 14, GOLD, false, SIZE.x - 114)
     var ml := String(info.get("mode_label", ""))
     _txt(("PLACAR · " + ml) if not ml.is_empty() else "PLACAR", Vector2(16, 116), 14, MUTED, true)
@@ -244,3 +249,35 @@ func _draw_card():
         _txt(bl, Vector2(_btn.position.x, _btn.position.y + 24), 18, Color("2a1a04") if active else MUTED, true, _btn.size.x, HORIZONTAL_ALIGNMENT_CENTER)
     if not notice.is_empty():
         _txt(notice, Vector2(16, SIZE.y - 54), 13, Color("9fe0a8") if notice.begins_with("Pedido") or notice.begins_with("Agora") else LOSS, false, SIZE.x - 32)
+
+## R41 · Moldura (Club / Fundador) e selo do jogador sobre a foto do cartão. Vêm do servidor (card),
+## já filtrados pelos direitos dele; antes da resposta usa o que a partida já sabe (info).
+func _decorate_photo(pr: Rect2):
+    var src: Dictionary = card if not card.is_empty() else info
+    var fr := "liga" if state == "bot" else Cosmetics.public_frame(src)
+    if fr == "club" or fr == "fundador":
+        if _frame_node == null:
+            _frame_node = ClubFrame.new()
+            _frame_node.fill_parent = false
+            _frame_node.name = "CardFrame"
+            view.add_child(_frame_node)
+        _frame_node.position = pr.position
+        _frame_node.size = pr.size
+        _frame_node.style = fr
+        _frame_node.visible = true
+    elif _frame_node != null:
+        _frame_node.visible = false
+    var tex := Cosmetics.badge_texture("" if state == "bot" else Cosmetics.public_badge(src))
+    if _seal_node == null:
+        _seal_node = TextureRect.new()
+        _seal_node.name = "CardBadge"
+        _seal_node.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        _seal_node.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        _seal_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        view.add_child(_seal_node)
+    _seal_node.texture = tex
+    _seal_node.visible = tex != null
+    _seal_node.size = Vector2(32, 32)
+    _seal_node.position = pr.end - Vector2(24, 24)
+    if _frame_node != null: view.move_child(_seal_node, view.get_child_count() - 1)
+

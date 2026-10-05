@@ -10,6 +10,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   c.send({ type: 'acct_auth', access_token: 'dev:PeerParty' });
   let st = await c.next('acct_state', 5000);
   if (st.needs_nickname) { c.send({ type: 'acct_create_profile', nickname: 'PeerParty' }); st = await c.next('acct_state', 5000); }
+  if (process.env.PEER_FOUNDER) {   // R41 · amigo Fundador (selo/título/moldura/avatar na mesa)
+    c.send({ type: 'dev_set_entitlements', is_founder: true, club_active: true, club_expires_at: new Date(Date.now() + 86400e3).toISOString() });
+    await c.next('acct_state', 5000); await new Promise(r => setTimeout(r, 900));
+    c.send({ type: 'acct_set_cosmetics', avatar_id: 'fundador', badge: 'fundador', title: 'fundador', frame: 'fundador' });
+    await c.next('acct_cosmetics_saved', 5000);
+  }
   // procura o alvo e pede amizade
   for (let i = 0; i < 60; i++) {
     c.send({ type: 'social_search', query: target });

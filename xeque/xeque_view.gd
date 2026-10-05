@@ -4,6 +4,7 @@ extends Control
 ## As posições abaixo foram medidas nas telas de referência aprovadas (telas_referencia/*.jpg):
 ## a cena da mesa casa com o tabuleiro do JSON; relógio e cartas da mão foram ajustados pixel a pixel.
 const Rules := preload("res://xeque/rules.gd")
+const Cosmetics := preload("res://profile/premium_cosmetics.gd")
 
 # ---------------------------------------------------------------- medidas por formato
 const LAYOUTS := {
@@ -477,6 +478,21 @@ func _draw_fly():
             tex_center(ui.CARD_BACK, from.lerp(pl[0], tt) + Vector2(i * 12, i * -4), pl[1] * 2.0, -0.2 + i * 0.15)
 
 # ---------------------------------------------------------------- placas
+## R41 · moldura (Club / Fundador) e selo do jogador humano sobre o retrato.
+func _look(pr: Rect2, look: Dictionary):
+    if look.is_empty(): return
+    match Cosmetics.public_frame(look):
+        "club":
+            draw_rect(pr.grow(3), Color("e9b94a"), false, 4.0)
+            draw_rect(pr.grow(-1), Color("fff1c0"), false, 1.0)
+        "fundador":
+            draw_rect(pr.grow(4), Color("1b150e"), false, 5.0)
+            draw_rect(pr.grow(2), Color("d9a441"), false, 2.0)
+    var tex: Texture2D = Cosmetics.badge_texture(Cosmetics.public_badge(look))
+    if tex != null:
+        var side := clampf(pr.size.x * 0.42, 16.0, 44.0)
+        draw_texture_rect(tex, Rect2(pr.end - Vector2(side * 0.8, side * 0.8), Vector2(side, side)), false)
+
 func _avatar(s: int, eliminated: bool) -> Texture2D:
     var a: Texture2D = ui.avatars[s]
     if not eliminated or a == null: return a
@@ -575,6 +591,7 @@ func _draw_plate(s: int):
             draw_rect(ar.grow(3), Color("120a06"))
             draw_rect(ar.grow(2), Color("d8d0bf") if not elim else Color("555"))
             draw_texture_rect(_avatar(s, elim), ar, false)
+            _look(ar, ui.seat_look(s))
             var x := ar.end.x + 9
             var nfs := 24 if compact else 30
             var top := r.position.y + (31 if compact else 40)
@@ -616,6 +633,7 @@ func _draw_plate(s: int):
             draw_rect(ar.grow(3), Color("d8c08a") if not elim else Color("555"))
             draw_rect(ar.grow(1), Color("5a3a12") if not elim else Color("333"))
             draw_texture_rect(_avatar(s, elim), ar, false)
+            _look(ar, ui.seat_look(s))
             var y := ar.end.y + 32 * u
             var bcol := Color("9fd0ff") if not elim else Color("555")
             if one_line:

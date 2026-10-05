@@ -1,4 +1,5 @@
 'use strict';
+const { look: publicLook } = require('../accounts/cosmetics');
 // R35 · Partidas ONLINE dos modos de cartas (MARCHA REAL e XEQUE) entre amigos, com bots completando
 // a mesa de 4. O SERVIDOR é a autoridade: guarda o estado, valida cada jogada com o motor de regras
 // (porta 1:1 do Godot, conferida por tests/server/modes_parity_test.cjs), sorteia, roda os bots e
@@ -57,7 +58,7 @@ class Party {
     const seats = [];
     for (let s = 0; s < 4; s++) seats.push(null);
     const humanSeats = [0, 2];
-    humans.forEach((h, i) => { seats[humanSeats[i]] = { kind: 'human', uid: h.user_id, nickname: h.nickname, avatar: h.avatar_id || '', badge: h.badge || '', connected: true, away_since: 0, left: false }; });
+    humans.forEach((h, i) => { seats[humanSeats[i]] = { kind: 'human', uid: h.user_id, nickname: h.nickname, avatar: h.avatar_id || '', ...publicLook(h), connected: true, away_since: 0, left: false }; });
     for (let s = 0; s < 4; s++) if (!seats[s]) {
       seats[s] = game === 'marcha' ? { kind: 'bot', nickname: MARCHA_BOTS[s] || `Bot ${s}` } : { kind: 'bot', nickname: (XEQUE_BOTS[s] || [`Bot ${s}`])[0], profile: (XEQUE_BOTS[s] || [0, 'equilibrado'])[1] };
     }
@@ -79,7 +80,7 @@ class Party {
   }
   startMsg(room, v) {
     return { type: 'party_start', room_id: room.id, game: room.game, game_name: GAMES[room.game].name, seat: 0,
-      players: rotArr(room.seats, v).map(s => ({ user_id: s.kind === 'human' ? s.uid : '', name: s.nickname, avatar: s.avatar || '', badge: s.badge || '', bot: s.kind !== 'human', connected: s.kind !== 'human' || s.connected, left: !!s.left })),
+      players: rotArr(room.seats, v).map(s => ({ user_id: s.kind === 'human' ? s.uid : '', name: s.nickname, avatar: s.avatar || '', badge: s.badge || '', title: s.title || '', frame: s.frame || 'liga', founder: !!s.founder, club: !!s.club, bot: s.kind !== 'human', connected: s.kind !== 'human' || s.connected, left: !!s.left })),
       ruleset: room.game === 'marcha' ? M.RULESET_VERSION : X.RULESET_VERSION, turn_ms: T.turnMs, snapshot: this.snapshot(room, v) };
   }
   later(room, ms, fn) { clearTimeout(room.timer); room.timer = setTimeout(() => { room.timer = null; if (!room.ended) fn(); }, Math.max(0, ms)); room.timer.unref && room.timer.unref(); }

@@ -15,6 +15,7 @@ const CASUAL_MODES = [["casual_3min", "RELÂMPAGO", 3], ["casual_5min", "RÁPIDA
 const LEAGUES = ["Madeira","Ferro","Bronze","Prata","Ouro","Platina","Esmeralda","Diamante","Mestre","Grande Mestre","Challenger"]
 const GOLD = Color("f4ce7f")
 const Cosmetics = preload("res://profile/premium_cosmetics.gd")
+const PlayerPortrait = preload("res://profile/player_portrait.gd")
 var hub = null   # main_hub (meu selo na faixa "Você")
 var account
 var controller
@@ -125,6 +126,11 @@ func _make_strip() -> Dictionary:
     var row = HBoxContainer.new()
     row.add_theme_constant_override("separation", 8)
     bg.add_child(row)
+    # R41 · retrato público (avatar + moldura Club/Fundador + selo) de quem está naquela cor.
+    var portrait = PlayerPortrait.make(hub, {}, 34.0)
+    portrait.show_seal = false   # o selo já fica ao lado do nome, maior
+    portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    row.add_child(portrait)
     # R31 · Destaque social: selo (Fundador / Club) do jogador, já filtrado pelo servidor.
     var seal = TextureRect.new()
     seal.name = "StripBadge"
@@ -145,7 +151,7 @@ func _make_strip() -> Dictionary:
     clock.custom_minimum_size.x = 96
     row.add_child(clock)
     hud.add_child(bg)
-    var strip := {"bg": bg, "name": name, "clock": clock, "style": style, "seal": seal, "seal_id": "", "color": ""}
+    var strip := {"bg": bg, "name": name, "clock": clock, "style": style, "seal": seal, "seal_id": "", "color": "", "portrait": portrait}
     # R37 · passar o mouse (ou tocar) na faixa do jogador abre o cartão de perfil com o placar deste modo
     bg.mouse_filter = Control.MOUSE_FILTER_PASS
     bg.mouse_entered.connect(func(): _strip_hover(strip, true))
@@ -170,6 +176,7 @@ func strip_info(color: String) -> Dictionary:
         "mode": mode if rated() else "casual", "mode_label": ("RANQUEADO · " if rated() else "CASUAL · ") + String(controller.mode_name).to_upper(),
         "subtitle": ("BRANCAS" if color == "w" else "PRETAS")}
     if hub != null and hub.has_method("avatar_texture"): d.avatar = hub.avatar_texture() if me else hub.avatar_texture(String(info.get("avatar_id", "")))
+    d.merge(PlayerPortrait.self_info(hub) if me else {"badge": info.get("badge", ""), "title": info.get("title", ""), "frame": info.get("frame", "liga")})   # R41
     return d
 
 func _strip_hover(strip: Dictionary, entered: bool):
@@ -294,7 +301,18 @@ func _show(which: String):
         "found":
             var opp: Dictionary = controller.opponent
             _label("ADVERSÁRIO ENCONTRADO", 22, GOLD, true)
+            # R41 · retrato do adversário com moldura e selo (o que ele escolheu e tem direito)
+            var ph := CenterContainer.new()
+            ph.name = "FoundPortraitHolder"
+            var fp = PlayerPortrait.make(hub, opp, 96.0 if get_viewport().get_visible_rect().size.y >= 600.0 else 48.0)
+            fp.name = "FoundPortrait"
+            ph.add_child(fp)
+            box.add_child(ph)
             _label(String(opp.get("nickname", "")), 24, Color("f4edda"), true)
+            var ttl := Cosmetics.title_text(Cosmetics.public_title(opp))
+            if not ttl.is_empty():
+                var tl = _label(ttl, 15, GOLD, true)
+                tl.name = "FoundTitle"
             if rated(): _label(league_line(int(opp.get("league", 0)), int(opp.get("pl", 0))), 16, Color("c4cbbd"), true)
             _label("%s%s · Você joga de %s" % ["" if rated() else "Casual · ", controller.mode_name, "BRANCAS" if controller.human_color == "w" else "PRETAS"], 16, Color("efe3c4"), true)
             found_label = _label("", 16, GOLD, true)
@@ -508,6 +526,12 @@ func _refresh_strips():
         if pair[1] != me and not bool(info.get("connected", true)): who += " (reconectando…)"
         if rated(): strip.name.text = ("%s\n%s %d" if two_line else "%s · %s %d") % [who, LEAGUES[clampi(int(info.get("league", 0)), 0, 10)], int(info.get("pl", 0))]
         else: strip.name.text = ("%s\nCasual" if two_line else "%s") % who
+        var mine_side: bool = pair[1] == me
+        var look: Dictionary = info if not mine_side else PlayerPortrait.self_info(hub)
+        strip.portrait.hub = hub
+        strip.portrait.mine = mine_side
+        strip.portrait.set_info(look)
+        strip.portrait.visible = not two_line   # celular deitado: faixa estreita, o nome tem prioridade
         var bid: String = Cosmetics.public_badge(info) if pair[1] != me else (String(hub.current_badge()) if hub != null and hub.has_method("current_badge") else "")
         if bid != strip.seal_id:
             strip.seal_id = bid

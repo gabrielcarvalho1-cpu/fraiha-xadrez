@@ -324,6 +324,15 @@ func _avatar(parent: Node, id: String, px: int) -> TextureRect:
     parent.add_child(t)
     return t
 
+## R41 · Moldura Club / Fundador sobre o avatar de outro jogador (dados do servidor).
+func _frame(av: Control, p: Dictionary) -> void:
+    var fr := Cosmetics.public_frame(p)
+    if av == null or (fr != "club" and fr != "fundador"): return
+    var f = preload("res://monetization/club_frame.gd").new()
+    f.style = fr
+    f.compact = av.custom_minimum_size.x < 60.0
+    av.add_child(f)
+
 ## R31 · DESTAQUE SOCIAL: selo (Fundador / Club) que o servidor já filtrou pelos direitos ativos.
 const AvatarCatalog = preload("res://profile/avatar_catalog.gd")
 const Cosmetics = preload("res://profile/premium_cosmetics.gd")
@@ -359,7 +368,7 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
     row.add_theme_constant_override("separation", 8)
     row.set_meta("user_id", String(p.get("user_id", "")))
     box.add_child(row)
-    _avatar(row, String(p.get("avatar_id", "warrior")), 40)
+    _frame(_avatar(row, String(p.get("avatar_id", "warrior")), 40), p)
     _seal(row, p, 28)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -502,6 +511,7 @@ func _build_profile(narrow: bool):
     top.add_theme_constant_override("separation", 12)
     box.add_child(top)
     var av = _avatar(top, String(profile.get("avatar_id", "warrior")), 88)
+    _frame(av, profile)
     if narrow: av.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     var info = VBoxContainer.new()
     info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -736,7 +746,7 @@ func _build_dm():
     var head = HBoxContainer.new()
     head.add_theme_constant_override("separation", 10)
     box.add_child(head)
-    _avatar(head, String(dm_peer.get("avatar_id", "warrior")), 44)
+    _frame(_avatar(head, String(dm_peer.get("avatar_id", "warrior")), 44), dm_peer)
     _seal(head, dm_peer, 30)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -872,7 +882,7 @@ func _build_invite_pick():
     var head = HBoxContainer.new()
     head.add_theme_constant_override("separation", 10)
     box.add_child(head)
-    _avatar(head, String(invite_peer.get("avatar_id", "warrior")), 44)
+    _frame(_avatar(head, String(invite_peer.get("avatar_id", "warrior")), 44), invite_peer)
     _seal(head, invite_peer, 30)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL

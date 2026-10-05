@@ -470,6 +470,7 @@ func _setup_account():
     casual_ui.name = "CasualUI"
     casual_ui.kind = "casual"
     add_child(casual_ui)
+    casual_ui.hub = hub   # R41 · retratos/selos na faixa e no "adversário encontrado" (antes só o Ranked tinha)
     casual_ui.setup(account, casual)
     casual_ui.back_requested.connect(open_home)
     # Abas CASUAL / RANQUEADA da tela de escolha de ritmo.
