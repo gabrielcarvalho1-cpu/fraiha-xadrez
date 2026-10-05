@@ -24,13 +24,15 @@ class Matchmaker {
     if (w === null) return a.stats.league === b.stats.league && Math.abs(a.stats.pl - b.stats.pl) <= this.cfg.initialPlWindow;
     return Math.abs(rating(a.stats) - rating(b.stats)) <= w;
   }
-  tick(now) {
+  tick(now, eligible = () => true) {
     const pairs = [];
     for (const [mode, q] of this.queues) {
       q.sort((x, y) => x.since - y.since);
       for (let i = 0; i < q.length; i++) {
+        if (!eligible(q[i])) continue;
         let best = -1, bestGap = Infinity;
         for (let j = i + 1; j < q.length; j++) {
+          if (!eligible(q[j])) continue;
           if (q[j].userId === q[i].userId || !this.compatible(q[i], q[j], now)) continue;
           const gap = this.open ? 0 : Math.abs(rating(q[i].stats) - rating(q[j].stats));
           if (gap < bestGap) { best = j; bestGap = gap; }

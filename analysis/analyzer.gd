@@ -123,7 +123,13 @@ func cancel():
     if engine != null: engine.cancel()
 
 func _eval(fen: String) -> Dictionary:
+    if engine.blocked():
+        cancel()
+        return {}
     var r: Dictionary = await engine.evaluate(fen, depth, max_ms_per_pos)
+    if engine.blocked() or engine._cancel:
+        cancel()
+        return {}
     if r.is_empty() and not _cancel: r = {"cp": 0, "mate": 0, "pv": [], "bestmove": ""}
     return r
 
@@ -137,7 +143,11 @@ func _eval_excluding(fen: String, uci: String) -> Dictionary:
         var u := Notation.uci_of(pos, m)
         if u != uci and u not in others: others.append(u)
     if others.is_empty(): return {}
-    return await engine.evaluate_searchmoves(fen, mini(depth, 12), 900, others)
+    var result: Dictionary = await engine.evaluate_searchmoves(fen, mini(depth, 12), 900, others)
+    if engine.blocked() or engine._cancel:
+        cancel()
+        return {}
+    return result
 
 ## Material entregue pelo lance (cp): peça movida para casa atacada sem recaptura compensadora,
 ## ou captura de peça menor por maior. Aproximação estática; a engine confirma pela avaliação.

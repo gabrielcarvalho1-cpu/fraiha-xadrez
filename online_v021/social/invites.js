@@ -11,6 +11,7 @@ const { look: publicLook } = require('../accounts/cosmetics');
 const crypto = require('crypto');
 const { CASUAL_MODES } = require('../ranked/config');
 const { UUID_RE } = require('../accounts/store');
+const { operation } = require('../accounts/operation');
 const { GAMES } = require('../modes/party');   // R35: convite também para MARCHA REAL e XEQUE (mesa online + bots)
 
 const TTL_MS = Number(process.env.FRAIHA_TEST_INVITE_TTL_MS || 60000); // env só para testes
@@ -95,7 +96,8 @@ class Invites {
   }
 
   async handle(ws, m) {
-    const a = String(m.type || ''), me = ws.user.id, now = this.now();
+    const op = operation(this.backend, ws);
+    const a = String(m.type || ''), me = op.uid, now = this.now();
     if (this.limited(me)) return this.fail(ws, 'Muitas ações seguidas. Aguarde alguns segundos.', 'rate_limited');
     if (a === 'invite_sync') return this.onAuthenticated(ws);
     if (a === 'invite_send') {
@@ -111,9 +113,10 @@ class Invites {
         if (mine.from.user_id === me && mine.to.user_id === other && mine.mode === mode && (mine.game || 'chess') === game && mine.status === 'pending') return this.send(ws, { type: 'invite_sent', invite: this.viewFor(mine, me), duplicate: true });
         return this.fail(ws, mine.from.user_id === me ? 'Você já tem um convite enviado. Cancele-o para enviar outro.' : 'Você tem um convite pendente. Aceite ou recuse primeiro.', 'pending_exists', { invite: this.viewFor(mine, me) });
       }
-      const [peer] = await this.store().getProfilesByIds([other]);
+      const [peer] = await op.wait(() => this.store().getProfilesByIds([other]));
       if (!peer) return this.fail(ws, 'Jogador não encontrado.', 'not_found');
-      const rel = await this.store().getRelations(me);
+      const rel = await op.wait(() => this.store().getRelations(me));
+      op.assert();
       const rp = Invites.relationProblem(rel, other);
       if (rp) return this.fail(ws, rp[1], rp[0]);
       const b1 = this.busyReason(me, true); if (b1) return this.fail(ws, b1[1], b1[0]);
@@ -122,8 +125,8 @@ class Invites {
       // Revalida depois do await: nada de dois convites abertos para ninguém.
       if (this.openOf(me)) return this.fail(ws, 'Você já tem um convite pendente.', 'pending_exists', { invite: this.view(this.openOf(me)) });
       if (this.openOf(other)) return this.fail(ws, 'Este amigo já tem um convite pendente.', 'target_busy');
-      const p = ws.profile;
-      const inv = { id: crypto.randomUUID(), from: { user_id: me, nickname: p.nickname, avatar_id: (ws.identity && ws.identity.avatar) || p.avatar_id, ...publicLook(ws.identity) }, to: { user_id: other, nickname: peer.nickname, avatar_id: peer.avatar_id, ...publicLook(peer) },
+      const p = op.profile;
+      const inv = { id: crypto.randomUUID(), from: { user_id: me, nickname: p.nickname, avatar_id: (op.identity && op.identity.avatar) || p.avatar_id, ...publicLook(op.identity) }, to: { user_id: other, nickname: peer.nickname, avatar_id: peer.avatar_id, ...publicLook(peer) },
         mode, game, created: now, expires: now + TTL_MS, status: 'pending' };
       this.invites.set(inv.id, inv); this.byUser.set(me, inv.id); this.byUser.set(other, inv.id);
       this.toUser(me, { type: 'invite_sent', invite: { ...this.view(inv, now), role: 'sender' } });
@@ -149,6 +152,7 @@ class Invites {
   }
 
   async accept(ws, inv, me) {
+    const op = operation(this.backend, ws);
     if (inv.to.user_id !== me) return this.fail(ws, 'Este convite não é para você.', 'not_recipient', { invite: this.view(inv) });
     // Idempotente: aceite repetido (clique duplo / pacote repetido) só devolve o estado atual.
     if (inv.status !== 'pending') return this.send(ws, { type: 'invite_updated', invite: this.viewFor(inv, me) });
@@ -158,11 +162,23 @@ class Invites {
     this.broadcast(inv);
     const from = inv.from.user_id, to = inv.to.user_id;
     const release = (code, message) => { inv.status = 'pending'; this.close(inv, 'failed', code, message); };
+    const participants = [from, to].map(uid => uid === me ? ws : this.sockets(uid).at(-1));
+    const guards = participants.map(socket => socket && operation(this.backend, socket));
     try {
-      const rel = await this.store().getRelations(to);
+      const rel = await op.wait(() => this.store().getRelations(to));
+      for (const guard of guards) {
+        if (!guard) return release('offline', 'Um dos jogadores está offline.');
+        await guard.wait(() => Promise.resolve());
+      }
+      op.assert();
+      for (const guard of guards) guard.assert();
+      if (inv.status !== 'starting' || this.byUser.get(from) !== inv.id || this.byUser.get(to) !== inv.id) return;
       const rp = Invites.relationProblem(rel, from);
       if (rp) return release(rp[0], rp[0] === 'not_friends' ? 'Convite cancelado: vocês não são mais amigos.' : 'Convite cancelado.');
     } catch (e) {
+      if (this.backend.cancelled && this.backend.cancelled(e)) {
+        return this.backend.operations.run(null, () => release('session_changed', 'Convite cancelado: sessão alterada ou indisponível.'));
+      }
       console.error('invite accept', e && e.message);
       return release('server_error', 'Erro temporário no servidor. Tente novamente.');
     }
@@ -189,8 +205,7 @@ class Invites {
     const casual = this.casual();
     if (!casual) return release('server_error', 'Casual indisponível no servidor.');
     const entry = (u, since) => {
-      const socks = this.sockets(u.user_id);
-      casual.sockets.set(u.user_id, socks[socks.length - 1]);
+      casual.sockets.set(u.user_id, participants[u.user_id === from ? 0 : 1]);
       return { userId: u.user_id, nickname: u.nickname, avatar: u.avatar_id, ...publicLook(u), stats: null, since };
     };
     let match;

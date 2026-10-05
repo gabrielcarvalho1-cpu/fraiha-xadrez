@@ -83,6 +83,7 @@ func stop():
     paused = false
     thinking = false
     completed.clear()
+    if search != null and search.has_method("abort"): search.abort()
     promotion_choices.clear()
     if is_instance_valid(game) and game.bot == self:
         game.bot = null
@@ -138,6 +139,7 @@ func promote(kind: String) -> bool:
 
 func _apply(move: Dictionary) -> bool:
     if not active or game.game_over: return false
+    if guard.is_valid() and bool(guard.call()): return false
     var before: Dictionary = rules.board.duplicate()
     var moving_color: String = rules.turn
     if not rules.play(move): return false
@@ -184,6 +186,7 @@ func _sync_view():
     game.queue_redraw()
 
 func _process(delta: float):
+    if active and guard.is_valid() and bool(guard.call()): stop()
     if worker != null and worker.is_started() and not worker.is_alive():
         var result = worker.wait_to_finish()
         worker = null
@@ -270,6 +273,9 @@ func _run_stockfish(my_epoch: int):
         legal.append(u)
         by_uci[u] = m
     var result: Dictionary = await sf_engine.search_move(Notation.fen(snapshot), Ladder.go_command(bot_id))
+    if guard.is_valid() and bool(guard.call()):
+        stop()
+        return
     if not active or epoch != my_epoch:
         if _sf_job == my_epoch: _sf_job = -1
         return
@@ -283,6 +289,9 @@ func _run_stockfish(my_epoch: int):
         return
     var wait_ms := int(Ladder.bot(bot_id).get("think_ms", 0)) - (Time.get_ticks_msec() - t0)
     if wait_ms > 0: await get_tree().create_timer(wait_ms / 1000.0).timeout
+    if guard.is_valid() and bool(guard.call()):
+        stop()
+        return
     if _sf_job == my_epoch: _sf_job = -1   # só libera depois de entregar o lance (evita 2ª busca no mesmo turno)
     if not active or epoch != my_epoch: return
     move_log.append({"ms": int(result.get("ms", 0)), "kind": String(choice.kind)})

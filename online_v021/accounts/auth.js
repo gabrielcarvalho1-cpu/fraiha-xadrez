@@ -4,15 +4,24 @@
 const crypto = require('crypto');
 
 class SupabaseAuth {
-  constructor({ url, apiKey, fetchImpl = fetch, cacheMs = 60e3 }) {
+  constructor({ url, apiKey, fetchImpl = fetch, cacheMs = 60e3, now = () => Date.now() }) {
     this.url = url.replace(/\/+$/, ''); this.apiKey = apiKey; this.fetch = fetchImpl; this.cacheMs = cacheMs;
     this.cache = new Map();
+    this.now = now;
   }
-  async verify(accessToken) {
+  async verify(accessToken, { force = false } = {}) {
     const token = String(accessToken || '');
     if (token.length < 20 || token.length > 4096) return null;
     const hit = this.cache.get(token);
-    if (hit && hit.until > Date.now()) return hit.user;
+    if (!force && hit && hit.until > this.now()) return hit.user;
+    this.cache.delete(token);
+    // exp só limita validade; a identidade continua vindo exclusivamente de Auth.
+    let expiresAt = null;
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+      if (Number.isFinite(payload.exp)) expiresAt = payload.exp * 1000;
+    } catch { /* tokens opacos: backend aplica duração máxima e revalidação */ }
+    if (expiresAt !== null && expiresAt <= this.now()) return null;
     let res;
     try {
       res = await this.fetch(this.url + '/auth/v1/user', { headers: { apikey: this.apiKey, Authorization: 'Bearer ' + token } });
@@ -20,9 +29,11 @@ class SupabaseAuth {
     if (!res.ok) return null;
     const u = await res.json().catch(() => null);
     if (!u || typeof u.id !== 'string') return null;
+    if (expiresAt !== null && expiresAt <= this.now()) return null;
     const user = { id: u.id, email: u.email || '', provider: (u.app_metadata && u.app_metadata.provider) || 'email' };
+    if (expiresAt !== null) user.expires_at = expiresAt;
     if (this.cache.size > 2000) this.cache.clear();
-    this.cache.set(token, { user, until: Date.now() + this.cacheMs });
+    this.cache.set(token, { user, until: Math.min(this.now() + this.cacheMs, expiresAt === null ? Infinity : expiresAt) });
     return user;
   }
 }

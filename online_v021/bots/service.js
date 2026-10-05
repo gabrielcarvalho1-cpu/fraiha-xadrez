@@ -9,6 +9,7 @@
 // Limite conhecido (documentado no handoff): o servidor não roda o Stockfish, então não prova
 // que os lances do lado do bot foram mesmo do bot. Fecha o atalho trivial, não é anti-cheat completo.
 const { Position } = require('../chess_rules');
+const { operation } = require('../accounts/operation');
 const LADDER = require('../../bot/bot_ladder.json');
 const IDS = LADDER.bots.map(b => b.id);
 const MIN_PLIES = 4, MAX_PLIES = 600, CLAIM_GAP_MS = Number(process.env.FRAIHA_BOT_CLAIM_GAP_MS || 5000);
@@ -39,7 +40,7 @@ function validateVictory(m) {
 }
 
 class BotService {
-  constructor({ store, send }) { this.store = store; this.send = send; }
+  constructor({ store, send, backend }) { this.store = store; this.send = send; this.backend = backend; }
   // Para o acct_state: progresso salvo na conta (ou indisponível sem a migração 0006).
   async summary(uid) {
     try { const rows = await this.store.getBotProgress(uid); return { available: true, defeated: rows.map(r => r.bot_id).filter(id => IDS.includes(id)) }; }
@@ -48,7 +49,8 @@ class BotService {
   async handle(ws, m) {
     const a = String(m.type || '');
     if (!ws.user || !ws.profile) return this.send(ws, { type: 'bot_error', code: 'auth_required', message: 'Entre na sua conta para salvar o progresso dos bots.' });
-    if (a === 'bot_progress') return this.send(ws, { type: 'bot_progress', ...(await this.summary(ws.user.id)), new_bot: null });
+    const op = operation(this.backend, ws);
+    if (a === 'bot_progress') return this.send(ws, { type: 'bot_progress', ...(await op.wait(() => this.summary(op.uid))), new_bot: null });
     if (a !== 'bot_victory') return this.send(ws, { type: 'bot_error', code: 'unknown', message: 'Ação desconhecida.' });
     const now = Date.now();
     if (ws.botClaimAt && now - ws.botClaimAt < CLAIM_GAP_MS) return this.send(ws, { type: 'bot_error', code: 'rate_limited', message: 'Aguarde um instante.' });
@@ -56,12 +58,12 @@ class BotService {
     const v = validateVictory(m);
     if (v.error) return this.send(ws, { type: 'bot_error', code: v.code, message: v.error, bot_id: String(m.bot_id || '') });
     let progress;
-    try { progress = await this.summary(ws.user.id); } catch (e) { throw e; }
+    try { progress = await op.wait(() => this.summary(op.uid)); } catch (e) { throw e; }
     if (!progress.available) return this.send(ws, { type: 'bot_error', code: 'not_configured', message: 'Progresso dos bots ainda não configurado no servidor (migração 0006 pendente).', bot_id: v.id });
     const idx = IDS.indexOf(v.id);
     if (idx > 0 && !progress.defeated.includes(IDS[idx - 1])) return this.send(ws, { type: 'bot_error', code: 'bot_locked', message: 'Derrote o bot anterior primeiro.', bot_id: v.id });
-    const fresh = await this.store.recordBotVictory(ws.user.id, v.id, { plies: m.moves.length, human_color: m.human_color });
-    const after = await this.summary(ws.user.id);
+    const fresh = await op.wait(() => this.store.recordBotVictory(op.uid, v.id, { plies: m.moves.length, human_color: m.human_color }));
+    const after = await op.wait(() => this.summary(op.uid));
     return this.send(ws, { type: 'bot_progress', ...after, new_bot: fresh ? v.id : null });
   }
 }

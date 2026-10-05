@@ -44,7 +44,10 @@ func _init(p_role := "analysis"):
     _next_id += 1
 
 func _ready():
-    set_process(false)
+    set_process(true)
+
+func _process(_delta: float):
+    if _busy and not _cancel and blocked(): cancel()
 
 ## "STOCKFISH" ou "FALLBACK" (log de QA pedido: ANALYSIS ENGINE = … / BOT ENGINE = …).
 func engine_kind() -> String:
@@ -215,8 +218,11 @@ func _wait_for(token: String, timeout: float) -> bool:
 func evaluate(fen: String, depth: int, max_ms := 4000) -> Dictionary:
     if blocked(): return {}
     if not engine_ready: await start()
-    if not engine_ready: return {}
-    while _busy: await get_tree().process_frame
+    if not engine_ready or blocked(): return {}
+    while _busy:
+        if blocked(): return {}
+        await get_tree().process_frame
+    if blocked(): return {}
     _busy = true
     _cancel = false
     var result := {}
@@ -253,13 +259,17 @@ func evaluate(fen: String, depth: int, max_ms := 4000) -> Dictionary:
             if not last.has("bestmove") and last.has("pv") and not last.pv.is_empty(): last["bestmove"] = last.pv[0]
             result = last
     _busy = false
-    return result
+    return {} if _cancel or blocked() else result
 
 ## Igual a evaluate(), mas restrito a `moves` (UCI "searchmoves"). Só nos transportes UCI.
 func evaluate_searchmoves(fen: String, depth: int, max_ms: int, moves: PackedStringArray) -> Dictionary:
     if transport == "builtin" or not engine_ready or moves.is_empty() or blocked(): return {}
-    while _busy: await get_tree().process_frame
+    while _busy:
+        if blocked(): return {}
+        await get_tree().process_frame
+    if blocked(): return {}
     _busy = true
+    _cancel = false
     _lines.clear()
     _send("position fen " + fen)
     _send("go depth %d movetime %d searchmoves %s" % [depth, max_ms, " ".join(moves)])
@@ -281,7 +291,7 @@ func evaluate_searchmoves(fen: String, depth: int, max_ms: int, moves: PackedStr
             break
         await get_tree().process_frame
     _busy = false
-    return {} if _cancel else last
+    return {} if _cancel or blocked() else last
 
 # ---------------------------------------------------------------- bot (perfil por liga)
 ## Envia opções UCI (só desta instância) e espera readyok.
@@ -304,7 +314,10 @@ func configure(opts: Dictionary) -> bool:
 func search_move(fen: String, go_cmd: String, timeout_ms := 8000) -> Dictionary:
     if blocked(): return {}
     if not engine_ready or transport == "builtin": return {}
-    while _busy: await get_tree().process_frame
+    while _busy:
+        if blocked(): return {}
+        await get_tree().process_frame
+    if blocked(): return {}
     _busy = true
     _cancel = false
     _lines.clear()
@@ -338,11 +351,12 @@ func search_move(fen: String, go_cmd: String, timeout_ms := 8000) -> Dictionary:
             break
         if not done: await get_tree().process_frame
     _busy = false
-    if _cancel or best.is_empty() or best == "(none)": return {}
+    if _cancel or blocked() or best.is_empty() or best == "(none)": return {}
     return {"bestmove": best, "lines": lines, "ms": Time.get_ticks_msec() - t0}
 
 func cancel():
     _cancel = true
+    if _busy and transport in ["process", "web"]: _send("stop")
     if _builtin != null and _builtin.has_method("abort"): _builtin.abort()
 
 static func _parse_info(line: String) -> Dictionary:
@@ -375,6 +389,7 @@ func _evaluate_builtin(fen: String, depth: int, max_ms: int) -> Dictionary:
         while _thread.is_alive(): await get_tree().process_frame
         _thread.wait_to_finish()
         _thread = null
+    if _cancel or blocked(): return {}
     if _builtin == null or _builtin._abort: _builtin = Search.new()   # depois de cancelar, busca nova
     var search: RefCounted = _builtin
     var move: Dictionary
@@ -387,7 +402,7 @@ func _evaluate_builtin(fen: String, depth: int, max_ms: int) -> Dictionary:
         while th.is_alive(): await get_tree().process_frame
         move = th.wait_to_finish()
         if _thread == th: _thread = null
-    if move.is_empty(): return {}
+    if _cancel or blocked() or move.is_empty(): return {}
     var m: Dictionary = search.last_metrics
     var score := int(m.get("score", 0))
     var out := {"cp": score, "mate": 0, "pv": [Notation.uci_of(pos, move)], "depth": int(m.get("depth", 0)), "bestmove": Notation.uci_of(pos, move)}

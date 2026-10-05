@@ -5,6 +5,7 @@ const { look: publicLook } = require('../accounts/cosmetics');
 // Mensagens: dm_open, dm_send, dm_read (cliente) -> dm_history, dm_msg, dm_unread, dm_read_ok, dm_error.
 const { STRIP } = require('../chat');
 const { UUID_RE } = require('../accounts/store');
+const { operation } = require('../accounts/operation');
 
 const MAX_LEN = 500;            // caracteres visíveis
 const MAX_RAW = 2000;           // payload bruto acima disso é rejeitado sem processar
@@ -31,10 +32,12 @@ class DirectMessages {
   sockets(uid) { return this.backend.socketsOf ? this.backend.socketsOf(uid) : []; }
   async unreadCounts(uid) { return this.store().unreadCounts(uid); }
   async pushUnread(uid) {
+    const op = operation(this.backend);
     const socks = this.sockets(uid);
     if (!socks.length) return;
-    const counts = await this.store().unreadCounts(uid);
-    for (const ws of socks) this.send(ws, { type: 'dm_unread', counts });
+    const counts = await op.wait(() => this.store().unreadCounts(uid));
+    op.assert();
+    for (const ws of this.sockets(uid)) this.send(ws, { type: 'dm_unread', counts });
   }
   allow(uid) {
     const now = this.now(), r = this.rate.get(uid) || { last: 0, times: [] };
@@ -59,19 +62,20 @@ class DirectMessages {
     return { ok: true };
   }
   async handle(ws, m) {
-    const a = String(m.type || ''), me = ws.user.id, st = this.store();
+    const op = operation(this.backend, ws);
+    const a = String(m.type || ''), me = op.uid, st = this.store();
     if (a !== 'dm_send' && this.busy(me)) return this.fail(ws, 'Muitas ações seguidas. Aguarde alguns segundos.', 'rate_limited', String(m.user_id || ''));
     const other = String(m.user_id || '');
     if (!UUID_RE.test(other)) return this.fail(ws, 'Jogador inválido.', 'bad_user');
     if (other === me) return this.fail(ws, 'Você não pode mandar mensagem para si mesmo.', 'self', other);
-    const [peer] = await st.getProfilesByIds([other]);
+    const [peer] = await op.wait(() => st.getProfilesByIds([other]));
     if (!peer) return this.fail(ws, 'Jogador não encontrado.', 'not_found', other);
-    const rel = await st.getRelations(me);
+    const rel = await op.wait(() => st.getRelations(me));
     const can = DirectMessages.sendable(rel, other);
     if (a === 'dm_open') {
       // Histórico continua visível mesmo sem amizade/bloqueado (só as mensagens da própria conversa).
       const before = Math.max(0, Number(m.before_id) || 0);
-      const rows = await st.getConversation(me, other, HISTORY + 1, before);
+      const rows = await op.wait(() => st.getConversation(me, other, HISTORY + 1, before));
       const has_more = rows.length > HISTORY;
       const messages = has_more ? rows.slice(1) : rows;
       return this.send(ws, { type: 'dm_history', user_id: other, peer: { user_id: peer.user_id, nickname: peer.nickname, avatar_id: peer.avatar_id, ...publicLook(peer) },
@@ -81,17 +85,19 @@ class DirectMessages {
       if (!can.ok) return this.fail(ws, can.message, can.code, other);
       const c = cleanBody(m.text);
       if (c.error) return this.fail(ws, c.error, c.code, other);
+      op.assert();
       if (!this.allow(me)) return this.fail(ws, 'Calma! Espere um instante para mandar outra mensagem.', 'rate_limited', other);
-      const row = await st.addDirectMessage(me, other, c.text);
+      const row = await op.wait(() => st.addDirectMessage(me, other, c.text));
+      op.assert();
       const out = { type: 'dm_msg', message: row, client_ref: String(m.client_ref || '').slice(0, 40) };
       for (const s of this.sockets(me)) this.send(s, { ...out, user_id: other });
-      const from = { user_id: me, nickname: ws.profile.nickname, avatar_id: (ws.identity && ws.identity.avatar) || ws.profile.avatar_id, ...publicLook(ws.identity) };
+      const from = { user_id: me, nickname: op.profile.nickname, avatar_id: (op.identity && op.identity.avatar) || op.profile.avatar_id, ...publicLook(op.identity) };
       for (const s of this.sockets(other)) this.send(s, { type: 'dm_msg', message: row, user_id: me, from });
       await this.pushUnread(other);
       return;
     }
     if (a === 'dm_read') {
-      const n = await st.markDirectRead(me, other);
+      const n = await op.wait(() => st.markDirectRead(me, other));
       this.send(ws, { type: 'dm_read_ok', user_id: other, marked: n });
       await this.pushUnread(me);
       return;
