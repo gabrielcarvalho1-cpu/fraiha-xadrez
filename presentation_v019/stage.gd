@@ -461,6 +461,7 @@ func _setup_account():
     ranked_ui.back_requested.connect(open_home)
     ranked_ui.play_requested.connect(_back_to_ranked_lobby)
     ranked.found.connect(_ranked_found)
+    ranked.finished.connect(_on_online_result)   # R42.1 · fim da partida = resultado OFICIAL do servidor
     casual = preload("res://ranked/ranked_controller.gd").new()
     casual.name = "CasualController"
     casual.kind = "casual"
@@ -482,6 +483,7 @@ func _setup_account():
         _open_casual())
     casual_ui.play_requested.connect(_back_to_casual_lobby)
     casual.found.connect(_casual_found)
+    casual.finished.connect(_on_online_result)
     match_chat = preload("res://social/match_chat.gd").new()
     match_chat.name = "MatchChat"
     add_child(match_chat)
@@ -1355,6 +1357,10 @@ func _refresh_analysis_buttons():
     if is_instance_valid(mobile_analyze): mobile_analyze.visible = can_analyze and mobile
     if human_mode and playing and is_instance_valid(desk_analyze): desk_analyze.visible = false   # nunca durante partida humana
     if not mobile: _layout_desk_hud.call_deferred()   # a largura do cartão muda quando ANALISAR aparece
+
+func _on_online_result(msg: Dictionary):
+    if recorder == null: return
+    recorder.finish_online(String(msg.get("match_id", "")), String(msg.get("outcome", "")), String(msg.get("reason_text", msg.get("reason", ""))))
 
 ## Fim de partida: usa o RESULTADO REAL do registro (vencedor comparado com a cor do jogador —
 ## nunca só "brancas"/"pretas"). Partida local (dois humanos) e empates não abrem a tela.

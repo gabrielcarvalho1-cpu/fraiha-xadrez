@@ -16,6 +16,8 @@ var _prev_mode := ""
 var _prev_board := {}
 var _prev_turn := "w"
 
+const ONLINE_MODES := ["ranked", "casual"]
+
 func setup(p_stage):
     stage = p_stage
     game = p_stage.game
@@ -39,6 +41,15 @@ func finish(result: String, reason := ""):
     if record != null and not record.finished:
         record.finish(result, reason)
         finished.emit(record)
+
+## Resultado oficial de uma partida online (Ranked/Casual): só fecha o registro DESTA partida.
+func finish_online(match_id: String, outcome: String, reason := "") -> bool:
+    if record == null or record.finished or not ONLINE_MODES.has(record.mode): return false
+    if match_id.is_empty() or record.match_id != match_id: return false
+    if outcome not in ["win", "loss", "draw"]: outcome = "draw"
+    record.finish(outcome, reason)
+    finished.emit(record)
+    return true
 
 func current():
     return record
@@ -86,7 +97,10 @@ func _process(_d):
         record.start_fen = _fen_from_game()
         _prev_count = count
         _prev_board = game.pieces.duplicate()
-    if bool(game.game_over) and not record.finished:
+    # Online (Ranked/Casual): o resultado é do SERVIDOR (finish_online, no ranked_result/casual_result).
+    # O estado "finished" chega antes do resultado (gravação no banco); deduzir pelo texto do
+    # tabuleiro aqui fechava o registro como empate e deixava o fim vazar para a partida seguinte.
+    if bool(game.game_over) and not record.finished and not ONLINE_MODES.has(record.mode):
         var human: String = record.human_color
         var status: String = String(game.status)
         var result := "draw"

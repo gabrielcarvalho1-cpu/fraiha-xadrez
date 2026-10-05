@@ -78,6 +78,8 @@ func attach():
     game.bot = self
     active = true
     game.game_started = true
+    # Partida nova: não herda o "fim de jogo" (VITÓRIA/DERROTA) da anterior até o 1º estado chegar.
+    if status != "finished": game.game_over = false
     game.settings_open = false
     game.particles.clear()
     game.captured_white.clear()
