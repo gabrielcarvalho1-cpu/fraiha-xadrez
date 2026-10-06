@@ -88,7 +88,10 @@ transcrição, vídeo, streaming nem add-ons pagos.
 **Áudio-only de verdade (auditoria R45-V07):** o token só dá privilégio de entrar + publicar ÁUDIO, mas a Agora
 só faz valer privilégios por tipo (áudio/vídeo/dados) com **Co-host token authentication** ligada no projeto
 (Agora Console → projeto → Features/Security). Sem isso, um cliente adulterado poderia tentar publicar vídeo.
-Status: **não verificado** (precisa do dono do projeto na Console).
+Status: **desligado** no projeto principal (conferido pelo dono em 2026-10-06). Tokens do servidor são
+compatíveis (AccessToken2, privilégios relativos: join + publicar áudio). **ATENÇÃO: a Agora NÃO permite
+desligar depois de ligar.** Ligar primeiro num projeto de TESTE apontado pelo staging, testar RTC real
+(2 aparelhos, renovação de token ~12 min, mute, sair) e só então ligar no projeto principal.
 
 **Janela residual do token (auditoria R45-V06):** fim de partida/logout fazem o servidor **recusar** renovação,
 mas um token já entregue continua válido até expirar (padrão 600 s; `FRAIHA_VOICE_TOKEN_TTL`, 120–3600).
