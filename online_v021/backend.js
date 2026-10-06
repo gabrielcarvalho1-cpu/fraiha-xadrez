@@ -15,6 +15,7 @@ const { Payments } = require('./payments/service');
 const { BotService } = require('./bots/service');
 const { Party } = require('./modes/party');
 const { VoiceService } = require('./voice/service');
+const { ModeControls, CLOSED_MESSAGE } = require('./admin/controls');   // FRAIHA Admin: ativar/desativar modos (autoridade no servidor)
 const Cosmetics = require('./accounts/cosmetics');
 
 const GUEST_TTL_MS = 24 * 3600e3;
@@ -81,6 +82,10 @@ class Backend {
     this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
     this.party = new Party({ send: (ws, o) => this.send(ws, o), backend: this });   // R35: MARCHA REAL / XEQUE online
     this.voice = new VoiceService({ backend: this, send: (ws, o) => this.send(ws, o), env: opts.env || process.env });   // FRAIHA Voice v1
+    // FRAIHA Admin · desativar um modo bloqueia novas entradas/pareamentos; partidas em andamento seguem.
+    this.modeControls = new ModeControls({ now: this.now });
+    this.adminMetrics = null;   // ligado pelo AdminService (telemetria em memória); nunca obrigatório
+    this.modeControls.onChange((family, after) => { if (!after.enabled) this.lastPurged = this.onModeClosed(family); });
     this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o), backend: this }) : null;
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
@@ -224,7 +229,14 @@ class Backend {
   onBlocked(a, b) { if (this.invites) this.invites.onRelationChanged(a, b); }
   onUnfriended(a, b) { if (this.invites) this.invites.onRelationChanged(a, b); }
   // Entrar em fila (Casual/Ranked) cancela o convite pendente do jogador; durante o aceite, a fila é recusada.
+  modeOpen(family) { return !this.modeControls || this.modeControls.isOpen(family); }
+  // Modo desativado pelo Admin: tira da fila quem estava esperando (com aviso). Não toca em partidas.
+  onModeClosed(family) {
+    const svc = family === 'ranked' ? this.ranked : family === 'casual' ? this.casual : null;
+    return svc && svc.purgeQueue ? svc.purgeQueue(CLOSED_MESSAGE) : 0;
+  }
   beforeQueue(ws, kind) {
+    if (!this.modeOpen(kind)) { this.send(ws, { type: kind + '_error', message: CLOSED_MESSAGE, code: 'mode_disabled' }); return false; }
     const uid = ws.identity && ws.identity.id;
     if (!uid || !this.invites) return true;
     if (this.invites.reserved(uid)) { this.send(ws, { type: kind + '_error', message: 'Sua partida do convite está começando.', code: 'busy' }); return false; }

@@ -81,6 +81,7 @@ class Ranked {
         const active = this.activeMatchOf(uid);
         if (active) return this.pushState(active, this.now());
         if (this.busyElsewhere(uid)) return this.fail(ws, 'Você já está em outra partida ou fila.', 'busy');
+        if (this.backend && this.backend.modeOpen && !this.backend.modeOpen(this.kind)) return this.fail(ws, require('../admin/controls').CLOSED_MESSAGE, 'mode_disabled');   // Admin: modo desativado durante a leitura do PL
         if (!this.mm.enqueue(mode, entry)) return this.fail(ws, 'Você já está na fila.', 'already_queued');
         const out = { type: this.p + 'queued', mode, mode_name: this.modes[mode].name };
         if (stats) { out.league = stats.league; out.pl = stats.pl; }
@@ -118,6 +119,15 @@ class Ranked {
     if (a === this.p + 'resign') { match.resign(color, now); return this.after(match, now); }
     return this.fail(ws, `Ação ${this.label} desconhecida.`);
   }
+  // FRAIHA Admin: modo desativado → quem estava esperando sai da fila com aviso (o cliente já trata *_error na busca).
+  purgeQueue(message) {
+    let n = 0;
+    for (const q of this.mm.queues.values()) for (const e of [...q]) {
+      this.mm.cancel(e.userId); this.invalidateQueue(e.userId); n++;
+      const ws = this.sockets.get(e.userId); if (ws) this.fail(ws, message, 'mode_disabled');
+    }
+    return n;
+  }
   pushState(match, now, only = null) {
     for (const c of only ? [only] : ['w', 'b']) { const ws = this.sockets.get(match.players[c].userId); if (ws && match.players[c].connected) this.send(ws, match.state(c, now)); }
   }
@@ -127,6 +137,7 @@ class Ranked {
   }
   async persist(match) {
     match.persisting = true;
+    { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('finished', this.kind, match.mode, match.result && match.result.reason); }
     let saved = false;
     if (this.rated) {
       try { await this.backend.store.recordRankedMatch(match.record()); saved = true; }
@@ -166,6 +177,7 @@ class Ranked {
     const seat = e => ({ userId: e.userId, nickname: e.nickname, avatar: e.avatar, ...publicLook(e), stats: e.stats, connected: true, leftAt: 0 });
     const match = new RankedMatch({ mode, white: seat(w), black: seat(bl), now, cfg: this.cfg, rated: this.rated, prefix: this.kind });
     this.matches.set(match.id, match); this.byUser.set(w.userId, match.id); this.byUser.set(bl.userId, match.id);
+    { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('started', this.kind, mode); }
     this.invalidateQueue(w.userId); this.invalidateQueue(bl.userId);
     for (const c of ['w', 'b']) {
       const me = match.players[c], opp = match.publicPlayer(c === 'w' ? 'b' : 'w');
@@ -191,8 +203,9 @@ class Ranked {
       }
       return true;
     };
-    for (const { mode, a, b } of this.mm.tick(now, eligible)) {
-      try { this.startMatch(mode, a, b, now); }
+    const open = !(this.backend && this.backend.modeOpen) || this.backend.modeOpen(this.kind);   // Admin: modo desativado = sem novos pareamentos
+    for (const { mode, a, b } of open ? this.mm.tick(now, eligible) : []) {
+      try { this.startMatch(mode, a, b, now); const am = this.backend && this.backend.adminMetrics; if (am) am.onPaired(this.kind, mode, [now - a.since, now - b.since]); }
       catch (error) {
         if (error.code !== 'player_unavailable') throw error;
         for (const e of [a, b]) if (this.queueEligible(e.userId)) this.mm.enqueue(mode, e);

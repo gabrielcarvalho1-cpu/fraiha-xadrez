@@ -63,6 +63,7 @@ class Party {
       seats[s] = game === 'marcha' ? { kind: 'bot', nickname: MARCHA_BOTS[s] || `Bot ${s}` } : { kind: 'bot', nickname: (XEQUE_BOTS[s] || [`Bot ${s}`])[0], profile: (XEQUE_BOTS[s] || [0, 'equilibrado'])[1] };
     }
     const room = { id, game, seats, rng, ver: 0, ended: false, busy: false, timer: null, deadline: 0, turn_seat: -1, started_at: this.now(), result: null, last: null };
+    { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('started', game === 'xeque' ? 'xeque' : 'marcha', game); }
     if (game === 'marcha') {
       room.g = new M.Marcha(rng);
       room.g.setup();
@@ -274,6 +275,7 @@ class Party {
     if (room.ended) return;
     room.ended = true; room.deadline = 0; room.turn_seat = -1; clearTimeout(room.timer);
     room.ended_at = this.now();
+    { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('finished', room.game === 'xeque' ? 'xeque' : 'marcha', room.game, reason); }
     this.broadcast(room, { ev: 'end', reason });
     this.recordStats(room);
     for (const s of room.seats) if (s.kind === 'human' && this.byUser.get(s.uid) === room.id) this.byUser.delete(s.uid);

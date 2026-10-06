@@ -107,6 +107,7 @@ class Invites {
       if (other === me) return this.fail(ws, 'Você não pode convidar a si mesmo.', 'self');
       if (game !== 'chess' && !GAMES[game]) return this.fail(ws, 'Modo inválido.', 'bad_mode');
       if (game === 'chess' && !CASUAL_MODES[mode]) return this.fail(ws, 'Tempo inválido. Escolha 3, 5, 10 ou 20 minutos.', 'bad_mode');
+      if (this.backend.modeOpen && !this.backend.modeOpen(game === 'chess' ? 'casual' : game)) return this.fail(ws, require('../admin/controls').CLOSED_MESSAGE, 'mode_disabled');   // FRAIHA Admin
       const mine = this.openOf(me);
       if (mine) {
         // Reenvio do mesmo convite (clique duplo / pacote repetido): devolve o existente.
@@ -182,6 +183,8 @@ class Invites {
       console.error('invite accept', e && e.message);
       return release('server_error', 'Erro temporário no servidor. Tente novamente.');
     }
+    // FRAIHA Admin: modo desativado depois do convite → não começa (partidas em andamento não são tocadas).
+    if (this.backend.modeOpen && !this.backend.modeOpen((inv.game || 'chess') === 'chess' ? 'casual' : inv.game)) return release('mode_disabled', require('../admin/controls').CLOSED_MESSAGE);
     // Partida ativa sempre tem prioridade. Tudo daqui até o startMatch é síncrono (sem corrida).
     for (const [uid, who] of [[from, inv.from.nickname], [to, inv.to.nickname]]) {
       if (this.backend.inMatch(uid)) return release('busy', `${who} já está em uma partida.`);
