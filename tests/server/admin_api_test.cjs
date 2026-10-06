@@ -200,3 +200,84 @@ test('métricas: espera real de pareamento registrada (não estimada)', async t 
   assert.ok(rk.avg_wait_ms.value >= 2500 && rk.avg_wait_ms.value <= 4500, 'média ~3 s: ' + rk.avg_wait_ms.value);
   assert.equal(r.body.queues.find(q => q.family === 'xeque').has_queue, false);
 });
+
+// ---------------------------------------------------------------- auditoria Orca (retorno)
+const Q = require('../../online_v021/admin/queries');
+
+test('Clube/Founder: true / false / sem registro (legítimo) / ERRO / TIMEOUT — erro nunca vira "não possui"', async t => {
+  const h = await fixture(t);
+  await h.backend.store.setEntitlements(A, { is_founder: true, club_active: true, club_expires_at: new Date(Date.now() + 86400e3).toISOString(), club_source: 'manual' });
+  await h.backend.store.setEntitlements(B, { is_founder: false, club_active: false });
+  // C: sem linha nenhuma (nunca teve) → legítimo INATIVO / false
+  const a = (await h.call('GET', '/admin/api/players/' + A, { token: h.boss })).body;
+  assert.equal(a.club.status, 'ATIVO'); assert.equal(a.founder.value, true); assert.equal(a.founder.status, 'real'); assert.equal(a.entitlements_read, 'ok');
+  const b = (await h.call('GET', '/admin/api/players/' + B, { token: h.boss })).body;
+  assert.equal(b.club.status, 'INATIVO'); assert.equal(b.founder.value, false); assert.equal(b.founder.status, 'real');
+  const c = (await h.call('GET', '/admin/api/players/' + C, { token: h.boss })).body;
+  assert.equal(c.club.status, 'INATIVO'); assert.equal(c.founder.value, false); assert.equal(c.founder.status, 'real', 'sem registro = não possui (legítimo)');
+  // ERRO de consulta
+  h.backend.store.adminEntitlementsFault = async () => { throw new Error('PGRST500 boom'); };
+  const e = (await h.call('GET', '/admin/api/players/' + A, { token: h.boss }));
+  assert.equal(e.status, 200);
+  assert.equal(e.body.entitlements_read, 'query_error');
+  assert.equal(e.body.club.status, 'INDISPONÍVEL', 'erro NÃO vira INATIVO');
+  assert.equal(e.body.founder.value, null, 'erro NÃO vira false'); assert.equal(e.body.founder.status, 'unavailable');
+  assert.equal(e.body.club.expires_at.value, null); assert.equal(e.body.club.expires_at.status, 'unavailable');
+  const list = (await h.call('GET', '/admin/api/players?q=Test', { token: h.boss })).body;
+  assert.equal(list.entitlements_read, 'query_error');
+  assert.ok(list.items.length >= 3 && list.items.every(i => i.club === 'INDISPONÍVEL' && i.founder === null), 'lista: todos desconhecidos');
+  // TIMEOUT de consulta
+  const old = Q.cfg.timeoutMs; Q.cfg.timeoutMs = 150; t.after(() => { Q.cfg.timeoutMs = old; });
+  h.backend.store.adminEntitlementsFault = () => new Promise(() => {});
+  const t0 = Date.now();
+  const to = (await h.call('GET', '/admin/api/players/' + A, { token: h.boss }));
+  assert.ok(Date.now() - t0 < 3000, 'não fica pendurado');
+  assert.equal(to.body.entitlements_read, 'timeout'); assert.equal(to.body.club.status, 'INDISPONÍVEL'); assert.equal(to.body.founder.value, null);
+  assert.match(to.body.club.read_error, /tempo esgotado/);
+  // recuperação
+  delete h.backend.store.adminEntitlementsFault;
+  assert.equal((await h.call('GET', '/admin/api/players/' + A, { token: h.boss })).body.club.status, 'ATIVO');
+});
+
+test('Ranked/modos: erro de leitura aparece como erro (não como "sem estatísticas")', async t => {
+  const h = await fixture(t);
+  const orig = h.backend.store.getRankedStats.bind(h.backend.store);
+  h.backend.store.getRankedStats = async () => { throw new Error('boom'); };
+  t.after(() => { h.backend.store.getRankedStats = orig; });
+  const d = (await h.call('GET', '/admin/api/players/' + A, { token: h.boss })).body;
+  assert.equal(d.ranked.ok, false); assert.equal(d.ranked.error, 'query_error'); assert.equal(d.modes.ok, true);
+});
+
+test('Convite: modo desativado DURANTE a consulta do perfil → convite não é criado (Casual, XEQUE, MARCHA)', async t => {
+  for (const [game, mode, family] of [['chess', 'casual_5min', 'casual'], ['xeque', '', 'xeque'], ['marcha', '', 'marcha']]) {
+    const h = await fixture(t);
+    h.backend.store.social.friends.add([A, B].sort().join('|'));
+    const orig = h.backend.store.getProfilesByIds.bind(h.backend.store);
+    let release;
+    h.backend.store.getProfilesByIds = ids => new Promise(res => { release = () => res(orig(ids)); });
+    h.messages.length = 0;
+    const sending = h.backend.handle(h.sockets[0], { type: 'invite_send', user_id: B, game, mode });
+    for (let i = 0; i < 20 && !release; i++) await flush();
+    assert.ok(release, `${family}: consulta do perfil pendente`);
+    const r = await h.call('POST', '/admin/api/queues/' + family, { token: h.boss, body: { enabled: false, reason: 'race test', confirm: family } });
+    assert.equal(r.status, 200);
+    release(); await sending; await flush();
+    assert.equal(h.backend.invites.invites.size, 0, `${family}: nenhum convite criado`);
+    const err = h.messages.find(x => x.socket === h.sockets[0] && x.code === 'mode_disabled');
+    assert.ok(err, `${family}: quem convidou recebeu mode_disabled (${JSON.stringify(h.messages.map(m => m.type + ':' + (m.code || '')))})`);
+    assert.ok(!h.messages.some(x => x.socket === h.sockets[1] && x.type === 'invite_received'), `${family}: convidado não recebeu convite`);
+  }
+});
+
+test('operator escreve fila; viewer não; owner tudo (papéis)', async t => {
+  const OP = '66666666-6666-4666-a666-666666666666';
+  const h = await fixture(t, { FRAIHA_ADMIN_USERS: `${BOSS}=owner,${VIEW}=viewer,${OP}=operator`, FRAIHA_ENV: 'dev' });
+  const op = 'tok-' + OP;
+  assert.equal((await h.call('POST', '/admin/api/queues/marcha', { token: op, body: { enabled: false, reason: 'operador', confirm: 'marcha' } })).status, 200);
+  assert.equal((await h.call('GET', '/admin/api/audit', { token: op })).status, 200);
+  assert.equal((await h.call('POST', '/admin/api/queues/marcha', { token: h.viewer, body: { enabled: true, reason: 'viewer', confirm: 'marcha' } })).status, 403);
+  assert.equal((await h.call('GET', '/admin/api/audit', { token: h.viewer })).status, 403, 'viewer não lê Admin Log');
+  assert.equal(h.backend.modeControls.isOpen('marcha'), false);
+  assert.equal((await h.call('POST', '/admin/api/queues/marcha', { token: h.boss, body: { enabled: true, reason: 'owner', confirm: 'marcha' } })).status, 200);
+  assert.equal(h.backend.modeControls.isOpen('marcha'), true);
+});

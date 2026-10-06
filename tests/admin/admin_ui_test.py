@@ -3,7 +3,7 @@ de jogo (tests/admin/seed_dev.cjs). Cobre: login admin/não-admin, telas, númer
 com confirmação + Admin Log, loading, empty, erro, timeout, reconexão e desktop 1280/1440/1920.
 Pré-requisitos (ver tests/admin/run_admin_qa.sh): servidor em 127.0.0.1:8140 e Admin servido em 127.0.0.1:8150.
 Rodar: python3 tests/admin/admin_ui_test.py [pasta_screenshots]"""
-import os, sys, json, urllib.request
+import os, sys, json, time, urllib.request
 from playwright.sync_api import sync_playwright
 
 ADMIN = "http://127.0.0.1:8150/index.html"
@@ -148,20 +148,107 @@ with sync_playwright() as p:
     check("ao vivo" in pg.inner_text("#conn-text"), "reconexão: volta sozinho quando o servidor responde")
 
     # --- timeout (servidor não responde em 8 s) na primeira carga de uma tela
-    pg.route("**/admin/api/system", lambda r: (pg.wait_for_timeout(9500), r.abort()))
+    def stall_system(r):
+        pg.wait_for_timeout(9500)
+        try: r.abort()
+        except Exception: pass
+    pg.route("**/admin/api/system", stall_system)
     pg.goto(ADMIN + "#/system")
     pg.wait_for_selector(".state.err", timeout=20000)
     check("não respondeu a tempo" in pg.inner_text(".state.err"), "timeout: mensagem clara + botão tentar de novo")
     pg.screenshot(path=f"{SHOTS}/15_timeout.png")
-    pg.unroute("**/admin/api/system")
+    pg.unroute_all(behavior="ignoreErrors")
 
-    # --- responsividade desktop
-    for w, hgt in [(1280, 800), (1920, 1080)]:
+    # ===================== auditoria Orca (retorno) =====================
+    reqs = []
+    pg.on("request", lambda r: reqs.append((time.time(), r.url, r.method)) if "/admin/api/" in r.url else None)
+    pg.unroute_all(behavior="ignoreErrors")
+
+    # --- LOGIN → abrir confirmação crítica → LOGOUT → tentar confirmar a antiga → NENHUMA mutação
+    pg.goto(ADMIN + "#/queues"); pg.wait_for_selector("[data-family=ranked] [data-action=toggle]", timeout=8000)
+    _, a0 = api("/admin/api/audit"); n0 = len(a0["items"])
+    pg.click("[data-family=ranked] [data-action=toggle]"); pg.wait_for_selector(".modal", timeout=3000)
+    pg.fill(".modal textarea", "tentativa depois do logout"); pg.fill(".modal input", "ranked")
+    pg.evaluate("window.__staleGo = document.querySelector('.modal .btn.danger')")
+    check(not pg.evaluate("window.__staleGo.disabled"), "confirmação pronta para enviar (antes do logout)")
+    # o botão Sair fica atrás do modal: o logout pode vir de qualquer lugar (aqui: chamada direta, como um atalho)
+    pg.evaluate("document.querySelector('header .btn.ghost').click()")
+    pg.wait_for_selector("select[name=env]", timeout=5000)
+    mark = time.time()
+    check(pg.locator(".modal").count() == 0, "logout fecha a confirmação pendente")
+    pg.evaluate("window.__staleGo && window.__staleGo.click()")
+    pg.wait_for_timeout(1500)
+    _, q = api("/admin/api/queues"); _, a1 = api("/admin/api/audit")
+    check([x for x in q["queues"] if x["family"] == "ranked"][0]["enabled"] is True and len(a1["items"]) == n0, "confirmação antiga após logout: NENHUMA mutação no servidor e nada no Admin Log")
+    pg.wait_for_timeout(6500)
+    late = [r for r in reqs if r[0] > mark + 0.2]
+    check(not late, f"depois do logout: nenhuma requisição administrativa (polling parado) {late[:2]}")
+    check(pg.locator(".shell").count() == 0 and pg.locator("select[name=env]").count() == 1, "depois do logout: tela de login, nada da sessão administrativa")
+
+    # --- perda de autenticação (401 no polling) com confirmação aberta → sessão encerrada, nada muda
+    login(pg, "boss"); pg.wait_for_selector("[data-metric='Online agora'] .val:not(.na)", timeout=10000)
+    pg.goto(ADMIN + "#/queues"); pg.wait_for_selector("[data-family=casual] [data-action=toggle]", timeout=8000)
+    pg.click("[data-family=casual] [data-action=toggle]"); pg.wait_for_selector(".modal", timeout=3000)
+    pg.fill(".modal textarea", "depois do 401"); pg.fill(".modal input", "casual")
+    pg.evaluate("window.__staleGo2 = document.querySelector('.modal .btn.danger')")
+    pg.route("**/admin/api/queues", lambda r: r.fulfill(status=401, body='{"error":"invalid_session"}', headers={"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}))
+    pg.wait_for_selector("select[name=env]", timeout=10000)
+    pg.unroute_all(behavior="ignoreErrors")
+    check(pg.locator(".modal").count() == 0, "401 durante o polling: sessão encerrada e confirmação fechada")
+    pg.evaluate("window.__staleGo2 && window.__staleGo2.click()"); pg.wait_for_timeout(1200)
+    _, q = api("/admin/api/queues")
+    check([x for x in q["queues"] if x["family"] == "casual"][0]["enabled"] is True, "confirmação antiga após 401: nenhuma mutação")
+
+    # --- request em voo → LOGOUT → resposta tardia → sessão NÃO reaparece, nenhuma ação nova
+    login(pg, "boss"); pg.wait_for_selector("[data-metric='Online agora'] .val:not(.na)", timeout=10000)
+    def slow_overview(route):
+        pg.wait_for_timeout(2500)
+        try: route.continue_()
+        except Exception: pass
+    pg.route("**/admin/api/overview", slow_overview)
+    pg.goto(ADMIN + "#/live"); pg.wait_for_timeout(300); pg.goto(ADMIN + "#/dashboard")   # nova carga do overview (lenta)
+    pg.wait_for_timeout(400)
+    pg.click("header .btn.ghost")
+    pg.wait_for_selector("select[name=env]", timeout=5000)
+    mark = time.time()
+    pg.wait_for_timeout(4500)
+    check(pg.locator(".shell").count() == 0 and pg.locator("select[name=env]").count() == 1, "resposta tardia depois do logout NÃO restaura a sessão")
+    late = [r for r in reqs if r[0] > mark + 0.2]
+    check(not late, f"resposta tardia não dispara nova requisição {late[:2]}")
+    pg.unroute_all(behavior="ignoreErrors")
+
+    # --- Clube/Founder: ERRO de consulta aparece como INDISPONÍVEL (não como "não possui")
+    login(pg, "boss"); pg.wait_for_selector("[data-metric='Online agora'] .val:not(.na)", timeout=10000)
+    _, pls = api("/admin/api/players?q=Rei"); uid = pls["items"][0]["user_id"]
+    def ent_error(route):
+        resp = route.fetch(); d = resp.json()
+        d["entitlements_read"] = "query_error"
+        d["club"]["status"] = "INDISPONÍVEL"; d["club"]["read_error"] = "ERRO DE CONSULTA"
+        d["founder"].update({"value": None, "status": "unavailable", "note": "ERRO DE CONSULTA"})
+        route.fulfill(response=resp, json=d)
+    pg.route("**/admin/api/players/" + uid, ent_error)
+    pg.goto(ADMIN + "#/players/" + uid); pg.wait_for_selector("#club-status", timeout=8000)
+    check(pg.inner_text("#club-status") == "INDISPONÍVEL" and "INDISPONÍVEL" in pg.inner_text("#founder-value") and pg.locator("#ent-error").count() == 1,
+          "perfil: erro de consulta = INDISPONÍVEL + aviso (não INATIVO/NÃO)")
+    pg.screenshot(path=f"{SHOTS}/17_perfil_erro_consulta.png", full_page=True)
+    pg.unroute_all(behavior="ignoreErrors")
+    pg.goto(ADMIN + "#/players"); pg.wait_for_timeout(500)   # sai e volta: nova leitura real
+    pg.goto(ADMIN + "#/players/" + uid); pg.wait_for_selector("#club-status", timeout=8000); pg.wait_for_timeout(300)
+    check(pg.inner_text("#club-status") in ("INATIVO", "ATIVO", "EXPIRADO") and pg.locator("#ent-error").count() == 0, "perfil: leitura normal mostra o status real")
+
+    # --- responsividade: celular 393, paisagem 852x393, desktop 1280 e 1920 em TODAS as telas
+    for w, hgt in [(393, 852), (852, 393), (1280, 800), (1920, 1080)]:
         pg.set_viewport_size({"width": w, "height": hgt})
-        pg.goto(ADMIN + "#/dashboard"); pg.wait_for_selector("[data-metric='Online agora'] .val:not(.na)", timeout=8000)
-        sw = pg.evaluate("document.documentElement.scrollWidth"); cw = pg.evaluate("document.documentElement.clientWidth")
-        check(sw <= cw, f"desktop {w}x{hgt}: sem rolagem horizontal")
-        pg.screenshot(path=f"{SHOTS}/16_dashboard_{w}.png")
+        bad = []
+        for rt in ["dashboard", "live", "queues", "matches", "players", "players/" + uid, "club", "founder", "audit", "system"]:
+            pg.goto(ADMIN + "#/" + rt); pg.wait_for_timeout(900)
+            sw = pg.evaluate("document.documentElement.scrollWidth"); cw = pg.evaluate("document.documentElement.clientWidth")
+            if sw > cw: bad.append(f"{rt}:{sw}>{cw}")
+        check(not bad, f"{w}x{hgt}: sem rolagem horizontal estrutural em nenhuma tela {bad}")
+        pg.goto(ADMIN + "#/queues"); pg.wait_for_selector("[data-family=ranked] [data-action=toggle]", timeout=8000)
+        btn = pg.locator("[data-family=ranked] [data-action=toggle]").bounding_box()
+        check(btn and btn["x"] >= 0 and btn["x"] + btn["width"] <= w + 0.5, f"{w}x{hgt}: botão crítico da fila visível e dentro da tela")
+        pg.screenshot(path=f"{SHOTS}/18_filas_{w}x{hgt}.png", full_page=True)
 
     check(not [e for e in errors if "Content Security Policy" in e or "Uncaught" in e], "sem erro de JS/CSP no console: " + "; ".join(errors[:3]))
     pg.unroute_all(behavior="ignoreErrors"); b.close()

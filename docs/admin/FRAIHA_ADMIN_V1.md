@@ -114,3 +114,13 @@ Manual: `PORT=8140 FRAIHA_DEV_AUTH=1 FRAIHA_ENV=local FRAIHA_ADMIN_USERS=<uuid>=
 3. Instrumentar o cliente: plataforma + versão no `acct_auth`/`guest_auth` → `game_sessions`.
 4. Endpoint de entitlement manual (Clube/Founder) com audit durável — área protegida, precisa de autorização.
 5. Histórico de partidas Casual/XEQUE/MARCHA na camada comum de histórico.
+
+## Retorno da auditoria Orca (sobre `1ef1ec1`) — correções locais, sem commit
+| Finding | Correção | Prova |
+| --- | --- | --- |
+| MEDIUM logout/estado privilegiado | `endSession()` fail-closed: época da sessão muda, timers param, cliente da API é revogado (aborta requisições em voo, recusa novas, apaga o token da memória), confirmações abertas são fechadas e nunca resolvem como "confirmar"; respostas tardias são ignoradas; 401 encerra tudo; logout no Supabase (melhor esforço, staging/prod) | `admin_ui_test.py`: confirmação aberta → logout → clique antigo → nenhuma mutação/sem Admin Log; 401 com confirmação aberta; poll lento → logout → sessão não volta; zero requisições após logout. `api_client_test.mjs`: revoke |
+| MEDIUM timeout | prazo cobre conexão + cabeçalhos + leitura/parse do corpo; corpo vazio/inválido com 200 = erro | `api_client_test.mjs` (o cliente antigo fica pendurado no corpo travado) |
+| MEDIUM Clube/Founder fail-closed | leitura com prazo; erro/timeout → `INDISPONÍVEL`/`null` + `entitlements_read`; sem linha = legítimo INATIVO/false; Ranked/modos com erro aparecem como erro | `admin_api_test.cjs` (true/false/sem registro/erro/timeout) + tela |
+| MEDIUM 0011 | privilégios explícitos (REVOKE de anon/authenticated/PUBLIC; service_role mínimo), TRUNCATE tratado (sem privilégio + trigger), append-only com trigger, RLS forçada, FKs, checks, índices, retenção, rollback | `tests/admin/test_0011_proposal.sh` (PostgreSQL 16 local descartável com papéis do Supabase; a proposta antiga permitia TRUNCATE por anon) |
+| LOW mobile | layout sem largura mínima estrutural; topo quebra linha; menu horizontal rolável | 393×852, 852×393, 1280, 1920 em todas as telas |
+| LOW race de convite | revalida o modo depois das consultas e antes de criar o convite | `admin_api_test.cjs` Casual/XEQUE/MARCHA (falha no código antigo) |
