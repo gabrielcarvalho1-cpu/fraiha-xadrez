@@ -69,6 +69,19 @@ repositório é tocado; `distribution/` fica fora do Godot (`.gdignore`); `distr
 | **assinatura do manifesto / trust anchor** | **pendente** — produção bloqueada por código (`RequireDevTrust`) |
 | uninstall | template Inno revisado; **não executado** (sem compilador/ICO/publisher) |
 
+## Auditoria Orca R46 — 2 MEDIUM novos corrigidos (2026-10-06)
+
+Snapshot auditado: `6cc1c6d` (1 BLOCKER de trust root/assinatura **fora do escopo**, continua aberto).
+
+| Finding | Causa raiz | Correção | Prova |
+| --- | --- | --- | --- |
+| Gates de packaging saíam 0 mesmo falhando | `MONTAR-UPLOAD` capturava o erro (`catch { Write-Host }`) e terminava sem `exit`; `CONFERIR-SITE` só imprimia; os `.cmd` gerados terminavam em `pause` (código do `pause` = 0); `RUN-QA` imprimia "QA FALHOU" e saía 0 | `exit 0` só no sucesso real, `exit 1` em qualquer falha; MONTAR apaga a pasta `UPLOAD` parcial; `.cmd` devolvem o código do PowerShell depois do `pause` (`FRAIHA_NO_PAUSE` para automação) | `tools/web_release/test_gates_exit_codes.py` (PowerShell real): manifesto ausente/incompleto, arquivo/parte faltando, SHA/tamanho errado, site faltando arquivo → ≠0; pacote válido → 0. Antes: manifesto ausente = ERRO + exit 0 |
+| Preparação DEV aceitava `online.cfg` com endpoint | `prepare-real-exports.ps1` só escrevia o `online.cfg` se ele NÃO existisse e fixava o hash do que estivesse lá | **Contrato:** o `online.cfg` DEV é exatamente `[online]\nserver_url=""\n` (UTF-8 sem BOM, SHA256 `ffaee906…606e`). Outro conteúdo → PARA (≠0), não sobrescreve, não gera pins. `ReviewedPins` recusa pin `cfg` diferente desse hash | `distribution/tests/test_prepare_offline.py` (PowerShell real; 3 falhas no script antigo, 0 no novo) + caso C# em `Tests.cs` |
+
+Testes que dependem de Windows (.NET Framework `csc`, WinForms, junctions): a suíte mock (`build.ps1 -Test`)
+e a aceitação real (`RUN-QA`) precisam rodar no PC Windows; aqui o C# foi compilado com `mcs -langversion:5`
+e a regra nova de pins foi executada em mono.
+
 ## Pendências reais (não bloqueiam DEV; bloqueiam produção)
 
 - Assinatura do manifesto + trust anchor + anti-replay/rotação; TOCTOU com handles/ACLs.

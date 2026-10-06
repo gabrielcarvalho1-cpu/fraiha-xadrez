@@ -48,6 +48,15 @@ namespace Fraiha.Distribution {
         [STAThread]public static int Main() {
             Paths.InitializeRuntime();
             root=DirUnderBase();
+            Case("reviewed pins approve ONLY the offline DEV online.cfg (R46 audit)",delegate {
+                string dir=Dir("pins-offline");string ok=Path.Combine(dir,"ok.txt"),bad=Path.Combine(dir,"bad.txt");
+                byte[] offline=new UTF8Encoding(false).GetBytes("[online]\nserver_url=\"\"\n"),online=new UTF8Encoding(false).GetBytes("[online]\nserver_url=\"wss://example.invalid\"\n");
+                Check(HashBytes(offline)==ReviewedPins.OfflineCfgSha,"offline profile hash matches contract");
+                File.WriteAllText(ok,"# t\nexe "+new string('a',64)+"\npck "+new string('b',64)+"\ncfg "+HashBytes(offline)+"\n",new UTF8Encoding(false));
+                Check(ReviewedPins.Load(ok).Count==3,"offline cfg pin accepted");
+                File.WriteAllText(bad,"exe "+new string('a',64)+"\npck "+new string('b',64)+"\ncfg "+HashBytes(online)+"\n",new UTF8Encoding(false));
+                Reject(delegate{ReviewedPins.Load(bad);});
+            });
             Case("site updater refuses Steam installs (Steam updates its own copy)",delegate {Reject(delegate{new Updater(Path.Combine(Dir("steam"),"steamapps","common","FRAIHA"));});Reject(delegate{new Updater(Path.Combine(Dir("steam2"),"SteamApps","common","FRAIHA"));});});
             Case("central DEV version read/schema",delegate {var r=Release.Read(Json.ReadFile(Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"../../version.json"))));Check(r.Id=="0.0.0-1" && r.DevOnly,"Explicit unassigned DEV version");});
             Case("version ordering same/higher/lower/channel/platform",delegate {
