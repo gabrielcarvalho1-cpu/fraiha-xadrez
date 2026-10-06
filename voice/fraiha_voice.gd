@@ -158,8 +158,8 @@ func set_muted(on: bool) -> void:
     muted_pref = on
     _save_pref()
     if state in ["CONNECTED", "MUTED"]:
+        # R45-V02: o ícone só muda quando o provedor CONFIRMA o estado real (evento "muted")
         provider.set_muted(on)
-        _to("MUTED" if on else "CONNECTED", "")
         _log("mute=%s" % on)
 
 ## Alto-falante da voz: liga/desliga o que EU ouço. Não sai da sala, não mexe no microfone nem nos sons do jogo.
@@ -229,6 +229,7 @@ static func error_text(code: String) -> String:
         "CAN_NOT_GET_GATEWAY_SERVER", "NETWORK_ERROR", "NETWORK_TIMEOUT": return "Sem conexão com o servidor de voz."
         "INVALID_TOKEN", "TOKEN_EXPIRE", "expired": return "Acesso de voz expirou."
         "timeout": return "A voz demorou demais para conectar."
+        "MUTE_FAILED": return "Não foi possível mudar o microfone. Toque de novo."
     return "Falha na voz. Toque para tentar de novo."
 
 # ------------------------------------------------------------------ eventos do servidor
@@ -359,6 +360,8 @@ func _on_provider(d: Dictionary):
             if bool(d.get("soft", false)):
                 if String(d.get("stage", "")) == "mic" and state in ["CONNECTED", "MUTED"]:
                     _to("MUTED", error_text(code))
+                elif code == "MUTE_FAILED" and state in ["CONNECTED", "MUTED"]:
+                    _to(state, error_text(code))   # estado continua o REAL; só avisa
                 return
             if active(): _fail(error_text(code), code)
         "left":
