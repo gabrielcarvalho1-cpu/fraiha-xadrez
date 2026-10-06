@@ -1,0 +1,13 @@
+FRAIHA Voice v1 — arquivos do navegador (pasta voice/ ao lado do index.html)
+
+AgoraRTC_N-4.24.8.js
+  Agora Web SDK NG 4.24.8 (pacote npm "agora-rtc-sdk-ng", arquivo AgoraRTC_N-production.js),
+  licença MIT (Copyright Agora Inc.), sem alterações.
+  SHA256 305e1f149dfdb3cacf070ad3c891793e1e13743927b67fff194385fa0fcfa6f3
+  Carregado SÓ quando o jogador toca no microfone numa partida online contra humano.
+
+fraiha-voice-bridge-v1.js
+  Ponte FRAIHA (Godot <-> Agora): microfone, entrar/sair do canal, mudo, renovação do token.
+  Não contém segredo: o token curto vem do servidor FRAIHA a cada partida.
+
+Nada de gravação, vídeo, transcrição ou armazenamento de áudio.
