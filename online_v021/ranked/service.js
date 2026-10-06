@@ -62,6 +62,7 @@ class Ranked {
     if (a === this.p + 'queue') {
       const mode = String(m.mode || '');
       if (!this.modes[mode]) return this.fail(ws, 'Modalidade inválida.');
+      if (this.backend && this.backend.modeOpen && !this.backend.modeOpen(this.kind, mode)) return this.fail(ws, require('../admin/controls').CLOSED_MESSAGE, 'mode_disabled');   // Admin: ritmo/fila desativado
       if (match && match.status !== 'finished') return this.pushState(match, now);
       if (this.busyElsewhere(uid)) return this.fail(ws, 'Você já está em outra partida ou fila.', 'busy');
       let revision, operation;
@@ -81,7 +82,7 @@ class Ranked {
         const active = this.activeMatchOf(uid);
         if (active) return this.pushState(active, this.now());
         if (this.busyElsewhere(uid)) return this.fail(ws, 'Você já está em outra partida ou fila.', 'busy');
-        if (this.backend && this.backend.modeOpen && !this.backend.modeOpen(this.kind)) return this.fail(ws, require('../admin/controls').CLOSED_MESSAGE, 'mode_disabled');   // Admin: modo desativado durante a leitura do PL
+        if (this.backend && this.backend.modeOpen && !this.backend.modeOpen(this.kind, mode)) return this.fail(ws, require('../admin/controls').CLOSED_MESSAGE, 'mode_disabled');   // Admin: modo/ritmo desativado durante a leitura do PL
         if (!this.mm.enqueue(mode, entry)) return this.fail(ws, 'Você já está na fila.', 'already_queued');
         const out = { type: this.p + 'queued', mode, mode_name: this.modes[mode].name };
         if (stats) { out.league = stats.league; out.pl = stats.pl; }
@@ -120,9 +121,10 @@ class Ranked {
     return this.fail(ws, `Ação ${this.label} desconhecida.`);
   }
   // FRAIHA Admin: modo desativado → quem estava esperando sai da fila com aviso (o cliente já trata *_error na busca).
-  purgeQueue(message) {
+  purgeQueue(message, onlyMode = null) {
     let n = 0;
-    for (const q of this.mm.queues.values()) for (const e of [...q]) {
+    for (const [mode, q] of this.mm.queues) for (const e of [...q]) {
+      if (onlyMode && mode !== onlyMode) continue;
       this.mm.cancel(e.userId); this.invalidateQueue(e.userId); n++;
       const ws = this.sockets.get(e.userId); if (ws) this.fail(ws, message, 'mode_disabled');
     }
@@ -205,6 +207,7 @@ class Ranked {
     };
     const open = !(this.backend && this.backend.modeOpen) || this.backend.modeOpen(this.kind);   // Admin: modo desativado = sem novos pareamentos
     for (const { mode, a, b } of open ? this.mm.tick(now, eligible) : []) {
+      if (this.backend && this.backend.modeOpen && !this.backend.modeOpen(this.kind, mode)) { for (const e of [a, b]) if (this.queueEligible(e.userId)) this.mm.enqueue(mode, e); continue; }   // ritmo fechado: sem pareamento
       try { this.startMatch(mode, a, b, now); const am = this.backend && this.backend.adminMetrics; if (am) am.onPaired(this.kind, mode, [now - a.since, now - b.since]); }
       catch (error) {
         if (error.code !== 'player_unavailable') throw error;

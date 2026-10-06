@@ -181,3 +181,15 @@ Manual: `PORT=8140 FRAIHA_DEV_AUTH=1 FRAIHA_ENV=local FRAIHA_ADMIN_USERS=<uuid>=
 - Jogador online recebe `acct_state` novo na hora (mesmo caminho do webhook de pagamento).
 - Limite de vagas de Fundador (`FRAIHA_FOUNDER_LIMIT`, vendas) NÃO bloqueia concessão manual: o owner decide.
 
+## Ritmos do Ranked (liquidez) — servidor é a fonte de verdade
+- `ModeControls`: além das famílias, cada ritmo do Ranked (`ranked_3min|5min|10min|20min`) tem ON/OFF. Fila aberta =
+  família Ranked ON **e** ritmo ON. Desligar: entrada recusada (`mode_disabled`), quem esperava sai com aviso,
+  partidas em andamento continuam, sem pareamento no ritmo fechado.
+- O jogo recebe a lista de ritmos ABERTOS no `acct_state.ranked_modes` e no aviso `{type:'ranked_modes', modes}` enviado
+  a TODAS as contas conectadas a cada mudança. A tela JOGAR RANQUEADO mostra só os abertos, sem buracos (4 = 2x2,
+  3 = 2+1 centralizado, 2 = lado a lado, 1 = centralizado, 0 = "RANQUEADA TEMPORARIAMENTE INDISPONÍVEL").
+  Cliente antigo (sem a lista) continua mostrando os 4 — o servidor recusa o ritmo fechado do mesmo jeito.
+- Admin: tela Filas → card Ranked → ritmos com Ativar/Desativar (motivo + palavra). API
+  `POST /admin/api/queues/ranked/:mode {enabled, reason, confirm:mode}` (perm `queues.write`). Log `queue.mode_*`.
+- **Persistência:** estado em memória. Reinício/sono do Render volta ao padrão de boot `FRAIHA_RANKED_MODES_OPEN`
+  (ex.: `ranked_5min,ranked_10min`; sem a variável = os 4 abertos; só valores inválidos = nenhum aberto).

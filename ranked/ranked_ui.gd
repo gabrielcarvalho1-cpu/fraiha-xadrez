@@ -48,7 +48,12 @@ var kind := "ranked"
 func rated() -> bool:
     return kind == "ranked"
 
+## Ritmos MOSTRADOS: no Ranked, só os que o servidor diz que estão abertos (Admin controla a liquidez).
 func mode_list() -> Array:
+    if not rated(): return CASUAL_MODES
+    return MODES.filter(func(m): return account == null or account.ranked_mode_open(String(m[0])))
+
+func all_modes() -> Array:
     return MODES if rated() else CASUAL_MODES
 
 func setup(service, ranked_controller):
@@ -304,15 +309,31 @@ func _show(which: String):
                     _label(("Jogando como %s. Entre na sua conta para usar seu nome." % who) if not account.has_profile() else "Jogando como %s." % who, 14, Color("a9b2a4"), true)
                 else:
                     _label("Conectando ao servidor…", 15, GOLD, true)
-            var grid = GridContainer.new()
-            grid.columns = 1 if _narrow() else 2
-            grid.add_theme_constant_override("h_separation", 10)
-            grid.add_theme_constant_override("v_separation", 10)
+            var shown := mode_list()
+            if shown.is_empty():
+                # Admin fechou todos os ritmos: nada de tela vazia nem cartões bloqueados.
+                var off = _label("RANQUEADA TEMPORARIAMENTE INDISPONÍVEL", 20, GOLD, true)
+                off.name = "RankedUnavailable"
+                _label("Novas filas serão abertas em breve.", 16, Color("efe3c4"), true)
+            # Grade sem buracos: linhas de 2 (1 no celular estreito); linha com 1 cartão fica centralizada.
+            var per_row := 1 if _narrow() else 2
+            var grid = VBoxContainer.new()
+            grid.name = "ModeGrid"
+            grid.add_theme_constant_override("separation", 10)
             grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
             box.add_child(grid)
-            for item in mode_list():
-                if rated(): _mode_card(grid, item)
-                else: _casual_card(grid, item)
+            for i in range(0, shown.size(), per_row):
+                var row = HBoxContainer.new()
+                row.add_theme_constant_override("separation", 10)
+                row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+                grid.add_child(row)
+                var chunk := shown.slice(i, i + per_row)
+                var lone: bool = per_row == 2 and chunk.size() == 1
+                if lone: row.add_child(_spacer(0.5))
+                for item in chunk:
+                    if rated(): _mode_card(row, item)
+                    else: _casual_card(row, item)
+                if lone: row.add_child(_spacer(0.5))
             if not rated():
                 var inv = _button(box, "CONVIDAR AMIGO PARA UMA PARTIDA", func(): invite_requested.emit(), true)
                 inv.name = "InviteFriendButton"
@@ -369,15 +390,22 @@ func _show(which: String):
     _layout_panel()
     _layout_panel.call_deferred()
 
+func _spacer(ratio: float) -> Control:
+    var c := Control.new()
+    c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    c.size_flags_stretch_ratio = ratio
+    c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    return c
+
 func controller_mode_or_last() -> String:
-    return last_mode if not last_mode.is_empty() else mode_list()[1][0]
+    return last_mode if not last_mode.is_empty() else all_modes()[1][0]
 
 func _mode_info(id: String) -> Array:
-    for item in mode_list():
+    for item in all_modes():
         if item[0] == id: return item
-    return mode_list()[1]
+    return all_modes()[1]
 
-func _mode_card(grid: GridContainer, item: Array):
+func _mode_card(grid: Container, item: Array):
     var id: String = item[0]
     var stats: Dictionary = account.ranked.get(id, {})
     var card = PanelContainer.new()
@@ -435,7 +463,7 @@ func _mode_card(grid: GridContainer, item: Array):
         controller.queue(id), true)
     qb.name = "Queue_" + id
 
-func _casual_card(grid: GridContainer, item: Array):
+func _casual_card(grid: Container, item: Array):
     var id: String = item[0]
     var card = PanelContainer.new()
     card.size_flags_horizontal = Control.SIZE_EXPAND_FILL

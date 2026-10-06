@@ -52,6 +52,21 @@ var guest_ready := false
 var guest_token := ""
 var guest_nickname := ""
 var auth_retried := false # invalid_token: renova a sessão só uma vez (evita loop)
+# Ritmos do Ranked ABERTOS (fonte: servidor; o Admin liga/desliga). Servidor antigo (sem a lista) = todos.
+var ranked_modes: Array = []
+var ranked_modes_known := false
+
+func ranked_mode_open(id: String) -> bool:
+    return not ranked_modes_known or ranked_modes.has(id)
+
+func _set_ranked_modes(list) -> bool:
+    if not list is Array: return false
+    var clean: Array = []
+    for m in list: if m is String: clean.append(m)
+    var changed_now := not ranked_modes_known or clean != ranked_modes
+    ranked_modes = clean
+    ranked_modes_known = true
+    return changed_now
 
 func _ready():
     var config = ConfigFile.new()
@@ -475,6 +490,7 @@ func _receive(msg: Dictionary):
         ranked = msg.ranked if msg.get("ranked") is Dictionary else {}
         needs_nickname = bool(msg.get("needs_nickname", false))
         persistent_backend = bool(msg.get("persistent", false))
+        if msg.has("ranked_modes"): _set_ranked_modes(msg.get("ranked_modes"))
         if msg.get("entitlements") is Dictionary:
             # R39 · extras do Fundador (link do grupo) chegam junto, só para quem é Fundador de verdade
             var ent: Dictionary = (msg.entitlements as Dictionary).duplicate()
@@ -512,6 +528,9 @@ func _receive(msg: Dictionary):
         cosmetics_saved.emit(msg)
     elif type == "acct_cosmetics_error":
         cosmetics_failed.emit(String(msg.get("code", "")), String(msg.get("message", "")), String(msg.get("field", "")))
+    elif type == "ranked_modes":
+        # Admin abriu/fechou um ritmo do Ranked: a tela JOGAR RANQUEADO se refaz (account.changed).
+        if _set_ranked_modes(msg.get("modes")): changed.emit()
     elif type == "acct_entitlements":
         entitlements_changed.emit(msg.get("entitlements", {}) if msg.get("entitlements") is Dictionary else {})
     elif type == "bot_progress":

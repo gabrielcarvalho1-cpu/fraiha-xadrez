@@ -14,6 +14,11 @@ const BACK := Rect2(352, 882, 420, 85)
 const INVITE := Rect2(402, 344, 320, 42)    # R35.1: CONVIDAR AMIGO (só na aba CASUAL)
 const CARD_DX := 512.0
 const CARD_DY := 230.0
+# Ritmos fechados pelo Admin: os cartões ABERTOS são redesenhados (recortes da própria arte) em posições
+# sem buracos; a área dos cartões é coberta com a faixa lisa logo acima deles (sem asset novo).
+const CARD_SRC := Rect2(56, 398, 508, 226)          # cartão 0 na arte (os outros: + DX/DY)
+const AREA := Rect2(44, 392, 1036, 474)             # área dos 4 cartões
+const AREA_FILL_SRC := Rect2(44, 352, 1036, 36)     # faixa lisa (sem desenho) acima dos cartões
 var ui   # ranked_ui dona deste painel
 var queue_hits: Array = []
 var hover := ""
@@ -34,8 +39,24 @@ func setup(owner):
         if b != null: b.pressed.emit())
     hide()
 
+## Deslocamento do i-ésimo cartão VISÍVEL quando há n visíveis (4 = grade 2x2 original).
+func _slot(i: int, n: int) -> Vector2:
+    match n:
+        3: return Vector2(i * CARD_DX, 0.0) if i < 2 else Vector2(CARD_DX / 2.0, CARD_DY)
+        2: return Vector2(i * CARD_DX, CARD_DY / 2.0)
+        1: return Vector2(CARD_DX / 2.0, CARD_DY / 2.0)
+    return Vector2((i % 2) * CARD_DX, (i / 2) * CARD_DY)
+
 func _card_button(i: int) -> Rect2:
-    return Rect2(82 + (i % 2) * CARD_DX, 552 + (i / 2) * CARD_DY, 450, 55)
+    var o := _slot(i, _modes().size())
+    return Rect2(82 + o.x, 552 + o.y, 450, 55)
+
+## Índice original (posição/ícone na arte) do ritmo: Relâmpago 0, Rápida 1, Normal 2, Convencional 3.
+func _art_index(id: String) -> int:
+    var all: Array = ui.all_modes()
+    for j in all.size():
+        if String(all[j][0]) == id: return j
+    return 0
 
 func _hit(r: Rect2, id: String, action: Callable) -> Button:
     var b := Button.new()
@@ -71,9 +92,13 @@ func layout(viewport_size: Vector2):
     var k := minf(1.0, minf((viewport_size.x - 40.0) / size.x, (viewport_size.y - 20.0) / size.y))
     scale = Vector2.ONE * k
     position = (viewport_size - size * k) / 2.0
+    var n := _modes().size()
     for i in 4:
         var b := _real_button(i)
+        queue_hits[i].visible = i < n
         queue_hits[i].disabled = b == null or b.disabled
+        var r := _card_button(i)
+        queue_hits[i].position = r.position
     invite_hit.visible = not ui.rated()
     queue_redraw()
 
@@ -136,12 +161,24 @@ func _draw():
         y += 23
     if not notice_text.is_empty():
         _center(font, notice_text, 564, y, 15, 640, Color("ffb08f") if ui.notice.text != "" else Color("f1d58a"))
-    # Cartões.
+    # Cartões (só os ritmos abertos; sem buracos).
     var modes := _modes()
-    for i in mini(4, modes.size()):
+    var n := mini(4, modes.size())
+    var reflow: bool = n != ui.all_modes().size()
+    if reflow:
+        draw_texture_rect_region(ART, AREA, AREA_FILL_SRC)
+        for i in n:
+            var j := _art_index(String(modes[i][0]))
+            var src := Rect2(CARD_SRC.position + Vector2((j % 2) * CARD_DX, (j / 2) * CARD_DY), CARD_SRC.size)
+            draw_texture_rect_region(ART, Rect2(CARD_SRC.position + _slot(i, n), CARD_SRC.size), src)
+        if n == 0:
+            _center(TITLE_FONT, "RANQUEADA TEMPORARIAMENTE INDISPONÍVEL", 564, 600, 38, 900, Color("f6d27a"), 7, Color(0.12, 0.06, 0.0, 0.9))
+            _center(font, "Novas filas serão abertas em breve.", 564, 650, 22, 800, Color("efe6cf"))
+    for i in n:
         var item: Array = modes[i]
-        var ox := (i % 2) * CARD_DX
-        var oy := (i / 2) * CARD_DY
+        var o := _slot(i, n)
+        var ox := o.x
+        var oy := o.y
         var name := String(item[1])
         var nf := _fit(TITLE_FONT, name, 34, 290)
         var np := Vector2(237 + ox, 459 + oy)

@@ -83,9 +83,13 @@ class Backend {
     this.party = new Party({ send: (ws, o) => this.send(ws, o), backend: this });   // R35: MARCHA REAL / XEQUE online
     this.voice = new VoiceService({ backend: this, send: (ws, o) => this.send(ws, o), env: opts.env || process.env });   // FRAIHA Voice v1
     // FRAIHA Admin · desativar um modo bloqueia novas entradas/pareamentos; partidas em andamento seguem.
-    this.modeControls = new ModeControls({ now: this.now });
+    this.modeControls = new ModeControls({ now: this.now, env: opts.env || process.env });
     this.adminMetrics = null;   // ligado pelo AdminService (telemetria em memória); nunca obrigatório
-    this.modeControls.onChange((family, after) => { if (!after.enabled) this.lastPurged = this.onModeClosed(family); });
+    this.modeControls.onChange((family, after, _before, mode, modeAfter) => {
+      if (mode) { if (!modeAfter.enabled) this.lastPurged = this.onModeClosed(family, mode); }
+      else if (!after.enabled) this.lastPurged = this.onModeClosed(family);
+      if (family === 'ranked') this.broadcastRankedModes();   // o jogo mostra só os ritmos abertos (sem nova build)
+    });
     this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o), backend: this }) : null;
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
@@ -229,11 +233,22 @@ class Backend {
   onBlocked(a, b) { if (this.invites) this.invites.onRelationChanged(a, b); }
   onUnfriended(a, b) { if (this.invites) this.invites.onRelationChanged(a, b); }
   // Entrar em fila (Casual/Ranked) cancela o convite pendente do jogador; durante o aceite, a fila é recusada.
-  modeOpen(family) { return !this.modeControls || this.modeControls.isOpen(family); }
-  // Modo desativado pelo Admin: tira da fila quem estava esperando (com aviso). Não toca em partidas.
-  onModeClosed(family) {
+  // mode (opcional): ritmo do Ranked (ranked_3min…). Casual/XEQUE/MARCHA: só a família.
+  modeOpen(family, mode = null) {
+    if (!this.modeControls) return true;
+    if (family === 'ranked' && mode) return this.modeControls.isRankedModeOpen(mode);
+    return this.modeControls.isOpen(family);
+  }
+  rankedModesOpen() { return this.modeControls ? this.modeControls.openRankedModes() : ['ranked_3min', 'ranked_5min', 'ranked_10min', 'ranked_20min']; }
+  // Avisa TODAS as contas conectadas quais ritmos do Ranked estão abertos (a tela JOGAR RANQUEADO se refaz).
+  broadcastRankedModes() {
+    const msg = { type: 'ranked_modes', modes: this.rankedModesOpen() };
+    for (const set of this.online.values()) for (const ws of set) { if (ws.user && (ws.readyState === undefined || ws.readyState === 1)) this.send(ws, msg); }
+  }
+  // Modo/ritmo desativado pelo Admin: tira da fila quem estava esperando (com aviso). Não toca em partidas.
+  onModeClosed(family, mode = null) {
     const svc = family === 'ranked' ? this.ranked : family === 'casual' ? this.casual : null;
-    return svc && svc.purgeQueue ? svc.purgeQueue(CLOSED_MESSAGE) : 0;
+    return svc && svc.purgeQueue ? svc.purgeQueue(CLOSED_MESSAGE, mode) : 0;
   }
   beforeQueue(ws, kind) {
     if (!this.modeOpen(kind)) { this.send(ws, { type: kind + '_error', message: CLOSED_MESSAGE, code: 'mode_disabled' }); return false; }
@@ -298,6 +313,7 @@ class Backend {
     const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile) } : null;
     this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,
       needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind,
+      ranked_modes: this.rankedModesOpen(),
       entitlements: entitlements ? { is_founder: !!entitlements.is_founder, club_active: !!entitlements.club_active, club_expires_at: entitlements.club_expires_at || null } : null,
       founder_perks: this.payments ? this.payments.founderPerks(entitlements) : null,
       cosmetics: look ? { avatar_id: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame } : null,
