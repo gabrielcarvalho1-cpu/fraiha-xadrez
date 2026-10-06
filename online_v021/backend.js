@@ -14,6 +14,7 @@ const { Presence } = require('./social/presence');
 const { Payments } = require('./payments/service');
 const { BotService } = require('./bots/service');
 const { Party } = require('./modes/party');
+const { VoiceService } = require('./voice/service');
 const Cosmetics = require('./accounts/cosmetics');
 
 const GUEST_TTL_MS = 24 * 3600e3;
@@ -79,6 +80,7 @@ class Backend {
     this.presence = new Presence({ send: (ws, o) => this.send(ws, o), backend: this });
     this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
     this.party = new Party({ send: (ws, o) => this.send(ws, o), backend: this });   // R35: MARCHA REAL / XEQUE online
+    this.voice = new VoiceService({ backend: this, send: (ws, o) => this.send(ws, o), env: opts.env || process.env });   // FRAIHA Voice v1
     this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o), backend: this }) : null;
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
@@ -378,6 +380,11 @@ class Backend {
       if (a.startsWith('party_')) {
         if (!ws.user || !ws.profile) return this.send(ws, { type: 'party_error', message: 'Entre na sua conta para jogar com amigos.', code: 'auth_required' });
         return this.party.handle(ws, m);
+      }
+      if (a.startsWith('voice_')) {
+        // FRAIHA Voice v1: só contas (sessão válida já conferida acima); convidado não entra em voz.
+        if (!ws.user || !ws.profile) return this.send(ws, { type: 'voice_denied', match_id: String(m.match_id || '').slice(0, 64), code: 'auth_required', message: 'Entre na sua conta para usar a voz.', renew: a === 'voice_renew' });
+        return this.voice.handle(ws, m);
       }
       if (a.startsWith('dm_')) {
         if (!ws.user || !ws.profile) return this.send(ws, { type: 'dm_error', message: 'Entre ou crie uma conta para conversar com amigos.', code: 'auth_required' });
