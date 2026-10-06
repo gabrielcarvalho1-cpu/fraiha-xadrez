@@ -73,6 +73,9 @@ namespace Fraiha.Distribution {
     // Mora ao lado do FRAIHA.Launcher.exe; o feed/manifesto nunca escreve nem escolhe este arquivo.
     public sealed class ReviewedPins {
         readonly HashSet<string> exe=new HashSet<string>(StringComparer.Ordinal),pck=new HashSet<string>(StringComparer.Ordinal),cfg=new HashSet<string>(StringComparer.Ordinal);
+        // Contrato offline DEV (auditoria R46): o único online.cfg aprovável é o perfil offline exato
+        // "[online]\nserver_url=\"\"\n" (UTF-8 sem BOM). Um pin "cfg" de qualquer outro conteúdo (ex.: endpoint) é recusado.
+        public const string OfflineCfgSha="ffaee9060a72096d914fc15346a3021d316c2ace6e9f36b780c956c7d325606e";
         public static string DefaultFile(){return Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"dev-reviewed-exports.txt");}
         public static ReviewedPins Load(string file){
             var p=new ReviewedPins();Paths.NoReparse(file);if(!File.Exists(file))return p;
@@ -81,6 +84,7 @@ namespace Fraiha.Distribution {
                 string line=raw.Trim();if(line.Length==0 || line.StartsWith("#",StringComparison.Ordinal))continue;
                 var m=System.Text.RegularExpressions.Regex.Match(line,"^(exe|pck|cfg) ([0-9a-f]{64})$");
                 if(!m.Success)throw new InvalidDataException("Malformed reviewed pin line");
+                if(m.Groups[1].Value=="cfg" && m.Groups[2].Value!=OfflineCfgSha)throw new InvalidDataException("Reviewed cfg pin is not the offline DEV online.cfg");
                 (m.Groups[1].Value=="exe"?p.exe:m.Groups[1].Value=="pck"?p.pck:p.cfg).Add(m.Groups[2].Value);
             }
             return p;

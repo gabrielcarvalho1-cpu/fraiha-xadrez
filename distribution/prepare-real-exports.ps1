@@ -9,6 +9,9 @@ param(
 # "Windows Desktop"). Só LÊ as origens; escreve apenas em distribution/.local:
 #   .local/real-A-dev-export, .local/real-B-dev-export  (EXE/PCK + online.cfg DEV com endpoint vazio + LEIA-ME)
 #   .local/bin/dev-reviewed-exports.txt                  (pins locais: exe/pck/cfg aprovados pelo operador)
+# CONTRATO OFFLINE (auditoria R46): o online.cfg do export DEV é SEMPRE exatamente o perfil offline
+#   [online]\nserver_url=""\n   (UTF-8 sem BOM). Um online.cfg já existente com qualquer outro conteúdo
+#   (ex.: endpoint de servidor) NÃO é aceito nem fixado nos pins: o script PARA (exit != 0) sem sobrescrever.
 # Sem export/import do Godot, sem download, sem apagar nada. (Substitui a versão do Orca presa aos exports
 # históricos V029/V030 — ver docs/FRAIHA_DISTRIBUTION_INTEGRATION_R46.md.)
 $ErrorActionPreference = 'Stop'
@@ -23,6 +26,9 @@ function Assert-NoReparse([string]$Path) {
 function Sha([string]$f) { (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLowerInvariant() }
 Assert-NoReparse (Join-Path $taskRoot '.local')
 $cfgBytes = [Text.UTF8Encoding]::new($false).GetBytes("[online]`nserver_url=`"`"`n")
+$offlineCfgSha = 'ffaee9060a72096d914fc15346a3021d316c2ace6e9f36b780c956c7d325606e'   # SHA256 desses bytes (igual em ReviewedPins.OfflineCfgSha)
+$sha = [Security.Cryptography.SHA256]::Create()
+if ((-join ($sha.ComputeHash($cfgBytes) | ForEach-Object { $_.ToString('x2') })) -ne $offlineCfgSha) { throw 'Perfil offline DEV interno inconsistente.' }
 $readme = "FRAIHA DEV (launcher Windows) - build de TESTE offline.`r`nEndpoint vazio: nao conecta em servidor nenhum. Nao distribuir.`r`n"
 $pins = @("# FRAIHA DEV - exports reais revisados (gerado por prepare-real-exports.ps1 em " + [DateTime]::UtcNow.ToString('u') + ")")
 $inventory = @()
@@ -42,7 +48,10 @@ foreach ($pair in @(@($ExportA, 'A', $LabelA), @($ExportB, 'B', $LabelB))) {
     if (Test-Path -LiteralPath $t) { if ((Sha $t) -ne (Sha $f[0])) { throw "Ja existe $t diferente; preserve e investigue (nada foi sobrescrito)." } }
     else { Copy-Item -LiteralPath $f[0] -Destination $t }
   }
-  $cfg = Join-Path $dest 'online.cfg'; if (!(Test-Path -LiteralPath $cfg)) { [IO.File]::WriteAllBytes($cfg, $cfgBytes) }
+  $cfg = Join-Path $dest 'online.cfg'
+  if (!(Test-Path -LiteralPath $cfg)) { [IO.File]::WriteAllBytes($cfg, $cfgBytes) }
+  elseif ((Sha $cfg) -ne $offlineCfgSha) { throw "online.cfg existente em $dest NAO e o perfil offline DEV (endpoint vazio). Nada foi aprovado nem sobrescrito: confira/remova esse arquivo e rode de novo." }
+  if ((Sha $cfg) -ne $offlineCfgSha) { throw "online.cfg gerado em $dest diverge do perfil offline DEV." }
   $rd = Join-Path $dest 'LEIA-ME.txt'; if (!(Test-Path -LiteralPath $rd)) { [IO.File]::WriteAllText($rd, $readme, [Text.UTF8Encoding]::new($false)) }
   $pins += "exe " + (Sha (Join-Path $dest 'FRAIHA.exe'))
   $pins += "pck " + (Sha (Join-Path $dest 'FRAIHA.pck'))
