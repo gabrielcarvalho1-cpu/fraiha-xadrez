@@ -10,6 +10,8 @@ const { Metrics } = require('./metrics');
 const { ModeControls } = require('./controls');
 const { liveSnapshot, whereIs, isGuest } = require('./live');
 const Q = require('./queries');
+const Ent = require('./entitlements');
+const { UUID_RE } = require('../accounts/store');
 const pkg = (() => { try { return require('../../package.json'); } catch { return {}; } })();
 
 const real = (value, note = '') => ({ value, status: 'real', note });
@@ -71,6 +73,7 @@ class AdminService {
         if (path === '/admin/api/queues') return need('queues.read') && out(200, this.queues());
         if (path === '/admin/api/matches') return need('matches.read') && out(200, this.matches());
         if (path === '/admin/api/players') return need('players.read') && out(200, await this.players(url.searchParams.get('q'), url.searchParams.get('limit')));
+        if (path === '/admin/api/online') return need('players.read') && out(200, await this.onlinePlayers());
         const pm = /^\/admin\/api\/players\/([0-9a-fA-F-]{36})$/.exec(path);
         if (pm) { if (!need('players.read')) return; const d = await this.player(pm[1].toLowerCase()); return d ? out(200, d) : out(404, { error: 'not_found' }); }
         if (path === '/admin/api/audit') return need('audit.read') && out(200, { persistent: this.audit.persistent, items: this.audit.list({ limit: url.searchParams.get('limit'), action: url.searchParams.get('action') || '' }) });
@@ -86,6 +89,16 @@ class AdminService {
           try { body = await readJson(req, 4096); }
           catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
           return this.setQueue(admin, qm[1], body, out);
+        }
+        const em = /^\/admin\/api\/players\/([0-9a-fA-F-]{36})\/(club|founder)$/.exec(path);
+        if (em) {
+          if (!need('entitlements.write')) return;
+          if (this.limited('write:' + admin.id, 20)) return out(429, { error: 'rate_limited' });
+          let body;
+          try { body = await readJson(req, 4096); }
+          catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
+          const r = await Ent.apply({ backend: this.backend, audit: this.audit, admin, kind: em[2], uid: em[1].toLowerCase(), body, now: this.now() });
+          return out(r.status, r.body);
         }
         return out(404, { error: 'not_found' });
       }
@@ -180,6 +193,23 @@ class AdminService {
           club: Q.clubStatus(e, this.now()), founder: e === undefined ? null : !!(e && e.is_founder), platform: null };
       }) };
   }
+  // Jogadores ONLINE agora (presença real do servidor) + estado real de Clube/Fundador.
+  async onlinePlayers() {
+    const now = this.now(), s = liveSnapshot(this.backend, now), st = this.backend.store;
+    const ids = s.online.filter(u => !isGuest(u) && UUID_RE.test(u)).slice(0, 200);
+    const base = { at: new Date(now).toISOString(), online_total: s.online.length, guests: s.guests, truncated: s.accounts > ids.length };
+    if (!st) return { ...base, items: [], entitlements_read: 'unavailable' };
+    let profiles = new Map(), profiles_read = 'ok';
+    try { for (const p of await Q.withTimeout(st.getProfilesByIds(ids))) profiles.set(p.user_id, p); } catch { profiles_read = 'query_error'; }
+    const ents = await Q.entitlementsOf(st, ids);
+    const items = ids.map(uid => {
+      const p = profiles.get(uid) || null;
+      const e = ents.ok ? (ents.map.get(uid) || null) : undefined;
+      return { user_id: uid, nickname: p ? p.nickname : null, has_profile: !!p || profiles_read !== 'ok', avatar_url: p && typeof p.avatar_url === 'string' && /^https:\/\/[a-z0-9-]+\.supabase\.co\//.test(p.avatar_url) ? p.avatar_url : null,
+        avatar_id: p ? p.avatar_id || null : null, where: whereIs(this.backend, uid, s), ent: Ent.view(e, now) };
+    }).sort((a, b) => String(a.nickname || '~').localeCompare(String(b.nickname || '~')));
+    return { ...base, profiles_read, entitlements_read: ents.ok ? 'ok' : ents.error, items };
+  }
   async player(uid) {
     const st = this.backend.store; if (!st) return null;
     const d = await Q.playerDetail(st, uid); if (!d) return null;
@@ -192,10 +222,9 @@ class AdminService {
         source: !ok ? unk() : e && e.club_source ? real(e.club_source) : none('sem registro'),
         started: none('PRECISA MIGRATION: início da assinatura não é registrado'),
         expires_at: !ok ? unk() : e && e.club_expires_at ? real(e.club_expires_at) : none('sem data'),
-        renewal: none('PRECISA BACKEND'), note: none('PRECISA MIGRATION: observação administrativa'),
-        actions: { grant: 'INDISPONÍVEL — BACKEND NECESSÁRIO', change: 'INDISPONÍVEL — BACKEND NECESSÁRIO', revoke: 'INDISPONÍVEL — BACKEND NECESSÁRIO' } },
-      founder: { ...(ok ? real(!!(e && e.is_founder), e ? '' : 'sem registro de benefício') : unk()), since: ok && e && e.founder_since ? e.founder_since : null, edition: none('ainda não definido'),
-        actions: { grant: 'INDISPONÍVEL — BACKEND NECESSÁRIO', revoke: 'INDISPONÍVEL — BACKEND NECESSÁRIO' } } };
+        renewal: none('PRECISA BACKEND'), note: none('PRECISA MIGRATION: observação administrativa') },
+      founder: { ...(ok ? real(!!(e && e.is_founder), e ? '' : 'sem registro de benefício') : unk()), since: ok && e && e.founder_since ? e.founder_since : null, edition: none('ainda não definido') },
+      ent: Ent.view(e, this.now()) };
   }
   system() {
     return { env: this.envName, backend_kind: this.backend.kind, server_version: pkg.version || null,

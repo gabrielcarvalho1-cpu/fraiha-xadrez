@@ -68,6 +68,59 @@ export function confirmAction({ title, body, confirmWord, actionLabel, danger = 
   });
 }
 
+// Clube / Fundador: confirmação com resumo + motivo obrigatório (nada muda com um clique só).
+// kind 'club' + action grant|change → escolhe validade (7/30/90/365/sem expiração/data); demais só motivo.
+// Resolve { reason, duration?, expires_at? } ou null.
+export const CLUB_TERMS = [['7', '7 dias'], ['30', '30 dias'], ['90', '90 dias'], ['365', '365 dias'], ['none', 'Sem expiração'], ['custom', 'Data personalizada']];
+const fmtDay = d => d.toLocaleDateString('pt-BR');
+export function entitlementDialog({ kind, action, playerName }) {
+  return new Promise(resolve => {
+    const withTerm = kind === 'club' && (action === 'grant' || action === 'change');
+    const title = { club: { grant: 'Conceder Clube', change: 'Alterar Clube', revoke: 'Revogar Clube' }, founder: { grant: 'Conceder Fundador', revoke: 'Revogar Fundador' } }[kind][action];
+    const label = { club: { grant: 'CONFIRMAR CONCESSÃO', change: 'CONFIRMAR ALTERAÇÃO', revoke: 'CONFIRMAR REVOGAÇÃO' }, founder: { grant: 'CONFIRMAR FUNDADOR', revoke: 'CONFIRMAR REVOGAÇÃO' } }[kind][action];
+    const danger = action === 'revoke';
+    const term = h('select', { name: 'term' }, CLUB_TERMS.map(([v, t]) => h('option', { value: v }, t)));
+    term.value = '30';
+    const tomorrow = new Date(Date.now() + 86400e3), min = tomorrow.toISOString().slice(0, 10);
+    const date = h('input', { type: 'date', name: 'date', min, class: 'hidden' });
+    const exp = h('b', { id: 'ent-expires' });
+    const reason = h('textarea', { rows: 2, placeholder: 'Obrigatório (vai para o Admin Log)', maxlength: 300 });
+    const go = h('button', { class: 'btn ' + (danger ? 'danger' : 'ok'), disabled: true }, label);
+    const expiresAt = () => {
+      if (!withTerm) return undefined;
+      if (term.value === 'none') return null;
+      if (term.value === 'custom') { if (!date.value) return ''; const d = new Date(date.value + 'T23:59:59'); return isNaN(d) || d.getTime() < Date.now() + 60e3 ? '' : d.toISOString(); }
+      return new Date(Date.now() + Number(term.value) * 86400e3).toISOString();
+    };
+    const sync = () => {
+      date.classList.toggle('hidden', term.value !== 'custom');
+      const e = expiresAt();
+      exp.textContent = e === null ? 'sem expiração' : e ? fmtDay(new Date(e)) : 'escolha a data';
+      go.disabled = !(reason.value.trim().length >= 3 && (!withTerm || e !== ''));
+    };
+    term.addEventListener('change', sync); date.addEventListener('input', sync); reason.addEventListener('input', sync);
+    let done = false;
+    const close = v => { if (done) return; done = true; openModals.delete(close); bg.remove(); resolve(v); };
+    openModals.add(close);
+    const body = h('div', { class: 'kv' },
+      h('span', { class: 'k' }, kind === 'club' ? (action === 'revoke' ? 'Revogar Clube de' : action === 'change' ? 'Alterar Clube de' : 'Conceder Clube para') : (action === 'revoke' ? 'Revogar Fundador de' : 'Conceder Fundador para')),
+      h('span', { class: 'v' }, h('b', {}, playerName)),
+      withTerm ? [h('span', { class: 'k' }, 'Validade'), h('span', { class: 'v' }, term, date), h('span', { class: 'k' }, 'Expira'), h('span', { class: 'v' }, exp)] : '',
+      kind === 'founder' && action === 'grant' ? [h('span', { class: 'k' }, 'Validade'), h('span', { class: 'v' }, 'permanente (Fundador não expira)')] : '');
+    const bg = h('div', { class: 'modal-bg', onclick: e => { if (e.target === bg) close(null); } },
+      h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', dataset: { ent: kind + '.' + action } },
+        h('h3', {}, title), body,
+        h('div', { class: 'fields' }, h('label', {}, 'Motivo', reason)),
+        h('div', { class: 'actions' }, h('button', { class: 'btn ghost', onclick: () => close(null) }, 'Cancelar'), go)));
+    go.addEventListener('click', () => {
+      const e = expiresAt();
+      if (go.disabled || e === '') return;
+      close({ reason: reason.value.trim(), ...(withTerm ? { duration: term.value, ...(term.value === 'custom' ? { expires_at: e } : {}) } : {}) });
+    });
+    document.body.append(bg); sync(); reason.focus();
+  });
+}
+
 // Gráfico de linhas em SVG (sem biblioteca). series = [{at,...}], keys = [{key,label,color}]
 export function lineChart(series, keys, { height = 200, empty = 'Sem amostras ainda.' } = {}) {
   const NS = 'http://www.w3.org/2000/svg';

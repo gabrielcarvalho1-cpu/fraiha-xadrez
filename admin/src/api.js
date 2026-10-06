@@ -13,6 +13,10 @@ export class ApiError extends Error {
       not_admin: 'Esta conta NÃO é administradora (verificado pelo servidor).', forbidden: 'Seu papel não tem permissão para esta ação.',
       admin_disabled: 'Admin desligado neste servidor (FRAIHA_ADMIN_USERS não configurado).', origin_not_allowed: 'Origem do Admin não autorizada pelo servidor.',
       rate_limited: 'Muitas requisições. Aguarde um pouco.', reason_required: 'Informe o motivo.', confirmation_required: 'Confirmação incorreta.',
+      already_active: 'O Clube já está ATIVO: use ALTERAR.', not_active: 'O Clube não está ATIVO: use CONCEDER.',
+      stale_state: 'O estado mudou desde que a tela foi carregada. Atualizado — confira e tente de novo.', player_not_found: 'Jogador não encontrado (sem perfil).',
+      invalid_date: 'Data inválida (precisa ser no futuro, até 10 anos).', invalid_duration: 'Validade inválida.', invalid_action: 'Ação inválida.',
+      entitlements_unavailable: 'Não foi possível ler o estado atual no banco. Nada foi alterado.', write_failed: 'O banco recusou a gravação. Nada foi alterado.',
       body_too_large: 'Requisição grande demais.', not_found: 'Não encontrado.', server_error: 'Erro interno do servidor.', bad_response: 'Resposta inválida do servidor.',
     })[this.code] || `Erro ${this.status || ''} ${this.code || ''}`.trim();
   }

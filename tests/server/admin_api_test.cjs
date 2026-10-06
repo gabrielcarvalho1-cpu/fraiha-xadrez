@@ -124,7 +124,7 @@ test('overview: números reais do servidor; o que não existe vem null + "unavai
   assert.ok(!JSON.stringify(pl.body).includes('@dev.invalid'), 'e-mail não sai na listagem');
   const det = await h.call('GET', '/admin/api/players/' + B, { token: h.boss });
   assert.equal(det.status, 200); assert.equal(det.body.profile.nickname, 'BobTest');
-  assert.equal(det.body.club.actions.grant, 'INDISPONÍVEL — BACKEND NECESSÁRIO', 'ação sem backend não finge funcionar');
+  assert.deepEqual(det.body.ent, { version: null, club: { status: 'INATIVO', active: false, expires_at: null, source: null }, founder: { value: false, since: null } }, 'estado real de Clube/Fundador (sem linha = sem benefício)');
 });
 
 test('DESATIVAR Ranked: fila esvaziada com aviso, nova entrada recusada, partida em andamento CONTINUA; audit log', async t => {

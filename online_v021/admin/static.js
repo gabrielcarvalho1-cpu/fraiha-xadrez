@@ -16,7 +16,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..', '..', 'admin');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
-const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.supabase.co; " +
   "connect-src 'self' http://127.0.0.1:8140 https://fraiha-xadrez-staging.onrender.com https://fraiha-xadrez.onrender.com https://*.supabase.co; " +
   "base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'";
 

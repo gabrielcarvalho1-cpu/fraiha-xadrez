@@ -127,13 +127,13 @@ with sync_playwright() as p:
     pg.fill("input[type=search]", "Rei"); pg.press("input[type=search]", "Enter")
     pg.wait_for_selector("tr.click", timeout=8000); pg.click("tr.click")
     pg.wait_for_selector("text=Clube FRAIHA", timeout=8000)
-    check(pg.locator("button:has-text('Conceder Clube')").is_disabled(), "perfil: Conceder Clube DESABILITADO (backend necessário)")
+    check(pg.locator("[data-act='club.grant']").count() == 1 and pg.locator("[data-act='club.grant']").is_enabled(), "perfil: CONCEDER Clube disponível para owner (backend real)")
     pg.screenshot(path=f"{SHOTS}/10_perfil_jogador.png", full_page=True)
 
     # --- clube / founder
-    pg.goto(ADMIN + "#/club"); pg.wait_for_selector("text=Campos preparados", timeout=8000)
+    pg.goto(ADMIN + "#/club"); pg.wait_for_selector("#online-panel", timeout=8000)
     pg.screenshot(path=f"{SHOTS}/11_clube.png", full_page=True)
-    pg.goto(ADMIN + "#/founder"); pg.wait_for_selector("text=Campos preparados", timeout=8000)
+    pg.goto(ADMIN + "#/founder"); pg.wait_for_selector("#online-panel", timeout=8000)
     pg.screenshot(path=f"{SHOTS}/12_founder.png", full_page=True)
     pg.goto(ADMIN + "#/system"); pg.wait_for_selector("text=Servidor", timeout=8000)
     pg.screenshot(path=f"{SHOTS}/13_sistema.png", full_page=True)
@@ -294,6 +294,7 @@ with sync_playwright() as p:
         d["entitlements_read"] = "query_error"
         d["club"]["status"] = "INDISPONÍVEL"; d["club"]["read_error"] = "ERRO DE CONSULTA"
         d["founder"].update({"value": None, "status": "unavailable", "note": "ERRO DE CONSULTA"})
+        d["ent"] = None   # o servidor real devolve ent=null quando a leitura falha
         route.fulfill(response=resp, json=d)
     pg.route("**/admin/api/players/" + uid, ent_error)
     pg.goto(ADMIN + "#/players/" + uid); pg.wait_for_selector("#club-status", timeout=8000)

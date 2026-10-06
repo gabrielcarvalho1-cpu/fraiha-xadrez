@@ -1,6 +1,6 @@
 // FRAIHA Admin · telas. Regra: número só aparece quando o servidor o entrega; o que não existe aparece
 // como INDISPONÍVEL com o motivo. Ação sem backend aparece desabilitada com "BACKEND NECESSÁRIO".
-import { h, metricCard, statusBadge, stateBox, loadingCards, lineChart, confirmAction, toast, unavailable,
+import { h, metricCard, statusBadge, stateBox, loadingCards, lineChart, confirmAction, entitlementDialog, toast, unavailable,
   fmtInt, fmtDur, fmtDate, fmtAgo, FAMILY_LABEL, PLACE_LABEL } from '../ui.js';
 import { ApiError } from '../api.js';
 
@@ -175,8 +175,7 @@ export function players(ctx) {
 const LEAGUES = ['Madeira', 'Ferro', 'Bronze', 'Prata', 'Ouro', 'Platina', 'Esmeralda', 'Diamante', 'Mestre', 'Grão-Mestre', 'Challenger'];
 const MODE_NAME = { ranked_3min: 'Relâmpago 3 min', ranked_5min: 'Rápida 5 min', ranked_10min: 'Normal 10 min', ranked_20min: 'Convencional 20 min' };
 function player(ctx) {
-  const f = frame(ctx, 'Perfil do jogador', 'Visão administrativa (somente leitura nesta versão).');
-  const disabledAction = label => h('button', { class: 'btn', disabled: true, title: 'INDISPONÍVEL — BACKEND NECESSÁRIO' }, label);
+  const f = frame(ctx, 'Perfil do jogador', 'Visão administrativa. Clube/Fundador: alteração só pelo servidor, com confirmação e Admin Log.');
   return {
     error: f.error,
     async load() {
@@ -204,7 +203,7 @@ function player(ctx) {
             h('span', { class: 'k' }, 'Plataforma'), h('span', { class: 'v' }, unavailable('PRECISA INSTRUMENTAÇÃO')),
             h('span', { class: 'k' }, 'Partida atual'), h('span', { class: 'v mono' }, w.match_id ? w.match_id.slice(0, 8) : '—'),
             h('span', { class: 'k' }, 'Fila atual'), h('span', { class: 'v' }, w.place === 'queue' ? `${w.mode} · ${fmtDur(w.wait_ms)}` : '—'))),
-          h('div', { class: 'panel' }, h('h2', {}, 'Clube FRAIHA'), h('div', { class: 'kv' },
+          h('div', { class: 'panel' }, h('h2', {}, 'Clube FRAIHA e Fundador'), h('div', { class: 'kv' },
             h('span', { class: 'k' }, 'Status'), h('span', { class: 'v' }, h('span', { class: 'badge ' + (d.club.status === 'ATIVO' ? 'gold' : entErr ? 'off' : 'unavailable'), id: 'club-status' }, d.club.status)),
             h('span', { class: 'k' }, 'Plano'), h('span', { class: 'v dim' }, d.club.plan.note),
             h('span', { class: 'k' }, 'Origem'), h('span', { class: 'v' }, entErr ? h('span', { class: 'unav' }, 'INDISPONÍVEL') : d.club.source.value || h('span', { class: 'dim' }, '—')),
@@ -212,14 +211,13 @@ function player(ctx) {
             h('span', { class: 'k' }, 'Expiração'), h('span', { class: 'v' }, entErr ? h('span', { class: 'unav' }, 'INDISPONÍVEL') : d.club.expires_at.value ? fmtDate(d.club.expires_at.value) : '—'),
             h('span', { class: 'k' }, 'Renovação'), h('span', { class: 'v dim' }, 'backend necessário'),
             h('span', { class: 'k' }, 'Observação admin'), h('span', { class: 'v dim' }, 'migration necessária')),
-            h('div', { class: 'row', style: 'margin-top:12px' }, disabledAction('Conceder Clube'), disabledAction('Alterar'), disabledAction('Revogar')),
-            h('p', { class: 'dim', style: 'font-size:12px' }, 'INDISPONÍVEL — BACKEND NECESSÁRIO: concessão manual exige endpoint de entitlement + audit persistente (área protegida de pagamentos).')),
+            h('div', { style: 'margin-top:12px' }, entBlock(ctx, { user_id: p.user_id, nickname: p.nickname, ent: d.ent, has_profile: true }))),
           h('div', { class: 'panel' }, h('h2', {}, 'Pacote Fundador'), h('div', { class: 'kv' },
             h('span', { class: 'k' }, 'Founder'), h('span', { class: 'v', id: 'founder-value' }, d.founder.status === 'unavailable' ? h('span', { class: 'badge off' }, 'INDISPONÍVEL') : d.founder.value ? h('span', { class: 'badge gold' }, 'SIM') : 'NÃO'),
             h('span', { class: 'k' }, 'Desde'), h('span', { class: 'v' }, fmtDate(d.founder.since)),
             h('span', { class: 'k' }, 'Edição/nível'), h('span', { class: 'v dim' }, 'ainda não definido'),
             h('span', { class: 'k' }, 'Badge / moldura'), h('span', { class: 'v dim' }, 'futuro')),
-            h('div', { class: 'row', style: 'margin-top:12px' }, disabledAction('Conceder Founder'), disabledAction('Revogar')),
+            h('p', { class: 'dim', style: 'font-size:12px;margin-top:12px' }, 'Conceder/revogar Fundador: no quadro Clube FRAIHA (os dois benefícios são independentes).'),
             h('p', { class: 'dim', style: 'font-size:12px' }, 'INDISPONÍVEL — BACKEND NECESSÁRIO.'))),
         h('div', { class: 'panel' }, h('h2', {}, 'Ranked (por modo)'), ranked.length ? h('div', { class: 'tablewrap' }, h('table', {},
           h('thead', {}, h('tr', {}, ['Modo', 'Liga', 'PL', 'Partidas', 'Vitórias', 'Derrotas', 'Empates', 'Maior liga'].map(t => h('th', {}, t)))),
@@ -231,27 +229,67 @@ function player(ctx) {
   };
 }
 
-// ---------------------------------------------------------------- CLUBE / FOUNDER
+// ---------------------------------------------------------------- CLUBE / FUNDADOR
+// Estado e ações vêm SEMPRE do servidor (p.ent = { version, club:{status,expires_at,…}, founder:{value,since} }).
+// O botão só aparece para quem tem 'entitlements.write' (owner); o servidor confere de novo em cada pedido.
+const fmtDay = iso => { const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString('pt-BR'); };
+const CLUB_BADGE = st => st === 'ATIVO' ? 'gold' : st === 'EXPIRADO' ? 'off' : 'unavailable';
+const canEnt = ctx => !!(ctx.session && ctx.session.admin.perms.includes('entitlements.write'));
+const ENT_DONE = { club: { grant: 'Clube CONCEDIDO', change: 'Clube ALTERADO', revoke: 'Clube REVOGADO' }, founder: { grant: 'Fundador CONCEDIDO', revoke: 'Fundador REVOGADO' } };
+async function doEnt(ctx, p, kind, action) {
+  const ok = await entitlementDialog({ kind, action, playerName: p.nickname || p.user_id.slice(0, 8) });
+  if (!ok || !ctx.alive()) return;   // cancelado ou sessão encerrada: nada é enviado
+  try {
+    const r = await ctx.api.post(`/admin/api/players/${p.user_id}/${kind}`, { action, ...ok, confirm: p.user_id, expect_version: p.ent.version });
+    toast(r.changed ? `${ENT_DONE[kind][action]} pelo servidor · registrado no Admin Log` : 'Nada mudou (já estava assim) · registrado no Admin Log');
+  } catch (e) { if (!ctx.alive() || (e instanceof ApiError && e.kind === 'revoked')) return; toast(e instanceof ApiError ? e.text : 'Falha ao aplicar', 'err'); }
+  if (ctx.alive()) ctx.refresh();
+}
+function entBlock(ctx, p) {
+  if (!p.ent) return h('div', { class: 'ent' }, h('span', { class: 'badge off' }, 'INDISPONÍVEL'), h('span', { class: 'dim' }, ' erro de consulta — status desconhecido'));
+  const write = canEnt(ctx) && p.has_profile !== false;
+  const btn = (label, kind, action, cls = '') => write ? h('button', { class: 'btn sm ' + cls, dataset: { act: kind + '.' + action, uid: p.user_id }, onclick: () => doEnt(ctx, p, kind, action) }, label) : '';
+  const c = p.ent.club, f = p.ent.founder;
+  const clubTxt = c.status === 'ATIVO' ? (c.expires_at ? 'até ' + fmtDay(c.expires_at) : 'sem expiração') : c.status === 'EXPIRADO' && c.expires_at ? 'em ' + fmtDay(c.expires_at) : '';
+  return h('div', { class: 'ent' },
+    h('div', { class: 'entline', dataset: { club: c.status } }, h('span', { class: 'dim' }, 'Clube'), h('span', { class: 'badge ' + CLUB_BADGE(c.status) }, c.status), clubTxt ? h('span', { class: 'dim' }, clubTxt) : '',
+      ...(c.active ? [btn('ALTERAR', 'club', 'change'), btn('REVOGAR', 'club', 'revoke', 'danger')] : [btn('CONCEDER', 'club', 'grant', 'ok')])),
+    h('div', { class: 'entline', dataset: { founder: String(f.value) } }, h('span', { class: 'dim' }, 'Fundador'), h('span', { class: 'badge ' + (f.value ? 'gold' : 'unavailable') }, f.value ? 'SIM' : 'NÃO'),
+      f.value && f.since ? h('span', { class: 'dim' }, 'desde ' + fmtDay(f.since)) : '',
+      f.value ? btn('REVOGAR', 'founder', 'revoke', 'danger') : btn('CONCEDER', 'founder', 'grant', 'ok')),
+    p.has_profile === false ? h('div', { class: 'dim' }, 'sem perfil ainda (escolhendo nome): benefícios só depois') : '');
+}
+const avatarOf = p => p.avatar_url ? h('img', { class: 'av', src: p.avatar_url, alt: '' }) : h('span', { class: 'av' }, (p.nickname || '?').slice(0, 1).toUpperCase());
+function onlinePanel(ctx, d) {
+  return h('div', { class: 'panel', id: 'online-panel' },
+    h('h2', {}, 'Jogadores online agora ', h('span', { class: 'badge real' }, `${d.items.length} conta${d.items.length === 1 ? '' : 's'}`), d.guests ? h('span', { class: 'dim', style: 'font-size:12px' }, ` + ${d.guests} convidado(s)`) : ''),
+    d.entitlements_read !== 'ok' ? h('div', { class: 'banner err' }, 'ERRO DE CONSULTA de Clube/Fundador: status mostrado como INDISPONÍVEL (não significa "não possui").') : '',
+    d.items.length ? h('div', { class: 'onlist' }, d.items.map(p => h('div', { class: 'onrow', dataset: { uid: p.user_id } },
+      h('div', { class: 'who2' }, avatarOf(p), h('div', {}, h('a', { href: '#/players/' + p.user_id }, h('b', {}, p.nickname || '(sem nome)')), h('div', { class: 'mono dim' }, p.user_id.slice(0, 8) + '…')),
+        h('span', { class: 'badge on' }, p.where.place === 'match' ? 'EM PARTIDA' : p.where.place === 'queue' ? 'EM FILA' : 'ONLINE')),
+      entBlock(ctx, p))))
+      : stateBox('empty', 'Nenhuma conta online agora.'),
+    d.truncated ? h('p', { class: 'dim' }, 'Mostrando as primeiras 200 contas.') : '');
+}
 function entitlementView(ctx, kind) {
   const isClub = kind === 'club';
-  const f = frame(ctx, isClub ? 'Clube FRAIHA' : 'Pacote Fundador', isClub ? 'Estrutura preparada; planos comerciais ainda não definidos (nada fixo no código).' : 'Estrutura preparada; preço e benefícios ainda não definidos.');
+  const f = frame(ctx, isClub ? 'Clube FRAIHA' : 'Fundador', isClub ? 'Conceder, alterar e revogar o Clube. Aplicado e validado no SERVIDOR; registrado no Admin Log.' : 'Conceder e revogar Fundador (permanente, sem validade). Independente do Clube.');
   return {
     error: f.error,
     async load() {
-      const d = await ctx.api.get('/admin/api/players?q=');
+      const [on, d] = await Promise.all([ctx.api.get('/admin/api/online'), ctx.api.get('/admin/api/players?q=')]);
       if (!ctx.alive()) return;
       const list = d.items.filter(p => isClub ? (p.club === 'ATIVO' || p.club === 'EXPIRADO') : p.founder === true);
       f.show(
-        d.entitlements_read && d.entitlements_read !== 'ok' ? h('div', { class: 'banner err' }, 'ERRO DE CONSULTA dos benefícios: a lista abaixo pode estar incompleta (não significa que ninguém possui).') : '',
-        h('div', { class: 'banner warn' }, 'Conceder / alterar / revogar: INDISPONÍVEL — BACKEND NECESSÁRIO. Precisa de endpoint server-side de entitlement + Admin Log persistente (migration proposta). Área protegida (pagamentos): só com sua autorização.'),
-        h('div', { class: 'panel' }, h('h2', {}, isClub ? 'Assinantes encontrados' : 'Founders encontrados', ' ', statusBadge('partial')),
-          h('p', { class: 'dim', style: 'font-size:12px;margin-top:-6px' }, 'Amostra: entre os jogadores com login mais recente (até 50). Lista completa precisa de consulta dedicada no backend.'),
-          list.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Jogador', isClub ? 'Status' : 'Founder', 'Último login'].map(t => h('th', {}, t)))),
-            h('tbody', {}, list.map(p => h('tr', { class: 'click', onclick: () => { location.hash = '#/players/' + p.user_id; } }, h('td', {}, p.nickname), h('td', {}, h('span', { class: 'badge gold' }, isClub ? p.club : 'SIM')), h('td', {}, fmtAgo(p.last_login_at))))))
+        canEnt(ctx) ? '' : h('div', { class: 'banner info' }, 'Somente leitura: só o papel owner altera Clube/Fundador.'),
+        onlinePanel(ctx, on),
+        h('div', { class: 'panel' }, h('h2', {}, isClub ? 'Com Clube (amostra)' : 'Fundadores (amostra)', ' ', statusBadge('partial')),
+          h('p', { class: 'dim', style: 'font-size:12px;margin-top:-6px' }, 'Entre os 50 jogadores com login mais recente. Para alterar alguém offline, abra o perfil.'),
+          d.entitlements_read && d.entitlements_read !== 'ok' ? h('div', { class: 'banner err' }, 'ERRO DE CONSULTA: a lista pode estar incompleta.') : '',
+          list.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Jogador', isClub ? 'Clube' : 'Fundador', 'Último login'].map(t => h('th', {}, t)))),
+            h('tbody', {}, list.map(p => h('tr', { class: 'click', onclick: () => { location.hash = '#/players/' + p.user_id; } }, h('td', {}, p.nickname), h('td', {}, h('span', { class: 'badge ' + (isClub ? CLUB_BADGE(p.club) : 'gold') }, isClub ? p.club : 'SIM')), h('td', {}, fmtAgo(p.last_login_at))))))
             : stateBox('empty', 'Nenhum encontrado na amostra.')),
-        h('div', { class: 'panel' }, h('h2', {}, 'Campos preparados'), h('div', { class: 'kv' },
-          ...(isClub ? ['Plano', 'Origem', 'Início', 'Expiração', 'Renovação', 'Observação administrativa'] : ['Founder SIM/NÃO', 'Badge', 'Moldura', 'Cosméticos', 'Benefícios', 'Edição/nível'])
-            .flatMap(k => [h('span', { class: 'k' }, k), h('span', { class: 'v dim' }, ['Origem', 'Expiração', 'Founder SIM/NÃO'].includes(k) ? 'existe no banco (leitura)' : 'a definir / migration')]))));
+        h('p', { class: 'dim' }, 'Admin Log em memória do servidor + linha "[admin-audit]" no log do Render (tabela durável = migration proposta 0011, não aplicada).'));
     },
   };
 }
@@ -261,7 +299,9 @@ export const founder = ctx => entitlementView(ctx, 'founder');
 // ---------------------------------------------------------------- ADMIN LOG
 export function audit(ctx) {
   const f = frame(ctx, 'Admin Log', 'Toda ação administrativa real é registrada pelo SERVIDOR antes de responder.');
-  const ACT = { 'queue.disable': 'desativou', 'queue.enable': 'ativou' };
+  const ACT = { 'queue.disable': 'desativou', 'queue.enable': 'ativou', clube_grant: 'concedeu Clube', clube_change: 'alterou Clube', clube_revoke: 'revogou Clube', founder_grant: 'concedeu Fundador', founder_revoke: 'revogou Fundador' };
+  const st = x => !x ? '—' : 'enabled' in x ? (x.enabled ? 'ativo' : 'desativado') : `Clube ${x.club}${x.club_expires_at ? ' até ' + new Date(x.club_expires_at).toLocaleDateString('pt-BR') : x.club === 'ATIVO' ? ' sem expiração' : ''} · Fundador ${x.founder ? 'SIM' : 'NÃO'}`;
+  const tgt = t => !t ? '—' : t.family ? FAMILY_LABEL[t.family] : t.user_id ? `${t.nickname || '?'} (${t.user_id.slice(0, 8)})` : JSON.stringify(t);
   return {
     error: f.error,
     async load() {
@@ -271,8 +311,8 @@ export function audit(ctx) {
         d.persistent ? '' : h('div', { class: 'banner warn' }, 'Persistência: memória do servidor + linha "[admin-audit]" no log do Render. Tabela durável = migration proposta (não aplicada).'),
         h('div', { class: 'panel' }, d.items.length ? h('div', { class: 'tablewrap' }, h('table', {}, h('thead', {}, h('tr', {}, ['Quando', 'Administrador', 'Ação', 'Alvo', 'Antes', 'Depois', 'Resultado', 'Motivo'].map(t => h('th', {}, t)))),
           h('tbody', {}, d.items.map(e => h('tr', {}, h('td', {}, fmtDate(e.at)), h('td', {}, e.actor ? e.actor.name : '—', h('div', { class: 'dim' }, e.actor ? e.actor.role : '')),
-            h('td', {}, ACT[e.action] || e.action), h('td', {}, e.target && e.target.family ? FAMILY_LABEL[e.target.family] : JSON.stringify(e.target)),
-            h('td', { class: 'mono' }, e.before ? (e.before.enabled ? 'ativo' : 'desativado') : '—'), h('td', { class: 'mono' }, e.after ? (e.after.enabled ? 'ativo' : 'desativado') : '—'),
+            h('td', {}, ACT[e.action] || e.action), h('td', {}, tgt(e.target)),
+            h('td', { class: 'mono' }, st(e.before)), h('td', { class: 'mono' }, st(e.after)),
             h('td', {}, h('span', { class: 'badge ' + (e.result === 'ok' ? 'on' : 'unavailable') }, e.result)), h('td', {}, e.reason))))))
           : stateBox('empty', 'Nenhuma ação administrativa registrada desde que o servidor subiu.')));
     },

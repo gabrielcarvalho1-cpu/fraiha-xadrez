@@ -4,7 +4,8 @@
 // (UUID da conta FRAIHA/Supabase; nada de e-mail no cliente). Sem a variável o Admin fica DESLIGADO.
 // Papéis → permissões (RBAC simples, pronto para crescer; tabela admin_roles = migration proposta).
 const ROLES = {
-  owner: ['dashboard.read', 'live.read', 'queues.read', 'queues.write', 'matches.read', 'players.read', 'audit.read', 'system.read'],
+  // entitlements.write (Clube/Fundador): SÓ owner. operator/viewer não recebem (política mais segura).
+  owner: ['dashboard.read', 'live.read', 'queues.read', 'queues.write', 'matches.read', 'players.read', 'audit.read', 'system.read', 'entitlements.write'],
   operator: ['dashboard.read', 'live.read', 'queues.read', 'queues.write', 'matches.read', 'players.read', 'audit.read', 'system.read'],
   viewer: ['dashboard.read', 'live.read', 'queues.read', 'matches.read', 'players.read', 'system.read'],
 };

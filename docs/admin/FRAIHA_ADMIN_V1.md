@@ -162,3 +162,22 @@ Manual: `PORT=8140 FRAIHA_DEV_AUTH=1 FRAIHA_ENV=local FRAIHA_ADMIN_USERS=<uuid>=
 - Testes: `tests/admin/oauth_test.mjs` (unitário) e `tests/admin/run_admin_google_qa.sh` (Chromium, Admin em
   `/admin/`). **Google e Supabase são MOCKADOS** no navegador; o token falso é um token DEV verificado pelo servidor
   local real (allowlist e 403 reais). O Google REAL ainda não foi testado.
+
+## Clube FRAIHA e Fundador — escrita administrativa (sem migration)
+- Modelo REAL (0005, `public.entitlements`): `is_founder`, `founder_since` (Fundador PERMANENTE) ·
+  `club_active`, `club_expires_at` (null = sem expiração), `club_source` · `updated_at`. O jogo lê pelo `acct_state`
+  (`store.getEntitlements`: Clube ativo = `club_active` e sem data ou data futura). Nenhuma migration nova.
+- `online_v021/admin/entitlements.js`: grava SÓ no servidor (service role). Clube: `grant` (7/30/90/365 dias, sem
+  expiração, data personalizada ≤10 anos), `change`, `revoke`; origem `manual` (valor já previsto na 0005).
+  Fundador: `grant`/`revoke` (sem validade; não há campo editável → sem ALTERAR). **Independentes:** conceder/revogar
+  Fundador não mexe no Clube (o bônus de 30 dias do Clube é regra da COMPRA, só nos pagamentos — não tocados).
+- Endpoints: `GET /admin/api/online` (contas online agora + estado real) · `POST /admin/api/players/:uuid/club`
+  `{action, duration, expires_at?, reason, confirm:uuid, expect_version}` · `POST /admin/api/players/:uuid/founder`
+  `{action, reason, confirm, expect_version}`. Payload estrito (campo desconhecido = 400), motivo obrigatório,
+  versão esperada (`updated_at`: tela velha/clique duplo = 409), alvo precisa ter perfil (404), erro de leitura =
+  503 sem gravar, PATCH condicionado à versão no Supabase.
+- Permissão `entitlements.write`: SÓ owner (operator/viewer não). Admin Log: `clube_grant|clube_change|clube_revoke|
+  founder_grant|founder_revoke` com admin, alvo, UUID, antes/depois, motivo (memória + `[admin-audit]`).
+- Jogador online recebe `acct_state` novo na hora (mesmo caminho do webhook de pagamento).
+- Limite de vagas de Fundador (`FRAIHA_FOUNDER_LIMIT`, vendas) NÃO bloqueia concessão manual: o owner decide.
+
