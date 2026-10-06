@@ -21,7 +21,7 @@ namespace Fraiha.Distribution {
         static Manifest Offer(MockServer server,string historical,long build){
             string version=Path.Combine(evidence,"version-"+build+".json"),output=Path.Combine(evidence,"package-"+build);
             File.WriteAllText(version,Json.Write(new Release{Version="0.0.0",Build=build,Protocol=0,Rules=0,Channel="DEV",Platform="windows_site",DevOnly=true}.Data()));
-            var m=PackageTool.Package(version,Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"../real-v"+historical+"-dev-export")),output,server.Url+"/package.zip","DEV distribution build "+build+"; historical real FRAIHA V"+historical+"; offline only; NOT current mainline");
+            var m=PackageTool.Package(version,Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"../real-"+historical+"-dev-export")),output,server.Url+"/package.zip","DEV distribution build "+build+"; real FRAIHA export "+historical+" (current mainline); offline only");
             server.Payload=File.ReadAllBytes(Path.Combine(output,"fraiha-"+m.Release.Id+".zip"));server.ManifestJson=Json.Write(m.Data());return m;
         }
         [DllImport("iphlpapi.dll")]static extern uint GetExtendedTcpTable(IntPtr table,ref int size,bool order,int family,int cls,uint reserved);
@@ -40,14 +40,15 @@ namespace Fraiha.Distribution {
             Paths.InitializeRuntime();
             evidence=Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"../rqa-"+DateTime.UtcNow.ToString("HHmmssfff")));Directory.CreateDirectory(evidence);
             try{Application.EnableVisualStyles();using(var server=new MockServer(8765)){
-                var a=Offer(server,"029",1);var u=new Updater(Path.Combine(evidence,"i")){RealOffline=true,QaAutoQuit=true};Assert(u.Installed()==null,"clean installation A");u.Install(u.Download.Check(server.Url+"/manifest.json","DEV"),null);Assert(u.Installed().PckHash==a.PckHash && a.CompleteExport,"A complete real V029 installed");
-                var b=Offer(server,"030",2);byte[] bytesB=server.Payload;Assert(a.PckHash!=b.PckHash,"A/B are different real PCK builds; DEV build numbers remain metadata");
+                var a=Offer(server,"A",1);var u=new Updater(Path.Combine(evidence,"i")){RealOffline=true,QaAutoQuit=true};Assert(u.Installed()==null,"clean installation A");u.Install(u.Download.Check(server.Url+"/manifest.json","DEV"),null);Assert(u.Installed().PckHash==a.PckHash && a.CompleteExport,"A complete real current export installed");
+                Assert(ReviewedPins.Load(ReviewedPins.DefaultFile()).Allows(a),"local reviewed pins (next to launcher) allow A");
+                var b=Offer(server,"B",2);byte[] bytesB=server.Payload;Assert(a.PckHash!=b.PckHash,"A/B are different real PCK builds; DEV build numbers remain metadata");
                 ObserveGame(u,"A",delegate{Reject(delegate{u.Install(b,null);},"update blocked with real game open");});
                 using(var form=new LauncherForm(u.Root,false,server.Url+"/manifest.json",true)){
                     form.Show();Application.DoEvents();Button check=null,update=null;foreach(Control control in form.Controls){var button=control as Button;if(button!=null){if(button.Text=="Check / Retry")check=button;if(button.Text=="Download / Update")update=button;}}
                     Assert(check!=null && update!=null,"real launcher controls present");check.PerformClick();Pump(form);update.PerformClick();Pump(form);using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(0,0,bitmap.Width,bitmap.Height));bitmap.Save(Path.Combine(evidence,"launcher-real.png"));}form.Close();
                 }Assert(u.Installed().Release.Build==2 && u.Installed().PckHash==b.PckHash,"launcher checked B, downloaded/hash/installed and changed pointer");ObserveGame(u,"B",null);
-                u.Rollback();Assert(u.Installed().PckHash==a.PckHash,"rollback restores real A");var c=Offer(server,"030",3);var invalid=c.Data();invalid["sha256"]=new string('a',64);Reject(delegate{u.Install(Manifest.Read(Json.Write(invalid)),null);},"invalid update rejected preserving A");Assert(u.Installed().PckHash==a.PckHash,"A pointer usable after invalid update");
+                u.Rollback();Assert(u.Installed().PckHash==a.PckHash,"rollback restores real A");var c=Offer(server,"B",3);var invalid=c.Data();invalid["sha256"]=new string('a',64);Reject(delegate{u.Install(Manifest.Read(Json.Write(invalid)),null);},"invalid update rejected preserving A");Assert(u.Installed().PckHash==a.PckHash,"A pointer usable after invalid update");
                 server.Mode="partial";Reject(delegate{u.Install(c,null);},"partial real package rejected");server.Mode="ok";u.Install(c,null);Assert(u.Installed().Release.Build==3,"retry real package succeeds");u.Rollback();ObserveGame(u,"A-after-failure-rollback",null);
                 server.ManifestJson="{}";Reject(delegate{new LauncherFlow(u).CheckUpdatePlay(server.Url+"/manifest.json",null,null,null);},"invalid manifest skips PLAY");server.Mode="redirect";Reject(delegate{u.Download.Check(server.Url+"/manifest.json","DEV");},"manifest unavailable rejects without game fallback");server.Mode="ok";
                 bool started=false;Reject(delegate{new LauncherFlow(u).CheckUpdatePlay("http://127.0.0.1:1/manifest.json",null,null,delegate{started=true;});},"offline refused feed fails automatic flow");Assert(!started && u.Installed().PckHash==a.PckHash,"offline flow never auto-plays stale state; manual A remains verified");
@@ -55,12 +56,29 @@ namespace Fraiha.Distribution {
                 Assert(Directory.GetFileSystemEntries(Path.Combine(u.Root,"temp")).Length==0,"real package staging cleaned");Paths.ReviewedProfile(Path.Combine(u.Root,"userdata"));Assert(true,"fresh isolated profile has no account/session cfg or reparse paths");
                 server.Payload=bytesB;server.ManifestJson=Json.Write(b.Data());NormalLauncher(b);
                 Log("LIMIT: TCP sampling covers startup, not packet-level proof or UDP; source review plus fixed empty endpoint provides offline policy for these pinned exports only.");
-                Log("SUMMARY real Windows acceptance passed; historical V029/V030, not current mainline or production.");
+                Assert(u.Installed().PckHash==a.PckHash,"current = A before smoke");Smoke(u,"A");u.Rollback();Assert(u.Installed().PckHash==b.PckHash,"rollback toggles to B");Smoke(u,"B");u.Rollback();Assert(u.Installed().PckHash==a.PckHash,"back to A");
+                var tmpPins=Path.Combine(evidence,"no-pins.txt");File.WriteAllText(tmpPins,"# vazio\n");
+                var u2=new Updater(u.Root){RealOffline=true,ReviewedPinsFile=tmpPins};Reject(u2.Play,"export without local reviewed pins refuses real PLAY");
+                Log("SUMMARY real Windows acceptance passed; CURRENT mainline exports A/B (DEV offline), not production.");
             }return 0;}catch(Exception e){Log("FAIL "+e);return 1;}finally{Console.WriteLine("Evidence: "+evidence);}
+        }
+        // Smoke de JOGO no binário real instalado (não só a Home): roda scripts de teste que já vêm no .pck
+        // (preset Windows inclui tests/) com argumentos FIXOS deste harness — nada vem do manifesto/launcher.
+        static void Smoke(Updater u,string tag){
+            string id=u.Installed().Release.Id,dir=Path.Combine(u.Root,"versions",id),profile=Path.Combine(u.Root,"userdata");Directory.CreateDirectory(profile);
+            foreach(var script in new[]{"res://tests/rules_test.gd","res://tests/home_navigation_test.gd","res://tests/bot_search_test.gd"}){
+                var start=new ProcessStartInfo(Path.Combine(dir,"FRAIHA.exe"),"--headless -s "+script){WorkingDirectory=dir,UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true};
+                start.EnvironmentVariables["APPDATA"]=profile;start.EnvironmentVariables["LOCALAPPDATA"]=Path.Combine(profile,"cache");start.EnvironmentVariables["FRAIHA_SERVER_URL"]="";start.EnvironmentVariables["FRAIHA_SUPABASE_URL"]="";start.EnvironmentVariables["FRAIHA_SUPABASE_KEY"]="";
+                using(var p=Process.Start(start)){var outTask=p.StandardOutput.ReadToEndAsync();var errTask=p.StandardError.ReadToEndAsync();if(!p.WaitForExit(240000)){p.Kill();throw new Exception("smoke timeout "+script);}
+                    string output=outTask.Result+errTask.Result;File.WriteAllText(Path.Combine(evidence,"smoke-"+tag+"-"+Path.GetFileNameWithoutExtension(script)+".txt"),output);
+                    bool failed=output.Contains("FAILURES=") && !System.Text.RegularExpressions.Regex.IsMatch(output,"FAILURES=0\\b");
+                    bool scriptError=output.Contains("SCRIPT ERROR");
+                    Assert(!failed && !scriptError && (output.Contains("FAILURES=0") || output.Contains("RESULT OK")),"real binary smoke "+tag+" "+script+" (exit "+p.ExitCode+")");}
+            }
         }
         static void Pump(LauncherForm form){var busy=typeof(LauncherForm).GetField("busy",BindingFlags.Instance|BindingFlags.NonPublic);var watch=Stopwatch.StartNew();do{Application.DoEvents();Thread.Sleep(20);if(watch.ElapsedMilliseconds>90000)throw new Exception("Launcher deadline");}while((bool)busy.GetValue(form));foreach(Control c in form.Controls)if(c is Label && c.Text.StartsWith("Error:",StringComparison.Ordinal))throw new Exception(c.Text);}
         static void NormalLauncher(Manifest offered){
-            string gui=Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"../g"+DateTime.UtcNow.ToString("HHmmss")));Directory.CreateDirectory(gui);string launcher=Path.Combine(gui,"FRAIHA.Launcher.exe");File.Copy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"FRAIHA.Launcher.exe"),launcher);
+            string gui=Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"../g"+DateTime.UtcNow.ToString("HHmmss")));Directory.CreateDirectory(gui);string launcher=Path.Combine(gui,"FRAIHA.Launcher.exe");File.Copy(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"FRAIHA.Launcher.exe"),launcher);File.Copy(ReviewedPins.DefaultFile(),Path.Combine(gui,"dev-reviewed-exports.txt"));
             string install=Path.Combine(gui,"dev-real-install"),expected=Path.Combine(install,"versions",offered.Release.Id,"FRAIHA.exe");Process game=null;
             using(var process=Process.Start(new ProcessStartInfo(launcher){Arguments="--dev-real-offline --auto-play",WorkingDirectory=gui,UseShellExecute=false})){
                 try{var watch=Stopwatch.StartNew();int samples=0;while(watch.ElapsedMilliseconds<90000){Application.DoEvents();if(process.HasExited)throw new Exception("Normal launcher exited before game startup");if(game==null){foreach(var p in Process.GetProcessesByName("FRAIHA")){try{if(p.MainModule.FileName==expected){game=p;break;}}catch(InvalidOperationException){}catch(System.ComponentModel.Win32Exception){}}}if(game!=null && !game.HasExited){CheckNetwork(game.Id);game.Refresh();if(game.MainWindowTitle.Contains("FRAIHA") && game.MainWindowHandle!=IntPtr.Zero){samples++;if(samples>=40)break;}}Thread.Sleep(50);}

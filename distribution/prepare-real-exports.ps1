@@ -1,52 +1,60 @@
-param([Parameter(Mandatory=$true)][string]$SourceRoot)
-# Read-only access to the two already approved historical export directories.
-# No Godot export/import, script execution in source, downloads or cleanup.
-$ErrorActionPreference='Stop'
-$taskRoot=Split-Path -Parent $MyInvocation.MyCommand.Path
+param(
+  [Parameter(Mandatory=$true)][string]$ExportA,
+  [Parameter(Mandatory=$true)][string]$ExportB,
+  [string]$LabelA = 'A',
+  [string]$LabelB = 'B'
+)
+# DEV · prepara dois exports Windows REAIS do FRAIHA atual (A = versão instalada, B = atualização) para o
+# launcher/updater. Cada pasta de origem tem exatamente FRAIHA.exe + FRAIHA.pck (export do preset
+# "Windows Desktop"). Só LÊ as origens; escreve apenas em distribution/.local:
+#   .local/real-A-dev-export, .local/real-B-dev-export  (EXE/PCK + online.cfg DEV com endpoint vazio + LEIA-ME)
+#   .local/bin/dev-reviewed-exports.txt                  (pins locais: exe/pck/cfg aprovados pelo operador)
+# Sem export/import do Godot, sem download, sem apagar nada. (Substitui a versão do Orca presa aos exports
+# históricos V029/V030 — ver docs/FRAIHA_DISTRIBUTION_INTEGRATION_R46.md.)
+$ErrorActionPreference = 'Stop'
+$taskRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 function Assert-NoReparse([string]$Path) {
-  $taskCurrent=[IO.Path]::GetFullPath($Path)
-  while ($taskCurrent) {
-    if ((Test-Path -LiteralPath $taskCurrent) -and ((Get-Item -LiteralPath $taskCurrent -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "Reparse path refused: $taskCurrent" }
-    $taskCurrent=Split-Path -Parent $taskCurrent
+  $p = [IO.Path]::GetFullPath($Path)
+  while ($p) {
+    if ((Test-Path -LiteralPath $p) -and ((Get-Item -LiteralPath $p -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "Reparse path refused: $p" }
+    $p = Split-Path -Parent $p
   }
 }
-Assert-NoReparse $SourceRoot
+function Sha([string]$f) { (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLowerInvariant() }
 Assert-NoReparse (Join-Path $taskRoot '.local')
-$taskExpected=@{
-  '029'='351a00c43297bf3feaad8cab7e28ea2974e7238589d050db09b8eb8018c3733c'
-  '030'='011137a3d88709cf5f2ab128648ebe5c325783824160939904b1860f74ab5433'
-}
-$taskInventory=@()
-foreach ($taskVersion in @('029','030')) {
-  $taskSource=Join-Path $SourceRoot ("v$taskVersion/release/windows-test")
-  $taskDest=Join-Path $taskRoot (".local/real-v$taskVersion-dev-export")
-  Assert-NoReparse $taskSource
-  Assert-NoReparse $taskDest
-  $taskExe=Join-Path $taskSource ("FRAIHA-Xadrez-V$taskVersion-Teste.exe")
-  $taskPck=Join-Path $taskSource ("FRAIHA-Xadrez-V$taskVersion-Teste.pck")
-  foreach ($taskFile in @($taskExe,$taskPck,(Join-Path $taskSource 'online.cfg'),(Join-Path $taskSource 'LEIA-ME.txt'))) { Assert-NoReparse $taskFile; if (!(Test-Path -LiteralPath $taskFile -PathType Leaf)) { throw "Missing complete export file: $taskFile" } }
-  if ((Get-FileHash -LiteralPath $taskExe).Hash.ToLowerInvariant() -ne '3bba9f68131498157e02ec44c296f996dd0a4d64c8fdb582d2794bd59feb4465') { throw 'Unreviewed EXE refused' }
-  if ((Get-FileHash -LiteralPath $taskPck).Hash.ToLowerInvariant() -ne $taskExpected[$taskVersion]) { throw 'Unreviewed PCK refused' }
-  New-Item -ItemType Directory -Force -Path $taskDest | Out-Null
-  foreach ($taskPair in @(@($taskExe,'FRAIHA.exe'),@($taskPck,'FRAIHA.pck'),@((Join-Path $taskSource 'LEIA-ME.txt'),'LEIA-ME.txt'))) {
-    $taskTarget=Join-Path $taskDest $taskPair[1]
-    Assert-NoReparse $taskTarget
-    if (Test-Path -LiteralPath $taskTarget) { if ((Get-FileHash -LiteralPath $taskTarget).Hash -ne (Get-FileHash -LiteralPath $taskPair[0]).Hash) { throw 'Existing DEV payload conflicts; preserve and investigate' } }
-    else { Copy-Item -LiteralPath $taskPair[0] -Destination $taskTarget }
+$cfgBytes = [Text.UTF8Encoding]::new($false).GetBytes("[online]`nserver_url=`"`"`n")
+$readme = "FRAIHA DEV (launcher Windows) - build de TESTE offline.`r`nEndpoint vazio: nao conecta em servidor nenhum. Nao distribuir.`r`n"
+$pins = @("# FRAIHA DEV - exports reais revisados (gerado por prepare-real-exports.ps1 em " + [DateTime]::UtcNow.ToString('u') + ")")
+$inventory = @()
+foreach ($pair in @(@($ExportA, 'A', $LabelA), @($ExportB, 'B', $LabelB))) {
+  $src = (Resolve-Path -LiteralPath $pair[0]).Path
+  Assert-NoReparse $src
+  $entries = @(Get-ChildItem -LiteralPath $src -Force)
+  $exe = Join-Path $src 'FRAIHA.exe'; $pck = Join-Path $src 'FRAIHA.pck'
+  if (!(Test-Path -LiteralPath $exe -PathType Leaf) -or !(Test-Path -LiteralPath $pck -PathType Leaf)) { throw "Export $($pair[1]) precisa de FRAIHA.exe e FRAIHA.pck: $src" }
+  $extra = $entries | Where-Object { $_.Name -notin @('FRAIHA.exe', 'FRAIHA.pck', 'FRAIHA.console.exe') }
+  if ($extra) { throw "Export $($pair[1]) tem arquivos extras (DLL/engine?) que o formato fraiha-flat-zip-v2 nao cobre: $($extra.Name -join ', ')" }
+  $dest = Join-Path $taskRoot (".local/real-" + $pair[1] + "-dev-export")
+  Assert-NoReparse $dest
+  New-Item -ItemType Directory -Force -Path $dest | Out-Null
+  foreach ($f in @(@($exe, 'FRAIHA.exe'), @($pck, 'FRAIHA.pck'))) {
+    $t = Join-Path $dest $f[1]
+    if (Test-Path -LiteralPath $t) { if ((Sha $t) -ne (Sha $f[0])) { throw "Ja existe $t diferente; preserve e investigue (nada foi sobrescrito)." } }
+    else { Copy-Item -LiteralPath $f[0] -Destination $t }
   }
-  $taskCfg=Join-Path $taskDest 'online.cfg'
-  Assert-NoReparse $taskCfg
-  if (Test-Path -LiteralPath $taskCfg) { if ((Get-FileHash -LiteralPath $taskCfg).Hash.ToLowerInvariant() -ne 'ffaee9060a72096d914fc15346a3021d316c2ace6e9f36b780c956c7d325606e') { throw 'Existing DEV config conflicts' } }
-  else { [IO.File]::WriteAllText($taskCfg,"[online]`nserver_url=`"`"`n",[Text.UTF8Encoding]::new($false)) }
-  foreach ($taskFile in @($taskExe,$taskPck,(Join-Path $taskSource 'online.cfg'),(Join-Path $taskSource 'LEIA-ME.txt'))) {
-    $taskItem=Get-Item -LiteralPath $taskFile
-    $taskInventory += [pscustomobject]@{ historical_version=$taskVersion; source=$taskFile; size=$taskItem.Length; sha256=(Get-FileHash -LiteralPath $taskFile).Hash.ToLowerInvariant(); role='original approved export' }
-  }
-  foreach ($taskName in @('FRAIHA.exe','FRAIHA.pck','online.cfg','LEIA-ME.txt')) {
-    $taskFile=Join-Path $taskDest $taskName
-    $taskInventory += [pscustomobject]@{ historical_version=$taskVersion; source=$taskFile; size=(Get-Item -LiteralPath $taskFile).Length; sha256=(Get-FileHash -LiteralPath $taskFile).Hash.ToLowerInvariant(); role='DEV copy; EXE/PCK renamed, sidecar endpoint intentionally empty' }
+  $cfg = Join-Path $dest 'online.cfg'; if (!(Test-Path -LiteralPath $cfg)) { [IO.File]::WriteAllBytes($cfg, $cfgBytes) }
+  $rd = Join-Path $dest 'LEIA-ME.txt'; if (!(Test-Path -LiteralPath $rd)) { [IO.File]::WriteAllText($rd, $readme, [Text.UTF8Encoding]::new($false)) }
+  $pins += "exe " + (Sha (Join-Path $dest 'FRAIHA.exe'))
+  $pins += "pck " + (Sha (Join-Path $dest 'FRAIHA.pck'))
+  $pins += "cfg " + (Sha $cfg)
+  foreach ($n in @('FRAIHA.exe', 'FRAIHA.pck', 'online.cfg', 'LEIA-ME.txt')) {
+    $f = Join-Path $dest $n
+    $inventory += [pscustomobject]@{ export = $pair[1]; label = $pair[2]; file = $n; source = $src; size = (Get-Item -LiteralPath $f).Length; sha256 = (Sha $f) }
   }
 }
-$taskReport=Join-Path $taskRoot ('.local/real-export-inventory-'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff')+'.json')
-$taskInventory | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $taskReport -Encoding UTF8
-Write-Output "Preserved complete approved exports, DEV-only empty sidecar; evidence: $taskReport"
+$bin = Join-Path $taskRoot '.local/bin'; New-Item -ItemType Directory -Force -Path $bin | Out-Null
+$pinFile = Join-Path $bin 'dev-reviewed-exports.txt'
+[IO.File]::WriteAllLines($pinFile, [string[]]($pins | Select-Object -Unique), [Text.UTF8Encoding]::new($false))
+$report = Join-Path $taskRoot ('.local/real-export-inventory-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff') + '.json')
+$inventory | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $report -Encoding UTF8
+Write-Output "OK: exports A/B preparados (endpoint DEV vazio); pins em $pinFile; inventario $report"

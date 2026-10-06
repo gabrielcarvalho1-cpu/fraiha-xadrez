@@ -48,6 +48,7 @@ namespace Fraiha.Distribution {
         [STAThread]public static int Main() {
             Paths.InitializeRuntime();
             root=DirUnderBase();
+            Case("site updater refuses Steam installs (Steam updates its own copy)",delegate {Reject(delegate{new Updater(Path.Combine(Dir("steam"),"steamapps","common","FRAIHA"));});Reject(delegate{new Updater(Path.Combine(Dir("steam2"),"SteamApps","common","FRAIHA"));});});
             Case("central DEV version read/schema",delegate {var r=Release.Read(Json.ReadFile(Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"../../version.json"))));Check(r.Id=="0.0.0-1" && r.DevOnly,"Explicit unassigned DEV version");});
             Case("version ordering same/higher/lower/channel/platform",delegate {
                 Release.RequireUpgrade(R(1),R(2));Reject(delegate{Release.RequireUpgrade(R(2),R(2));});Reject(delegate{Release.RequireUpgrade(R(2),R(1));});

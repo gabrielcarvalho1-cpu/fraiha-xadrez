@@ -69,12 +69,33 @@ namespace Fraiha.Distribution {
         }
         public string Encode() {return Json.Write(new Dictionary<string,object>{{"current",Current},{"previous",Previous},{"high_game_version",HighVersion},{"high_build",HighBuild},{"channel","DEV"},{"platform","windows_site"}});}
     }
+    // Pins LOCAIS de exports reais revisados (DEV). Formato: uma linha "<exe|pck|cfg> <sha256>" (# = comentário).
+    // Mora ao lado do FRAIHA.Launcher.exe; o feed/manifesto nunca escreve nem escolhe este arquivo.
+    public sealed class ReviewedPins {
+        readonly HashSet<string> exe=new HashSet<string>(StringComparer.Ordinal),pck=new HashSet<string>(StringComparer.Ordinal),cfg=new HashSet<string>(StringComparer.Ordinal);
+        public static string DefaultFile(){return Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"dev-reviewed-exports.txt");}
+        public static ReviewedPins Load(string file){
+            var p=new ReviewedPins();Paths.NoReparse(file);if(!File.Exists(file))return p;
+            if(new FileInfo(file).Length>65536)throw new InvalidDataException("Reviewed pins file too large");
+            foreach(string raw in File.ReadAllLines(file,new UTF8Encoding(false,true))){
+                string line=raw.Trim();if(line.Length==0 || line.StartsWith("#",StringComparison.Ordinal))continue;
+                var m=System.Text.RegularExpressions.Regex.Match(line,"^(exe|pck|cfg) ([0-9a-f]{64})$");
+                if(!m.Success)throw new InvalidDataException("Malformed reviewed pin line");
+                (m.Groups[1].Value=="exe"?p.exe:m.Groups[1].Value=="pck"?p.pck:p.cfg).Add(m.Groups[2].Value);
+            }
+            return p;
+        }
+        public bool Allows(Manifest m){return m.CompleteExport && exe.Contains(m.ExeHash) && pck.Contains(m.PckHash) && cfg.Contains(m.CfgHash);}
+        public int Count{get{return exe.Count+pck.Count+cfg.Count;}}
+    }
     public sealed class Updater {
         public readonly string Root;public readonly HttpDownload Download=new HttpDownload();
         public Action<string> Fault; // Deterministic tests only; not exposed to feed or command line.
         public Updater(string root) {
             if(!Path.IsPathRooted(root) || root.StartsWith(@"\\",StringComparison.Ordinal))throw new InvalidDataException("Absolute local drive root required");
-            Root=Path.GetFullPath(root).TrimEnd('\\'); if(Root==Path.GetPathRoot(Root).TrimEnd('\\'))throw new InvalidDataException("Drive root forbidden"); Paths.NoReparse(Root); Directory.CreateDirectory(Root);
+            Root=Path.GetFullPath(root).TrimEnd('\\'); if(Root==Path.GetPathRoot(Root).TrimEnd('\\'))throw new InvalidDataException("Drive root forbidden");
+            // Steam atualiza a cópia Steam (SteamPipe). O updater do site NUNCA mexe numa instalação da Steam.
+            if((Root+"\\").IndexOf("\\steamapps\\",StringComparison.OrdinalIgnoreCase)>=0)throw new InvalidDataException("Steam install: updates belong to Steam, not the site launcher"); Paths.NoReparse(Root); Directory.CreateDirectory(Root);
         }
         string P(string rel) {return Paths.Child(Root,rel);}
         void At(string point) {if(Fault!=null)Fault(point);}
@@ -163,6 +184,7 @@ namespace Fraiha.Distribution {
             VerifyInstalled(s.Previous);string current=s.Current;s.Current=s.Previous;s.Previous=current;WriteState(s);
         }}
         public bool RealOffline; // Local opt-in only. Never controlled by the manifest.
+        public string ReviewedPinsFile; // Testes/QA: caminho explícito; padrão = ao lado do launcher.
         public bool QaAutoQuit; // Harness-only fixed engine flag; no manifest/launcher argument forwarding.
         public int? LastGameExitCode {get;private set;}
         public string LastGameCaptureDirectory {get;private set;}
@@ -174,11 +196,15 @@ namespace Fraiha.Distribution {
             using(var exeHandle=new FileStream(exe,FileMode.Open,FileAccess.Read,FileShare.Read))using(var pckHandle=new FileStream(pck,FileMode.Open,FileAccess.Read,FileShare.Read)) {
                 var start=new ProcessStartInfo(exe){WorkingDirectory=dir,UseShellExecute=false,Arguments=""};
                 if(RealOffline){
-                    if(Root.Length>110)throw new InvalidOperationException("Reviewed historical export requires DEV root at most 110 characters for its shader cache");
+                    if(Root.Length>110)throw new InvalidOperationException("Real export requires DEV root at most 110 characters (shader cache paths)");
                     if(!manifest.CompleteExport)throw new InvalidOperationException("Real offline mode refuses two-file fixtures");
-                    if(manifest.ExeHash!="3bba9f68131498157e02ec44c296f996dd0a4d64c8fdb582d2794bd59feb4465" || (manifest.PckHash!="351a00c43297bf3feaad8cab7e28ea2974e7238589d050db09b8eb8018c3733c" && manifest.PckHash!="011137a3d88709cf5f2ab128648ebe5c325783824160939904b1860f74ab5433") || manifest.CfgHash!="ffaee9060a72096d914fc15346a3021d316c2ace6e9f36b780c956c7d325606e")throw new InvalidOperationException("Export has no reviewed DEV offline startup profile");
-                    // Four-file v2 is homologated only for the inventoried historical V029/V030 exports.
-                    // Their endpoint resolver honors this final local environment override.
+                    // FRAIHA (integração Claude): os pins deixam de ser fixos no código (eram só os exports
+                    // históricos V029/V030). Agora vêm de um arquivo LOCAL do operador, ao lado do launcher,
+                    // gerado por prepare-real-exports.ps1 a partir de exports aprovados — nunca do manifesto/feed.
+                    var pins=ReviewedPins.Load(ReviewedPinsFile??ReviewedPins.DefaultFile());
+                    if(!pins.Allows(manifest))throw new InvalidOperationException("Export has no reviewed DEV offline startup profile");
+                    // O FRAIHA atual resolve o servidor por online.cfg ao lado do exe e depois FRAIHA_SERVER_URL
+                    // (online_v020/endpoint.gd); Supabase por FRAIHA_SUPABASE_URL/KEY (account_service.gd). Vazios = offline.
                     string profile=P("userdata"),cache=P("userdata\\cache"),temp=P("userdata\\temp");
                     Paths.ReviewedProfile(profile);
                     Directory.CreateDirectory(profile);Directory.CreateDirectory(cache);Directory.CreateDirectory(temp);
