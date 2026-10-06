@@ -1204,7 +1204,7 @@ func _layout_mobile(board_center: Vector2):
     home_button.call_deferred("_margins")
     home_button.add_theme_font_size_override("font_size", 15)
     for button in [home_button] + mobile_actions.get_children():
-        _touch_button_style(button)
+        if button is Button: _touch_button_style(button)   # R45: a coluna também tem o controle de voz (não é Button)
     player_caption.add_theme_stylebox_override("normal", _badge_style(Color("5d6b58")))
     var board_pixels: float
     if portrait:
@@ -1283,6 +1283,7 @@ func _layout_mobile(board_center: Vector2):
             if ui != null: ui.layout_hud(Rect2(), true, false, safe, Rect2(left_x, safe.position.y, side_width, 50), Rect2(left_x, safe.end.y - 50, side_width, 50))
     var crowded = portrait and mobile_actions.get_children().filter(func(b): return b.visible).size() > 3
     for button in mobile_actions.get_children():
+        if not (button is Button): continue
         button.custom_minimum_size.y = 44 if portrait else 40
         # Linha única no retrato: com o botão Chat, todos encolhem por igual sem sair da tela.
         button.clip_text = crowded

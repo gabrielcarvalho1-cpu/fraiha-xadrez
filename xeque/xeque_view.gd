@@ -30,7 +30,7 @@ const LAYOUTS := {
         "turn": Rect2(350, 1361, 380, 62), "meter": Rect2(708, 1452, 300, 120),
         "xeque": [Vector2(184, 1846), 0.768], "play": Rect2(405, 1805, 630, 82),
         "hint": null, "help": Rect2(470, 22, 60, 60), "menu": Rect2(540, 22, 60, 60),
-        "music": Rect2(330, 22, 60, 60), "fx": Rect2(400, 22, 60, 60), "full": Rect2(260, 22, 60, 60), "voice": Rect2(190, 22, 60, 60),
+        "music": Rect2(330, 22, 60, 60), "fx": Rect2(400, 22, 60, 60), "full": Rect2(260, 22, 60, 60), "voice": Rect2(620, 22, 60, 60),
         "hand": [Vector2(540, 1664), 0.167], "pile": [Vector2(540, 912), 0.18], "clock": [Vector2(540, 703), 0.32],
         "reveal": [Vector2(540, 884), 0.25], "mate_clock": [Vector2(540, 690), 0.48], "mate_title": [Vector2(540, 1252), 128],
         "mate_line": [Vector2(540, 1326), 27],

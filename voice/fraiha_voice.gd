@@ -39,6 +39,7 @@ var _deadline := 0.0
 var _deadline_state := ""
 var _granted_once := false
 var _sent_join := false
+var _early_peers: Array = []   # voice_peer que chegou antes de enter_match (no máx. 8)
 
 func _ready():
     name = "FraihaVoice"
@@ -85,6 +86,9 @@ func enter_match(kind: String, match_id: String) -> void:
     participants.clear()
     peers_waiting.clear()
     _to("DISCONNECTED", "")
+    var early := _early_peers.filter(func(m): return String(m.get("match_id", "")) == match_id)
+    _early_peers.clear()
+    for m in early: _on_server(m)
     _log("match kind=%s match=%s" % [kind, match_id.left(8)])
 
 ## Fim/saída da partida, abandono, voltar à Home, logout: sai da voz e esquece a partida.
@@ -204,7 +208,12 @@ func _on_server(msg: Dictionary):
     if type == "link_lost": return   # RTC é independente do WebSocket do jogo; renovação espera reconectar
     var mid := String(msg.get("match_id", ""))
     if ctx.is_empty() or mid != String(ctx.match_id):
-        return                       # resposta de outra partida (antiga): ignora
+        # aviso "fulano entrou na voz" pode chegar ANTES de o modo abrir a partida aqui (corrida):
+        # guarda os últimos e aplica quando a partida for informada. Resto de outra partida: ignora.
+        if type == "voice_peer" and mid != "":
+            _early_peers.append(msg.duplicate())
+            if _early_peers.size() > 8: _early_peers.pop_front()
+        return
     match type:
         "voice_peer":
             var u := int(msg.get("uid", 0))
