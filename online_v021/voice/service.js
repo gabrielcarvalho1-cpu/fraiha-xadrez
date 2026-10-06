@@ -34,7 +34,8 @@ class VoiceService {
       if (!color) return { error: 'not_in_match' };
       const kind = g.kind === 'casual' ? 'casual' : 'ranked';
       const parts = ['w', 'b'].map((c, i) => ({ uid: i + 1, name: String(any.players[c].nickname || '') }));
-      return { kind, id: any.id, seatUid: color === 'w' ? 1 : 2, participants: parts };
+      const others = ['w', 'b'].filter(c => c !== color).map(c => any.players[c].userId);
+      return { kind, id: any.id, seatUid: color === 'w' ? 1 : 2, participants: parts, others };
     }
     const p = b.party;
     if (p) {
@@ -43,10 +44,10 @@ class VoiceService {
         if (room.ended) return { error: 'match_over' };
         const seat = p.seatOf(room, uid);
         if (seat < 0 || room.seats[seat].left) return { error: 'not_in_match' };
-        const humans = [];
-        room.seats.forEach((s, i) => { if (s.kind === 'human' && !s.left) humans.push({ uid: i + 1, name: String(s.nickname || '') }); });
+        const humans = [], others = [];
+        room.seats.forEach((s, i) => { if (s.kind === 'human' && !s.left) { humans.push({ uid: i + 1, name: String(s.nickname || '') }); if (i !== seat) others.push(s.uid); } });
         if (humans.length < 2) return { error: 'solo' };
-        return { kind: room.game === 'xeque' ? 'xeque' : 'marcha', id: room.id, seatUid: seat + 1, participants: humans };
+        return { kind: room.game === 'xeque' ? 'xeque' : 'marcha', id: room.id, seatUid: seat + 1, participants: humans, others };
       }
     }
     return { error: 'not_in_match' };
@@ -73,12 +74,23 @@ class VoiceService {
     return this.send(ws, { type: 'voice_denied', match_id: String(matchId || ''), code, message: msg, renew: !!renew });
   }
 
+  // Aviso para os OUTROS humanos da mesa: "fulano entrou/saiu da voz" (para quem ainda não entrou
+  // saber que pode tocar no microfone). Só nome público + assento; nada de ids de conta ou token.
+  notify(where, joined) {
+    const me = where.participants.find(p => p.uid === where.seatUid);
+    const msg = { type: 'voice_peer', match_id: where.id, uid: where.seatUid, name: me ? me.name : '', joined };
+    const b = this.backend;
+    for (const other of where.others || []) for (const sock of (b.socketsOf ? b.socketsOf(other) : [])) this.send(sock, msg);
+  }
+
   handle(ws, m) {
     const a = String(m.type || '');
     const uid = ws.user && ws.user.id;
     const matchId = typeof m.match_id === 'string' ? m.match_id.slice(0, 64) : '';
-    if (a === 'voice_leave') {   // a saída é do cliente; aqui só registra (sem estado no servidor)
+    if (a === 'voice_leave') {   // a saída é do cliente; aqui só registra e avisa a mesa (sem estado no servidor)
       this.log(`[voice] leave match=${short(matchId)} reason=${String(m.reason || '').replace(/[^a-z_]/g, '').slice(0, 24)}`);
+      const w = uid && matchId ? this.locate(uid, matchId) : { error: 'x' };
+      if (!w.error) this.notify(w, false);
       return;
     }
     if (a !== 'voice_join' && a !== 'voice_renew') return this.deny(ws, matchId, 'bad_request', false);
@@ -94,6 +106,7 @@ class VoiceService {
     try { token = buildRtcAudioToken({ appId: this.appId, appCertificate: this.cert, channel, uid: where.seatUid, ttl: this.ttl, privilegeTtl: this.ttl, issueTs: Math.floor(this.now() / 1000) }); }
     catch (e) { console.error('[voice] token build failed', e && e.message); return this.deny(ws, matchId, 'token_error', renew); }
     this.log(`[voice] ${renew ? 'renew' : 'token'} granted kind=${where.kind} match=${short(where.id)} seat=${where.seatUid} ttl=${this.ttl}`);
+    if (!renew) this.notify(where, true);
     return this.send(ws, { type: 'voice_granted', renew, match_id: where.id, kind: where.kind, app_id: this.appId, channel,
       uid: where.seatUid, token, ttl: this.ttl, participants: where.participants });
   }

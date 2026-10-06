@@ -98,6 +98,16 @@ test('Ranked: participantes recebem token do próprio assento; terceiro e partid
     assert.ok(!JSON.stringify(r).includes(id), 'id de usuário não vai para a voz');
   }
   assert.notEqual(ra.uid, rb.uid);
+  // aviso para a mesa: B entrou → A recebe voice_peer (só assento + nome público)
+  h.messages.length = 0;
+  await h.backend.handle(h.sockets[1], { type: 'voice_join', match_id: m.id }); await flush();
+  const peer = h.messages.find(x => x.socket === h.sockets[0] && x.type === 'voice_peer');
+  assert.ok(peer && peer.joined === true && peer.uid === rb.uid && peer.name === 'BobTest');
+  assert.ok(!h.messages.some(x => x.socket === h.sockets[2] && x.type === 'voice_peer'), 'terceiro não recebe aviso');
+  h.messages.length = 0;
+  await h.backend.handle(h.sockets[1], { type: 'voice_leave', match_id: m.id, reason: 'user' }); await flush();
+  const gone = h.messages.find(x => x.socket === h.sockets[0] && x.type === 'voice_peer');
+  assert.ok(gone && gone.joined === false);
   assert.equal((await h.ask(2, { type: 'voice_join', match_id: m.id })).code, 'not_in_match', 'terceiro não entra');
   assert.equal((await h.ask(0, { type: 'voice_join', match_id: '99999999-1111-4111-a111-111111111111' })).code, 'not_in_match');
   assert.equal((await h.ask(0, { type: 'voice_join', match_id: '../x' })).code, 'bad_request');
