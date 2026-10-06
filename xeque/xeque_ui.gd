@@ -68,6 +68,9 @@ const PlayerPortrait := preload("res://profile/player_portrait.gd")
 
 var hub = null
 var stage = null
+## R45 · FRAIHA Voice (módulo único do jogo); null fora do jogo completo.
+func voice():
+    return stage.get("voice") if stage != null else null
 ## R43 · controle de tela cheia do jogo (o mesmo do botão da Home); null fora do jogo completo.
 func screen_mode():
     return stage.get("screen_mode") if stage != null else null
@@ -699,6 +702,12 @@ func _on_hit(id: String):
         "fullscreen":
             var sm = screen_mode()
             if sm != null: sm.toggle()
+        "voice":
+            var vo = voice()
+            if vo != null: vo.press()
+        "voice_off":
+            var vo = voice()
+            if vo != null: vo.leave("user")
         "help":
             tutorial_from_game = true
             mode = "tutorial"

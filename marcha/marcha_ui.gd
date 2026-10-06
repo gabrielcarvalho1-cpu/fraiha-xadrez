@@ -13,6 +13,7 @@ const Layout := preload("res://marcha/board_layout.gd")
 const Access := preload("res://marcha/marcha_access.gd")
 const Sound := preload("res://ui_v022/mode_sound.gd")
 const FullscreenControl := preload("res://ui_v022/fullscreen_control.gd")
+const VoiceGlyph := preload("res://voice/voice_glyph.gd")   # R45
 const Cosmetics := preload("res://profile/premium_cosmetics.gd")
 const PlayerPortrait := preload("res://profile/player_portrait.gd")
 const MUSIC := "res://marcha/audio/musica_marcha.mp3"    # música enviada pelo dono do projeto (loop)
@@ -64,6 +65,9 @@ const PAWN_BASE := 11.0           # a base do peão assenta 11 px abaixo do cent
 
 var hub = null
 var stage = null
+## R45 · FRAIHA Voice (módulo único do jogo); null fora do jogo completo.
+func voice():
+    return stage.get("voice") if stage != null else null
 ## R43 · controle de tela cheia do jogo (o mesmo do botão da Home); null fora do jogo completo.
 func screen_mode():
     return stage.get("screen_mode") if stage != null else null
@@ -1090,6 +1094,12 @@ func _on_hit(id: String):
         "fullscreen":
             var sm = screen_mode()
             if sm != null: sm.toggle()
+        "voice":
+            var vo = voice()
+            if vo != null: vo.press()
+        "voice_off":
+            var vo = voice()
+            if vo != null: vo.leave("user")
         "menu": menu_open = not menu_open
         "menu_close": menu_open = false
         "menu_tutorial":
@@ -1291,6 +1301,16 @@ class TableView extends Control:
         # R43 · TELA CHEIA (o mesmo botão da Home), à esquerda da música
         var sm = ui.screen_mode()
         if sm != null and sm.supported(): fullscreen_button(Rect2(right - gap * 2, top, bs, bs), sm.on_cached())
+        # R45 · FRAIHA Voice: só na partida online com outro humano (no navegador)
+        var vo = ui.voice()
+        if ui.mode == "game" and vo != null and vo.in_match() and vo.available():
+            var vr := Rect2(right - gap * 3, top, bs, bs)
+            draw_rect(vr, Color("0a1611"))
+            draw_rect(vr, ui.GOLD, false, 2.0)
+            ui.VoiceGlyph.draw_mic(self, vr.grow(-6), vo.state, ui.GOLD, vo.is_speaking(vo.my_uid))
+            ui.hits.append({"rect": vr, "id": "voice"})
+            if vo.active() or vo.state == "ERROR": ui.hits.append({"rect": ui.VoiceGlyph.draw_leave_badge(self, vr), "id": "voice_off"})
+            if not ui.portrait: ui.VoiceGlyph.draw_status(self, vr.position.x - 12, vr.get_center().y, 330, vo.status_text(), 18, Color("e8dcc0"))
 
     # ------------------------------------------------------------ placas dos jogadores
     ## R41 · moldura (Club / Fundador) e selo do jogador humano sobre o retrato da placa.

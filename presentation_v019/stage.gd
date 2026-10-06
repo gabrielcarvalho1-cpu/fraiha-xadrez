@@ -71,6 +71,10 @@ var casual_ui
 var match_chat
 var social_ui
 var invite_ui
+var voice                      # R45 · FRAIHA Voice (voice/fraiha_voice.gd): voz só em PvP humano online
+var desk_voice: Control
+var mobile_voice: Control
+var _voice_poll := 0.0
 
 func _enter_tree():
     MobileLayout.configure_window(get_window())
@@ -81,6 +85,8 @@ func _ready():
     bot_controller.name = "BotController"
     bot_controller.guard = func() -> bool: return FairPlay.engine_blocked(self, "bot")
     add_child(bot_controller)
+    voice = preload("res://voice/fraiha_voice.gd").new()
+    add_child(voice)
     _build_backdrop()
     _build_navigation()
     get_viewport().size_changed.connect(_layout)
@@ -264,6 +270,10 @@ func _build_desk_panel(overlay: CanvasLayer):
     tools.alignment = BoxContainer.ALIGNMENT_CENTER
     tools.add_theme_constant_override("separation", 8)
     row.add_child(tools)
+    # R45 · FRAIHA Voice: microfone + estado (só aparece em Casual/Ranked/amigo online, no navegador)
+    desk_voice = preload("res://voice/voice_control.gd").new()
+    tools.add_child(desk_voice)
+    desk_voice.setup(voice)
     desk_restart = HudButton.make("restart")
     desk_restart.name = "RestartButton"
     desk_restart.tooltip_text = "Reiniciar partida"
@@ -448,6 +458,8 @@ func _setup_account():
     account_ui.name = "AccountUI"
     add_child(account_ui)
     account_ui.setup(account)
+    voice.setup(account)
+    voice.changed.connect(_on_voice_changed)
     hub.bind_account(account)
     # R37 · cartão de perfil ao passar o mouse no avatar (Ranked, Casual, Marcha, Xeque)
     profile_popup = preload("res://social/profile_popup.gd").new()
@@ -699,6 +711,9 @@ func _build_mobile_controls(overlay: CanvasLayer):
         elif caption == "Tela cheia":
             button.pressed.connect(func(): if screen_mode != null: screen_mode.toggle())
             mobile_fullscreen = button
+    mobile_voice = preload("res://voice/voice_control.gd").new()
+    mobile_actions.add_child(mobile_voice)
+    mobile_voice.setup(voice, true)
     mobile_status = Label.new()
     mobile_status.add_theme_font_size_override("font_size", 20)
     mobile_status.add_theme_color_override("font_color", Color("efcf83"))
@@ -737,7 +752,11 @@ func _build_mobile_controls(overlay: CanvasLayer):
         choice.pressed.connect(game._finish_promotion.bind(kinds[index]))
         choices.add_child(choice)
 
-func _process(_delta):
+func _process(delta):
+    _voice_poll -= delta
+    if _voice_poll <= 0.0:   # R45 · voz segue a partida (entra/sai sozinha do contexto, nunca o contrário)
+        _voice_poll = 0.25
+        _sync_voice()
     if is_instance_valid(medieval_modal) and (medieval_modal.visible or navigation_dialog.visible): _sync_modal()
     if not is_instance_valid(mobile_status): return
     var mobile = MobileLayout.active(get_viewport())
@@ -1388,6 +1407,7 @@ func _refresh_analysis_buttons():
     if not mobile: _layout_desk_hud.call_deferred()   # a largura do cartão muda quando ANALISAR aparece
 
 func _on_online_result(msg: Dictionary):
+    if voice != null: voice.exit_match("match_end")   # R45 · fim oficial da partida: sai da voz
     if recorder == null: return
     recorder.finish_online(String(msg.get("match_id", "")), String(msg.get("outcome", "")), String(msg.get("reason_text", msg.get("reason", ""))))
 
@@ -1454,6 +1474,38 @@ func open_training(report: Dictionary):
         add_child(training_ui)
     training_ui.open_for(report)
 
+
+# ---------- R45 · FRAIHA Voice: qual partida PvP humana está ativa agora (o modo informa; voz só segue) ----------
+func voice_context() -> Dictionary:
+    if mode == "ranked" and ranked != null and ranked.in_match(): return {"kind": "ranked", "match_id": String(ranked.match_id)}
+    if mode == "casual" and casual != null and casual.in_match(): return {"kind": "casual", "match_id": String(casual.match_id)}
+    for g in ["marcha", "xeque"]:
+        var ui = _party_ui(g)
+        if ui == null or not bool(ui.get("online")) or String(ui.get("mode")) != "game" or not ui.is_open(): continue
+        var humans := 0
+        for p in ui.get("players"):
+            if p is Dictionary and String(p.get("user_id", "")) != "" and not bool(p.get("left", false)): humans += 1
+        if humans >= 2: return {"kind": g, "match_id": String(ui.get("room_id"))}
+    return {}
+
+func _sync_voice():
+    if voice == null: return
+    var c := voice_context()
+    if c.is_empty() or String(c.match_id).is_empty():
+        if voice.in_match() or voice.active(): voice.exit_match("left_match")
+    else:
+        voice.enter_match(String(c.kind), String(c.match_id))
+
+var _voice_last_error := ""
+func _on_voice_changed():
+    var err: String = voice.message if voice.state == "ERROR" else ""
+    var fresh := err != "" and err != _voice_last_error
+    _voice_last_error = err
+    for g in ["marcha", "xeque"]:
+        var ui = _party_ui(g)
+        if ui == null or not ui.is_open(): continue
+        if fresh and bool(ui.get("online")) and ui.has_method("_flash"): ui._flash(err)   # erro de voz visível no celular em pé
+        if ui.has_method("_redraw"): ui._redraw()
 
 # ---------- R35 · MARCHA REAL / XEQUE online com amigo (mesa de 4 com bots, servidor autoridade) ----------
 func _party_ui(game: String):

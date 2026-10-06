@@ -7,6 +7,7 @@ const Rules := preload("res://xeque/rules.gd")
 const Cosmetics := preload("res://profile/premium_cosmetics.gd")
 
 # ---------------------------------------------------------------- medidas por formato
+const VoiceGlyph := preload("res://voice/voice_glyph.gd")
 const LAYOUTS := {
     "desktop": {
         "scene": [1.1832, Vector2(-29.2, -112.6)], "board": Rect2(650, 208, 620, 536),
@@ -16,7 +17,7 @@ const LAYOUTS := {
         "turn": Rect2(1525, 36, 350, 68), "meter": Rect2(1522, 158, 356, 142),
         "xeque": [Vector2(1700, 640), 0.92], "play": Rect2(1525, 757, 350, 80),
         "hint": [Vector2(1700, 912), 24], "help": Rect2(1752, 993, 54, 54), "menu": Rect2(1813, 993, 54, 54),
-        "music": Rect2(1630, 993, 54, 54), "fx": Rect2(1691, 993, 54, 54), "full": Rect2(1569, 993, 54, 54),
+        "music": Rect2(1630, 993, 54, 54), "fx": Rect2(1691, 993, 54, 54), "full": Rect2(1569, 993, 54, 54), "voice": Rect2(1508, 993, 54, 54),
         "hand": [Vector2(960, 930), 0.212], "pile": [Vector2(960, 478), 0.128], "clock": [Vector2(960, 333), 0.22],
         "reveal": [Vector2(960, 476), 0.19], "mate_clock": [Vector2(960, 262), 0.36], "mate_title": [Vector2(960, 862), 196],
         "mate_line": [Vector2(960, 958), 33],
@@ -29,7 +30,7 @@ const LAYOUTS := {
         "turn": Rect2(350, 1361, 380, 62), "meter": Rect2(708, 1452, 300, 120),
         "xeque": [Vector2(184, 1846), 0.768], "play": Rect2(405, 1805, 630, 82),
         "hint": null, "help": Rect2(470, 22, 60, 60), "menu": Rect2(540, 22, 60, 60),
-        "music": Rect2(330, 22, 60, 60), "fx": Rect2(400, 22, 60, 60), "full": Rect2(260, 22, 60, 60),
+        "music": Rect2(330, 22, 60, 60), "fx": Rect2(400, 22, 60, 60), "full": Rect2(260, 22, 60, 60), "voice": Rect2(190, 22, 60, 60),
         "hand": [Vector2(540, 1664), 0.167], "pile": [Vector2(540, 912), 0.18], "clock": [Vector2(540, 703), 0.32],
         "reveal": [Vector2(540, 884), 0.25], "mate_clock": [Vector2(540, 690), 0.48], "mate_title": [Vector2(540, 1252), 128],
         "mate_line": [Vector2(540, 1326), 27],
@@ -42,7 +43,7 @@ const LAYOUTS := {
         "turn": Rect2(42, 342, 318, 62), "meter": Rect2(1590, 56, 320, 128),
         "xeque": [Vector2(1750, 360), 0.837], "play": Rect2(1581, 459, 326, 96),
         "hint": [Vector2(1750, 632), 22], "help": Rect2(1798, 2, 50, 48), "menu": Rect2(1856, 2, 50, 48),
-        "music": Rect2(1682, 2, 50, 48), "fx": Rect2(1740, 2, 50, 48), "full": Rect2(1624, 2, 50, 48),
+        "music": Rect2(1682, 2, 50, 48), "fx": Rect2(1740, 2, 50, 48), "full": Rect2(1624, 2, 50, 48), "voice": Rect2(1566, 2, 50, 48),
         "hand": [Vector2(975, 772), 0.183], "pile": [Vector2(975, 369), 0.122], "clock": [Vector2(975, 248), 0.185],
         "reveal": [Vector2(975, 356), 0.16], "mate_clock": [Vector2(975, 222), 0.31], "mate_title": [Vector2(975, 690), 124],
         "mate_line": [Vector2(975, 800), 26],
@@ -233,6 +234,18 @@ func fullscreen_button(r: Rect2, on: bool):
     preload("res://ui_v022/fullscreen_control.gd").draw_glyph(self, r.grow(-6), on, Color("f6ecd2"), 2.5)
     hit(r, "fullscreen")
 
+## R45 · FRAIHA Voice: microfone só em partida online com outro humano (no navegador).
+func _draw_voice(lay: Dictionary):
+    var vo = ui.voice()
+    if vo == null or not vo.in_match() or not vo.available() or not lay.has("voice"): return
+    var r: Rect2 = lay.voice
+    var hov: bool = ui.hover_id == "voice"
+    panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+    VoiceGlyph.draw_mic(self, r.grow(-7), vo.state, Color("f6ecd2"), vo.is_speaking(vo.my_uid))
+    hit(r, "voice")
+    if vo.active() or vo.state == "ERROR": hit(VoiceGlyph.draw_leave_badge(self, r), "voice_off")
+    if ui.layout != "portrait": VoiceGlyph.draw_status(self, r.position.x - 10, r.get_center().y, 300, vo.status_text(), 18, Color("f6ecd2"))
+
 func square_button(r: Rect2, glyph: String, id: String):
     var hov: bool = ui.hover_id == id
     panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
@@ -314,6 +327,7 @@ func _draw_game():
     sound_button(lay.fx, "fx")
     var sm = ui.screen_mode()
     if sm != null and sm.supported(): fullscreen_button(lay.full, sm.on_cached())   # R43
+    _draw_voice(lay)
     if not mate: _draw_hand()
     _draw_fly()
     if ui.phase in ["reveal", "clock", "safe"]: _draw_reveal(false)
