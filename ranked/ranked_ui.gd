@@ -16,6 +16,8 @@ const LEAGUES = ["Madeira","Ferro","Bronze","Prata","Ouro","Platina","Esmeralda"
 const GOLD = Color("f4ce7f")
 const Cosmetics = preload("res://profile/premium_cosmetics.gd")
 const PlayerPortrait = preload("res://profile/player_portrait.gd")
+const Plaque = preload("res://ranked/player_plaque.gd")   # R46 · placa do jogador (proposta A aprovada)
+const LEAGUE_ACCENT := [Color("b07a44"), Color("a9b1b6"), Color("c98a4a"), Color("d3dbe0"), Color("f4ce7f"), Color("86dccf"), Color("68d48a"), Color("94c9ff"), Color("c99bff"), Color("ff9b8f"), Color("ffd76a")]
 var hub = null   # main_hub (meu selo na faixa "Você")
 var account
 var controller
@@ -115,7 +117,7 @@ func setup(service, ranked_controller):
 func _make_strip() -> Dictionary:
     var bg = PanelContainer.new()
     var style = StyleBoxFlat.new()
-    style.bg_color = Color(0.05, 0.08, 0.07, 0.86)
+    style.bg_color = Color(0, 0, 0, 0)   # R46: a placa (player_plaque.gd) desenha fundo e borda
     style.border_color = Color("5d6b58")
     style.set_border_width_all(1)
     style.set_corner_radius_all(6)
@@ -123,6 +125,8 @@ func _make_strip() -> Dictionary:
     style.content_margin_right = 6
     bg.add_theme_stylebox_override("panel", style)
     bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var plaque = Plaque.new()
+    bg.add_child(plaque)
     var row = HBoxContainer.new()
     row.add_theme_constant_override("separation", 8)
     bg.add_child(row)
@@ -141,17 +145,46 @@ func _make_strip() -> Dictionary:
     seal.mouse_filter = Control.MOUSE_FILTER_IGNORE
     seal.visible = false
     row.add_child(seal)
+    var col = VBoxContainer.new()
+    col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    col.add_theme_constant_override("separation", 0)
+    row.add_child(col)
     var name = Label.new()
     name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     name.clip_text = true
     name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    name.add_theme_color_override("font_color", Color("efe3c4"))
-    row.add_child(name)
+    name.add_theme_color_override("font_color", Color("f4edda"))
+    name.add_theme_font_override("font", preload("res://account/login_art.gd").FONT_BOLD)
+    name.add_theme_color_override("font_outline_color", Color("0b150f"))
+    name.add_theme_constant_override("outline_size", 4)
+    col.add_child(name)
+    var subrow = HBoxContainer.new()
+    subrow.add_theme_constant_override("separation", 6)
+    col.add_child(subrow)
+    var emblem = TextureRect.new()
+    emblem.custom_minimum_size = Vector2(24, 24)
+    emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    emblem.visible = false
+    subrow.add_child(emblem)
+    var sub = Label.new()
+    sub.add_theme_font_size_override("font_size", 16)
+    sub.add_theme_color_override("font_color", GOLD)
+    sub.add_theme_color_override("font_outline_color", Color("0b150f"))
+    sub.add_theme_constant_override("outline_size", 3)
+    sub.clip_text = true
+    sub.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    subrow.add_child(sub)
     var clock = ClockView.new()
     clock.custom_minimum_size.x = 96
     row.add_child(clock)
+    var front = Plaque.new()      # camada da frente: indicador de voz por cima do retrato
+    front.front = true
+    bg.add_child(front)
     hud.add_child(bg)
-    var strip := {"bg": bg, "name": name, "clock": clock, "style": style, "seal": seal, "seal_id": "", "color": "", "portrait": portrait}
+    var strip := {"front": front, "bg": bg, "name": name, "clock": clock, "style": style, "seal": seal, "seal_id": "", "color": "", "portrait": portrait, "plaque": plaque, "sub": sub, "emblem": emblem}
     # R37 · passar o mouse (ou tocar) na faixa do jogador abre o cartão de perfil com o placar deste modo
     bg.mouse_filter = Control.MOUSE_FILTER_PASS
     bg.mouse_entered.connect(func(): _strip_hover(strip, true))
@@ -524,34 +557,82 @@ func _refresh_strips():
         var info = controller.player(pair[1])
         var who = "Você" if pair[1] == me else String(info.get("nickname", "Adversário"))
         if pair[1] != me and not bool(info.get("connected", true)): who += " (reconectando…)"
-        if rated(): strip.name.text = ("%s\n%s %d" if two_line else "%s · %s %d") % [who, LEAGUES[clampi(int(info.get("league", 0)), 0, 10)], int(info.get("pl", 0))]
-        else: strip.name.text = ("%s\nCasual" if two_line else "%s") % who
+        var lg := clampi(int(info.get("league", 0)), 0, 10)
+        strip.name.text = who
+        var ttl := Cosmetics.title_text(Cosmetics.public_title(info if pair[1] != me else PlayerPortrait.self_info(hub)))
+        if rated():
+            strip.sub.text = "%s · %d PL%s" % [LEAGUES[lg].to_upper(), int(info.get("pl", 0)), ("  ·  " + ttl) if ttl != "" and not two_line else ""]
+            strip.emblem.texture = ThemeCatalog.badge_texture(Catalog.IDS[lg])
+            strip.emblem.visible = strip.emblem.texture != null
+            strip.plaque.accent = LEAGUE_ACCENT[lg]
+        else:
+            strip.sub.text = ttl if ttl != "" else "CASUAL"
+            strip.emblem.visible = false
+            strip.plaque.accent = Color("f4ce7f")
+        # voz (só leitura do FraihaVoice): na sala (fone dourado) / falando (verde + brilho) / silenciado por mim (risco)
+        var stg = get_parent()
+        var vo = stg.get("voice") if stg != null else null
+        var seat := 1 if pair[1] == "w" else 2
+        var vs := ""
+        if vo != null and vo.active():
+            var here: bool = (pair[1] == me) or vo.remote.has(seat)
+            if here: vs = "speaking" if vo.is_speaking(seat) else ("deaf" if pair[1] != me and vo.is_participant_muted(seat) else "in")
+        strip.plaque.voice_state = vs
+        strip.plaque.speaking = vs == "speaking"
+        strip.front.voice_state = vs
+        strip.front.speaking = vs == "speaking"
+        strip.front.accent = strip.plaque.accent
+        strip.plaque.portrait_rect = Rect2(strip.portrait.global_position - strip.bg.global_position, strip.portrait.size)
+        strip.front.portrait_rect = strip.plaque.portrait_rect
+        strip.plaque.queue_redraw()
+        strip.front.queue_redraw()
         var mine_side: bool = pair[1] == me
         var look: Dictionary = info if not mine_side else PlayerPortrait.self_info(hub)
         strip.portrait.hub = hub
         strip.portrait.mine = mine_side
         strip.portrait.set_info(look)
-        strip.portrait.visible = not two_line   # celular deitado: faixa estreita, o nome tem prioridade
+        strip.portrait.visible = true   # R46: retrato pequeno também no celular deitado (placa aprovada)
         var bid: String = Cosmetics.public_badge(info) if pair[1] != me else (String(hub.current_badge()) if hub != null and hub.has_method("current_badge") else "")
         if bid != strip.seal_id:
             strip.seal_id = bid
             strip.seal.texture = Cosmetics.badge_texture(bid)
-        strip.seal.visible = strip.seal.texture != null
+        # celular deitado (faixa estreita): o selo vai para o canto do retrato e o nome ganha o espaço
+        strip.seal.visible = strip.seal.texture != null and not two_line
+        strip.portrait.seal_rect.texture = strip.seal.texture
+        strip.portrait.seal_rect.visible = two_line and strip.seal.texture != null
         var running = controller.status == "playing" and controller.clock.active == pair[1]
         strip.clock.show_time(controller.clock.remaining_ms(pair[1]), running)
-        strip.style.border_color = Color("e5c37c") if running else Color("5d6b58")
+        strip.style.border_color = Color(0, 0, 0, 0)
+        strip.plaque.active = running
     resign_button.visible = controller.in_match() and not Mobile.active(get_viewport())
     if controller.status == "playing" and account.server_ready: link_label.text = ""
 
 # Posiciona as faixas dos jogadores em volta do tabuleiro (retângulo em pixels de tela).
+const PLAQUE_H := 98.0
 func layout_hud(board: Rect2, mobile: bool, portrait: bool, safe: Rect2, top_slot: Rect2, bottom_slot: Rect2):
     # Desktop usa coordenadas 1920x1080 (escala da janela); mobile usa pixels CSS.
     two_line = mobile and not portrait
     hud_font = 16 if mobile else 26
     for key in strips:
         strips[key].name.add_theme_font_size_override("font_size", (13 if two_line else hud_font - 2) if mobile else hud_font)
+        # celular deitado (faixa estreita): nome em fonte compacta, até 2 linhas, sem a 2ª linha de título
+        # (o título continua no cartão de perfil) → nicks de até 20 letras aparecem inteiros
+        var nm: Label = strips[key].name
+        if two_line:
+            nm.add_theme_font_override("font", ThemeDB.fallback_font)
+            nm.add_theme_font_size_override("font_size", 11)
+            nm.clip_text = false
+            nm.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+            nm.max_lines_visible = 2
+        else:
+            nm.add_theme_font_override("font", preload("res://account/login_art.gd").FONT_BOLD)
+            nm.clip_text = true
+            nm.autowrap_mode = TextServer.AUTOWRAP_OFF
+            nm.max_lines_visible = -1
+        strips[key].sub.visible = not two_line
         strips[key].clock.set_font_size(hud_font + 4 if mobile else 34)
-        strips[key].clock.custom_minimum_size.x = 84 if mobile else 150
+        strips[key].clock.custom_minimum_size.x = (58 if two_line else 84) if mobile else 150
+        if two_line: strips[key].clock.set_font_size(14)
     resign_button.add_theme_font_size_override("font_size", 22)
     if not resign_button.has_meta("styled"):
         resign_button.set_meta("styled", true)
@@ -563,6 +644,12 @@ func layout_hud(board: Rect2, mobile: bool, portrait: bool, safe: Rect2, top_slo
         resign_button.add_theme_stylebox_override("normal", st)
         resign_button.add_theme_color_override("font_color", Color("efe3c4"))
     if mobile:
+        for key in strips:
+            var side := 30.0 if two_line else 38.0
+            strips[key].portrait.custom_minimum_size = Vector2(side, side)
+            strips[key].portrait.size = Vector2(side, side)
+            strips[key].sub.add_theme_font_size_override("font_size", 11)
+            strips[key].emblem.custom_minimum_size = Vector2(16, 16)
         strips.top.bg.position = top_slot.position
         strips.top.bg.size = top_slot.size
         strips.bottom.bg.position = bottom_slot.position
@@ -574,10 +661,16 @@ func layout_hud(board: Rect2, mobile: bool, portrait: bool, safe: Rect2, top_slo
     var x = board.end.x + 28.0
     if x + width > safe.end.x - 8.0: x = maxf(safe.position.x + 8.0, board.position.x - width - 28.0)
     strips.top.bg.position = Vector2(x, board.position.y)
-    strips.top.bg.size = Vector2(width, 66)
-    strips.bottom.bg.position = Vector2(x, board.end.y - 66)
-    strips.bottom.bg.size = Vector2(width, 66)
-    resign_button.position = Vector2(x, board.end.y - 192)     # R38.3: acima da faixa de capturas (stage.MATERIAL_H)
+    strips.top.bg.size = Vector2(width, PLAQUE_H)
+    strips.bottom.bg.position = Vector2(x, board.end.y - PLAQUE_H)
+    strips.bottom.bg.size = Vector2(width, PLAQUE_H)
+    for key in strips:
+        strips[key].portrait.custom_minimum_size = Vector2(76, 76)
+        strips[key].portrait.size = Vector2(76, 76)
+        strips[key].name.add_theme_font_size_override("font_size", 24)
+        strips[key].style.content_margin_left = 12
+        strips[key].style.content_margin_right = 10
+    resign_button.position = Vector2(x, board.end.y - PLAQUE_H - 60 - 126)     # R38.3: acima da faixa de capturas (stage.MATERIAL_H)
     resign_button.size = Vector2(220, 56)
     link_label.position = Vector2(x, board.get_center().y - 30)
     link_label.size = Vector2(width, 60)

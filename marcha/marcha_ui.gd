@@ -1358,6 +1358,7 @@ class TableView extends Control:
             var friend: Texture2D = ui.seat_avatar(seat)   # R41 · amigo online: o avatar dele
             draw_texture_rect(friend if friend != null else ui.portraits[ui.BOTS[seat].portrait], pr, false)
         _look(pr, ui.seat_look(seat))
+        if ui.online: ui.VoiceGlyph.draw_seat_voice(self, pr, ui.voice(), seat)   # R46 · quem está na voz / falando
         var x := pr.end.x + (10.0 if narrow else 12.0)
         # placas estreitas (celular em retrato): a referência usa letras e marcadores menores
         var sc := 0.8 if r.size.x < 300.0 else 1.0

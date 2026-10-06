@@ -56,6 +56,24 @@ static func draw_headphones(ci: CanvasItem, r: Rect2, muted: bool, col: Color) -
     if muted:
         ci.draw_line(c + Vector2(-s * 0.36, -s * 0.30), c + Vector2(s * 0.36, s * 0.36), RED, w * 1.3)
 
+## R46 · Indicador de voz sobre o RETRATO de um assento da mesa (Marcha/XEQUE online). Só leitura do
+## FraihaVoice; desenha nada fora da voz. seat = assento como o jogador vê (0 = eu); a sala usa o assento
+## absoluto + 1 (o servidor gira a mesa para cada jogador: absoluto = (meu absoluto + seat) % 4).
+static func draw_seat_voice(ci: CanvasItem, avatar: Rect2, voice, seat: int) -> void:
+    if voice == null or not voice.active() or int(voice.my_uid) <= 0: return
+    var uid := ((int(voice.my_uid) - 1 + seat) % 4) + 1
+    var me := seat == 0
+    if not me and not voice.remote.has(uid): return
+    var talking: bool = voice.is_speaking(uid)
+    if talking:
+        for i in 3: ci.draw_rect(avatar.grow(4 + i * 2.0), Color(0.5, 0.95, 0.5, 0.6 - i * 0.18), false, 2.5)
+    var side := clampf(avatar.size.x * 0.34, 18.0, 34.0)
+    var b := Rect2(avatar.position + Vector2(-side * 0.3, avatar.size.y - side * 0.7), Vector2(side, side))
+    ci.draw_circle(b.get_center(), side * 0.56, Color("0b150f"))
+    ci.draw_arc(b.get_center(), side * 0.56, 0, TAU, 18, Color("d9b45e"), 1.5)
+    var deaf: bool = (not me) and voice.is_participant_muted(uid)
+    draw_headphones(ci, b.grow(-side * 0.12), deaf, LIVE if talking else Color("f4ce7f"))
+
 ## Badge "×" (sair da voz) no canto do botão; devolve o retângulo de toque.
 static func draw_leave_badge(ci: CanvasItem, r: Rect2) -> Rect2:
     var rr := minf(r.size.x, r.size.y) * 0.2

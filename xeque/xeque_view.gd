@@ -623,6 +623,7 @@ func _draw_plate(s: int):
             draw_rect(ar.grow(2), Color("d8d0bf") if not elim else Color("555"))
             draw_texture_rect(_avatar(s, elim), ar, false)
             _look(ar, ui.seat_look(s))
+            if ui.online: VoiceGlyph.draw_seat_voice(self, ar, ui.voice(), s)   # R46 · quem está na voz / falando
             var x := ar.end.x + 9
             var nfs := 24 if compact else 30
             var top := r.position.y + (31 if compact else 40)
@@ -665,6 +666,7 @@ func _draw_plate(s: int):
             draw_rect(ar.grow(1), Color("5a3a12") if not elim else Color("333"))
             draw_texture_rect(_avatar(s, elim), ar, false)
             _look(ar, ui.seat_look(s))
+            if ui.online: VoiceGlyph.draw_seat_voice(self, ar, ui.voice(), s)   # R46 · quem está na voz / falando
             var y := ar.end.y + 32 * u
             var bcol := Color("9fd0ff") if not elim else Color("555")
             if one_line:

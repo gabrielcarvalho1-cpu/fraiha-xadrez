@@ -1161,8 +1161,8 @@ func _layout_material_desktop():
     var w := 460.0
     var x := board.end.x + 28.0
     if x + w > vs.x - 8.0: x = maxf(8.0, board.position.x - w - 28.0)
-    var top_y := board.position.y + (74.0 if strips else 0.0)
-    var bottom_y := board.end.y - MATERIAL_H - (74.0 if strips else 0.0)
+    var top_y := board.position.y + (106.0 if strips else 0.0)
+    var bottom_y := board.end.y - MATERIAL_H - (106.0 if strips else 0.0)
     material_hud.compact = false
     material_hud.top_rect = Rect2(x, top_y, w, MATERIAL_H)
     material_hud.bottom_rect = Rect2(x, bottom_y, w, MATERIAL_H)

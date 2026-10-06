@@ -105,6 +105,10 @@ func run():
     check(String(j[2].channel) == "fx_casual_" + mid and String(j[2].token).begins_with("007") and int(j[2].uid) in [1, 2], "token do servidor para o canal da partida (uid = assento)")
     mock.fire({"ev": "remote", "seq": v._seq, "uids": [3 - int(j[2].uid)]})
     check("PeerParty" in v.status_text() and "PeerParty" in stage.desk_voice.label.text, "quem está na sala: %s" % stage.desk_voice.label.text)
+    mock.fire({"ev": "speaking", "seq": v._seq, "uids": [3 - int(j[2].uid)]})
+    for k in 6: await process_frame
+    var opp_strip: Dictionary = stage.casual_ui.strips.top
+    check(String(opp_strip.plaque.voice_state) == "speaking" and opp_strip.plaque.speaking, "placa do adversário: fone verde + brilho quando ele fala")
     await shot("3_casual_voz_conectada")
     if not shots.is_empty():   # celular em pé e deitado: microfone na coluna de ações
         for sz in [Vector2i(720, 1280), Vector2i(1280, 600)]:
@@ -153,6 +157,12 @@ func run():
     mu._redraw()
     await process_frame
     check(mu.hits.any(func(h): return String(h.id) == "voice") and mu.hits.any(func(h): return String(h.id) == "voice_off"), "MARCHA: botão de voz e de sair da voz desenhados")
+    var ally_uid: int = ((int(v.my_uid) - 1 + 2) % 4) + 1
+    mock.fire({"ev": "remote", "seq": v._seq, "uids": [ally_uid]})
+    mock.fire({"ev": "speaking", "seq": v._seq, "uids": [ally_uid]})
+    mu._redraw()
+    for k in 4: await process_frame
+    check(v.is_speaking(ally_uid), "MARCHA: aliado falando (assento girado → uid %d)" % ally_uid)
     await shot("4_marcha_voz")
     if not shots.is_empty():
         root.get_window().size = Vector2i(720, 1280)
