@@ -2,6 +2,7 @@
 import { ENVIRONMENTS } from './config.js';
 import { Api, ApiError, login, remoteLogout } from './api.js';
 import { h, toast, closeAllModals } from './ui.js';
+import { startGoogle, consumeGoogleReturn } from './oauth.js';
 import * as V from './views/index.js';
 
 const ROUTES = [
@@ -49,46 +50,78 @@ function sessionRejected(api, err) {
   renderLogin(err.text);
 }
 
-function renderLogin(error = '') {
+// Token (senha OU Google) → o SERVIDOR decide em /admin/api/session se a conta é admin (UUID na allowlist).
+// Só depois disso a sessão do Admin existe. Falha/recusa: o token é descartado e a sessão Supabase encerrada.
+async function establishSession(envKey, token, epoch) {
+  const api = new Api(envKey, token);
+  try {
+    const session = await api.get('/admin/api/session');
+    if (epoch !== S.epoch) { api.revoke(); remoteLogout(envKey, token); return null; }   // login antigo chegando tarde: descarta
+    S.epoch++;
+    Object.assign(S, { api, session, envKey, fails: 0 });
+    api.onUnauthorized = err => sessionRejected(api, err);   // QUALQUER 401 desta sessão encerra tudo
+    if (!/^#\/[a-z]/.test(location.hash)) location.hash = '#/dashboard';
+    renderShell();
+    return session;
+  } catch (err) {
+    api.revoke(); remoteLogout(envKey, token);
+    throw err;
+  }
+}
+
+function loginErrorText(err) {
+  return err instanceof ApiError ? (err.code === 'login_failed' ? 'E-mail ou senha incorretos.' : err.text) : 'Falha inesperada.';
+}
+
+function renderLogin(error = '', { envKey = '' } = {}) {
   if (S.api || S.session) endSession();
   const envSel = h('select', { name: 'env' }, Object.entries(ENVIRONMENTS).map(([k, e]) => h('option', { value: k }, e.label)));
+  if (envKey && ENVIRONMENTS[envKey]) envSel.value = envKey;
   const email = h('input', { type: 'text', name: 'email', autocomplete: 'username', placeholder: 'email da sua conta FRAIHA' });
   const pass = h('input', { type: 'password', name: 'password', autocomplete: 'current-password' });
   const dev = h('input', { type: 'text', name: 'dev', placeholder: 'nome dev (ex.: boss)', autocomplete: 'off' });
-  const supaRows = [h('label', {}, 'E-mail', email), h('label', {}, 'Senha', pass)];
-  const devRows = [h('label', {}, 'Conta DEV (servidor local com FRAIHA_DEV_AUTH=1)', dev)];
   const msg = h('div', { class: error ? 'banner err' : 'hidden' }, error);
   const btn = h('button', { class: 'btn primary', type: 'submit' }, 'Entrar');
-  const sync = () => { const dv = ENVIRONMENTS[envSel.value].auth === 'dev'; supaRows.forEach(r => r.classList.toggle('hidden', dv)); devRows.forEach(r => r.classList.toggle('hidden', !dv)); };
+  const google = h('button', { class: 'btn', type: 'button', id: 'google-login', onclick: () => {
+    msg.className = 'hidden';
+    try { google.disabled = true; google.textContent = 'Abrindo o Google…'; startGoogle(envSel.value); }
+    catch { google.disabled = false; google.textContent = 'ENTRAR COM GOOGLE'; msg.textContent = 'Não foi possível iniciar o login com Google neste navegador.'; msg.className = 'banner err'; }
+  } }, 'ENTRAR COM GOOGLE');
+  const supaRows = [h('label', {}, 'E-mail', email), h('label', {}, 'Senha', pass)];
+  const googleRows = [h('p', { class: 'muted' }, 'ou'), google];
+  const devRows = [h('label', {}, 'Conta DEV (servidor local com FRAIHA_DEV_AUTH=1)', dev)];
+  const sync = () => { const dv = ENVIRONMENTS[envSel.value].auth === 'dev'; [...supaRows, ...googleRows].forEach(r => r.classList.toggle('hidden', dv)); devRows.forEach(r => r.classList.toggle('hidden', !dv)); };
   envSel.addEventListener('change', sync);
   const form = h('form', { onsubmit: async e => {
     e.preventDefault(); btn.disabled = true; btn.textContent = 'Entrando…'; msg.className = 'hidden';
     const epoch = S.epoch;
-    let api = null;
     try {
       const token = await login(envSel.value, { email: email.value.trim(), password: pass.value, devName: dev.value.trim() });
       pass.value = '';
-      api = new Api(envSel.value, token);
-      const session = await api.get('/admin/api/session');   // o SERVIDOR decide se é admin
-      if (epoch !== S.epoch || !document.body.contains(form)) { api.revoke(); return; }   // login antigo chegando tarde
-      S.epoch++;
-      Object.assign(S, { api, session, envKey: envSel.value, fails: 0 });
-      api.onUnauthorized = err => sessionRejected(api, err);   // QUALQUER 401 desta sessão encerra tudo
-      if (!location.hash) location.hash = '#/dashboard';
-      renderShell();
+      if (epoch !== S.epoch || !document.body.contains(form)) return;
+      await establishSession(envSel.value, token, epoch);
     } catch (err) {
-      if (api) api.revoke();
       if (epoch !== S.epoch) return;
-      msg.textContent = err instanceof ApiError ? (err.code === 'login_failed' ? 'E-mail ou senha incorretos.' : err.text) : 'Falha inesperada.';
+      msg.textContent = loginErrorText(err);
       msg.className = 'banner err'; btn.disabled = false; btn.textContent = 'Entrar';
     }
-  } }, h('label', {}, 'Ambiente', envSel), supaRows, devRows, msg, btn);
+  } }, h('label', {}, 'Ambiente', envSel), supaRows, devRows, msg, btn, googleRows);
   root.replaceChildren(h('div', { class: 'login' }, h('div', { class: 'box' },
     h('h1', {}, h('span', { class: 'crest brand' }, h('span', { class: 'crest' }, '♜')), 'FRAIHA ADMIN'),
     h('p', { class: 'muted' }, 'Acesso restrito. A permissão é verificada pelo servidor a cada requisição.'), form)));
   sync();
+  return { msg };
 }
 
+// Volta do Google: limpa o endereço, confere que ESTA aba iniciou o login e pergunta ao servidor.
+async function resumeGoogle(ret) {
+  if (ret.error) return renderLogin(ret.error);
+  const { msg } = renderLogin('', { envKey: ret.envKey });
+  msg.textContent = 'Verificando a conta no servidor…'; msg.className = 'banner info';
+  const epoch = S.epoch;
+  try { await establishSession(ret.envKey, ret.token, epoch); }
+  catch (err) { if (epoch === S.epoch) renderLogin(loginErrorText(err), { envKey: ret.envKey }); }
+}
 function renderShell() {
   const envName = (S.session && S.session.env) || 'unknown';
   const expected = S.envKey === 'local' ? ['local', 'dev'] : [S.envKey];
@@ -150,4 +183,4 @@ async function mount() {
 const backoff = () => Math.min(30000, 2000 * 2 ** Math.min(4, S.fails - 1));
 const waitVisible = () => new Promise(res => { const f = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', f); res(); } }; document.addEventListener('visibilitychange', f); });
 
-renderLogin();
+{ const ret = consumeGoogleReturn(); if (ret) resumeGoogle(ret); else renderLogin(); }

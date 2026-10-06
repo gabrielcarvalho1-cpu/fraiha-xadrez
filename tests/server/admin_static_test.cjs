@@ -67,7 +67,7 @@ test('Admin LIGADO: /admin/ serve o frontend, assets corretos, API intacta, nada
 
   // --- assets que o index e os módulos realmente pedem
   const assets = { '/admin/assets/admin.css': /^text\/css/, '/admin/src/app.js': /^text\/javascript/, '/admin/src/api.js': /^text\/javascript/,
-    '/admin/src/config.js': /^text\/javascript/, '/admin/src/ui.js': /^text\/javascript/, '/admin/src/views/index.js': /^text\/javascript/ };
+    '/admin/src/config.js': /^text\/javascript/, '/admin/src/oauth.js': /^text\/javascript/, '/admin/src/ui.js': /^text\/javascript/, '/admin/src/views/index.js': /^text\/javascript/ };
   for (const [p, type] of Object.entries(assets)) {
     const r = await get(port, p);
     assert.equal(r.status, 200, p); assert.match(r.headers['content-type'], type, p);
@@ -146,7 +146,7 @@ test('loadFiles: só .html/.css/.js de admin/, sem ocultos, sem package.json, se
   const { loadFiles } = require('../../online_v021/admin/static');
   const keys = [...loadFiles().keys()].sort();
   assert.deepEqual(keys, ['/admin/', '/admin/assets/admin.css', '/admin/index.html', '/admin/src/api.js', '/admin/src/app.js',
-    '/admin/src/config.js', '/admin/src/ui.js', '/admin/src/views/index.js']);
+    '/admin/src/config.js', '/admin/src/oauth.js', '/admin/src/ui.js', '/admin/src/views/index.js']);
   const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'fx-static-'));
   try {
     fs.writeFileSync(path.join(tmp, 'index.html'), 'ok'); fs.writeFileSync(path.join(tmp, '.env.js'), 'x'); fs.writeFileSync(path.join(tmp, 'a.json'), '{}');

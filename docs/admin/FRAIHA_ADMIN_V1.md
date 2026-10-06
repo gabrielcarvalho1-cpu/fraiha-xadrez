@@ -143,3 +143,22 @@ Manual: `PORT=8140 FRAIHA_DEV_AUTH=1 FRAIHA_ENV=local FRAIHA_ADMIN_USERS=<uuid>=
   (o navegador manda `Origin` nas ações POST). No login, escolher o ambiente **STAGING**.
 - Testes: `tests/server/admin_static_test.cjs` (servidor real); `ADMIN_URL=http://127.0.0.1:8140/admin/ python3
   tests/admin/admin_ui_test.py` roda o QA completo do painel servido pelo próprio servidor.
+
+## ENTRAR COM GOOGLE (mesmo fluxo do jogo Web)
+- Reaproveita o fluxo do jogo (`account/account_service.gd`): REST do Supabase Auth, sem SDK —
+  `/auth/v1/authorize?provider=google&redirect_to=<página>` → Google → Supabase → volta com `#access_token=…`
+  (fluxo implícito). Só a URL do projeto e a chave publicável (já públicas no jogo).
+- `admin/src/oauth.js`: `redirect_to` = endereço canônico desta página (origem + caminho, sem query/hash; nunca de
+  parâmetro → sem open redirect). Marcador de uso único em `sessionStorage` (ambiente + horário, sem credencial,
+  validade 10 min): retorno sem login iniciado nesta aba é ignorado. Tokens saem do endereço na hora; refresh token
+  e token do Google são descartados; o access token fica só na memória.
+- Depois do retorno o caminho é o MESMO do login por senha: `/admin/api/session` → servidor verifica o token no
+  Supabase → UUID na `FRAIHA_ADMIN_USERS`. Conta Google comum = 403 `not_admin` (e a sessão Supabase dela é
+  encerrada). Logout chama `/auth/v1/logout`. 401 continua encerrando a sessão.
+- Só STAGING/PRODUCTION (LOCAL usa conta DEV).
+- **Redirect URL necessária no Supabase (NÃO adicionada):** `https://fraiha-xadrez-staging.onrender.com/admin/`.
+  Sem ela o Supabase devolve para a Site URL (o jogo) e o Admin não recebe o login. Google Cloud: nada muda (o
+  callback continua o do Supabase).
+- Testes: `tests/admin/oauth_test.mjs` (unitário) e `tests/admin/run_admin_google_qa.sh` (Chromium, Admin em
+  `/admin/`). **Google e Supabase são MOCKADOS** no navegador; o token falso é um token DEV verificado pelo servidor
+  local real (allowlist e 403 reais). O Google REAL ainda não foi testado.
