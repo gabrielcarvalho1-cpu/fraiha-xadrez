@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fraiha:distribution:manifest:v1",
+  "title": "Strict FRAIHA Windows site fixed payload manifest v1/v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "game_version", "build_number", "protocol_version", "rules_version", "release_channel", "platform", "development_only", "format", "package_url", "package_size", "sha256", "exe_size", "exe_sha256", "pck_size", "pck_sha256", "release_notes", "mandatory", "date"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "game_version": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})$"},
+    "build_number": {"type": "integer", "minimum": 1, "maximum": 2100000000},
+    "protocol_version": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+    "rules_version": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+    "release_channel": {"enum": ["DEV", "BETA", "STABLE"]},
+    "platform": {"const": "windows_site"},
+    "development_only": {"type": "boolean"},
+    "format": {"enum": ["fraiha-flat-zip-v1", "fraiha-flat-zip-v2"]},
+    "cfg_size": {"type": "integer", "minimum": 1, "maximum": 32768},
+    "cfg_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "readme_size": {"type": "integer", "minimum": 1, "maximum": 1048576},
+    "readme_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "package_url": {"type": "string", "maxLength": 2048, "format": "uri"},
+    "package_size": {"type": "integer", "minimum": 1, "maximum": 536870912},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "exe_size": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+    "exe_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pck_size": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+    "pck_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "release_notes": {"type": "string", "maxLength": 4096},
+    "mandatory": {"type": "boolean"},
+    "date": {"type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+  },
+  "allOf": [
+    {"if": {"properties": {"format": {"const": "fraiha-flat-zip-v2"}}}, "then": {"required": ["cfg_size", "cfg_sha256", "readme_size", "readme_sha256"]}, "else": {"not": {"anyOf": [{"required": ["cfg_size"]}, {"required": ["cfg_sha256"]}, {"required": ["readme_size"]}, {"required": ["readme_sha256"]}]}}},
+    {"if": {"properties": {"release_channel": {"const": "DEV"}}}, "then": {"properties": {"development_only": {"const": true}}}, "else": {"properties": {"development_only": {"const": false}, "protocol_version": {"minimum": 1}, "rules_version": {"minimum": 1}, "game_version": {"not": {"const": "0.0.0"}}}}}
+  ],
+  "$comment": "Authoritative Contracts.cs enforces URL policy, combined 1 GiB expanded limit, duplicate keys and production trust gate. v1: fixed EXE/PCK fixtures; v2: fixed EXE/PCK/online.cfg/LEIA-ME.txt. No remote commands/paths/arguments. Reviewed offline PLAY is a local opt-in pinned to historical V029/V030 hashes; v2 is not a generic export format. HTTPS or digest alone does not authenticate manifests."
+}

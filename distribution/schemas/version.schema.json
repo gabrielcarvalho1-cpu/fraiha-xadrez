@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fraiha:distribution:version:v1",
+  "title": "FRAIHA distribution version v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "game_version", "build_number", "protocol_version", "rules_version", "release_channel", "platform", "development_only"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "game_version": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})\\.(0|[1-9][0-9]{0,5})$"},
+    "build_number": {"type": "integer", "minimum": 1, "maximum": 2100000000},
+    "protocol_version": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+    "rules_version": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+    "release_channel": {"enum": ["DEV", "BETA", "STABLE"]},
+    "platform": {"enum": ["web", "windows_site", "windows_steam", "android", "ios"]},
+    "development_only": {"type": "boolean"}
+  },
+  "allOf": [
+    {"if": {"properties": {"release_channel": {"const": "DEV"}}}, "then": {"properties": {"development_only": {"const": true}}}, "else": {"properties": {"development_only": {"const": false}, "protocol_version": {"minimum": 1}, "rules_version": {"minimum": 1}, "game_version": {"not": {"const": "0.0.0"}}}}}
+  ],
+  "$comment": "Runtime additionally rejects duplicate decoded keys, integer noncanonical lexemes, invalid types, and inputs exceeding 32 KiB. DEV 0 protocol/rules is unassigned, not production compatibility. No INTERNAL channel in v1."
+}

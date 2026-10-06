@@ -1,0 +1,114 @@
+﻿[
+    {
+        "historical_version":  "029",
+        "source":  "C:\\Users\\Usuário\\Documents\\Codex\\2026-09-20\\referenced-chatgpt-conversation-this-is-an\\work\\v029\\release\\windows-test\\FRAIHA-Xadrez-V029-Teste.exe",
+        "size":  96584192,
+        "sha256":  "3bba9f68131498157e02ec44c296f996dd0a4d64c8fdb582d2794bd59feb4465",
+        "role":  "original approved export"
+    },
+    {
+        "historical_version":  "029",
+        "source":  "C:\\Users\\Usuário\\Documents\\Codex\\2026-09-20\\referenced-chatgpt-conversation-this-is-an\\work\\v029\\release\\windows-test\\FRAIHA-Xadrez-V029-Teste.pck",
+        "size":  82264412,
+        "sha256":  "351a00c43297bf3feaad8cab7e28ea2974e7238589d050db09b8eb8018c3733c",
+        "role":  "original approved export"
+    },
+    {
+        "historical_version":  "029",
+        "source":  "C:\\Users\\Usuário\\Documents\\Codex\\2026-09-20\\referenced-chatgpt-conversation-this-is-an\\work\\v029\\release\\windows-test\\online.cfg",
+        "size":  91,
+        "sha256":  "b5eb9d12e5253287474eda289d313fbe7be17d0c759838887da8c22fa1e59e47",
+        "role":  "original approved export"
+    },
+    {
+        "historical_version":  "029",
+        "source":  "C:\\Users\\Usuário\\Documents\\Codex\\2026-09-20\\referenced-chatgpt-conversation-this-is-an\\work\\v029\\release\\windows-test\\LEIA-ME.txt",
+        "size":  3731,
+        "sha256":  "dd5530fb67222c48d23ee9de4b5a23de13f36075b5d3e71abb2adb2c61eda173",
+        "role":  "original approved export"
+    },
+    {
+        "historical_version":  "029",
+        "source":  "C:\\Users\\Usuário\\orca\\workspaces\\project\\codex-distribution-v1\\distribution\\.local\\real-v029-dev-export\\FRAIHA.exe",
+        "size":  96584192,
+        "sha256":  "3bba9f68131498157e02ec44c296f996dd0a4d64c8fdb582d2794bd59feb4465",
+        "role":  "DEV copy; EXE/PCK renamed, sidecar endpoint intentionally empty"
+    },
+    {
+        "historical_version":  "029",
+        "source":  "C:\\Users\\Usuário\\orca\\workspaces\\project\\codex-distribution-v1\\distribution\\.local\\real-v029-dev-export\\FRAIHA.pck",
+        "size":  82264412,
+        "sha256":  "351a00c43297bf3feaad8cab7e28ea2974e7238589d050db09b8eb8018c3733c",
+        "role":  "DEV copy; EXE/PCK renamed, sidecar endpoint intentionally empty"
+    },
+    {
+        "historical_version":  "029",
+        "source":  "C:\\Users\\Usuário\\orca\\workspaces\\project\\codex-distribution-v1\\distribution\\.local\\real-v029-dev-export\\online.cfg",
+        "size":  23,
+        "sha256":  "ffaee9060a72096d914fc15346a3021d316c2ace6e9f36b780c956c7d325606e",
+        "role":  "DEV copy; EXE/PCK renamed, sidecar endpoint intentionally empty"
+    },
+    {
+        "historical_version":  "029",
+        "source":  "C:\\Users\\Usuário\\orca\\workspaces\\project\\codex-distribution-v1\\distribution\\.local\\real-v029-dev-export\\LEIA-ME.txt",
+        "size":  3731,
+        "sha256":  "dd5530fb67222c48d23ee9de4b5a23de13f36075b5d3e71abb2adb2c61eda173",
+        "role":  "DEV copy; EXE/PCK renamed, sidecar endpoint intentionally empty"
+    },
+    {
+        "historical_version":  "030",
+        "source":  "C:\\Users\\Usuário\\Documents\\Codex\\2026-09-20\\referenced-chatgpt-conversation-this-is-an\\work\\v030\\release\\windows-test\\FRAIHA-Xadrez-V030-Teste.exe",
+        "size":  96584192,
+        "sha256":  "3bba9f68131498157e02ec44c296f996dd0a4d64c8fdb582d2794bd59feb4465",
+        "role":  "original approved export"
+    },
+    {
+        "historical_version":  "030",
+        "source":  "C:\\Users\\Usuário\\Documents\\Codex\\2026-09-20\\referenced-chatgpt-conversation-this-is-an\\work\\v030\\release\\windows-test\\FRAIHA-Xadrez-V030-Teste.pck",
+        "size":  85100844,
+        "sha256":  "011137a3d88709cf5f2ab128648ebe5c325783824160939904b1860f74ab5433",
+        "role":  "original approved export"
+    },
+    {
+        "historical_version":  "030",
+        "source":  "C:\\Users\\Usuário\\Documents\\Codex\\2026-09-20\\referenced-chatgpt-conversation-this-is-an\\work\\v030\\release\\windows-test\\online.cfg",
+        "size":  91,
+        "sha256":  "b5eb9d12e5253287474eda289d313fbe7be17d0c759838887da8c22fa1e59e47",
+        "role":  "original approved export"
+    },
+    {
+        "historical_version":  "030",
+        "source":  "C:\\Users\\Usuário\\Documents\\Codex\\2026-09-20\\referenced-chatgpt-conversation-this-is-an\\work\\v030\\release\\windows-test\\LEIA-ME.txt",
+        "size":  2457,
+        "sha256":  "6f8b6d1418fbdc1103b9c150039328c2ba6f5cf79d6b92aa0f64a095d05d7e44",
+        "role":  "original approved export"
+    },
+    {
+        "historical_version":  "030",
+        "source":  "C:\\Users\\Usuário\\orca\\workspaces\\project\\codex-distribution-v1\\distribution\\.local\\real-v030-dev-export\\FRAIHA.exe",
+        "size":  96584192,
+        "sha256":  "3bba9f68131498157e02ec44c296f996dd0a4d64c8fdb582d2794bd59feb4465",
+        "role":  "DEV copy; EXE/PCK renamed, sidecar endpoint intentionally empty"
+    },
+    {
+        "historical_version":  "030",
+        "source":  "C:\\Users\\Usuário\\orca\\workspaces\\project\\codex-distribution-v1\\distribution\\.local\\real-v030-dev-export\\FRAIHA.pck",
+        "size":  85100844,
+        "sha256":  "011137a3d88709cf5f2ab128648ebe5c325783824160939904b1860f74ab5433",
+        "role":  "DEV copy; EXE/PCK renamed, sidecar endpoint intentionally empty"
+    },
+    {
+        "historical_version":  "030",
+        "source":  "C:\\Users\\Usuário\\orca\\workspaces\\project\\codex-distribution-v1\\distribution\\.local\\real-v030-dev-export\\online.cfg",
+        "size":  23,
+        "sha256":  "ffaee9060a72096d914fc15346a3021d316c2ace6e9f36b780c956c7d325606e",
+        "role":  "DEV copy; EXE/PCK renamed, sidecar endpoint intentionally empty"
+    },
+    {
+        "historical_version":  "030",
+        "source":  "C:\\Users\\Usuário\\orca\\workspaces\\project\\codex-distribution-v1\\distribution\\.local\\real-v030-dev-export\\LEIA-ME.txt",
+        "size":  2457,
+        "sha256":  "6f8b6d1418fbdc1103b9c150039328c2ba6f5cf79d6b92aa0f64a095d05d7e44",
+        "role":  "DEV copy; EXE/PCK renamed, sidecar endpoint intentionally empty"
+    }
+]
