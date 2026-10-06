@@ -77,7 +77,16 @@ func unhover(k: String):
     if k == _want_key: _open_in = -1.0
     if is_open() and k == key and not _inside: _close_in = CLOSE_DELAY
 
+var _last_toggle_key := ""
+var _last_toggle_ms := -100000
+
 func toggle(k: String, p_info: Dictionary, rect: Rect2):
+    # R46 · no celular UM toque chega duas vezes (InputEventScreenTouch + clique emulado do mouse):
+    # sem isso o cartão abria e fechava no mesmo toque ("toco na foto e nada acontece").
+    var now := Time.get_ticks_msec()
+    if k == _last_toggle_key and now - _last_toggle_ms < 350: return
+    _last_toggle_key = k
+    _last_toggle_ms = now
     if is_open() and k == key:
         close()
         return

@@ -67,5 +67,18 @@ func run():
     check(cb != null and cb.visible, "cartão: selo Fundador")
     await shot("3_cartao")
     pp.close()
+    # R46 · TOQUE REAL na foto do adversário (celular): o cartão tem que abrir e FICAR aberto
+    # (no celular o toque chega como ScreenTouch + clique emulado; não pode abrir e fechar no mesmo toque)
+    for i in 4: await process_frame
+    var tap: Vector2 = top.portrait.get_global_rect().get_center()
+    var t1 := InputEventScreenTouch.new(); t1.index = 0; t1.position = tap; t1.pressed = true
+    Input.parse_input_event(t1)
+    await process_frame
+    var t2 := InputEventScreenTouch.new(); t2.index = 0; t2.position = tap; t2.pressed = false
+    Input.parse_input_event(t2)
+    for i in 3: await process_frame
+    await create_timer(0.8).timeout
+    check(pp.is_open() and pp.key == "chess_" + String(top.color), "toque na FOTO do adversário abre o cartão de perfil e ele fica aberto")
+    pp.close()
     print("RESULT %d/%d" % [checks - failures, checks], " OK" if failures == 0 else " FALHAS=%d" % failures)
     quit(failures)
