@@ -1,7 +1,7 @@
 // FRAIHA Admin · casca da aplicação: login, ambiente, navegação, atualização automática e reconexão.
 import { ENVIRONMENTS } from './config.js';
-import { Api, ApiError, login } from './api.js';
-import { h, toast } from './ui.js';
+import { Api, ApiError, login, remoteLogout } from './api.js';
+import { h, toast, closeAllModals } from './ui.js';
 import * as V from './views/index.js';
 
 const ROUTES = [
@@ -17,7 +17,8 @@ const ROUTES = [
   { id: 'system', label: 'Sistema', ico: '⚙', view: V.system, every: 15000 },
 ];
 
-const S = { api: null, session: null, envKey: '', timer: null, fails: 0, lastOk: 0, viewToken: 0 };
+// epoch muda a cada login/logout: qualquer callback/promise de uma sessão anterior vira no-op.
+const S = { api: null, session: null, envKey: '', timer: null, fails: 0, lastOk: 0, viewToken: 0, epoch: 0 };
 const root = document.getElementById('app');
 
 function route() {
@@ -25,8 +26,21 @@ function route() {
   return { r: ROUTES.find(x => x.id === id) || ROUTES[0], arg: rest.join('/') };
 }
 
+// Encerra a sessão administrativa no CLIENTE de forma fail-closed (o servidor continua sendo a autoridade):
+// para timers, revoga o cliente da API (aborta requisições em voo e recusa novas), fecha confirmações
+// pendentes, apaga identidade/dados da tela e invalida views antigas.
+function endSession({ remote = false } = {}) {
+  S.epoch++; S.viewToken++;
+  clearTimeout(S.timer); S.timer = null;
+  const api = S.api;
+  if (api) { const tok = api.token; api.revoke(); if (remote) remoteLogout(api.envKey, tok); }
+  closeAllModals();
+  window.onhashchange = null;
+  Object.assign(S, { api: null, session: null, envKey: '', fails: 0, lastOk: 0 });
+}
+
 function renderLogin(error = '') {
-  clearTimeout(S.timer);
+  if (S.api || S.session) endSession();
   const envSel = h('select', { name: 'env' }, Object.entries(ENVIRONMENTS).map(([k, e]) => h('option', { value: k }, e.label)));
   const email = h('input', { type: 'text', name: 'email', autocomplete: 'username', placeholder: 'email da sua conta FRAIHA' });
   const pass = h('input', { type: 'password', name: 'password', autocomplete: 'current-password' });
@@ -39,15 +53,21 @@ function renderLogin(error = '') {
   envSel.addEventListener('change', sync);
   const form = h('form', { onsubmit: async e => {
     e.preventDefault(); btn.disabled = true; btn.textContent = 'Entrando…'; msg.className = 'hidden';
+    const epoch = S.epoch;
+    let api = null;
     try {
       const token = await login(envSel.value, { email: email.value.trim(), password: pass.value, devName: dev.value.trim() });
       pass.value = '';
-      const api = new Api(envSel.value, token);
+      api = new Api(envSel.value, token);
       const session = await api.get('/admin/api/session');   // o SERVIDOR decide se é admin
+      if (epoch !== S.epoch || !document.body.contains(form)) { api.revoke(); return; }   // login antigo chegando tarde
+      S.epoch++;
       Object.assign(S, { api, session, envKey: envSel.value, fails: 0 });
       if (!location.hash) location.hash = '#/dashboard';
       renderShell();
     } catch (err) {
+      if (api) api.revoke();
+      if (epoch !== S.epoch) return;
       msg.textContent = err instanceof ApiError ? (err.code === 'login_failed' ? 'E-mail ou senha incorretos.' : err.text) : 'Falha inesperada.';
       msg.className = 'banner err'; btn.disabled = false; btn.textContent = 'Entrar';
     }
@@ -79,7 +99,7 @@ function renderShell() {
   mount();
 }
 
-function logout() { clearTimeout(S.timer); Object.assign(S, { api: null, session: null }); location.hash = ''; renderLogin(); }
+function logout() { endSession({ remote: true }); history.replaceState(null, '', location.pathname); renderLogin(); }
 
 function setConn(kind, text) {
   const d = document.getElementById('conn-dot'), t = document.getElementById('conn-text');
@@ -92,24 +112,27 @@ async function mount() {
   const { r, arg } = route();
   document.querySelectorAll('.side a').forEach(a => a.classList.toggle('on', a.dataset.route === r.id));
   const main = document.getElementById('view'); if (!main) return;
-  const token = ++S.viewToken;
-  const ctx = { api: S.api, session: S.session, arg, el: main, refresh: () => tick(true), alive: () => token === S.viewToken };
+  const token = ++S.viewToken, epoch = S.epoch;
+  const alive = () => token === S.viewToken && epoch === S.epoch && !!S.api;
+  const ctx = { api: S.api, session: S.session, arg, el: main, refresh: () => tick(true), alive };
   const view = r.view(ctx);
   const tick = async (manual = false) => {
-    if (token !== S.viewToken) return;
+    if (!alive()) return;
     try {
       await view.load();
+      if (!alive()) return;   // resposta tardia de sessão/tela antiga: não mexe em nada
       S.fails = 0; S.lastOk = Date.now(); setConn('ok', r.every ? `ao vivo · ${new Date().toLocaleTimeString('pt-BR')}` : `atualizado ${new Date().toLocaleTimeString('pt-BR')}`);
     } catch (err) {
+      if (!alive() || (err instanceof ApiError && err.kind === 'revoked')) return;   // sessão encerrada: silêncio
       if (!(err instanceof ApiError)) { console.error(err); err = new ApiError('server', 0, 'client_error'); }
-      if (err.kind === 'auth') { toast(err.text, 'err'); return renderLogin(err.text); }
+      if (err.kind === 'auth') { endSession(); toast(err.text, 'err'); return renderLogin(err.text); }
       S.fails++;
       view.error && view.error(err, S.lastOk);
       setConn(err.kind === 'network' || err.kind === 'timeout' ? 'bad' : 'warn', `${err.text} · nova tentativa em ${Math.round(backoff() / 1000)} s`);
     }
-    if (token !== S.viewToken) return;
+    if (!alive()) return;
     const wait = S.fails ? backoff() : r.every;
-    if (wait && !manual) S.timer = setTimeout(() => (document.hidden ? waitVisible().then(() => tick()) : tick()), wait);
+    if (wait && !manual) S.timer = setTimeout(() => (document.hidden ? waitVisible().then(() => alive() && tick()) : tick()), wait);
   };
   await tick();
 }

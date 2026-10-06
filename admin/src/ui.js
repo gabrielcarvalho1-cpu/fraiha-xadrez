@@ -44,6 +44,9 @@ export function toast(text, kind = 'ok') {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), 4500);
 }
 
+// Confirmações abertas: logout/troca de sessão fecha TODAS e resolve null (nenhuma pode ser confirmada depois).
+const openModals = new Set();
+export function closeAllModals() { for (const close of [...openModals]) close(null); document.querySelectorAll('.modal-bg, .toast').forEach(n => n.remove()); }
 // Confirmação de ação sensível: exige motivo + digitar o identificador. Resolve {reason} ou null.
 export function confirmAction({ title, body, confirmWord, actionLabel, danger = true }) {
   return new Promise(resolve => {
@@ -52,7 +55,9 @@ export function confirmAction({ title, body, confirmWord, actionLabel, danger = 
     const go = h('button', { class: 'btn ' + (danger ? 'danger' : 'ok'), disabled: true }, actionLabel);
     const check = () => { go.disabled = !(reason.value.trim().length >= 3 && word.value.trim() === confirmWord); };
     reason.addEventListener('input', check); word.addEventListener('input', check);
-    const close = v => { bg.remove(); resolve(v); };
+    let done = false;
+    const close = v => { if (done) return; done = true; openModals.delete(close); bg.remove(); resolve(v); };
+    openModals.add(close);
     const bg = h('div', { class: 'modal-bg', onclick: e => { if (e.target === bg) close(null); } },
       h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
         h('h3', {}, title), h('p', { class: 'muted' }, body),

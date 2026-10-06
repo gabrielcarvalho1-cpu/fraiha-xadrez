@@ -1,0 +1,6 @@
+{
+  "name": "fraiha-admin",
+  "private": true,
+  "type": "module",
+  "description": "FRAIHA Admin (app separado do jogo; sem dependências e sem build)"
+}
