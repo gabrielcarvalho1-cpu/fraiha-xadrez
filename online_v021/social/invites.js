@@ -123,6 +123,8 @@ class Invites {
       const b1 = this.busyReason(me, true); if (b1) return this.fail(ws, b1[1], b1[0]);
       if (!this.sockets(other).length) return this.fail(ws, 'Este amigo está offline.', 'target_offline');
       const b2 = this.busyReason(other, false); if (b2) return this.fail(ws, b2[1], b2[0]);
+      // FRAIHA Admin (auditoria): o modo pode ter sido desativado durante as consultas acima → revalida antes de criar.
+      if (this.backend.modeOpen && !this.backend.modeOpen(game === 'chess' ? 'casual' : game)) return this.fail(ws, require('../admin/controls').CLOSED_MESSAGE, 'mode_disabled');
       // Revalida depois do await: nada de dois convites abertos para ninguém.
       if (this.openOf(me)) return this.fail(ws, 'Você já tem um convite pendente.', 'pending_exists', { invite: this.view(this.openOf(me)) });
       if (this.openOf(other)) return this.fail(ws, 'Este amigo já tem um convite pendente.', 'target_busy');
