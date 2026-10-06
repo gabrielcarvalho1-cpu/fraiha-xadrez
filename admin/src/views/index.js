@@ -88,12 +88,12 @@ export function queues(ctx) {
     const ok = await confirmAction({ title: `${enable ? 'Ativar' : 'Desativar'} ${FAMILY_LABEL[q.family]}`,
       body: enable ? `Volta a aceitar ${q.entry}.` : `Bloqueia ${q.entry}. Quem estiver esperando sai da fila com aviso. Partidas em andamento continuam até o fim.`,
       confirmWord: q.family, actionLabel: enable ? 'Ativar' : 'Desativar', danger: !enable });
-    if (!ok) return;
+    if (!ok || !ctx.alive()) return;   // confirmação fechada ou sessão encerrada: nada é enviado
     try {
       const r = await ctx.api.post('/admin/api/queues/' + q.family, { enabled: enable, reason: ok.reason, confirm: ok.confirm });
       toast(r.changed ? `${FAMILY_LABEL[q.family]} ${enable ? 'ATIVADO' : 'DESATIVADO'} pelo servidor · registrado no Admin Log` : 'Nada mudou (já estava assim) · registrado no Admin Log');
-    } catch (e) { toast(e instanceof ApiError ? e.text : 'Falha ao aplicar', 'err'); }
-    ctx.refresh();
+    } catch (e) { if (!ctx.alive() || (e instanceof ApiError && e.kind === 'revoked')) return; toast(e instanceof ApiError ? e.text : 'Falha ao aplicar', 'err'); }
+    if (ctx.alive()) ctx.refresh();
   }
   return {
     error: f.error,
@@ -160,8 +160,10 @@ export function players(ctx) {
         h('td', {}, h('span', { class: 'badge ' + (p.where.place === 'offline' ? 'unavailable' : 'on') }, PLACE_LABEL[p.where.place])),
         h('td', {}, p.where.place === 'match' || p.where.place === 'queue' ? `${FAMILY_LABEL[p.where.family]} · ${p.where.mode}` : '—'),
         h('td', {}, fmtDate(p.created_at)), h('td', {}, fmtAgo(p.last_login_at)), h('td', { class: 'dim' }, '—'),
-        h('td', {}, h('span', { class: 'badge ' + (p.club === 'ATIVO' ? 'gold' : 'unavailable') }, p.club)), h('td', {}, p.founder ? h('span', { class: 'badge gold' }, 'FOUNDER') : '—')));
+        h('td', {}, h('span', { class: 'badge ' + (p.club === 'ATIVO' ? 'gold' : p.club === 'INDISPONÍVEL' ? 'off' : 'unavailable'), dataset: { club: p.club } }, p.club)),
+        h('td', { dataset: { founder: String(p.founder) } }, p.founder === null ? h('span', { class: 'badge off' }, 'INDISPONÍVEL') : p.founder ? h('span', { class: 'badge gold' }, 'FOUNDER') : '—')));
       f.show(form,
+        d.entitlements_read && d.entitlements_read !== 'ok' ? h('div', { class: 'banner err' }, `Clube/Founder: ERRO DE CONSULTA${d.entitlements_read === 'timeout' ? ' (tempo esgotado)' : ''} — status mostrado como INDISPONÍVEL, não como "não possui".`) : '',
         h('div', { class: 'panel' }, d.items.length ? h('div', { class: 'tablewrap' }, h('table', {}, h('thead', {}, h('tr', {}, ['Jogador', 'Status', 'Local atual', 'Cadastro', 'Último login', 'Plataforma', 'Clube', 'Founder'].map(t => h('th', {}, t)))), h('tbody', {}, rows)))
           : stateBox('empty', q ? `Nenhum jogador encontrado para "${q}".` : 'Nenhum jogador cadastrado.')),
         h('p', { class: 'dim' }, 'Elo/liga e partidas por jogador ficam no perfil (um jogador por vez). Plataforma: ', unavailable('PRECISA INSTRUMENTAÇÃO'), ' · Busca por e-mail: ', unavailable(d.email_search.note)));
@@ -183,14 +185,17 @@ function player(ctx) {
       catch (e) { if (e instanceof ApiError && e.status === 404) return f.show(stateBox('empty', 'Jogador não encontrado.'), h('a', { href: '#/players' }, '← voltar')); throw e; }
       if (!ctx.alive()) return;
       const p = d.profile, w = d.where;
-      const ranked = d.ranked ? Object.entries(d.ranked).filter(([k]) => MODE_NAME[k]) : [];
-      const modes = d.modes ? Object.entries(d.modes) : [];
+      const ranked = d.ranked && d.ranked.ok ? Object.entries(d.ranked.value || {}).filter(([k]) => MODE_NAME[k]) : [];
+      const modes = d.modes && d.modes.ok ? Object.entries(d.modes.value || {}) : [];
+      const readErr = sec => stateBox('error', 'ERRO DE CONSULTA' + (sec && sec.error === 'timeout' ? ' (tempo esgotado)' : '') + ' — dado indisponível agora.');
+      const entErr = d.entitlements_read && d.entitlements_read !== 'ok';
       f.show(
         h('a', { href: '#/players' }, '← Jogadores'),
         h('div', { class: 'profile-head', style: 'margin-top:12px' }, h('div', { class: 'avatar' }, (p.nickname || '?').slice(0, 1).toUpperCase()),
           h('div', {}, h('h1', {}, p.nickname), h('div', { class: 'mono dim' }, p.user_id)),
           h('div', { class: 'spacer', style: 'flex:1' }),
           h('span', { class: 'badge ' + (w.place === 'offline' ? 'unavailable' : 'on') }, PLACE_LABEL[w.place] + (w.family ? ` · ${FAMILY_LABEL[w.family]} ${w.mode}` : '') + (w.voice ? ' · voz' : ''))),
+        entErr ? h('div', { class: 'banner err', id: 'ent-error' }, `Clube/Founder: ${d.club.read_error}. O status real deste jogador é DESCONHECIDO agora (não significa "não possui").`) : '',
         h('div', { class: 'cols3' },
           h('div', { class: 'panel' }, h('h2', {}, 'Dados básicos'), h('div', { class: 'kv' },
             h('span', { class: 'k' }, 'Cadastro'), h('span', { class: 'v' }, fmtDate(p.created_at)),
@@ -200,17 +205,17 @@ function player(ctx) {
             h('span', { class: 'k' }, 'Partida atual'), h('span', { class: 'v mono' }, w.match_id ? w.match_id.slice(0, 8) : '—'),
             h('span', { class: 'k' }, 'Fila atual'), h('span', { class: 'v' }, w.place === 'queue' ? `${w.mode} · ${fmtDur(w.wait_ms)}` : '—'))),
           h('div', { class: 'panel' }, h('h2', {}, 'Clube FRAIHA'), h('div', { class: 'kv' },
-            h('span', { class: 'k' }, 'Status'), h('span', { class: 'v' }, h('span', { class: 'badge ' + (d.club.status === 'ATIVO' ? 'gold' : 'unavailable') }, d.club.status)),
+            h('span', { class: 'k' }, 'Status'), h('span', { class: 'v' }, h('span', { class: 'badge ' + (d.club.status === 'ATIVO' ? 'gold' : entErr ? 'off' : 'unavailable'), id: 'club-status' }, d.club.status)),
             h('span', { class: 'k' }, 'Plano'), h('span', { class: 'v dim' }, d.club.plan.note),
-            h('span', { class: 'k' }, 'Origem'), h('span', { class: 'v' }, d.club.source.value || h('span', { class: 'dim' }, '—')),
+            h('span', { class: 'k' }, 'Origem'), h('span', { class: 'v' }, entErr ? h('span', { class: 'unav' }, 'INDISPONÍVEL') : d.club.source.value || h('span', { class: 'dim' }, '—')),
             h('span', { class: 'k' }, 'Início'), h('span', { class: 'v dim' }, 'migration necessária'),
-            h('span', { class: 'k' }, 'Expiração'), h('span', { class: 'v' }, d.club.expires_at.value ? fmtDate(d.club.expires_at.value) : '—'),
+            h('span', { class: 'k' }, 'Expiração'), h('span', { class: 'v' }, entErr ? h('span', { class: 'unav' }, 'INDISPONÍVEL') : d.club.expires_at.value ? fmtDate(d.club.expires_at.value) : '—'),
             h('span', { class: 'k' }, 'Renovação'), h('span', { class: 'v dim' }, 'backend necessário'),
             h('span', { class: 'k' }, 'Observação admin'), h('span', { class: 'v dim' }, 'migration necessária')),
             h('div', { class: 'row', style: 'margin-top:12px' }, disabledAction('Conceder Clube'), disabledAction('Alterar'), disabledAction('Revogar')),
             h('p', { class: 'dim', style: 'font-size:12px' }, 'INDISPONÍVEL — BACKEND NECESSÁRIO: concessão manual exige endpoint de entitlement + audit persistente (área protegida de pagamentos).')),
           h('div', { class: 'panel' }, h('h2', {}, 'Pacote Fundador'), h('div', { class: 'kv' },
-            h('span', { class: 'k' }, 'Founder'), h('span', { class: 'v' }, d.founder.value ? h('span', { class: 'badge gold' }, 'SIM') : 'NÃO'),
+            h('span', { class: 'k' }, 'Founder'), h('span', { class: 'v', id: 'founder-value' }, d.founder.status === 'unavailable' ? h('span', { class: 'badge off' }, 'INDISPONÍVEL') : d.founder.value ? h('span', { class: 'badge gold' }, 'SIM') : 'NÃO'),
             h('span', { class: 'k' }, 'Desde'), h('span', { class: 'v' }, fmtDate(d.founder.since)),
             h('span', { class: 'k' }, 'Edição/nível'), h('span', { class: 'v dim' }, 'ainda não definido'),
             h('span', { class: 'k' }, 'Badge / moldura'), h('span', { class: 'v dim' }, 'futuro')),
@@ -219,9 +224,9 @@ function player(ctx) {
         h('div', { class: 'panel' }, h('h2', {}, 'Ranked (por modo)'), ranked.length ? h('div', { class: 'tablewrap' }, h('table', {},
           h('thead', {}, h('tr', {}, ['Modo', 'Liga', 'PL', 'Partidas', 'Vitórias', 'Derrotas', 'Empates', 'Maior liga'].map(t => h('th', {}, t)))),
           h('tbody', {}, ranked.map(([k, s]) => h('tr', {}, h('td', {}, MODE_NAME[k]), h('td', {}, LEAGUES[s.league] || s.league), h('td', {}, fmtInt(s.pl)), h('td', {}, fmtInt(s.matches)), h('td', {}, fmtInt(s.wins)), h('td', {}, fmtInt(s.losses)), h('td', {}, fmtInt(s.draws)), h('td', {}, LEAGUES[s.highest_league] || '—'))))))
-          : stateBox('empty', 'Sem estatísticas de Ranked.'),
+          : d.ranked && !d.ranked.ok ? readErr(d.ranked) : stateBox('empty', 'Sem estatísticas de Ranked.'),
           h('p', { class: 'dim', style: 'font-size:12px' }, 'O FRAIHA usa liga + PL por modo (não Elo numérico).')),
-        h('div', { class: 'panel' }, h('h2', {}, 'Outros modos'), modes.length ? h('div', { class: 'mini' }, modes.map(([k, s]) => h('div', {}, h('span', { class: 'dim' }, (FAMILY_LABEL[k] || k)), h('b', {}, `${fmtInt(s.wins)} V · ${fmtInt(s.losses)} D`)))) : stateBox('empty', 'Sem registros.')));
+        h('div', { class: 'panel' }, h('h2', {}, 'Outros modos'), modes.length ? h('div', { class: 'mini' }, modes.map(([k, s]) => h('div', {}, h('span', { class: 'dim' }, (FAMILY_LABEL[k] || k)), h('b', {}, `${fmtInt(s.wins)} V · ${fmtInt(s.losses)} D`)))) : d.modes && !d.modes.ok ? readErr(d.modes) : stateBox('empty', 'Sem registros.')));
     },
   };
 }
@@ -235,8 +240,9 @@ function entitlementView(ctx, kind) {
     async load() {
       const d = await ctx.api.get('/admin/api/players?q=');
       if (!ctx.alive()) return;
-      const list = d.items.filter(p => isClub ? p.club !== 'INATIVO' : p.founder);
+      const list = d.items.filter(p => isClub ? (p.club === 'ATIVO' || p.club === 'EXPIRADO') : p.founder === true);
       f.show(
+        d.entitlements_read && d.entitlements_read !== 'ok' ? h('div', { class: 'banner err' }, 'ERRO DE CONSULTA dos benefícios: a lista abaixo pode estar incompleta (não significa que ninguém possui).') : '',
         h('div', { class: 'banner warn' }, 'Conceder / alterar / revogar: INDISPONÍVEL — BACKEND NECESSÁRIO. Precisa de endpoint server-side de entitlement + Admin Log persistente (migration proposta). Área protegida (pagamentos): só com sua autorização.'),
         h('div', { class: 'panel' }, h('h2', {}, isClub ? 'Assinantes encontrados' : 'Founders encontrados', ' ', statusBadge('partial')),
           h('p', { class: 'dim', style: 'font-size:12px;margin-top:-6px' }, 'Amostra: entre os jogadores com login mais recente (até 50). Lista completa precisa de consulta dedicada no backend.'),

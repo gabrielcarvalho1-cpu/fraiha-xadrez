@@ -171,20 +171,30 @@ class AdminService {
     const rows = await Q.searchPlayers(st, q, limit);
     const ids = rows.map(r => r.user_id), ents = await Q.entitlementsOf(st, ids), s = liveSnapshot(this.backend, this.now());
     return { query: String(q || ''), email_search: none('PRECISA BACKEND: busca por e-mail exige Supabase Auth Admin (dado pessoal; proposta para V2)'),
-      items: rows.map(r => { const e = ents.get(r.user_id) || null; return { user_id: r.user_id, nickname: r.nickname, avatar_id: r.avatar_id, account_status: r.account_status || null,
-        created_at: r.created_at || null, last_login_at: r.last_login_at || null, where: whereIs(this.backend, r.user_id, s),
-        club: Q.clubStatus(e, this.now()), founder: e ? !!e.is_founder : false, platform: null }; }) };
+      entitlements_read: ents.ok ? 'ok' : ents.error,
+      items: rows.map(r => {
+        // ents.ok=false → undefined (DESCONHECIDO); linha ausente → null (legítimo: sem benefício)
+        const e = ents.ok ? (ents.map.get(r.user_id) || null) : undefined;
+        return { user_id: r.user_id, nickname: r.nickname, avatar_id: r.avatar_id, account_status: r.account_status || null,
+          created_at: r.created_at || null, last_login_at: r.last_login_at || null, where: whereIs(this.backend, r.user_id, s),
+          club: Q.clubStatus(e, this.now()), founder: e === undefined ? null : !!(e && e.is_founder), platform: null };
+      }) };
   }
   async player(uid) {
     const st = this.backend.store; if (!st) return null;
     const d = await Q.playerDetail(st, uid); if (!d) return null;
-    const e = d.entitlements;
-    return { ...d, where: whereIs(this.backend, uid), platform: none('PRECISA INSTRUMENTAÇÃO'),
-      club: { status: Q.clubStatus(e, this.now()), plan: none('planos ainda não definidos'), source: e && e.club_source ? real(e.club_source) : none('sem registro'),
-        started: none('PRECISA MIGRATION: início da assinatura não é registrado'), expires_at: e && e.club_expires_at ? real(e.club_expires_at) : none('sem data'),
+    const ok = d.entitlements.ok, e = ok ? d.entitlements.value : undefined;
+    const why = ok ? '' : (d.entitlements.error === 'timeout' ? 'ERRO DE CONSULTA: tempo esgotado' : 'ERRO DE CONSULTA');
+    const unk = () => ({ value: null, status: 'unavailable', note: why });
+    return { profile: d.profile, ranked: d.ranked, modes: d.modes, entitlements_read: ok ? 'ok' : d.entitlements.error,
+      where: whereIs(this.backend, uid), platform: none('PRECISA INSTRUMENTAÇÃO'),
+      club: { status: Q.clubStatus(e, this.now()), read_error: ok ? null : why, plan: none('planos ainda não definidos'),
+        source: !ok ? unk() : e && e.club_source ? real(e.club_source) : none('sem registro'),
+        started: none('PRECISA MIGRATION: início da assinatura não é registrado'),
+        expires_at: !ok ? unk() : e && e.club_expires_at ? real(e.club_expires_at) : none('sem data'),
         renewal: none('PRECISA BACKEND'), note: none('PRECISA MIGRATION: observação administrativa'),
         actions: { grant: 'INDISPONÍVEL — BACKEND NECESSÁRIO', change: 'INDISPONÍVEL — BACKEND NECESSÁRIO', revoke: 'INDISPONÍVEL — BACKEND NECESSÁRIO' } },
-      founder: { value: e ? !!e.is_founder : false, since: e && e.founder_since ? e.founder_since : null, edition: none('ainda não definido'),
+      founder: { ...(ok ? real(!!(e && e.is_founder), e ? '' : 'sem registro de benefício') : unk()), since: ok && e && e.founder_since ? e.founder_since : null, edition: none('ainda não definido'),
         actions: { grant: 'INDISPONÍVEL — BACKEND NECESSÁRIO', revoke: 'INDISPONÍVEL — BACKEND NECESSÁRIO' } } };
   }
   system() {
