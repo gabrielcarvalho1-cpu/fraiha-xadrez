@@ -66,6 +66,13 @@ pl = cv2.GaussianBlur(pl, (0, 0), 2.0); pl[PY0 + 4:PY1, PX0 + 4:PX1 - 4] = 1.0
 take = np.maximum(take, pl)
 take = cv2.GaussianBlur(take, (0, 0), 1.2)    # ~3 px de mistura nas costuras
 out = a * (1 - take[..., None]) + r * take[..., None]
+# pedras da direita: a referência tinha um bloco encostado no bloco grande da arte ("encavaladas").
+# Abaixo de y 770, a partir da base do pilar direito, volta a arte oficial R36 (pedras originais).
+orig0 = cv2.imread(ROOT + '/tools/home_ref/home_forest_v7_r36_original.png').astype(np.float32)
+SX0, SY0 = 1100, 770
+sm = np.zeros((H, W), np.float32); sm[SY0:, SX0:1240] = 1.0
+sm = cv2.GaussianBlur(sm, (0, 0), 3.0); sm[:SY0 - 6, :] = 0
+out = out * (1 - sm[..., None]) + orig0 * sm[..., None]
 # mochila da esquerda INTEIRA (a da arte oficial R36): o recorte vinha do menu encolhido (colunas
 # espelhadas) e a referência só mostra metade dela. Couro marrom/laranja da original, contorno suave.
 orig = cv2.imread(ROOT + '/tools/home_ref/home_forest_v7_r36_original.png').astype(np.float32)

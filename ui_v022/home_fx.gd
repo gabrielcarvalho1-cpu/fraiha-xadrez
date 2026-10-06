@@ -1,5 +1,5 @@
 extends Control
-## R44 · Animações da Home (arte oficial v7): tochas e lanterna tremulando, água da cachoeira e do rio
+## R44 · Animações da Home (R44.1: todas lentas e sutis; fumacinha nos cavalos) (arte oficial v7): tochas e lanterna tremulando, água da cachoeira e do rio
 ## correndo, passarinhos atravessando o céu e a barriguinha da gatinha YUMI subindo e descendo
 ## (só a barriga: cabeça, orelhas, patas e contorno ficam parados).
 ## Tudo em coordenadas do canvas 1672 x 941, por cima da arte e por baixo dos painéis/botões.
@@ -18,29 +18,35 @@ const WATER_RECT := Rect2(1150, 400, 312, 420)
 const BELLY_RECT := Rect2(40, 704, 150, 92)        # corpo da gatinha (a barriga fica no meio)
 const BELLY_C := Vector2(108, 748)                 # centro da barriga
 const BELLY_R := Vector2(52, 30)                   # raio da área que respira (dentro do contorno)
-const SKY := Rect2(1185, 228, 440, 92)            # céu visível entre a placa do perfil e as montanhas
+const SKY := Rect2(1185, 228, 440, 92)
+## R44.1 · fumacinha das narinas dos cavalos do logo: [narina, direção do focinho]
+const NOSES := [[Vector2(586, 172), 1.0], [Vector2(1060, 172), -1.0]]            # céu visível entre a placa do perfil e as montanhas
 
+## R44.1 · tudo SUTIL e LENTO (pedido do dono): nada de esticar a chama nem brilhos piscando.
 const FLAME_SHADER := """
 shader_type canvas_item;
 uniform float seed = 0.0;
 float fm(vec4 c) { return smoothstep(0.55, 0.85, max(c.r, c.g)) * step(c.b, c.r + 0.05); }
+float h(float x) { return fract(sin(x * 91.7) * 43758.5453); }
+float sn(float x) { float i = floor(x); float f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(h(i), h(i + 1.0), f); }
 void fragment() {
     vec4 o = texture(TEXTURE, UV);
     float k = 1.0 - UV.y;
-    float sway = sin(TIME * 6.0 + seed) * 0.07 + sin(TIME * 13.0 + seed * 2.3) * 0.035;
-    float st = 1.0 + 0.16 * sin(TIME * 8.0 + seed) + 0.07 * sin(TIME * 17.0 + seed * 1.7);
-    vec2 suv = vec2(UV.x - sway * k * k, 1.0 - (1.0 - UV.y) / st);
-    vec4 s = texture(TEXTURE, suv);
+    // balanço de no máximo ~1 px na ponta da chama, devagar
+    float sway = (sn(TIME * 1.4 + seed) - 0.5) * 0.035;
+    vec4 s = texture(TEXTURE, vec2(UV.x - sway * k * k, UV.y));
     float m = max(fm(o), fm(s));
     vec4 c = mix(o, s, m);
-    c.rgb *= 1.0 + m * (0.18 * sin(TIME * 11.0 + seed) + 0.08 * sin(TIME * 23.0 + seed));
+    // respiração da luz: ±6 %, ruído suave (~1,5 Hz)
+    c.rgb *= 1.0 + m * (sn(TIME * 1.6 + seed * 3.0) - 0.5) * 0.12;
     COLOR = vec4(c.rgb, m);
 }
 """
 
 const WATER_SHADER := """
 shader_type canvas_item;
-float wm(vec3 c) { return smoothstep(0.06, 0.22, c.b - c.r) * smoothstep(0.32, 0.6, c.b); }
+// só água de verdade: azul claro e saturado (céu, árvores e pedras azuladas ficam de fora)
+float wm(vec3 c) { return smoothstep(0.22, 0.37, c.b - c.r) * smoothstep(0.62, 0.82, c.b) * smoothstep(0.30, 0.50, c.g); }
 float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float n(vec2 p) {
     vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -49,15 +55,10 @@ float n(vec2 p) {
 void fragment() {
     vec4 o = texture(TEXTURE, UV);
     float m = wm(o.rgb);
-    vec2 d = vec2(sin(UV.y * 140.0 + TIME * 5.0) * 0.004, 0.0);
-    vec4 c = texture(TEXTURE, UV + d * m);
-    float m2 = m * wm(c.rgb);
-    vec3 col = mix(o.rgb, c.rgb, m2);
-    float streak = smoothstep(0.62, 0.92, n(vec2(UV.x * 70.0, UV.y * 9.0 - TIME * 2.4)));
-    col += vec3(0.55, 0.85, 1.0) * streak * m * 0.55;
-    float tw = step(0.992, h(floor(UV * vec2(156.0, 210.0)) + floor(TIME * 5.0)));
-    col += vec3(0.8, 0.95, 1.0) * tw * m * 0.6;
-    COLOR = vec4(col, m);
+    // correnteza: variação lenta de brilho descendo (±7 %), sem faíscas
+    float flow = n(vec2(UV.x * 38.0, UV.y * 14.0 - TIME * 0.55)) - 0.5;
+    vec3 col = o.rgb * (1.0 + flow * 0.14);
+    COLOR = vec4(col, m * 0.9);
 }
 """
 
@@ -82,6 +83,8 @@ var _cat_mat: ShaderMaterial
 var _glows: Array = []
 var _birds: Array = []
 var _next_flock := 3.0
+var _puffs: Array = []
+var _next_puff := 4.0
 var _add := CanvasItemMaterial.new()
 var _glow_tex: GradientTexture2D
 
@@ -120,6 +123,7 @@ func _ready():
         glow.position = c - Vector2(r, r)
         add_child(glow)
         _glows.append([glow, randf() * TAU])
+        if i == TORCHES.size() - 1: continue   # lanterna: vidro fechado, só a luz respira
         var m := _piece(Rect2(c - Vector2(sz.x / 2.0, sz.y * 0.62), sz), FLAME_SHADER)
         m.set_shader_parameter("seed", float(i) * 1.7)
     # barriguinha da gatinha
@@ -150,16 +154,34 @@ func _process(delta):
     t += delta
     for gl in _glows:
         var s: float = gl[1]
-        gl[0].modulate.a = 0.60 + 0.30 * sin(t * 8.0 + s) + 0.14 * sin(t * 19.0 + s * 2.0) + randf_range(-0.08, 0.08)
+        # luz em volta: respira devagar (±8 %), sem tremedeira
+        gl[0].modulate.a = 0.42 + 0.05 * sin(t * 1.3 + s) + 0.03 * sin(t * 2.9 + s * 2.0)
     # barriga sobe e desce devagar (gato dormindo, ~3,5 s por ciclo)
-    _cat_mat.set_shader_parameter("breath", 0.5 + 0.5 * sin(t * 1.8))
+    _cat_mat.set_shader_parameter("breath", 0.5 + 0.5 * sin(t * 1.6))
+    # fumacinha dos cavalos: de vez em quando um deles solta 2 bufadas curtas, bem discretas
+    _next_puff -= delta
+    if _next_puff <= 0.0:
+        _next_puff = randf_range(7.0, 13.0)
+        var nose: Array = NOSES[randi() % NOSES.size()]
+        for k in 2:
+            for j in 5:
+                _puffs.append({"p": nose[0] + Vector2(nose[1] * randf_range(0.0, 2.0), randf_range(-1.0, 1.5)),
+                    "v": Vector2(nose[1] * randf_range(15.0, 23.0), randf_range(-3.0, 3.0)), "age": -k * 0.55 - j * 0.04,
+                    "life": randf_range(1.3, 1.8), "r0": randf_range(1.6, 2.6)})
+    for pf in _puffs:
+        pf.age += delta
+        if pf.age > 0.0:
+            pf.p += pf.v * delta
+            pf.v *= 1.0 - 0.9 * delta
+            pf.v.y -= 2.5 * delta
+    _puffs = _puffs.filter(func(pf): return pf.age < pf.life)
     # passarinhos
     _next_flock -= delta
     if _next_flock <= 0.0:
-        _next_flock = randf_range(6.0, 11.0)
+        _next_flock = randf_range(10.0, 18.0)
         var dir := 1.0 if randf() < 0.5 else -1.0
         var y0 := randf_range(SKY.position.y + 14.0, SKY.end.y - 24.0)
-        var speed := randf_range(38.0, 55.0)
+        var speed := randf_range(26.0, 36.0)
         for k in randi_range(2, 5):
             _birds.append({"x": (SKY.position.x - 20.0 - k * 16.0) if dir > 0.0 else (SKY.end.x + 20.0 + k * 16.0),
                 "y": y0 + randf_range(-10.0, 10.0) + k * 3.0, "dir": dir, "v": speed * randf_range(0.92, 1.08),
@@ -170,11 +192,16 @@ func _process(delta):
     queue_redraw()
 
 func _draw():
+    for pf in _puffs:
+        if pf.age <= 0.0: continue
+        var k: float = pf.age / pf.life
+        var a := 0.26 * sin(PI * minf(1.0, k * 1.15)) * (1.0 - k)
+        draw_circle(pf.p, pf.r0 + 10.0 * k, Color(0.93, 0.93, 0.95, a))
     for b in _birds:
         if b.x < SKY.position.x or b.x > SKY.end.x: continue
-        var flap := sin(t * 11.0 + b.ph)
+        var flap := sin(t * 7.0 + b.ph)
         var c := Vector2(b.x, b.y + sin(t * 2.0 + b.ph) * 2.0)
         var w: float = 7.0 * b.s
         var tip := Vector2(w, -3.5 * flap * b.s - 0.5)
-        var col := Color(0.09, 0.06, 0.12, 0.85)
+        var col := Color(0.09, 0.06, 0.12, 0.7)
         draw_polyline(PackedVector2Array([c + Vector2(-tip.x, tip.y), c + Vector2(-w * 0.35, -0.6), c, c + Vector2(w * 0.35, -0.6), c + tip]), col, 1.8)

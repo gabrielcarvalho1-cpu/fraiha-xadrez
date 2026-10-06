@@ -230,6 +230,7 @@ func _button(parent: Node, row: int, title: String, subtitle: String, pos: Vecto
     # Título guardado como dado (usado pelo menu mobile/testes); sem tooltip: o próprio botão
     # já mostra o nome, e o balão repetia o mesmo texto embaixo dele.
     button.set_meta("title", title)
+    button.set_meta("subtitle", subtitle)
     button.name = "MenuButton" + str(row)
     parent.add_child(button)
     var margin = MarginContainer.new()
@@ -2148,7 +2149,32 @@ func _build_reference_chrome():
         button.mouse_exited.connect(func(): if ref_mode and not button.has_focus(): hover.hide())
         button.focus_entered.connect(func(): if ref_mode: hover.show())
         button.focus_exited.connect(func(): hover.hide())
-        # R36: a arte v7 já traz os textos de TODAS as linhas (inclusive MARCHA REAL, XEQUE e HISTÓRICO)
+        # R44.1: os textos NÃO ficam mais na arte (serrilhavam ao reduzir): o jogo escreve com a fonte
+        # do jogo, nítida em qualquer tamanho de tela. Mesma coluna, mesmo tamanho em todas as linhas.
+        _ref_caption(button, ranked)
+
+func _ref_caption(button: TextureButton, ranked: bool):
+    var cap := Control.new()
+    cap.name = "RefCaption"
+    cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    cap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    button.add_child(cap)
+    var box := VBoxContainer.new()
+    box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    box.alignment = BoxContainer.ALIGNMENT_CENTER
+    box.add_theme_constant_override("separation", -2)
+    var left := (MENU_TEXT_X + (16.0 if ranked else 0.0)) - MENU_X
+    box.position = Vector2(left, 0)
+    box.size = Vector2(MENU_W - left - 56.0, button.size.y)
+    cap.add_child(box)
+    var sub := String(button.get_meta("subtitle", ""))
+    var t := _label(box, String(button.get_meta("title", "")), 19 if ranked else 15, GOLD if ranked else CREAM)
+    t.autowrap_mode = TextServer.AUTOWRAP_OFF
+    t.add_theme_constant_override("outline_size", 0)
+    if not sub.is_empty() and button.get_meta("title", "") != "SAIR":
+        var st := _label(box, sub, 14 if ranked else 12, CREAM if ranked else Color("cfd3c8"))
+        st.autowrap_mode = TextServer.AUTOWRAP_OFF
+    cap.hide()
 
 func _sync_chrome():
     var ref = _is_ref_art(canvas.get_node("ForestArtwork").texture)
