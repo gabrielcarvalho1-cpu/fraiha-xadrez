@@ -2,9 +2,14 @@
 # Para cada caminho de ARQUIVOS-SHA256.txt faz um pedido HEAD e compara o tamanho.
 # Pega o erro do R45: voice/ não enviada → 404 → "Não foi possível carregar a voz".
 param([string]$Site = 'https://jogar.fraihaxadrez.com')
+# FAIL-CLOSED (auditoria R46): tudo no ar = exit 0; manifesto ausente/incompleto ou qualquer arquivo
+# faltando/diferente = exit 1.
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$rows = Get-Content -LiteralPath (Join-Path $root 'ARQUIVOS-SHA256.txt') | Where-Object { $_ -match '^[^#\s]\S*\s+\d+\s+[0-9A-Fa-f]{64}$' }
+$manifest = Join-Path $root 'ARQUIVOS-SHA256.txt'
+if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { Write-Host 'ERRO: ARQUIVOS-SHA256.txt nao encontrado nesta pasta.' -ForegroundColor Red; exit 1 }
+$rows = @(Get-Content -LiteralPath $manifest | Where-Object { $_ -match '^[^#\s]\S*\s+\d+\s+[0-9A-Fa-f]{64}$' })
+if ($rows.Count -lt 15) { Write-Host "ERRO: ARQUIVOS-SHA256.txt incompleto ($($rows.Count) linhas)." -ForegroundColor Red; exit 1 }
 $bad = 0
 foreach ($row in $rows) {
   $rel, $size, $hash = $row -split '\s+'
@@ -18,5 +23,6 @@ foreach ($row in $rows) {
     Write-Host "FALTANDO NO SITE  $rel  ($($_.Exception.Message))" -ForegroundColor Red; $bad++
   }
 }
-if ($bad -eq 0) { Write-Host "`nTUDO NO AR: $($rows.Count) arquivos conferidos em $Site" -ForegroundColor Green }
-else { Write-Host "`n$bad problema(s). Reenvie os arquivos marcados (pastas engines/ e voice/ inclusive)." -ForegroundColor Red }
+if ($bad -eq 0) { Write-Host "`nTUDO NO AR: $($rows.Count) arquivos conferidos em $Site" -ForegroundColor Green; exit 0 }
+Write-Host "`n$bad problema(s). Reenvie os arquivos marcados (pastas engines/ e voice/ inclusive)." -ForegroundColor Red
+exit 1

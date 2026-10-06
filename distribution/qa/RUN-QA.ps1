@@ -6,6 +6,7 @@
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 Start-Transcript -Path (Join-Path $root 'qa-output.txt') -Force | Out-Null
+$rc = 1   # FAIL-CLOSED (auditoria R46): só sai 0 se TODAS as etapas passarem
 try {
   Write-Output ("=== FRAIHA Distribution QA " + [DateTime]::UtcNow.ToString('u') + " em " + $root)
   Write-Output ("Windows: " + [Environment]::OSVersion.VersionString + " | .NET release: " + (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').Release)
@@ -36,8 +37,10 @@ try {
   Write-Output '=== [3/3] aceitacao real (FRAIHA atual)'
   & (Join-Path $dist 'build.ps1') -RealTest
   Write-Output '=== QA CONCLUIDO SEM FALHAS'
+  $rc = 0
 } catch { Write-Output ("=== QA FALHOU: " + $_) }
 finally {
   Get-ChildItem -Path (Join-Path $root 'distribution\.local') -Directory -Filter 'rqa-*' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1 | ForEach-Object { Write-Output ("EVIDENCIA: " + $_.FullName) }
   Stop-Transcript | Out-Null
 }
+exit $rc

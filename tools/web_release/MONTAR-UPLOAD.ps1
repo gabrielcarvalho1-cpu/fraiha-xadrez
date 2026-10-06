@@ -2,18 +2,24 @@
 # Lê ARQUIVOS-SHA256.txt (lista completa: index.*, engines/, voice/), junta as partes e confere
 # tamanho + SHA256 de CADA arquivo (decodifica as imagens .png.b64). Se faltar qualquer um (ex.: a pasta voice/), PARA com erro.
 # Não envia nada para a internet.
+# FAIL-CLOSED (auditoria R46): sucesso real = exit 0; QUALQUER falha = exit 1 e a pasta UPLOAD parcial
+# é removida (nada incompleto fica pronto para subir).
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $up = Join-Path $root 'UPLOAD'
+$sep = [IO.Path]::DirectorySeparatorChar
+$rc = 1
 try {
+  $manifest = Join-Path $root 'ARQUIVOS-SHA256.txt'
+  if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'ARQUIVOS-SHA256.txt nao encontrado nesta pasta (copie a pasta inteira de novo).' }
   if (Test-Path -LiteralPath $up) { Remove-Item -LiteralPath $up -Recurse -Force }
   New-Item -ItemType Directory -Path $up | Out-Null
-  $rows = Get-Content -LiteralPath (Join-Path $root 'ARQUIVOS-SHA256.txt') | Where-Object { $_ -match '^[^#\s]\S*\s+\d+\s+[0-9A-Fa-f]{64}$' }
+  $rows = @(Get-Content -LiteralPath $manifest | Where-Object { $_ -match '^[^#\s]\S*\s+\d+\s+[0-9A-Fa-f]{64}$' })
   if ($rows.Count -lt 15) { throw "ARQUIVOS-SHA256.txt incompleto ($($rows.Count) linhas)." }
   $count = @{ 'raiz' = 0; 'engines' = 0; 'voice' = 0 }
   foreach ($row in $rows) {
     $rel, $size, $hash = $row -split '\s+'
-    $winRel = $rel -replace '/', '\'
+    $winRel = $rel -replace '/', $sep
     $dest = Join-Path $up $winRel
     $dir = Split-Path -Parent $dest
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
@@ -49,5 +55,11 @@ try {
   Write-Host '  -> a PASTA voice/  como voice/   (3 arquivos)   <- sem ela a voz da 404'
   Write-Host ''
   Write-Host 'Depois do upload: rode CONFERIR-SITE-__TAG__.cmd (confere no site publicado).'
-  Start-Process explorer.exe $up
-} catch { Write-Host "ERRO: $_" -ForegroundColor Red }
+  $rc = 0
+  if ($env:OS -eq 'Windows_NT' -and -not $env:FRAIHA_NO_EXPLORER) { try { Start-Process explorer.exe $up } catch {} }
+} catch {
+  Write-Host "ERRO: $_" -ForegroundColor Red
+  Write-Host 'NADA PRONTO PARA SUBIR: a pasta UPLOAD incompleta foi removida.' -ForegroundColor Red
+  try { if (Test-Path -LiteralPath $up) { Remove-Item -LiteralPath $up -Recurse -Force } } catch {}
+}
+exit $rc

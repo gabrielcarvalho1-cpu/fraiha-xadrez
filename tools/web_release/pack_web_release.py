@@ -88,7 +88,8 @@ def main(argv):
             f.write(text)
         cmd = name.replace(".ps1", "-%s" % tag)
         with open(os.path.join(out, cmd + ".cmd"), "w", newline="\r\n") as f:
-            f.write('@echo off\ntitle FRAIHA %s\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File "%%~dp0%s.ps1"\npause\n' % (cmd, cmd))
+            # fail-closed: o código de saída do PowerShell é devolvido DEPOIS do pause (sem isso o .cmd sai 0)
+            f.write('@echo off\ntitle FRAIHA %s\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File "%%~dp0%s.ps1" %%*\nset "RC=%%ERRORLEVEL%%"\nif not "%%RC%%"=="0" echo FALHOU (codigo %%RC%%)\nif not defined FRAIHA_NO_PAUSE pause\nexit /b %%RC%%\n' % (cmd, cmd))
     print("OK: %d arquivos (index %d + engines %d + voice %d) em %s" % (
         len(files), len(INDEX), len(REQUIRED_DIRS["engines"]), len(REQUIRED_DIRS["voice"]), out))
 
