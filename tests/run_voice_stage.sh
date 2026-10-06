@@ -11,9 +11,9 @@ PEER_VOICE=1 node tests/server/party_peer.cjs $PORT GodotVoice > /tmp/peer_voice
 PEER=$!
 GODOT=${GODOT:-/home/claude/godot/Godot_v4.5.1-stable_linux.x86_64}
 if [[ " $* " == *" --shots "* ]]; then
-  FRAIHA_SERVER_URL=ws://127.0.0.1:$PORT timeout 400 xvfb-run -a -s "-screen 0 1920x1080x24" $GODOT --path . -s tests/voice_stage_test.gd -- "$@" 2>&1 | grep -E "PASS|FAIL|RESULT|SCRIPT ERROR|Parse Error|DBG"
+  FRAIHA_SERVER_URL=ws://127.0.0.1:$PORT timeout 400 xvfb-run -a -s "-screen 0 1920x1080x24" $GODOT --path . ${RES:+--resolution $RES} -s tests/voice_stage_test.gd -- "$@" 2>&1 | grep -E "PASS|FAIL|RESULT|SCRIPT ERROR|Parse Error|DBG|ERROR|at: "
 else
-  FRAIHA_SERVER_URL=ws://127.0.0.1:$PORT timeout 400 $GODOT --headless --path . -s tests/voice_stage_test.gd -- "$@" 2>&1 | grep -E "PASS|FAIL|RESULT|SCRIPT ERROR|Parse Error|DBG"
+  FRAIHA_SERVER_URL=ws://127.0.0.1:$PORT timeout 400 $GODOT --headless --path . -s tests/voice_stage_test.gd -- "$@" 2>&1 | grep -E "PASS|FAIL|RESULT|SCRIPT ERROR|Parse Error|DBG|ERROR|at: "
 fi
 kill $SRV $PEER 2>/dev/null
 grep -E "\[voice\]" /tmp/srv_voice.log | head -40

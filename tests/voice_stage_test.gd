@@ -87,8 +87,9 @@ func run():
     check(await wait_until(func(): return v.in_match() and String(v.ctx.match_id) == mid and String(v.ctx.kind) == "casual", 2.0), "voz segue a partida (casual, match_id do servidor)")
     check(v.state == "DISCONNECTED" and mock.calls.is_empty(), "voz começa DESLIGADA (só entra com toque do jogador)")
     check(await wait_until(func(): return "PeerParty está na voz" in v.status_text(), 6.0), "aviso do servidor: '%s'" % v.status_text())
-    await wait_until(func(): return stage.desk_voice.visible, 2.0)
-    check(stage.desk_voice.visible and stage.desk_voice.mic.is_visible_in_tree(), "botão do microfone no HUD da partida")
+    var ctl = stage.mobile_voice if "--mobile-test" in OS.get_cmdline_user_args() else stage.desk_voice
+    await wait_until(func(): return ctl.mic.is_visible_in_tree(), 3.0)
+    check(ctl.mic.is_visible_in_tree(), "botão do microfone no HUD da partida (%s)" % ("celular" if ctl == stage.mobile_voice else "desktop"))
     await shot("1_casual_voz_aviso")
     # falha de voz no meio da partida: a partida segue
     mock.fail_join = "CAN_NOT_GET_GATEWAY_SERVER"
@@ -105,6 +106,13 @@ func run():
     mock.fire({"ev": "remote", "seq": v._seq, "uids": [3 - int(j[2].uid)]})
     check("PeerParty" in v.status_text() and "PeerParty" in stage.desk_voice.label.text, "quem está na sala: %s" % stage.desk_voice.label.text)
     await shot("3_casual_voz_conectada")
+    if not shots.is_empty():   # celular em pé e deitado: microfone na coluna de ações
+        for sz in [Vector2i(720, 1280), Vector2i(1280, 600)]:
+            root.get_window().size = sz
+            for k in 12: await process_frame
+            await shot("3b_casual_mobile_%dx%d" % [sz.x, sz.y])
+        root.get_window().size = Vector2i(1920, 1080)
+        for k in 12: await process_frame
     stage.desk_voice.mic.pressed.emit()
     check(v.state == "MUTED", "microfone: mudo")
     stage.desk_voice.mic.pressed.emit()
@@ -117,6 +125,16 @@ func run():
     check(not stage.desk_voice.visible, "botão some depois da partida")
     if stage.result_overlay != null: stage.result_overlay.hide_result()
     stage.open_home()
+    await wait_until(func(): return false, 1.0)
+    # -------- RANKED: "ranked_found" do servidor → voz segue a partida ranqueada (mesmo controlador)
+    var rid := "00000000-0000-4000-8000-00000000beef"
+    stage.account.server_message.emit({"type": "ranked_found", "match_id": rid, "mode": "ranked_3min", "mode_name": "Relâmpago", "you": "w", "opponent": {"nickname": "Simulado"}})
+    check(await wait_until(func(): return v.in_match() and String(v.ctx.kind) == "ranked" and String(v.ctx.match_id) == rid, 3.0), "RANKED: voz segue a partida ranqueada (match_id do servidor)")
+    stage.desk_voice.mic.pressed.emit()
+    check(await wait_until(func(): return acc.has_method("send_server") and v.state in ["CONNECTING", "ERROR"], 3.0), "RANKED: toque pede token ao servidor")
+    check(await wait_until(func(): return v.state == "ERROR", 6.0) and "online" in v.message.to_lower() or "partida" in v.message.to_lower(), "RANKED simulado (não existe no servidor): servidor RECUSA o token (%s)" % v.message)
+    stage.open_home()
+    check(await wait_until(func(): return not v.in_match(), 2.0), "RANKED: voltar para a Home tira da voz")
     await wait_until(func(): return false, 1.0)
     # -------- MARCHA REAL online
     await invite(social, peer_id, friend, "Invite_marcha")
@@ -131,6 +149,12 @@ func run():
     await process_frame
     check(mu.hits.any(func(h): return String(h.id) == "voice") and mu.hits.any(func(h): return String(h.id) == "voice_off"), "MARCHA: botão de voz e de sair da voz desenhados")
     await shot("4_marcha_voz")
+    if not shots.is_empty():
+        root.get_window().size = Vector2i(720, 1280)
+        for k in 12: await process_frame
+        await shot("4_marcha_voz_retrato")
+        root.get_window().size = Vector2i(1920, 1080)
+        for k in 12: await process_frame
     mu._on_hit("voice_off")
     check(v.state == "DISCONNECTED" and v.in_match(), "MARCHA: × sai da voz, a mesa continua")
     mu._on_hit("voice")
@@ -150,6 +174,12 @@ func run():
     check(String(joins()[-1][2].channel) == "fx_xeque_" + String(xu.room_id), "XEQUE: canal da mesa")
     xu._redraw()
     await shot("5_xeque_voz")
+    if not shots.is_empty():
+        root.get_window().size = Vector2i(720, 1280)
+        for k in 12: await process_frame
+        await shot("5_xeque_voz_retrato")
+        root.get_window().size = Vector2i(1920, 1080)
+        for k in 12: await process_frame
     xu._on_hit("menu")
     xu._on_hit("menu_quit")
     xu._on_hit("quit_yes")
