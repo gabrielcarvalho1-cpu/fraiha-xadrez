@@ -129,3 +129,17 @@ Manual: `PORT=8140 FRAIHA_DEV_AUTH=1 FRAIHA_ENV=local FRAIHA_ADMIN_USERS=<uuid>=
 | Gap | Correção | Prova |
 | --- | --- | --- |
 | 401 numa AÇÃO (ex.: fila) só mostrava toast; a tela privilegiada continuava aberta | Tratamento **centralizado** no cliente da API (`Api.unauthorized`): qualquer resposta 401 de uma sessão instalada (polling, ação, leitura; corpo JSON, vazio ou inválido) revoga o cliente (aborta o que está em voo, recusa novas, apaga o token) e chama `sessionRejected` uma única vez → `endSession()` (timers, confirmações, época) + volta ao login com o motivo. 401 de cliente antigo não derruba sessão nova. 400/403/5xx/timeout/rede NÃO encerram a sessão | `api_client_test.mjs` (401 GET/POST/corpo vazio/inválido; 400/403/404/500/503/timeout não revogam; login sem sessão); `admin_ui_test.py` (ação 401 com outra confirmação aberta → login, sem shell/botões, nada aplicado, Admin Log igual, polling parado; 400/403/500 na ação mantêm a sessão; 401 vazio em outra tela; novo login funciona) — os testes novos falham no código de `e9232c7` |
+
+## Frontend servido em `/admin/` pelo próprio servidor (staging visual, decisão "Opção A")
+- `online_v021/admin/static.js`: na inicialização lê `admin/` (só `.html/.css/.js`, sem ocultos, sem
+  `package.json`, sem symlink) para um mapa em memória; cada request é lookup de caminho EXATO → sem acesso
+  ao disco, sem path traversal, sem listagem. Só GET/HEAD; CSP (`frame-ancestors 'none'`), `X-Frame-Options: DENY`,
+  `nosniff`, `no-referrer`.
+- Rotas: `/admin` → 301 `/admin/`; `/admin/` e `/admin/index.html` → app; `/admin/assets/*`, `/admin/src/*` → assets;
+  qualquer outro `/admin/*` → 404 curto. `/admin/api/*` continua no `AdminService` (tratado ANTES). Rotas do app são
+  por hash (`#/filas`): recarregar sempre pede `/admin/`, sem fallback.
+- **Sem `FRAIHA_ADMIN_USERS` → 404 também para a tela** (produção sem a variável não mostra nada).
+- Mesma origem: em staging, `FRAIHA_ADMIN_ORIGINS` deve conter `https://fraiha-xadrez-staging.onrender.com`
+  (o navegador manda `Origin` nas ações POST). No login, escolher o ambiente **STAGING**.
+- Testes: `tests/server/admin_static_test.cjs` (servidor real); `ADMIN_URL=http://127.0.0.1:8140/admin/ python3
+  tests/admin/admin_ui_test.py` roda o QA completo do painel servido pelo próprio servidor.

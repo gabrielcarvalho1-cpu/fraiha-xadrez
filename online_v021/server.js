@@ -5,6 +5,8 @@ const {Backend}=require('./backend');const backend=new Backend({send:(ws,o)=>sen
 console.log('FRAIHA accounts backend: '+backend.kind);
 // FRAIHA Admin · API /admin/api/* (desligada sem FRAIHA_ADMIN_USERS; autoridade só no servidor). Ver docs/admin/.
 const {AdminService}=require('./admin/service');const admin=new AdminService({backend});
+// Frontend do Admin em /admin/ (estático, só com o Admin ligado). A API /admin/api/* vem antes. Ver online_v021/admin/static.js.
+const {AdminStatic}=require('./admin/static');const adminStatic=new AdminStatic({enabled:()=>admin.access.enabled});
 const initial=()=>{let b={};const back=['R','N','B','Q','K','B','N','R'];for(let x=0;x<8;x++){b[x+',0']='b'+back[x];b[x+',1']='bP';b[x+',6']='wP';b[x+',7']='w'+back[x]}return b};
 const key=(x,y)=>x+','+y, inside=(x,y)=>x>=0&&x<8&&y>=0&&y<8, color=p=>p?p[0]:'';
 function fresh(){return{board:initial(),turn:'w',status:'BRANCAS JOGAM',game_over:false,promotion_pending:false,promotion_color:'w',promotion_cell:[-1,-1],last_from:[-1,-1],last_to:[-1,-1],captured_white:[],captured_black:[],move_count:0}}
@@ -33,6 +35,7 @@ const MAX_PACKET=8192, MAX_BIG_PACKET=600*1024, BIG_TYPES={'acct_avatar_upload':
 function bigAllowed(m,len){const lim=m&&typeof m.type==='string'&&Object.prototype.hasOwnProperty.call(BIG_TYPES,m.type)?BIG_TYPES[m.type]:0;return len<=lim}
 const server=http.createServer((req,res)=>{
   if(admin.owns(req))return void admin.handle(req,res);
+  if(adminStatic.owns(req))return void adminStatic.handle(req,res);
   // Webhook do provedor de pagamento (V2). Corpo bruto é necessário para verificar a assinatura.
   if(req.method==='POST'&&(req.url==='/webhooks/payments'||String(req.url).startsWith('/webhooks/payments?'))){let raw='';req.on('data',d=>{raw+=d;if(raw.length>1e6)req.destroy()});req.on('end',async()=>{try{const r=await backend.payments.webhook(req,raw);res.writeHead(r.status,{'content-type':'text/plain'});res.end(r.body)}catch(e){console.error('webhook',e&&e.message);res.writeHead(500);res.end('error')}});return}
   res.writeHead(200,{'content-type':'text/plain'});res.end('FRAIHA multiplayer server\n')});

@@ -6,7 +6,8 @@ Rodar: python3 tests/admin/admin_ui_test.py [pasta_screenshots]"""
 import os, sys, json, time, urllib.request
 from playwright.sync_api import sync_playwright
 
-ADMIN = "http://127.0.0.1:8150/index.html"
+# ADMIN_URL permite rodar o MESMO QA com o Admin servido pelo próprio servidor (http://127.0.0.1:8140/admin/).
+ADMIN = os.environ.get("ADMIN_URL", "http://127.0.0.1:8150/index.html")
 API = "http://127.0.0.1:8140"
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else "/tmp/claude-0/admin_shots"
 os.makedirs(SHOTS, exist_ok=True)
