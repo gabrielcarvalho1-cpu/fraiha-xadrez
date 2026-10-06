@@ -37,6 +37,8 @@ var desk_side: Label
 var desk_gear: Button
 var desk_music: Button       # R37.3
 var desk_fx: Button
+var desk_fullscreen: Button   # R43 · tela cheia também na partida
+var mobile_fullscreen: Button
 var mobile_music: Button
 var mobile_fx: Button
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
@@ -309,6 +311,14 @@ func _build_desk_panel(overlay: CanvasLayer):
         tools.add_child(sb)
         if kind == "music": desk_music = sb
         else: desk_fx = sb
+    # R43 · TELA CHEIA também durante a partida (bots, casual, ranked): o mesmo botão da Home.
+    desk_fullscreen = HudButton.make("fullscreen")
+    desk_fullscreen.name = "DeskFullscreen"
+    desk_fullscreen.tooltip_text = "Tela cheia"
+    desk_fullscreen.custom_minimum_size = Vector2(54, 54)
+    desk_fullscreen.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    desk_fullscreen.pressed.connect(func(): if screen_mode != null: screen_mode.toggle())
+    tools.add_child(desk_fullscreen)
 
 ## Visual medieval da confirmação (sair/abandonar): painel verde, moldura dourada, título
 ## em Cinzel e botões verde/ouro. Só aparência; as ações continuam as mesmas.
@@ -653,7 +663,7 @@ func _build_mobile_controls(overlay: CanvasLayer):
     mobile_actions.vertical = true
     mobile_actions.add_theme_constant_override("separation", 8)
     overlay.add_child(mobile_actions)
-    for caption in ["Reiniciar", "Marcar", "Analisar", "Música", "Efeitos"]:
+    for caption in ["Reiniciar", "Marcar", "Analisar", "Música", "Efeitos", "Tela cheia"]:
         var button = Button.new()
         button.text = caption
         button.custom_minimum_size.y = 44
@@ -686,6 +696,9 @@ func _build_mobile_controls(overlay: CanvasLayer):
         elif caption == "Efeitos":
             button.pressed.connect(func(): ModeSound.toggle_effects(hub))
             mobile_fx = button
+        elif caption == "Tela cheia":
+            button.pressed.connect(func(): if screen_mode != null: screen_mode.toggle())
+            mobile_fullscreen = button
     mobile_status = Label.new()
     mobile_status.add_theme_font_size_override("font_size", 20)
     mobile_status.add_theme_color_override("font_color", Color("efcf83"))
@@ -736,6 +749,7 @@ func _process(_delta):
     if is_instance_valid(desk_music) and desk_panel.visible:
         desk_music.queue_redraw()
         desk_fx.queue_redraw()
+    _sync_fullscreen_buttons()
     # Online has its own server-side rematch; a local reset would desync the room.
     mobile_restart.visible = mode != "online" and not (mode == "ranked" and not ranked.in_match()) and not (mode == "casual" and not casual.in_match())
     mobile_restart.text = "Desistir" if mode in ["ranked", "casual"] else "Reiniciar"
@@ -1007,6 +1021,21 @@ func _confirm_navigation():
 ## naturalmente (sem travar a tecla), 1 pedido automático só no 1º clique/toque e nunca mais depois que o
 ## jogador sai. Esc com a tela cheia ativa (ou que acabou de tirá-la) não navega: ver EscGuard.
 var screen_mode
+
+## R43 · botões de tela cheia da partida (desktop e celular) seguem o estado real; somem sem a API (iPhone).
+func _sync_fullscreen_buttons():
+    var ok: bool = screen_mode != null and screen_mode.supported()
+    var on: bool = ok and screen_mode.on_cached()
+    if is_instance_valid(desk_fullscreen):
+        desk_fullscreen.visible = ok
+        var g := "exit_fullscreen" if on else "fullscreen"
+        if desk_fullscreen.glyph != g:
+            desk_fullscreen.glyph = g
+            desk_fullscreen.tooltip_text = "Sair da tela cheia" if on else "Tela cheia"
+            desk_fullscreen.queue_redraw()
+    if is_instance_valid(mobile_fullscreen):
+        mobile_fullscreen.visible = ok
+        mobile_fullscreen.text = "Sair da tela cheia" if on else "Tela cheia"
 
 func _setup_screen_mode():
     screen_mode = preload("res://ui_v022/fullscreen_control.gd").new()

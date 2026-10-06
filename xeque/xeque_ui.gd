@@ -68,6 +68,9 @@ const PlayerPortrait := preload("res://profile/player_portrait.gd")
 
 var hub = null
 var stage = null
+## R43 · controle de tela cheia do jogo (o mesmo do botão da Home); null fora do jogo completo.
+func screen_mode():
+    return stage.get("screen_mode") if stage != null else null
 var root: Control
 var view: Control
 var g: Rules = null
@@ -693,6 +696,9 @@ func _on_hit(id: String):
         "xeque": human_challenge()
         "mute_music": Sound.toggle_music(hub)
         "mute_fx": Sound.toggle_effects(hub)
+        "fullscreen":
+            var sm = screen_mode()
+            if sm != null: sm.toggle()
         "help":
             tutorial_from_game = true
             mode = "tutorial"

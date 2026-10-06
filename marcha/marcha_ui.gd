@@ -12,6 +12,7 @@ const AI := preload("res://marcha/ai.gd")
 const Layout := preload("res://marcha/board_layout.gd")
 const Access := preload("res://marcha/marcha_access.gd")
 const Sound := preload("res://ui_v022/mode_sound.gd")
+const FullscreenControl := preload("res://ui_v022/fullscreen_control.gd")
 const Cosmetics := preload("res://profile/premium_cosmetics.gd")
 const PlayerPortrait := preload("res://profile/player_portrait.gd")
 const MUSIC := "res://marcha/audio/musica_marcha.mp3"    # música enviada pelo dono do projeto (loop)
@@ -63,6 +64,9 @@ const PAWN_BASE := 11.0           # a base do peão assenta 11 px abaixo do cent
 
 var hub = null
 var stage = null
+## R43 · controle de tela cheia do jogo (o mesmo do botão da Home); null fora do jogo completo.
+func screen_mode():
+    return stage.get("screen_mode") if stage != null else null
 var access = null
 var root: Control
 var view: TableView
@@ -1083,6 +1087,9 @@ func _on_hit(id: String):
         "help": tut_page = 0
         "mute_music": Sound.toggle_music(hub)
         "mute_fx": Sound.toggle_effects(hub)
+        "fullscreen":
+            var sm = screen_mode()
+            if sm != null: sm.toggle()
         "menu": menu_open = not menu_open
         "menu_close": menu_open = false
         "menu_tutorial":
@@ -1240,6 +1247,11 @@ class TableView extends Control:
         else:
             for i in 3: draw_line(r.get_center() + Vector2(-9, -6 + i * 6), r.get_center() + Vector2(9, -6 + i * 6), ui.GOLD, 2.5)
         ui.hits.append({"rect": r, "id": id})
+    func fullscreen_button(r: Rect2, on: bool):
+        draw_rect(r, Color("0a1611"))
+        draw_rect(r, ui.GOLD, false, 2.0)
+        ui.FullscreenControl.draw_glyph(self, r.grow(-6), on, ui.GOLD, 2.5)
+        ui.hits.append({"rect": r, "id": "fullscreen"})
     func sound_button(r: Rect2, kind: String):
         var off: bool = ui.Sound.music_muted(ui.hub) if kind == "music" else ui.Sound.effects_muted(ui.hub)
         draw_rect(r, Color("0a1611"))
@@ -1276,6 +1288,9 @@ class TableView extends Control:
         # MÚSICA / EFEITOS: no salão e na partida
         sound_button(Rect2(right - gap, top, bs, bs), "music")
         sound_button(Rect2(right, top, bs, bs), "fx")
+        # R43 · TELA CHEIA (o mesmo botão da Home), à esquerda da música
+        var sm = ui.screen_mode()
+        if sm != null and sm.supported(): fullscreen_button(Rect2(right - gap * 2, top, bs, bs), sm.on_cached())
 
     # ------------------------------------------------------------ placas dos jogadores
     ## R41 · moldura (Club / Fundador) e selo do jogador humano sobre o retrato da placa.

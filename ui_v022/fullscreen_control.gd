@@ -62,6 +62,25 @@ func _ready():
 func supported() -> bool:
     return _supported
 
+## Estado sem custo (atualizado a cada 0,2 s): para desenhar o ícone a cada frame.
+func on_cached() -> bool:
+    return _last_on
+
+## R43 · ícone de tela cheia para botões desenhados à mão (MARCHA REAL / XEQUE): 4 cantos para fora
+## (entrar) ou para dentro (sair) — o mesmo desenho do botão da Home (ui_v022/hud_button.gd).
+static func draw_glyph(ci: CanvasItem, rect: Rect2, on: bool, col: Color, w := 3.0):
+    var center := rect.get_center()
+    var r := minf(rect.size.x, rect.size.y) * 0.30
+    for dx in [-1, 1]:
+        for dy in [-1, 1]:
+            var corner: Vector2 = center + Vector2(dx, dy) * r
+            var tip: Vector2 = corner if not on else center + Vector2(dx, dy) * r * 0.35
+            var arm := r * 0.6
+            var sx: float = -dx if not on else dx
+            var sy: float = -dy if not on else dy
+            ci.draw_line(tip, tip + Vector2(sx * arm, 0), col, w)
+            ci.draw_line(tip, tip + Vector2(0, sy * arm), col, w)
+
 func is_on() -> bool:
     if _web: return bool(JavaScriptBridge.eval(JS_IS_ON))
     var w := get_window()

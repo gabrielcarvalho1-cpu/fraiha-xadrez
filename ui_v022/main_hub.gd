@@ -20,12 +20,15 @@ const APP_VERSION = "0.37"
 const FOREST = preload("res://ui_v022/assets/home_forest_v7.png")   # R36: arte de REFERÊNCIA aprovada pelo dono (tools/home_ref_v7.py): menu com pilares e tochas, 11 linhas com textos; só o que é vivo foi apagado
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
 ## R36 · linhas do menu na arte v7 (y da borda dourada de cima, altura até a de baixo) — medidas na referência
-const MENU_ROWS := [Vector2(324.0, 46.5), Vector2(375.0, 46.5), Vector2(427.5, 55.0), Vector2(491.0, 46.5), Vector2(541.0, 46.5), Vector2(592.0, 46.0), Vector2(642.0, 46.5), Vector2(692.0, 46.5), Vector2(743.0, 45.5), Vector2(793.0, 45.5), Vector2(842.0, 45.5)]
-const MENU_X := 603.0       # borda esquerda das linhas na arte v7
-const MENU_W := 457.0       # até a borda direita (x 1060)
+# R43: menu da arte em 92% (tools/home_r43_art.py): x' = 554 + (x-530)*0,92 ; y' = 292 + (y-288)*0,92
+const MENU_ROWS := [Vector2(325.1, 42.8), Vector2(372.0, 42.8), Vector2(420.3, 50.6), Vector2(478.8, 42.8), Vector2(524.8, 42.8), Vector2(571.7, 42.3), Vector2(617.7, 42.8), Vector2(663.7, 42.8), Vector2(710.6, 41.9), Vector2(756.6, 41.9), Vector2(801.7, 41.9)]
+const MENU_X := 621.16      # borda esquerda das linhas na arte v7 (R43: menu 92%)
+const MENU_W := 420.44      # até a borda direita (R43: menu 92%)
 const MENU_SCALE := 0.74   # R35: escala das linhas (o conteúdo encolhe por igual a partir de x=628)
-const MENU_TEXT_X := 695.0  # onde começam os textos das linhas na arte v7
+const MENU_TEXT_X := 705.8  # onde começam os textos das linhas na arte v7 (R43: menu 92%)
 const FOREST_V2 = FOREST
+const FOREST_WIDE = preload("res://ui_v022/assets/home_forest_v7_wide.png")   # R43: laterais completadas (tools/home_wide_r43.py)
+const WIDE_PAD := 84.0
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
 const BUTTON_ATLAS = preload("res://ui_v022/assets/menu_atlas.png")
@@ -1471,6 +1474,16 @@ func _draw_presentation_frame():
         return
     var cover = maxf(full.size.x / DESIGN.x, full.size.y / DESIGN.y) * 1.04
     var cover_rect = Rect2((full.size - DESIGN * cover) / 2.0, DESIGN * cover)
+    if _is_ref_art(tex):
+        # R43 · modo janela: a cena continua dos dois lados (home_forest_v7_wide.png = 84 px de cada
+        # lado completados + o meio idêntico à arte oficial), alinhada pixel a pixel com a arte.
+        # Se a janela for ainda mais larga, o resto é a mesma cena ampliada e escurecida.
+        var ws = maxf(full.size.x / FOREST_WIDE.get_width(), full.size.y / FOREST_WIDE.get_height()) * 1.04
+        var wsize = FOREST_WIDE.get_size() * ws
+        presentation_frame.draw_texture_rect(FOREST_WIDE, Rect2((full.size - wsize) / 2.0, wsize), false, Color(0.5, 0.52, 0.48))
+        var u = canvas.scale.x
+        presentation_frame.draw_texture_rect(FOREST_WIDE, Rect2(artwork.position - Vector2(WIDE_PAD * u, 0), FOREST_WIDE.get_size() * u), false)
+        return
     # Sobras da tela (fora da tela cheia): panorama de folhagem em pixel art, levemente escurecido.
     var foliage: Texture2D = preload("res://ui_v022/assets/home_side_foliage.png")
     var fs = maxf(full.size.x / foliage.get_width(), full.size.y / foliage.get_height())
@@ -1933,7 +1946,7 @@ func public_cosmetics() -> Dictionary:
 # ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
 # Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo
 # (retrato, nickname, liga/PL, barra, insígnia, texto da conta) e as áreas de clique.
-const REF_MENU_RECT = Rect2(598,318,468,575)   # R36: miolo do menu da arte v7 (entre os pilares)
+const REF_MENU_RECT = Rect2(616.56,319.6,430.56,529.0)   # R36/R43: miolo do menu da arte v7 (entre os pilares, menu 92%)
 var ref_nodes: Array = []
 var ref_mode := false
 var desk_profile := {}
@@ -2090,14 +2103,14 @@ func _build_reference_chrome():
     ref_nodes.append(ref_menu_cover)
     # Os louros do Ranqueado ficam sobre a borda da moldura: nas páginas internas, a borda é
     # recomposta com as mesmas colunas da própria arte, logo abaixo (sem emenda).
-    for x in [580.0, 1060.0]:
+    for x in [600.0, 1041.6]:   # R43: colunas da moldura no menu em 92%
         var patch = TextureRect.new()
         patch.name = "RefLaurelPatch"
-        patch.texture = _slice(FOREST_V2, Rect2(x, 600, 22, 76))
+        patch.texture = _slice(FOREST_V2, Rect2(x, 579.0, 20.2, 70.0))
         patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         patch.stretch_mode = TextureRect.STRETCH_SCALE
         patch.position = Vector2(x, MENU_ROWS[2].x - 10.0)
-        patch.size = Vector2(22, MENU_ROWS[2].y + 20.0)
+        patch.size = Vector2(20.2, MENU_ROWS[2].y + 20.0)
         patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
         ref_menu_cover.add_child(patch)
         patch.top_level = false
