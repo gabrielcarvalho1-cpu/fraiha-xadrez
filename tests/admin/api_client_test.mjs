@@ -61,3 +61,49 @@ test('revoke (logout): requisição em voo é abortada e nenhuma nova sai', asyn
   assert.equal(hits, before, 'nenhuma requisição nova depois do logout');
   assert.equal(api.token, '', 'token apagado da memória');
 });
+
+test('401 (qualquer chamada, GET ou POST, corpo JSON/vazio/inválido) → onUnauthorized UMA vez + cliente revogado + em voo abortada', async t => {
+  let mode = 'json', slowHits = 0;
+  const s = await server((req, res) => {
+    if (req.url === '/slow') { slowHits++; setTimeout(() => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}'); }, 600); return; }
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(mode === 'json' ? '{"error":"invalid_session"}' : mode === 'bad' ? '{quebr' : '');
+  });
+  t.after(() => { s.closeAllConnections && s.closeAllConnections(); s.close(() => {}); });
+  for (const m of ['json', 'empty', 'bad']) {
+    mode = m;
+    const api = apiFor(s); const calls = [];
+    api.onUnauthorized = e => calls.push(e);
+    const inflight = api.get('/slow');
+    await new Promise(r => setTimeout(r, 50));
+    await assert.rejects(api.post('/admin/api/queues/ranked', { enabled: false }), e => e instanceof ApiError && e.kind === 'auth' && e.status === 401, m);
+    assert.equal(calls.length, 1, 'onUnauthorized exatamente uma vez · ' + m);
+    assert.equal(calls[0].code, 'invalid_session');
+    assert.equal(api.revoked, true); assert.equal(api.token, '');
+    await assert.rejects(inflight, e => e.kind === 'revoked', 'requisição em voo não termina como sucesso · ' + m);
+    await assert.rejects(api.get('/x'), e => e.kind === 'revoked', 'nenhuma nova requisição sai');
+    assert.equal(calls.length, 1, 'não dispara de novo');
+  }
+});
+
+test('400/403/404/500/timeout NÃO acionam onUnauthorized nem revogam', async t => {
+  let status = 400;
+  const s = await server((req, res) => {
+    if (req.url === '/stall') { res.writeHead(200); res.write('{'); return; }
+    res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(status === 200 ? '{"ok":true}' : '{"error":"x"}');
+  });
+  t.after(() => { s.closeAllConnections && s.closeAllConnections(); s.close(() => {}); });
+  const api = apiFor(s); let calls = 0; api.onUnauthorized = () => calls++;
+  for (const st of [400, 403, 404, 500, 503]) { status = st; await assert.rejects(api.post('/q', {}), e => e instanceof ApiError && e.status === st && e.kind !== 'auth'); }
+  await assert.rejects(api.request('/stall', { timeout: 300 }), e => e.kind === 'timeout');
+  assert.equal(calls, 0); assert.equal(api.revoked, false);
+  status = 200; assert.deepEqual(await api.get('/x'), { ok: true }, 'chamada 200 normal segue funcionando');
+});
+
+test('401 sem onUnauthorized (tela de login) → só erro auth, sem revogar', async t => {
+  const s = await server((req, res) => { res.writeHead(401, { 'Content-Type': 'application/json' }); res.end('{"error":"invalid_session"}'); });
+  t.after(() => { s.closeAllConnections && s.closeAllConnections(); s.close(() => {}); });
+  const api = apiFor(s);
+  await assert.rejects(api.get('/admin/api/session'), e => e.kind === 'auth' && e.code === 'invalid_session');
+  assert.equal(api.revoked, false);
+});

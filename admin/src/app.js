@@ -39,6 +39,16 @@ function endSession({ remote = false } = {}) {
   Object.assign(S, { api: null, session: null, envKey: '', fails: 0, lastOk: 0 });
 }
 
+// 401 em qualquer chamada da sessão (polling, ação de fila, leitura, …): o servidor recusou o token.
+// Encerra a sessão inteira (timers, cliente, confirmações, tela privilegiada) e volta ao login.
+// Idempotente e preso à sessão de origem: um 401 de cliente antigo nunca derruba uma sessão nova.
+function sessionRejected(api, err) {
+  if (api !== S.api) return;
+  endSession();
+  toast(err.text, 'err');
+  renderLogin(err.text);
+}
+
 function renderLogin(error = '') {
   if (S.api || S.session) endSession();
   const envSel = h('select', { name: 'env' }, Object.entries(ENVIRONMENTS).map(([k, e]) => h('option', { value: k }, e.label)));
@@ -63,6 +73,7 @@ function renderLogin(error = '') {
       if (epoch !== S.epoch || !document.body.contains(form)) { api.revoke(); return; }   // login antigo chegando tarde
       S.epoch++;
       Object.assign(S, { api, session, envKey: envSel.value, fails: 0 });
+      api.onUnauthorized = err => sessionRejected(api, err);   // QUALQUER 401 desta sessão encerra tudo
       if (!location.hash) location.hash = '#/dashboard';
       renderShell();
     } catch (err) {

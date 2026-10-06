@@ -217,6 +217,74 @@ with sync_playwright() as p:
     check(not late, f"resposta tardia não dispara nova requisição {late[:2]}")
     pg.unroute_all(behavior="ignoreErrors")
 
+    # ===================== correção final: 401 em AÇÃO administrativa (não só no polling) =====================
+    JH = {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"}
+    def ranked_enabled():
+        _, q = api("/admin/api/queues"); return [x for x in q["queues"] if x["family"] == "ranked"][0]["enabled"]
+
+    # --- 400 / 403 / 500 numa ação NÃO encerram a sessão (só mostram o erro)
+    login(pg, "boss"); pg.wait_for_selector("[data-metric='Online agora'] .val:not(.na)", timeout=10000)
+    pg.goto(ADMIN + "#/queues"); pg.wait_for_selector("[data-family=ranked] [data-action=toggle]", timeout=8000)
+    for st, code, msg in ((400, "reason_required", "Informe o motivo"), (403, "forbidden", "não tem permissão"), (500, "server_error", "Erro interno")):
+        def fail_post(st, code):
+            return lambda r: r.fulfill(status=st, body=json.dumps({"error": code}), headers=JH) if r.request.method == "POST" else r.continue_()
+        pg.route("**/admin/api/queues/ranked", fail_post(st, code))
+        pg.click("[data-family=ranked] [data-action=toggle]"); pg.wait_for_selector(".modal", timeout=3000)
+        pg.fill(".modal textarea", f"erro {st}"); pg.fill(".modal input", "ranked"); pg.click(".modal .btn.danger")
+        pg.wait_for_selector(f".toast:has-text('{msg}')", timeout=5000)
+        mark = time.time(); pg.wait_for_timeout(5500)
+        polled = [r for r in reqs if r[0] > mark and r[1].endswith("/admin/api/queues")]
+        check(pg.locator(".shell").count() == 1 and pg.locator("select[name=env]").count() == 0 and polled and ranked_enabled() is True,
+              f"ação com HTTP {st}: erro exibido, sessão CONTINUA (polling segue), nada aplicado")
+        pg.unroute_all(behavior="ignoreErrors")
+
+    # --- LOGADO → ação de fila → endpoint responde 401 → sessão encerrada por inteiro
+    pg.goto(ADMIN + "#/dashboard"); pg.wait_for_timeout(300)
+    pg.goto(ADMIN + "#/queues"); pg.wait_for_selector("[data-family=ranked] [data-action=toggle]", timeout=8000)
+    _, a0 = api("/admin/api/audit"); n0 = len(a0["items"])
+    held = []
+    pg.route("**/admin/api/queues/ranked", lambda r: held.append(r) if r.request.method == "POST" else r.continue_())
+    pg.click("[data-family=ranked] [data-action=toggle]"); pg.wait_for_selector(".modal", timeout=3000)
+    pg.fill(".modal textarea", "acao com 401"); pg.fill(".modal input", "ranked"); pg.click(".modal .btn.danger")
+    pg.wait_for_function("() => !document.querySelector('.modal')", timeout=3000)
+    for _ in range(30):
+        if held: break
+        pg.wait_for_timeout(100)
+    check(len(held) == 1, "ação enviada (POST /admin/api/queues/ranked interceptado)")
+    # enquanto a ação está em voo, outra confirmação crítica fica aberta e pronta
+    pg.click("[data-family=casual] [data-action=toggle]"); pg.wait_for_selector(".modal", timeout=3000)
+    pg.fill(".modal textarea", "pendente no 401"); pg.fill(".modal input", "casual")
+    pg.evaluate("window.__staleGo3 = document.querySelector('.modal .btn.danger')")
+    check(not pg.evaluate("window.__staleGo3.disabled"), "confirmação pendente pronta (antes do 401)")
+    held[0].fulfill(status=401, body='{"error":"invalid_session"}', headers=JH)   # o servidor recusa a ação
+    pg.wait_for_selector("select[name=env]", timeout=5000)
+    mark = time.time()
+    pg.unroute_all(behavior="ignoreErrors")
+    check(pg.locator(".shell").count() == 0 and pg.locator("[data-action=toggle]").count() == 0 and pg.locator("header .btn.ghost").count() == 0,
+          "401 na ação: tela privilegiada removida (sem shell, sem botões de fila, sem Sair)")
+    check("Sessão inválida" in pg.inner_text(".banner.err"), "401 na ação: volta ao login com o motivo")
+    check(pg.locator(".modal").count() == 0, "401 na ação: confirmação pendente fechada")
+    pg.screenshot(path=f"{SHOTS}/18_acao_401_login.png")
+    pg.evaluate("window.__staleGo3 && window.__staleGo3.click()"); pg.wait_for_timeout(1200)
+    _, q = api("/admin/api/queues"); _, a1 = api("/admin/api/audit")
+    check(ranked_enabled() is True and [x for x in q["queues"] if x["family"] == "casual"][0]["enabled"] is True and len(a1["items"]) == n0,
+          "401 na ação: ação NÃO aplicada; confirmação antiga não envia nada; Admin Log inalterado")
+    pg.wait_for_timeout(6500)
+    late = [r for r in reqs if r[0] > mark + 0.2]
+    check(not late, f"401 na ação: polling parado, nenhuma requisição administrativa depois {late[:2]}")
+    check(pg.evaluate("location.hash === '' || !document.querySelector('.shell')") and pg.locator(".shell").count() == 0, "401 na ação: sessão não volta sozinha")
+
+    # --- 401 em outra chamada (leitura de uma tela qualquer, não a fila) também encerra
+    login(pg, "boss"); pg.wait_for_selector("[data-metric='Online agora'] .val:not(.na)", timeout=10000)
+    pg.route("**/admin/api/audit*", lambda r: r.fulfill(status=401, body="", headers=JH))   # 401 com corpo vazio
+    pg.goto(ADMIN + "#/audit")
+    pg.wait_for_selector("select[name=env]", timeout=8000)
+    pg.unroute_all(behavior="ignoreErrors")
+    check(pg.locator(".shell").count() == 0, "401 (corpo vazio) na tela Admin Log: sessão encerrada")
+    # novo login normal depois do 401 funciona (chamadas 200 normais)
+    login(pg, "boss"); pg.wait_for_selector("[data-metric='Online agora'] .val:not(.na)", timeout=10000)
+    check(pg.locator(".shell").count() == 1, "depois do 401: novo login normal funciona")
+
     # --- Clube/Founder: ERRO de consulta aparece como INDISPONÍVEL (não como "não possui")
     login(pg, "boss"); pg.wait_for_selector("[data-metric='Online agora'] .val:not(.na)", timeout=10000)
     _, pls = api("/admin/api/players?q=Rei"); uid = pls["items"][0]["user_id"]

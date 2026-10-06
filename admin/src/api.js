@@ -19,7 +19,18 @@ export class ApiError extends Error {
 }
 
 export class Api {
-  constructor(envKey, token) { this.envKey = envKey; this.env = ENVIRONMENTS[envKey]; this.token = token; this.revoked = false; this.inflight = new Set(); }
+  constructor(envKey, token) { this.envKey = envKey; this.env = ENVIRONMENTS[envKey]; this.token = token; this.revoked = false; this.inflight = new Set(); this.onUnauthorized = null; }
+  // Ponto ÚNICO de tratamento de 401: qualquer resposta 401 da API (polling, ação, leitura) revoga este
+  // cliente (aborta o que estiver em voo, recusa novas, apaga o token) e avisa a sessão uma única vez.
+  // Só vale para um cliente já instalado como sessão (onUnauthorized definido); no login o erro é só exibido.
+  // 400/403/5xx/timeout/rede NÃO passam por aqui e não encerram a sessão.
+  unauthorized(err) {
+    const cb = this.onUnauthorized;
+    if (!cb || this.revoked) return;
+    this.onUnauthorized = null;
+    this.revoke();
+    try { cb(err); } catch (e) { console.error(e); }
+  }
   // Logout / troca de identidade: nenhuma requisição desta sessão sai ou termina depois disso.
   revoke() { this.revoked = true; this.token = ''; for (const c of this.inflight) { try { c.abort(); } catch { /* já abortada */ } } this.inflight.clear(); }
   // O prazo cobre a operação INTEIRA: conexão, cabeçalhos E leitura/parse do corpo (auditoria: corpo travado).
@@ -36,12 +47,19 @@ export class Api {
         body: body !== undefined ? JSON.stringify(body) : undefined }));
       const text = await abortRace(res.text());
       if (this.revoked) throw new ApiError('revoked', 0, 'session_ended');
+      if (res.status === 401) {   // antes do parse: 401 com corpo vazio/inválido também encerra a sessão
+        let d = null; try { d = text ? JSON.parse(text) : null; } catch { /* corpo irrelevante */ }
+        const err = new ApiError('auth', 401, (d && d.error) || 'invalid_session', d && d.detail);
+        this.unauthorized(err);
+        throw err;
+      }
       let data = null;
       if (text) { try { data = JSON.parse(text); } catch { throw new ApiError('server', res.status, 'bad_response'); } }
       if (!res.ok) throw new ApiError(res.status === 401 ? 'auth' : res.status === 403 ? 'forbidden' : res.status >= 500 ? 'server' : 'http', res.status, data && data.error, data && data.detail);
       if (data === null) throw new ApiError('server', res.status, 'bad_response');   // 200 sem corpo nunca é sucesso
       return data;
     } catch (e) {
+      if (e instanceof ApiError && e.kind === 'auth') throw e;   // a 401 propaga como 'auth' (a sessão já foi encerrada)
       if (this.revoked) throw new ApiError('revoked', 0, 'session_ended');
       if (e instanceof ApiError) throw e;
       throw new ApiError(timedOut ? 'timeout' : 'network');
