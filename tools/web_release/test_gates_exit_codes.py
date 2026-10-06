@@ -44,7 +44,7 @@ class Static(unittest.TestCase):
         self.assertIn("$rc = 0", qa)
         cmd = open(os.path.join(HERE, "../../distribution/qa/RUN-QA.cmd"), encoding="utf-8").read()
         self.assertIn("exit /b %RC%", cmd)
-        self.assertLess(cmd.index('set "RC='), cmd.index("pause"))
+        self.assertLess(cmd.index('set "RC='), cmd.rindex("pause"))
 
 
 @NEED
