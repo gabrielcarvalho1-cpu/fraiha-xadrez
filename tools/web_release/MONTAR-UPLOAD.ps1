@@ -18,12 +18,12 @@ try {
     $dir = Split-Path -Parent $dest
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
     $src = Join-Path $root $winRel
-    if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination $dest }
-    elseif (Test-Path -LiteralPath ($src + '.b64')) {
-      # imagens vêm em base64 (a cópia para o PC recomprime PNG e mudaria o SHA256)
+    if (Test-Path -LiteralPath ($src + '.b64')) {
+      # imagens vêm em base64 (a cópia para o PC recomprime PNG e mudaria o SHA256); o .b64 tem prioridade
       $bytes = [Convert]::FromBase64String([System.IO.File]::ReadAllText($src + '.b64'))
       [System.IO.File]::WriteAllBytes($dest, $bytes)
     }
+    elseif (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination $dest }
     else {
       $parts = @(Get-ChildItem -LiteralPath (Split-Path -Parent $src) -Filter ((Split-Path -Leaf $src) + '.part*') -ErrorAction SilentlyContinue | Sort-Object Name)
       if ($parts.Count -eq 0) { throw "FALTANDO: $rel (copie a pasta inteira de novo)." }
