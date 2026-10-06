@@ -10,6 +10,8 @@ const { buildRtcAudioToken } = require('./agora_token');
 
 const TOKEN_TTL_S = 600;            // 10 min; o cliente renova antes de expirar (voice_renew)
 const RATE_WINDOW_MS = 60e3, RATE_MAX = 12;
+// R45-V05: além do limite por conexão, um limite por CONTA+PARTIDA (abas/reconexões não multiplicam)
+const ACCOUNT_RATE_MAX = 16, LEAVE_RATE_MAX = 20, MAX_KEYS = 5000;
 const short = id => String(id || '').slice(0, 8);
 
 class VoiceService {
@@ -19,6 +21,10 @@ class VoiceService {
     this.cert = String(env.FRAIHA_AGORA_APP_CERTIFICATE || '').trim();
     this.ttl = Math.min(3600, Math.max(120, Number(env.FRAIHA_VOICE_TOKEN_TTL || TOKEN_TTL_S) || TOKEN_TTL_S));
     this.rate = new WeakMap();
+    this.accountRate = new Map();   // `${uid}|${match}` -> {start, n}
+    // Presença de voz idempotente: `${uid}|${match}` -> Set(ws). Aviso "entrou" só na 1ª conexão,
+    // "saiu" só quando a última sai/fecha. leave repetido / de quem não entrou não gera aviso.
+    this.present = new Map();
   }
   configured() { return /^[0-9a-fA-F]{32}$/.test(this.appId) && /^[0-9a-fA-F]{32}$/.test(this.cert); }
 
@@ -53,11 +59,54 @@ class VoiceService {
     return { error: 'not_in_match' };
   }
 
-  allow(ws) {
+  allow(ws, key) {
     const t = this.now();
     let r = this.rate.get(ws);
-    if (!r || t - r.start > RATE_WINDOW_MS) { r = { start: t, n: 0 }; this.rate.set(ws, r); }
-    return ++r.n <= RATE_MAX;
+    if (!r || t - r.start > RATE_WINDOW_MS) { r = { start: t, n: 0, leaves: 0 }; this.rate.set(ws, r); }
+    if (++r.n > RATE_MAX) return false;
+    if (!key) return true;
+    if (this.accountRate.size > MAX_KEYS) for (const [k, v] of this.accountRate) if (t - v.start > RATE_WINDOW_MS) this.accountRate.delete(k);
+    let a = this.accountRate.get(key);
+    if (!a || t - a.start > RATE_WINDOW_MS) { a = { start: t, n: 0 }; this.accountRate.set(key, a); }
+    return ++a.n <= ACCOUNT_RATE_MAX;
+  }
+  allowLeave(ws) {
+    const t = this.now();
+    let r = this.rate.get(ws);
+    if (!r || t - r.start > RATE_WINDOW_MS) { r = { start: t, n: 0, leaves: 0 }; this.rate.set(ws, r); }
+    return ++r.leaves <= LEAVE_RATE_MAX;
+  }
+  // presença: true se esta conexão foi a PRIMEIRA da conta nesta partida (então avisa a mesa)
+  enter(ws, key) {
+    let set = this.present.get(key);
+    if (!set) {
+      if (this.present.size > MAX_KEYS) return false;   // proteção de memória: sem aviso, voz segue
+      set = new Set(); this.present.set(key, set);
+    }
+    for (const w of set) if (w.readyState !== undefined && w.readyState !== 1) set.delete(w);   // conexões mortas
+    const first = set.size === 0;
+    set.add(ws);
+    (ws.voiceKeys || (ws.voiceKeys = new Set())).add(key);
+    return first;
+  }
+  // true se a conta SAIU de vez (última conexão) — só então avisa a mesa
+  exit(ws, key) {
+    const set = this.present.get(key);
+    if (ws.voiceKeys) ws.voiceKeys.delete(key);
+    if (!set || !set.delete(ws)) return false;
+    if (set.size) return false;
+    this.present.delete(key);
+    return true;
+  }
+  // conexão fechada / logout / troca de conta (backend.invalidate): limpa presença e avisa a mesa
+  dropSocket(ws) {
+    const uid = ws.user && ws.user.id;
+    for (const key of [...(ws.voiceKeys || [])]) {
+      if (!this.exit(ws, key)) continue;
+      const matchId = key.slice(key.indexOf('|') + 1);
+      const w = uid ? this.locate(uid, matchId) : { error: 'x' };
+      if (!w.error) this.notify(w, false);
+    }
   }
 
   deny(ws, matchId, code, renew) {
@@ -87,9 +136,11 @@ class VoiceService {
     const a = String(m.type || '');
     const uid = ws.user && ws.user.id;
     const matchId = typeof m.match_id === 'string' ? m.match_id.slice(0, 64) : '';
-    if (a === 'voice_leave') {   // a saída é do cliente; aqui só registra e avisa a mesa (sem estado no servidor)
+    if (a === 'voice_leave') {   // a saída é do cliente; aqui registra e avisa a mesa (1x, idempotente)
+      if (!this.allowLeave(ws)) return;
       this.log(`[voice] leave match=${short(matchId)} reason=${String(m.reason || '').replace(/[^a-z_]/g, '').slice(0, 24)}`);
-      const w = uid && matchId ? this.locate(uid, matchId) : { error: 'x' };
+      if (!uid || !matchId || !this.exit(ws, `${uid}|${matchId}`)) return;
+      const w = this.locate(uid, matchId);
       if (!w.error) this.notify(w, false);
       return;
     }
@@ -97,7 +148,7 @@ class VoiceService {
     const renew = a === 'voice_renew';
     if (!uid) return this.deny(ws, matchId, 'not_in_match', renew);
     if (!/^[A-Za-z0-9-]{8,64}$/.test(matchId)) return this.deny(ws, matchId, 'bad_request', renew);
-    if (!this.allow(ws)) return this.deny(ws, matchId, 'rate_limited', renew);
+    if (!this.allow(ws, `${uid}|${matchId}`)) return this.deny(ws, matchId, 'rate_limited', renew);
     if (!this.configured()) return this.deny(ws, matchId, 'not_configured', renew);
     const where = this.locate(uid, matchId);
     if (where.error) return this.deny(ws, matchId, where.error, renew);
@@ -106,7 +157,7 @@ class VoiceService {
     try { token = buildRtcAudioToken({ appId: this.appId, appCertificate: this.cert, channel, uid: where.seatUid, ttl: this.ttl, privilegeTtl: this.ttl, issueTs: Math.floor(this.now() / 1000) }); }
     catch (e) { console.error('[voice] token build failed', e && e.message); return this.deny(ws, matchId, 'token_error', renew); }
     this.log(`[voice] ${renew ? 'renew' : 'token'} granted kind=${where.kind} match=${short(where.id)} seat=${where.seatUid} ttl=${this.ttl}`);
-    if (!renew) this.notify(where, true);
+    if (!renew && this.enter(ws, `${uid}|${where.id}`)) this.notify(where, true);
     return this.send(ws, { type: 'voice_granted', renew, match_id: where.id, kind: where.kind, app_id: this.appId, channel,
       uid: where.seatUid, token, ttl: this.ttl, participants: where.participants });
   }

@@ -135,6 +135,7 @@ class Backend {
     s.timer = null; s.token = null; s.expiresAt = 0; s.revalidateAt = 0; s.revalidation = null;
     s.authPending = false; s.authPrevious = null;
     // Serviços recebem a identidade antiga para desligar filas/mesas antes da limpeza.
+    if (this.voice) this.voice.dropSocket(ws);   // voz: presença sai junto com a sessão (R45-V05)
     this.operations.run(null, () => this.setIdentity(ws, null));
     ws.user = null; ws.profile = null; ws.guest = null;
     ws.cosmeticsAt = null; ws.guestAuthAt = null;

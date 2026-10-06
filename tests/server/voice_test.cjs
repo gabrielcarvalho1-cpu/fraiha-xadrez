@@ -99,6 +99,7 @@ test('Ranked: participantes recebem token do próprio assento; terceiro e partid
   }
   assert.notEqual(ra.uid, rb.uid);
   // aviso para a mesa: B entrou → A recebe voice_peer (só assento + nome público)
+  await h.backend.handle(h.sockets[1], { type: 'voice_leave', match_id: m.id, reason: 'user' }); await flush();
   h.messages.length = 0;
   await h.backend.handle(h.sockets[1], { type: 'voice_join', match_id: m.id }); await flush();
   const peer = h.messages.find(x => x.socket === h.sockets[0] && x.type === 'voice_peer');
@@ -166,4 +167,33 @@ test('convidado não entra em voz; limite de tentativas', async t => {
   let last;
   for (let i = 0; i < 13; i++) last = await h.ask(0, { type: 'voice_renew', match_id: m.id });
   assert.equal(last.code, 'rate_limited');
+});
+
+test('R45-V05: limite por CONTA+partida (abas não multiplicam); leave idempotente sem spam; fechar conexão avisa 1x', async t => {
+  const h = await fixture(t);
+  const m = h.backend.ranked.startMatch('ranked_3min', h.entry(A), h.entry(B));
+  // segunda conexão da MESMA conta A
+  const tab2 = { readyState: 1 };
+  await h.backend.handle(tab2, { type: 'acct_auth', access_token: A }); await flush();
+  h.sockets.push(tab2);
+  t.after(() => h.backend.onClose(tab2));
+  let granted = 0;
+  for (let i = 0; i < 12; i++) if ((await h.ask(0, { type: 'voice_renew', match_id: m.id })).type === 'voice_granted') granted++;
+  for (let i = 0; i < 12; i++) if ((await h.ask(3, { type: 'voice_renew', match_id: m.id })).type === 'voice_granted') granted++;
+  assert.equal(granted, 16, 'conta+partida: no máximo 16/min somando as abas (antes: 24)');
+  // presença: B entra 1x → 1 aviso; 25 leaves → 1 aviso de saída
+  h.messages.length = 0;
+  await h.backend.handle(h.sockets[1], { type: 'voice_join', match_id: m.id }); await flush();
+  await h.backend.handle(h.sockets[1], { type: 'voice_join', match_id: m.id }); await flush();
+  assert.equal(h.messages.filter(x => x.socket === h.sockets[0] && x.type === 'voice_peer' && x.joined).length, 1, 'entrar de novo não repete o aviso');
+  h.messages.length = 0;
+  for (let i = 0; i < 25; i++) await h.backend.handle(h.sockets[1], { type: 'voice_leave', match_id: m.id, reason: 'user' });
+  await flush();
+  assert.equal(h.messages.filter(x => x.socket === h.sockets[0] && x.type === 'voice_peer').length, 1, '25 leaves = 1 aviso por conexão da mesa (antes: 25)');
+  // fechar a conexão de quem está na voz avisa a mesa 1x
+  await h.backend.handle(h.sockets[1], { type: 'voice_join', match_id: m.id }); await flush();
+  h.messages.length = 0;
+  h.backend.onClose(h.sockets[1]); await flush();
+  const gone = h.messages.filter(x => x.socket === h.sockets[0] && x.type === 'voice_peer');
+  assert.equal(gone.length, 1); assert.equal(gone[0].joined, false);
 });
