@@ -41,6 +41,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       }, 300);
     }
     if (m.type === 'party_event' && m.ev === 'end') console.log('fim', game);
+    // R45 · PEER_VOICE=1: o amigo entra na voz assim que a partida começa (o cliente vê "fulano está na voz")
+    if (process.env.PEER_VOICE && (m.type === 'party_start' || m.type === 'casual_found')) {
+      const kind = m.type === 'casual_found' ? 'casual' : m.game;
+      setTimeout(() => c.send({ type: 'voice_join', kind, match_id: m.room_id || m.match_id }), 300);
+    }
+    if (m.type === 'voice_granted' || m.type === 'voice_denied') console.log('voz', m.type, m.code || m.channel);
     // o alvo saiu: o teste segue para o próximo modo, então PeerParty também sai (a mesa encerra)
     if (m.type === 'party_event' && m.ev === 'left') setTimeout(() => c.send({ type: 'party_leave', room_id: room }), 200);
   });
