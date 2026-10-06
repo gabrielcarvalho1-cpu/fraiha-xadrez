@@ -80,6 +80,12 @@ func leave(seq: int, reason := "") -> void:
 func set_muted(on: bool) -> void:
     if _ready: JavaScriptBridge.eval("window.FraihaVoiceBridge.setMuted(%s)" % ("true" if on else "false"))
 
+func set_speaker_muted(on: bool) -> void:
+    if _ready: JavaScriptBridge.eval("window.FraihaVoiceBridge.setSpeakerMuted(%s)" % ("true" if on else "false"))
+
+func set_remote_muted(uid: int, on: bool) -> void:
+    if _ready: JavaScriptBridge.eval("window.FraihaVoiceBridge.setRemoteMuted(%d, %s)" % [uid, "true" if on else "false"])
+
 func renew(token: String) -> void:
     if _ready: JavaScriptBridge.eval("window.FraihaVoiceBridge.renew(%s)" % JSON.stringify(token))
 

@@ -8,6 +8,7 @@ const Glyph := preload("res://voice/voice_glyph.gd")
 var voice = null
 var mic: Button
 var off: Button
+var ear: Button     # ÁUDIO RECEBIDO da voz (fone): ouvir / não ouvir os outros, sem sair da sala
 var label: Label
 var compact := false   # celular: estado numa linha embaixo do microfone
 
@@ -31,6 +32,16 @@ func setup(v, mobile := false) -> void:
     mic.pressed.connect(func(): if voice != null: voice.press())
     mic.draw.connect(_draw_mic)
     row.add_child(mic)
+    ear = HudButton.make("sound_on")
+    ear.name = "VoiceSpeaker"
+    ear.glyph = ""
+    ear.custom_minimum_size = Vector2(44, 44) if not mobile else Vector2(44, 44)
+    ear.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    ear.pressed.connect(func(): if voice != null: voice.toggle_speaker())
+    ear.draw.connect(func():
+        if voice == null: return
+        Glyph.draw_headphones(ear, Rect2(Vector2.ZERO, ear.size).grow(-8), voice.speaker_muted, Color("f4ce7f")))
+    row.add_child(ear)
     off = HudButton.make("sound_on")
     off.name = "VoiceLeave"
     off.glyph = ""
@@ -72,6 +83,9 @@ func refresh() -> void:
     visible = voice.in_match() and voice.available()
     var st: String = voice.state
     off.visible = voice.active() or st == "ERROR"
+    ear.visible = voice.active()
+    ear.tooltip_text = "Voltar a ouvir a voz" if voice.speaker_muted else "Silenciar a voz recebida (continuo na sala; meu microfone não muda)"
+    ear.queue_redraw()
     var txt: String = voice.status_text()
     label.text = txt
     _fit()

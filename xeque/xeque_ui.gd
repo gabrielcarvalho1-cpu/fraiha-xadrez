@@ -708,6 +708,9 @@ func _on_hit(id: String):
         "voice_off":
             var vo = voice()
             if vo != null: vo.leave("user")
+        "voice_ear":
+            var vo = voice()
+            if vo != null: vo.toggle_speaker()
         "help":
             tutorial_from_game = true
             mode = "tutorial"

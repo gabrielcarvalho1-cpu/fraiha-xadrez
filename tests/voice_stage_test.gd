@@ -113,6 +113,11 @@ func run():
             await shot("3b_casual_mobile_%dx%d" % [sz.x, sz.y])
         root.get_window().size = Vector2i(1920, 1080)
         for k in 12: await process_frame
+    ctl.ear.pressed.emit()
+    check(v.speaker_muted and v.state == "CONNECTED" and mock.calls[-1] == ["speaker", true] and stage.casual.in_match(), "fone: voz recebida muda (segue na sala, microfone aberto, partida intacta)")
+    await shot("3c_casual_voz_sem_ouvir")
+    ctl.ear.pressed.emit()
+    check(not v.speaker_muted, "fone: volta a ouvir")
     stage.desk_voice.mic.pressed.emit()
     check(v.state == "MUTED", "microfone: mudo")
     stage.desk_voice.mic.pressed.emit()
@@ -155,6 +160,13 @@ func run():
         await shot("4_marcha_voz_retrato")
         root.get_window().size = Vector2i(1920, 1080)
         for k in 12: await process_frame
+    mu._on_hit("voice_ear")
+    check(v.speaker_muted and v.state in ["CONNECTED", "MUTED"], "MARCHA: fone silencia só a voz recebida")
+    mu._redraw()
+    await process_frame
+    check(mu.hits.any(func(h): return String(h.id) == "voice_ear"), "MARCHA: botão do fone desenhado")
+    await shot("4b_marcha_sem_ouvir")
+    mu._on_hit("voice_ear")
     mu._on_hit("voice_off")
     check(v.state == "DISCONNECTED" and v.in_match(), "MARCHA: × sai da voz, a mesa continua")
     mu._on_hit("voice")
@@ -172,8 +184,11 @@ func run():
     xu._on_hit("voice")
     check(await wait_until(func(): return v.state in ["CONNECTED", "MUTED"], 6.0), "XEQUE: na voz")
     check(String(joins()[-1][2].channel) == "fx_xeque_" + String(xu.room_id), "XEQUE: canal da mesa")
+    xu._on_hit("voice_ear")
+    check(v.speaker_muted, "XEQUE: fone silencia a voz recebida")
     xu._redraw()
     await shot("5_xeque_voz")
+    xu._on_hit("voice_ear")
     if not shots.is_empty():
         root.get_window().size = Vector2i(720, 1280)
         for k in 12: await process_frame

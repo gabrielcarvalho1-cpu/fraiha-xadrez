@@ -41,6 +41,21 @@ static func draw_mic(ci: CanvasItem, r: Rect2, state: String, col: Color, talkin
             ci.draw_line(p + Vector2(0, -s * 0.06), p + Vector2(0, s * 0.02), Color("0b150f"), w * 0.9)
             ci.draw_circle(p + Vector2(0, s * 0.065), w * 0.45, Color("0b150f"))
 
+## Fone de ouvido = ÁUDIO RECEBIDO da voz (diferente do alto-falante de música/efeitos do jogo).
+## muted: risco vermelho (não estou ouvindo ninguém, mas continuo na sala).
+static func draw_headphones(ci: CanvasItem, r: Rect2, muted: bool, col: Color) -> void:
+    var c := r.get_center()
+    var s := minf(r.size.x, r.size.y)
+    var w := maxf(2.5, s / 12.0)
+    var main := col if not muted else col.darkened(0.25)
+    ci.draw_arc(c + Vector2(0, s * 0.06), s * 0.30, PI, TAU, 18, main, w)          # arco da cabeça
+    for side in [-1.0, 1.0]:
+        var cup := Rect2(c + Vector2(side * s * 0.30 - s * 0.11, s * 0.0), Vector2(s * 0.22, s * 0.32))
+        ci.draw_rect(cup, main)                                                        # conchas
+        ci.draw_line(c + Vector2(side * s * 0.30, s * 0.06), c + Vector2(side * s * 0.30, s * 0.02), main, w)
+    if muted:
+        ci.draw_line(c + Vector2(-s * 0.36, -s * 0.30), c + Vector2(s * 0.36, s * 0.36), RED, w * 1.3)
+
 ## Badge "×" (sair da voz) no canto do botão; devolve o retângulo de toque.
 static func draw_leave_badge(ci: CanvasItem, r: Rect2) -> Rect2:
     var rr := minf(r.size.x, r.size.y) * 0.2

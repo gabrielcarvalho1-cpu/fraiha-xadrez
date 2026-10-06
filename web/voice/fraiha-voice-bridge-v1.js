@@ -16,6 +16,17 @@
   var client = null, mic = null, published = false, muted = false;
   var remotes = {};         // uid -> {audio: track|null}
   var autoplayBlocked = false;
+  // ÁUDIO RECEBIDO (alto-falante da voz), independente do microfone e dos sons do jogo:
+  // speakerMuted = não toca NINGUÉM; mutedUids = silencia só aquele participante (salas com 3+ humanos).
+  // Continua inscrito no canal (voltar a ouvir é imediato); o microfone não é tocado.
+  var speakerMuted = false;
+  var mutedUids = {};
+  function audible(uid) { return !speakerMuted && !mutedUids[uid]; }
+  function applyRemote(uid) {
+    var r = remotes[uid]; if (!r || !r.audio) return;
+    try { if (audible(uid)) { if (!r.audio.isPlaying) r.audio.play(); } else if (r.audio.isPlaying) r.audio.stop(); } catch (e) {}
+  }
+  function applyAll() { Object.keys(remotes).forEach(applyRemote); }
 
   function emit(ev, data) {
     var o = data || {};
@@ -61,7 +72,7 @@
           document.removeEventListener('pointerdown', resume, true);
           document.removeEventListener('keydown', resume, true);
           autoplayBlocked = false;
-          Object.keys(remotes).forEach(function (u) { var r = remotes[u]; if (r && r.audio) { try { r.audio.play(); } catch (e) {} } });
+          applyAll();
           emit('autoplay_ok');
         };
         document.addEventListener('pointerdown', resume, true);
@@ -99,7 +110,7 @@
 
   async function teardown() {
     var c = client, m = mic;
-    client = null; mic = null; published = false; remotes = {};
+    client = null; mic = null; published = false; remotes = {}; mutedUids = {};
     if (c) {
       try { c.removeAllListeners(); } catch (e) {}
       try { if (m) await c.unpublish(); } catch (e) {}
@@ -140,6 +151,7 @@
     return serial(async function () {
       if (stale(seq)) return;
       var cfg = JSON.parse(cfgJson);
+      speakerMuted = !!cfg.speaker_muted;   // estado do alto-falante vem do jogo a cada entrada
       var A = window.AgoraRTC;
       if (!A || !mic) return emit('error', { seq: seq, stage: 'join', code: 'NOT_PREPARED' });
       if (client) await teardown().then(function () { return null; });
@@ -158,7 +170,7 @@
           await c.subscribe(u, 'audio');
           if (client !== c) return;
           remotes[u.uid] = { audio: u.audioTrack };
-          if (u.audioTrack) u.audioTrack.play();
+          applyRemote(u.uid);   // respeita "voz recebida mutada" (geral ou só desse participante)
           emit('remote', { seq: seq, uids: remoteList() });
         } catch (e) { emit('warn', { seq: seq, code: errCode(e), message: errMsg(e) }); }
       });
@@ -216,6 +228,17 @@
     });
   }
 
+  // Alto-falante da voz: on = não ouvir ninguém (continua na sala, microfone intocado).
+  function setSpeakerMuted(on) { speakerMuted = !!on; applyAll(); emit('speaker', { muted: speakerMuted, uids: mutedList() }); }
+  // Mute LOCAL de um participante (só eu deixo de ouvi-lo; ninguém mais é afetado).
+  function setRemoteMuted(uid, on) {
+    uid = Number(uid); if (!(uid > 0)) return;
+    if (on) mutedUids[uid] = true; else delete mutedUids[uid];
+    applyRemote(uid); emit('speaker', { muted: speakerMuted, uids: mutedList() });
+  }
+  function mutedList() { return Object.keys(mutedUids).map(Number).sort(function (a, b) { return a - b; }); }
+  function playingList() { return Object.keys(remotes).filter(function (u) { var r = remotes[u]; return r && r.audio && r.audio.isPlaying; }).map(Number); }
+
   function renew(token) {
     return serial(async function () {
       if (!client) return;
@@ -236,6 +259,8 @@
     leave: function (seq, reason) { leave(Number(seq), reason); return 1; },
     setMuted: function (on) { setMuted(!!on); return 1; },
     renew: function (token) { renew(token); return 1; },
-    debug: function () { return JSON.stringify({ seq: cur, joined: !!client, mic: !!mic, published: published, muted: muted, remotes: remoteList(), autoplayBlocked: autoplayBlocked, sdk: !!window.AgoraRTC }); }
+    setSpeakerMuted: function (on) { setSpeakerMuted(!!on); return 1; },
+    setRemoteMuted: function (uid, on) { setRemoteMuted(uid, !!on); return 1; },
+    debug: function () { return JSON.stringify({ seq: cur, joined: !!client, mic: !!mic, published: published, muted: muted, speakerMuted: speakerMuted, mutedUids: mutedList(), playing: playingList(), remotes: remoteList(), autoplayBlocked: autoplayBlocked, sdk: !!window.AgoraRTC }); }
   };
 })();

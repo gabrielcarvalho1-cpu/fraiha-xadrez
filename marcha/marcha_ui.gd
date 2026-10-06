@@ -1100,6 +1100,9 @@ func _on_hit(id: String):
         "voice_off":
             var vo = voice()
             if vo != null: vo.leave("user")
+        "voice_ear":
+            var vo = voice()
+            if vo != null: vo.toggle_speaker()
         "menu": menu_open = not menu_open
         "menu_close": menu_open = false
         "menu_tutorial":
@@ -1310,7 +1313,16 @@ class TableView extends Control:
             ui.VoiceGlyph.draw_mic(self, vr.grow(-6), vo.state, ui.GOLD, vo.is_speaking(vo.my_uid))
             ui.hits.append({"rect": vr, "id": "voice"})
             if vo.active() or vo.state == "ERROR": ui.hits.append({"rect": ui.VoiceGlyph.draw_leave_badge(self, vr), "id": "voice_off"})
-            if not ui.portrait: ui.VoiceGlyph.draw_status(self, vr.position.x - 12, vr.get_center().y, 330, vo.status_text(), 18, Color("e8dcc0"))
+            var text_right := vr.position.x - 12
+            if vo.active():
+                # ÁUDIO RECEBIDO (fone): ouvir / não ouvir os outros, sem sair da sala nem mexer no microfone
+                var er := Rect2(right - gap * 4, top, bs, bs)
+                draw_rect(er, Color("0a1611"))
+                draw_rect(er, ui.GOLD, false, 2.0)
+                ui.VoiceGlyph.draw_headphones(self, er.grow(-7), vo.speaker_muted, ui.GOLD)
+                ui.hits.append({"rect": er, "id": "voice_ear"})
+                text_right = er.position.x - 12
+            if not ui.portrait: ui.VoiceGlyph.draw_status(self, text_right, vr.get_center().y, 330, vo.status_text(), 18, Color("e8dcc0"))
 
     # ------------------------------------------------------------ placas dos jogadores
     ## R41 · moldura (Club / Fundador) e selo do jogador humano sobre o retrato da placa.

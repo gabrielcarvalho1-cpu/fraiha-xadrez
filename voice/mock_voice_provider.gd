@@ -25,6 +25,11 @@ func leave(seq: int, why := "") -> void:
 func set_muted(on: bool) -> void:
     calls.append(["mute", on])
     if auto: event.emit({"ev": "muted", "muted": on})
+func set_speaker_muted(on: bool) -> void:
+    calls.append(["speaker", on])
+    if auto: event.emit({"ev": "speaker", "muted": on, "uids": []})
+func set_remote_muted(uid: int, on: bool) -> void:
+    calls.append(["remote_mute", uid, on])
 func renew(token: String) -> void:
     calls.append(["renew", token.length()])
 func fire(d: Dictionary) -> void:

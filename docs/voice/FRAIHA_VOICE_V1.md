@@ -97,6 +97,51 @@ O SDK só é baixado quando alguém toca no microfone. Fallback: jsDelivr (mesma
 - Passou do grátis sem cartão → conta pode ser suspensa; com cartão, áudio ~US$ 0,99 / 1.000 min.
 - Por isso a voz começa desligada e Marcha/XEQUE com só 1 humano não abre canal.
 
+## Três controles independentes (R46)
+
+| Controle | Efeito | O que NÃO faz |
+| --- | --- | --- |
+| **Microfone** (ícone do microfone) | mudo = ninguém me ouve; aberto = os outros me ouvem | não para de ouvir, não sai da sala |
+| **Voz recebida** (ícone do fone) | silenciado = eu não ouço ninguém da sala | não sai da sala, não fecha meu microfone |
+| **Sair da voz** ("×") | desconecta do RTC, para de ouvir e transmitir, libera microfone/trilha/listeners | não mexe na partida |
+
+- Música, efeitos e áudio do jogo (barramentos do Godot) **não** controlam a voz. O áudio da voz toca pelo
+  WebRTC/WebAudio do navegador (fora do Godot), e o teste confere que mudar música/efeitos não chama o provedor.
+- Voz recebida muda: as trilhas remotas param de tocar (`stop()`), mas a inscrição no canal continua (voltar a
+  ouvir é imediato). Quem entra na sala enquanto está mudo também não toca.
+- Fica só na sessão (não vai para disco), para ninguém entrar "surdo" depois sem perceber. O microfone mudo
+  continua salvo como antes.
+- **Mute por participante** já existe no provedor/ponte (`set_participant_muted(assento)` →
+  `FraihaVoiceBridge.setRemoteMuted`): silencia só aquela pessoa, só para mim. Hoje Marcha/XEQUE online têm no
+  máximo 2 humanos (você + 1 amigo), então não há tela para isso ainda; quando houver 3+ humanos é só ligar a UI.
+
+## Níveis de teste (não confundir)
+
+| Nível | O que foi provado | Onde |
+| --- | --- | --- |
+| **TESTADO COM MOCK** | máquina de estados, erros, timeouts, cleanup, renovação, áudio recebido x microfone x sair, mute por participante | `tests/voice_client_test.gd`, `tests/run_voice_stage.sh` |
+| **TESTADO COM SDK FALSO NO CHROMIUM** | a ponte JS: trilhas remotas tocam/param certo, microfone intocado, saída limpa | `tests/web/voice_bridge/run_test.py` |
+| **TESTADO EM BUILD REAL** | build Web real no Chromium com microfone falso: SDK 4.24.8 carrega de `voice/`, permissão, trilha, join recusado limpo, permissão negada | `tests/web/qa_gate/run_voice_gate.sh` |
+| **TESTADO COM RTC REAL** | **R45**: o dono do projeto testou voz real entre pessoas na Agora (staging com `FRAIHA_AGORA_APP_ID` / `FRAIHA_AGORA_APP_CERTIFICATE`) nos 3 modos testados — funcionou | teste manual do usuário |
+
+O controle de **voz recebida (R46)** ainda **não** foi testado com RTC real: precisa de 2 aparelhos (roteiro abaixo).
+
+### Roteiro RTC real (2 aparelhos, de preferência com fone)
+
+1. A e B na mesma partida online, os dois na voz.
+2. A muta o microfone → A continua ouvindo B; B não ouve A. A abre o microfone → B volta a ouvir A.
+3. A silencia a voz recebida (fone) → A não ouve B; B continua ouvindo A (microfone de A aberto). A reativa → volta a ouvir.
+4. A muda música/efeitos do jogo → a voz não muda.
+5. A toca no "×" → sai da voz (B vê que A saiu); a partida segue.
+
+## Incidente de publicação do R45 (resolvido)
+
+A build pedia `voice/fraiha-voice-bridge-v1.js`, mas a pasta `voice/` não tinha sido enviada ao R2 → 404 →
+`BRIDGE_LOAD` → "Não foi possível carregar a voz.". Depois de enviar os 3 arquivos de `voice/` a voz funcionou.
+Prevenção (R46): `tools/web_release/pack_web_release.py` sempre inclui `voice/` e `engines/` e se recusa a gerar
+sem eles; o `MONTAR-UPLOAD` confere tamanho+SHA256 de **cada** arquivo (15) e para se faltar algum; o
+`CONFERIR-SITE` (novo) consulta o site publicado e aponta qualquer arquivo faltando (ex.: 404 em `voice/`).
+
 ## Testes
 
 | Teste | O que prova |

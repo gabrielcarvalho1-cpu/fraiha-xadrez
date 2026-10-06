@@ -32,6 +32,11 @@ var speaking: Array = []       # uids falando (inclui o meu, uid local = my_uid)
 var peers_waiting := {}        # uid -> nome: quem entrou na voz enquanto eu ainda não entrei
 var my_uid := 0
 var muted_pref := false
+## ÁUDIO RECEBIDO (alto-falante da voz) — independente do microfone e de música/efeitos do jogo.
+## true = não ouço ninguém, mas continuo na sala (e os outros me ouvem se o microfone estiver aberto).
+## Só nesta sessão (não vai para disco): ninguém fica "surdo" na próxima vez sem perceber.
+var speaker_muted := false
+var remote_muted := {}         # uid -> true: mute LOCAL só daquele participante (salas com 3+ humanos)
 var autoplay_blocked := false
 
 var _seq := 0
@@ -142,6 +147,7 @@ func leave(reason := "user") -> void:
         _log("leave reason=%s" % reason)
     _sent_join = false
     _granted_once = false
+    remote_muted.clear()
     remote.clear()
     speaking.clear()
     my_uid = 0
@@ -156,6 +162,28 @@ func set_muted(on: bool) -> void:
         _to("MUTED" if on else "CONNECTED", "")
         _log("mute=%s" % on)
 
+## Alto-falante da voz: liga/desliga o que EU ouço. Não sai da sala, não mexe no microfone nem nos sons do jogo.
+func set_speaker_muted(on: bool) -> void:
+    speaker_muted = on
+    if active(): provider.set_speaker_muted(on)
+    _log("speaker_mute=%s" % on)
+    changed.emit()
+
+func toggle_speaker() -> void:
+    set_speaker_muted(not speaker_muted)
+
+## Mute LOCAL de um participante (uid = assento): só eu deixo de ouvi-lo.
+func set_participant_muted(uid: int, on: bool) -> void:
+    if uid <= 0 or uid == my_uid: return
+    if on: remote_muted[uid] = true
+    else: remote_muted.erase(uid)
+    if active(): provider.set_remote_muted(uid, on)
+    _log("participant_mute seat=%d on=%s" % [uid, on])
+    changed.emit()
+
+func is_participant_muted(uid: int) -> bool:
+    return speaker_muted or remote_muted.has(uid)
+
 # ------------------------------------------------------------------ texto para a UI
 func status_text() -> String:
     match state:
@@ -169,8 +197,10 @@ func status_text() -> String:
     var others: Array = []
     for u in remote: others.append(String(participants.get(int(u), "Jogador")))
     var who := ("com " + _names(others)) if not others.is_empty() else "aguardando os outros"
-    if autoplay_blocked: return "Toque na tela para ouvir"
-    return ("Mudo · " if state == "MUTED" else "Na voz · ") + who
+    if autoplay_blocked and not speaker_muted: return "Toque na tela para ouvir"
+    var txt := ("Mudo · " if state == "MUTED" else "Na voz · ") + who
+    if speaker_muted: txt += " · sem ouvir"
+    return txt
 
 func is_speaking(uid: int) -> bool:
     return speaking.has(uid)
@@ -236,7 +266,7 @@ func _on_server(msg: Dictionary):
             _log("token granted kind=%s seat=%d ttl=%d" % [String(msg.get("kind", "")), my_uid, int(msg.get("ttl", 0))])
             _arm(T_JOIN, "CONNECTING")
             provider.join(_seq, {"app_id": String(msg.get("app_id", "")), "channel": String(msg.get("channel", "")),
-                "token": String(msg.get("token", "")), "uid": my_uid, "muted": muted_pref})
+                "token": String(msg.get("token", "")), "uid": my_uid, "muted": muted_pref, "speaker_muted": speaker_muted})
         "voice_denied":
             var code := String(msg.get("code", ""))
             _log("token rejected code=%s renew=%s" % [code, bool(msg.get("renew", false))])
@@ -256,7 +286,7 @@ func _on_account_changed():
 func _on_provider(d: Dictionary):
     var ev := String(d.get("ev", ""))
     var seq := int(d.get("seq", _seq))
-    var global_ev := ev in ["muted", "renewed", "autoplay_blocked", "autoplay_ok", "device_changed", "sdk_loading", "sdk_ready"]
+    var global_ev := ev in ["muted", "speaker", "renewed", "autoplay_blocked", "autoplay_ok", "device_changed", "sdk_loading", "sdk_ready"]
     if not global_ev and seq != _seq and seq != -1: return     # evento de tentativa antiga
     match ev:
         "permission":
