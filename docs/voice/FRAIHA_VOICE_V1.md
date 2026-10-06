@@ -85,6 +85,17 @@ Sem as duas primeiras o servidor responde `not_configured` e o jogo funciona nor
 Na Agora Console: criar projeto com **App Certificate** (modo seguro / token). Não ativar Cloud Recording,
 transcrição, vídeo, streaming nem add-ons pagos.
 
+**Áudio-only de verdade (auditoria R45-V07):** o token só dá privilégio de entrar + publicar ÁUDIO, mas a Agora
+só faz valer privilégios por tipo (áudio/vídeo/dados) com **Co-host token authentication** ligada no projeto
+(Agora Console → projeto → Features/Security). Sem isso, um cliente adulterado poderia tentar publicar vídeo.
+Status: **não verificado** (precisa do dono do projeto na Console).
+
+**Janela residual do token (auditoria R45-V06):** fim de partida/logout fazem o servidor **recusar** renovação,
+mas um token já entregue continua válido até expirar (padrão 600 s; `FRAIHA_VOICE_TOKEN_TTL`, 120–3600).
+O cliente oficial sai sozinho; um cliente adulterado poderia ficar no canal até o token vencer.
+Decisão de produto pendente: aceitar (padrão) ou reduzir o TTL (ex.: 300) — a revogação imediata exigiria
+API de controle da Agora (não implementada).
+
 ## Build Web
 
 A pasta `voice/` vai ao lado do `index.html` (como `engines/`):
@@ -121,7 +132,8 @@ O SDK só é baixado quando alguém toca no microfone. Fallback: jsDelivr (mesma
 | --- | --- | --- |
 | **TESTADO COM MOCK** | máquina de estados, erros, timeouts, cleanup, renovação, áudio recebido x microfone x sair, mute por participante | `tests/voice_client_test.gd`, `tests/run_voice_stage.sh` |
 | **TESTADO COM SDK FALSO NO CHROMIUM** | a ponte JS: trilhas remotas tocam/param certo, microfone intocado, saída limpa | `tests/web/voice_bridge/run_test.py` |
-| **TESTADO EM BUILD REAL** | build Web real no Chromium com microfone falso: SDK 4.24.8 carrega de `voice/`, permissão, trilha, join recusado limpo, permissão negada | `tests/web/qa_gate/run_voice_gate.sh` |
+| **TESTADO EM BUILD REAL** | build Web real no Chromium com microfone falso: SDK 4.24.8 carrega de `voice/`, permissão, trilha, join recusado limpo, permissão negada | `tests/web/voice_bridge/run_lifecycle_test.py` | captura REAL (getUserMedia sintético): Agora travada não segura o microfone; cancelamentos; mute real; trilha perdida; participante fantasma (auditoria R45) |
+| `tests/web/qa_gate/run_voice_gate.sh` |
 | **TESTADO COM RTC REAL** | **R45**: o dono do projeto testou voz real entre pessoas na Agora (staging com `FRAIHA_AGORA_APP_ID` / `FRAIHA_AGORA_APP_CERTIFICATE`) nos 3 modos testados — funcionou | teste manual do usuário |
 
 O controle de **voz recebida (R46)** ainda **não** foi testado com RTC real: precisa de 2 aparelhos (roteiro abaixo).
@@ -142,6 +154,26 @@ Prevenção (R46): `tools/web_release/pack_web_release.py` sempre inclui `voice/
 sem eles; o `MONTAR-UPLOAD` confere tamanho+SHA256 de **cada** arquivo (15) e para se faltar algum; o
 `CONFERIR-SITE` (novo) consulta o site publicado e aponta qualquer arquivo faltando (ex.: 404 em `voice/`).
 
+## Auditoria Voice R45 (independente, 2026-10-06) — correções R46
+
+Relatório: 0 BLOCKER, 1 HIGH, 6 MEDIUM, 2 LOW, sobre o snapshot `b389849`. Comparado com o HEAD atual e
+reproduzido com `tests/web/voice_bridge/run_lifecycle_test.py` (captura REAL getUserMedia + SDK falso):
+13 falhas no código antigo, 0 depois da correção.
+
+| ID | Sev. | Estado | O que mudou |
+| --- | --- | --- | --- |
+| V01 | HIGH | **corrigido** | sair/fim/F5/erro param a CAPTURA na hora (stop+close síncronos, inclusive a MediaStreamTrack crua); unpublish/leave da Agora depois, em segundo plano, com limite (2 s / 5 s); a saída antiga nunca fecha uma tentativa nova |
+| V02 | MEDIUM | **corrigido** | o evento `muted` traz o estado REAL da trilha; falha vira `MUTE_FAILED` com aviso; "entrar mudo" que falha entra só ouvindo (não publica); o ícone no Godot só muda com a confirmação |
+| V03 | MEDIUM | **corrigido** | a geração (seq) muda na CHAMADA; toda espera (SDK, permissão, join, mute, publish) é cancelável; trilha que chega depois do cancelamento é fechada |
+| V04 | MEDIUM | **corrigido** | trilha encerrada é descartada e despublicada; desmutar (gesto) recria e publica |
+| V05 | MEDIUM | **corrigido** | limite por conta+partida (16/min somando abas) além do por conexão (12); presença idempotente: aviso "entrou" só na 1ª conexão, "saiu" só na última; leave repetido não gera aviso; conexão fechada/logout avisa 1x |
+| V06 | MEDIUM | **aceito/documentado** | janela residual do token (ver Configuração); decisão de TTL com o dono do produto |
+| V07 | MEDIUM | **documentado** | pré-requisito Co-host token authentication na Console (ver Configuração) — falta verificar |
+| V08 | LOW | **corrigido** | geração por participante: subscribe atrasado de quem saiu/despublicou é descartado e não toca |
+| V09 | LOW | **corrigido no R46** | pacote Web confere nome+tamanho+SHA256 dos 3 arquivos de `voice/` (e `engines/`) e PARA se faltar; PNG em base64 |
+
+Não testado: microfone físico, RTC real com a correção (repetir o roteiro abaixo), Safari/iOS/Android.
+
 ## Testes
 
 | Teste | O que prova |
@@ -150,6 +182,7 @@ sem eles; o `MONTAR-UPLOAD` confere tamanho+SHA256 de **cada** arquivo (15) e pa
 | `tests/server/voice_e2e_test.cjs` | mesmo fluxo pelo `server.js` real (WebSocket) |
 | `tests/voice_client_test.gd` | máquina de estados com provedor mock: todos os caminhos de erro/timeout/cleanup |
 | `tests/run_voice_stage.sh` | jogo inteiro + servidor real + amigo automático: Casual por convite, Ranked, Marcha, XEQUE; bot/local sem voz; falha de RTC não mexe na partida; `--mobile-test` |
+| `tests/web/voice_bridge/run_lifecycle_test.py` | captura REAL (getUserMedia sintético): Agora travada não segura o microfone; cancelamentos; mute real; trilha perdida; participante fantasma (auditoria R45) |
 | `tests/web/qa_gate/run_voice_gate.sh` | Chromium real com microfone falso: ponte + SDK 4.24.8 + permissão + trilha + join recusado limpo + cleanup; permissão negada |
 
 **Não testado (exige credenciais + 2 aparelhos):** áudio real entre duas pessoas na Agora, renovação real
