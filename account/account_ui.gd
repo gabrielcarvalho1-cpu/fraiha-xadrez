@@ -278,12 +278,20 @@ func _place(c: Control, slot: Rect2):
 func _value(key: String) -> String:
     return fields[key].text if fields.has(key) else ""
 
+## Senha: vai direto para o Supabase (account.update_password); os campos são limpos logo após o envio.
+func _save_password():
+    var pwd := _value("password")
+    var confirm := _value("password_confirm")
+    for k in ["password", "password_confirm"]:
+        if fields.has(k): fields[k].text = ""
+    account.update_password(pwd, confirm)
+
 func _show(target: String):
     page = target
     _clear()
     links_box = null
     var titles := {"login":"ENTRAR NO FRAIHA", "signup":"CRIAR CONTA", "recover":"RECUPERAR SENHA",
-        "new_password":"NOVA SENHA", "nickname":"ESCOLHA SEU NOME", "account":"SUA CONTA",
+        "new_password":"NOVA SENHA", "set_password":"SENHA DA CONTA", "nickname":"ESCOLHA SEU NOME", "account":"SUA CONTA",
         "waiting":"CONECTANDO…", "unavailable":"CONTAS"}
     var baked := target == "login"
     art.texture = ART_FULL if baked else ART_BLANK
@@ -323,9 +331,19 @@ func _show(target: String):
             _link("Voltar", func(): _show("login"))
         "new_password":
             _input_field("password", "Nova senha (mín. 8 caracteres)", true)
-            _button("SALVAR NOVA SENHA", func(): account.update_password(_value("password")), true)
+            _input_field("password_confirm", "Confirmar nova senha", true)
+            _button("SALVAR NOVA SENHA", _save_password, true)
             _divider()
             _link("Fechar", close)
+        "set_password":
+            if account.provider != "email":
+                _label("Crie uma senha para entrar também com e-mail e senha. O login com Google continua funcionando na mesma conta.", 15)
+            _label(account.email, 14, Color("b8b19c"))
+            _input_field("password", "Nova senha (mín. 8 caracteres)", true)
+            _input_field("password_confirm", "Confirmar nova senha", true).text_submitted.connect(func(_t): _save_password())
+            _button("SALVAR SENHA", _save_password, true)
+            _divider()
+            _link("Voltar", func(): _show("account"))
         "nickname":
             _label("É assim que os adversários verão você. Seu e-mail nunca é mostrado.", 15)
             _input_field("nickname", "Nome de jogador (3 a 16)").text_submitted.connect(func(t): account.create_profile(t))
@@ -338,6 +356,7 @@ func _show(target: String):
             if not account.persistent_backend:
                 _label("Servidor em modo de teste: progresso Ranked NÃO é permanente.", 14, Color("ff9d86"))
             _button("CONTINUAR", close, true)
+            _button("DEFINIR SENHA" if account.provider != "email" else "ALTERAR SENHA", func(): _show("set_password"))
             _button("SAIR DA CONTA", account.sign_out)
         "waiting":
             _label("Conectando sua conta ao servidor FRAIHA…", 16)

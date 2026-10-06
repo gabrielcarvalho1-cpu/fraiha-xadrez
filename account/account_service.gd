@@ -5,6 +5,7 @@ extends Node
 signal changed
 signal notice(text: String, is_error: bool)
 signal recovery_started
+signal password_saved                         # senha definida/alterada no Supabase (mesmo usuário)
 signal server_message(msg: Dictionary)
 signal nickname_checked(nickname: String, available: bool, error: String)
 signal nickname_changed(nickname: String, next_change_at: String)
@@ -147,6 +148,9 @@ static func auth_error_text(code: int, body: Dictionary) -> String:
     if "email_not_confirmed" in raw or "not confirmed" in raw: return "Confirme seu e-mail antes de entrar (veja sua caixa de entrada)."
     if "user_already_exists" in raw or "already registered" in raw: return "Já existe uma conta com este e-mail. Use ENTRAR."
     if "weak_password" in raw or "password should" in raw: return "Senha fraca: use pelo menos 8 caracteres, com letras e números."
+    if "same_password" in raw or "different from the old" in raw: return "A nova senha precisa ser diferente da atual."
+    if "reauthentication" in raw: return "Por segurança, entre na conta de novo e tente outra vez."
+    if code == 401 or "bad_jwt" in raw or "session_not_found" in raw or "invalid jwt" in raw: return "Sessão expirada. Entre na conta de novo."
     if "over_email_send_rate_limit" in raw or "rate limit" in raw: return "Muitas tentativas. Aguarde um pouco e tente de novo."
     if "validation_failed" in raw or "invalid format" in raw: return "Verifique o e-mail digitado."
     return "Não foi possível concluir (%d). Tente novamente." % code
@@ -212,15 +216,40 @@ func recover(mail: String):
         if code >= 200 and code < 300: notice.emit("Se existir uma conta com este e-mail, enviamos um link para criar uma nova senha.", false)
         else: notice.emit(auth_error_text(code, body), true))
 
-func update_password(password: String):
-    if busy or not signed_in(): return
-    if password.length() < 8: 
-        notice.emit("A senha precisa ter pelo menos 8 caracteres.", true)
+## Política de senha (a mesma do Supabase Auth do projeto: mínimo 8; bcrypt aceita até 72 bytes).
+const PASSWORD_MIN := 8
+const PASSWORD_MAX_BYTES := 72
+
+static func password_error(password: String, confirm: String) -> String:
+    if password.is_empty(): return "Digite a nova senha."
+    if password.length() < PASSWORD_MIN: return "A senha precisa ter pelo menos %d caracteres." % PASSWORD_MIN
+    if password.to_utf8_buffer().size() > PASSWORD_MAX_BYTES: return "A senha pode ter no máximo %d caracteres." % PASSWORD_MAX_BYTES
+    if password != confirm: return "As senhas não conferem."
+    return ""
+
+## Define (conta criada com Google) ou altera a senha da conta LOGADA.
+## API oficial do Supabase Auth: PUT /auth/v1/user {password} com o token da própria sessão
+## (= supabase.auth.updateUser({password})). Atualiza o MESMO usuário (mesmo UUID); não cria conta.
+## A senha vai direto deste cliente para o Supabase: nunca para o servidor FRAIHA, log ou disco.
+func update_password(password: String, confirm: Variant = null):
+    if busy: return
+    if not signed_in():
+        notice.emit("Entre na sua conta para definir uma senha.", true)
+        return
+    var again: String = password if confirm == null else String(confirm)   # chamada antiga (um campo só)
+    var err := password_error(password, again)
+    if not err.is_empty():
+        notice.emit(err, true)
         return
     busy = true
+    var expected_id := user_id
     _auth_request(HTTPClient.METHOD_PUT, "/auth/v1/user", {"password": password}, func(code, body):
         busy = false
-        if code == 200: notice.emit("Senha alterada com sucesso.", false)
+        if code == 200 and String(body.get("id", "")) == expected_id:
+            notice.emit("Senha salva. Agora você também pode entrar com e-mail e senha.", false)
+            password_saved.emit()
+        elif code == 200:
+            notice.emit("Resposta inesperada do serviço de contas. A senha não foi confirmada.", true)
         else: notice.emit(auth_error_text(code, body), true), access_token)
 
 func sign_out():
