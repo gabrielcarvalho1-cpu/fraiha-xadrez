@@ -1029,7 +1029,7 @@ class EscGuard extends Node:
             get_viewport().set_input_as_handled()
 
 func _input(event):
-    if screen_mode != null: screen_mode.auto_on_first_gesture(event)
+    # R42.2: tela cheia SÓ pelo botão de expandir (sem pedido automático no 1º clique).
     if not event is InputEventKey or not event.pressed or event.echo:
         return
     if event.alt_pressed and event.keycode == KEY_ENTER and not OS.has_feature("web"):

@@ -8,8 +8,8 @@ extends Node
 ##     (Chrome/Edge/Opera). O Esc vira só do jogo (voltar, menu, sair da partida); para sair da tela
 ##     cheia: botão do jogo ou SEGURAR o Esc (o navegador avisa). Navegador sem Keyboard Lock
 ##     (Firefox/Safari): o Esc continua saindo da tela cheia e, nesse caso, não navega.
-##   • Um único pedido automático no 1º clique/toque da sessão. Se o jogador sair da tela cheia (Esc, botão
-##     ou gesto do navegador), o jogo NUNCA volta sozinho: só pelo botão.
+##   • R42.2: o jogo NUNCA entra em tela cheia sozinho — só pelo botão de expandir (o pedido automático
+##     no 1º clique, do R29.2, foi desligado a pedido do dono; auto_on_first_gesture não é mais chamado).
 ##   • iPhone/Safari (sem a API para páginas): supported() = false e o botão some.
 ##   • Desktop (não Web): o botão alterna janela <-> tela cheia exclusiva (stage.toggle_fullscreen).
 signal changed(on: bool)

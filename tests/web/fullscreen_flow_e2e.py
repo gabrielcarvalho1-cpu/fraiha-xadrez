@@ -2,7 +2,7 @@
 Uso: sirva uma build Web exportada (COOP/COEP) e rode
     python3 tests/web/fullscreen_flow_e2e.py http://127.0.0.1:8129/ [chromium_path]
 Cobre:
- 1 Home -> entra em tela cheia (1º clique da sessão)        6 Home -> Bots -> VOLTAR mantém a tela cheia
+ 1 R42.2: só o botão entra em tela cheia (nada automático)        6 Home -> Bots -> VOLTAR mantém a tela cheia
  2 botão de tela cheia SAI                                   7 Bots + Esc em tela cheia: sai da tela cheia e NÃO navega
  3 Esc em tela cheia sai                                     8 2º Esc fora da tela cheia volta a página (regra antiga)
  4 depois de sair, clicar no jogo NÃO volta sozinho          9 SAIR: sai da tela cheia e vai para https://fraihaxadrez.com/
@@ -48,8 +48,13 @@ with sync_playwright() as p:
     s = st("ANTES FULLSCREEN")
     check(not s["fs"] and full100(s), "antes do gesto: sem tela cheia e canvas em 100%% (%dx%d)" % (s["cw"], s["ch"]))
     click((820, 748), 3000)                    # JOGAR COMO CONVIDADO (1º clique da sessão)
+    s = st("1º CLIQUE")
+    check(not s["fs"] and full100(s), "1. R42.2: 1º clique NÃO entra em tela cheia sozinho")
+    click(EMPTY); click(BOT_ITEM); click(BOT_BACK)
+    check(not st("VÁRIOS CLIQUES")["fs"], "1b. R42.2: navegar pela Home não entra em tela cheia")
+    click(FS_BTN, 2500)
     s = st("EM FULLSCREEN")
-    check(s["fs"] and full100(s), "1. Home: 1º clique entra em tela cheia")
+    check(s["fs"] and full100(s), "1c. botão de expandir entra em tela cheia")
     click(FS_BTN)
     s = st("APÓS BOTÃO SAIR")
     check(not s["fs"], "2. botão de tela cheia SAI da tela cheia")
