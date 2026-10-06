@@ -42,14 +42,13 @@ func run():
     var ui = hub.marcha
     ui.tut_page = -1
     await ui.access.refresh()
-    check(bool(ui.gate_info.get("can_play", false)) and not bool(ui.gate_info.get("unlimited", true)), "servidor: 1 partida grátis disponível hoje")
-    check(await ui.access.request_start(), "servidor libera a 1ª partida (marcha_granted)")
-    DirAccess.remove_absolute(local)
-    check(not Access.local_played_today(), "aparelho sem registro local (dados do navegador limpos)")
-    check(not await ui.access.request_start(), "mesmo assim o servidor recusa a 2ª partida do dia")
-    # recarregar (F5): novo pedido de estado vem do servidor
+    # R44 · fase de testes: o servidor libera para todos (sem limite diário)
+    check(bool(ui.gate_info.get("can_play", false)) and bool(ui.gate_info.get("unlimited", false)) and String(ui.gate_info.label).contains("PARTIDAS LIVRES"), "servidor: fase de testes, partidas livres")
+    var all_ok := true
+    for i in 4: all_ok = all_ok and await ui.access.request_start()
+    check(all_ok, "servidor libera 4 partidas seguidas (sem limite)")
     await ui.access.refresh()
-    check(not bool(ui.gate_info.get("can_play", true)) and String(ui.gate_info.label).contains("JÁ USADA"), "após recarregar o estado: PARTIDA GRÁTIS DE HOJE JÁ USADA")
+    check(bool(ui.gate_info.get("can_play", false)), "após recarregar o estado: continua liberado")
     ui.close()
     DirAccess.remove_absolute(local)
     print("RESULT %d/%d" % [checks - failures, checks], " OK" if failures == 0 else " FALHAS=%d" % failures)

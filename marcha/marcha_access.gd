@@ -1,5 +1,5 @@
 extends Node
-## MARCHA REAL · acesso: Club FRAIHA = ilimitado; sem Club = 1 partida por dia para experimentar.
+## MARCHA REAL · acesso: Club FRAIHA = ilimitado; sem Club = 3 partidas por dia para experimentar (R44; antes 1).
 ## Com conta e servidor: quem decide é o SERVIDOR (marcha_status / marcha_start, dia UTC, tabela
 ## marcha_usage da migração 0008). Sem conta, sem servidor ou com a 0008 ainda não aplicada: o limite
 ## é contado neste aparelho (user://marcha_daily.cfg, dia local). O tutorial nunca conta.
@@ -7,7 +7,9 @@ signal changed(info: Dictionary)
 
 const LOCAL_FILE := "user://marcha_daily.cfg"
 const SEEN_FILE := "user://marcha.cfg"
-const FREE_PER_DAY := 1
+const FREE_PER_DAY := 3
+## R44 · fase de testes: todo mundo joga sem limite (o servidor também). Para voltar: false.
+const TEST_PHASE_UNLIMITED := true
 
 var hub = null
 var info := {}
@@ -32,30 +34,40 @@ func _club() -> bool:
 static func today_local() -> String:
     return Time.get_date_string_from_system()
 
-static func local_played_today(path := LOCAL_FILE) -> bool:
-    if path == LOCAL_FILE and _web_day() == today_local(): return true
+static func local_used_today(path := LOCAL_FILE) -> int:
+    var used := 0
+    if path == LOCAL_FILE: used = _web_used(today_local())
     var cfg := ConfigFile.new()
-    if cfg.load(path) != OK: return false
-    return String(cfg.get_value("daily", "day", "")) == today_local()
+    if cfg.load(path) == OK and String(cfg.get_value("daily", "day", "")) == today_local():
+        used = maxi(used, int(cfg.get_value("daily", "used", 1)))   # arquivo antigo (só o dia) = 1 jogada
+    return used
+
+static func local_played_today(path := LOCAL_FILE) -> bool:
+    return local_used_today(path) >= FREE_PER_DAY
 
 static func local_consume(path := LOCAL_FILE):
-    if path == LOCAL_FILE: _web_set_day(today_local())
+    var used := local_used_today(path) + 1
+    if path == LOCAL_FILE: _web_set_used(today_local(), used)
     var cfg := ConfigFile.new()
     cfg.load(path)
     cfg.set_value("daily", "day", today_local())
+    cfg.set_value("daily", "used", used)
     cfg.save(path)
 
 ## Web: o user:// (IndexedDB) só é gravado alguns segundos depois; um F5 logo após começar a
 ## partida perderia o consumo. O localStorage grava na hora — o dia consumido fica nos dois.
 const WEB_KEY := "fraiha_marcha_daily"
-static func _web_day() -> String:
-    if not OS.has_feature("web"): return ""
+## Valor: "AAAA-MM-DD|n" (formato antigo: só o dia = 1 jogada).
+static func _web_used(day: String) -> int:
+    if not OS.has_feature("web"): return 0
     var v = JavaScriptBridge.eval("(function(){try{return localStorage.getItem('%s')||''}catch(e){return ''}})()" % WEB_KEY, true)
-    return String(v) if v is String else ""
+    var parts := (String(v) if v is String else "").split("|")
+    if parts.size() == 0 or parts[0] != day: return 0
+    return int(parts[1]) if parts.size() > 1 else 1
 
-static func _web_set_day(day: String):
+static func _web_set_used(day: String, used: int):
     if not OS.has_feature("web"): return
-    JavaScriptBridge.eval("(function(){try{localStorage.setItem('%s','%s')}catch(e){}})()" % [WEB_KEY, day.json_escape()], true)
+    JavaScriptBridge.eval("(function(){try{localStorage.setItem('%s','%s')}catch(e){}})()" % [WEB_KEY, ("%s|%d" % [day, used]).json_escape()], true)
 
 static func tutorial_seen() -> bool:
     var cfg := ConfigFile.new()
@@ -73,18 +85,24 @@ func _update(i: Dictionary):
     changed.emit(info)
 
 func _local_info() -> Dictionary:
+    if TEST_PHASE_UNLIMITED and not _club(): return {"can_play": true, "unlimited": true, "label": "FASE DE TESTES · PARTIDAS LIVRES", "note": ""}
     if _club(): return {"can_play": true, "unlimited": true, "label": "CLUB FRAIHA · PARTIDAS ILIMITADAS", "note": ""}
-    var played := local_played_today()
-    return {"can_play": not played, "unlimited": false,
-        "label": "1 PARTIDA GRÁTIS HOJE" if not played else "PARTIDA GRÁTIS DE HOJE JÁ USADA",
-        "note": "Membros do Club FRAIHA jogam sem limite. Sem Club: uma partida por dia para experimentar." if not played else "Volte amanhã para outra partida grátis, ou assine o Club FRAIHA para jogar sem limite."}
+    return _free_info(FREE_PER_DAY - local_used_today())
 
 func _server_info(msg: Dictionary) -> Dictionary:
-    if bool(msg.get("unlimited", false)): return {"can_play": true, "unlimited": true, "label": "CLUB FRAIHA · PARTIDAS ILIMITADAS", "note": ""}
-    var left := maxi(0, int(msg.get("limit", FREE_PER_DAY)) - int(msg.get("used", 0)))
-    return {"can_play": left > 0, "unlimited": false,
-        "label": "1 PARTIDA GRÁTIS HOJE" if left > 0 else "PARTIDA GRÁTIS DE HOJE JÁ USADA",
-        "note": "Membros do Club FRAIHA jogam sem limite. Sem Club: uma partida por dia para experimentar." if left > 0 else "Volte amanhã para outra partida grátis, ou assine o Club FRAIHA para jogar sem limite."}
+    if bool(msg.get("unlimited", false)):
+        if bool(msg.get("free_for_all", false)): return {"can_play": true, "unlimited": true, "label": "FASE DE TESTES · PARTIDAS LIVRES", "note": ""}
+        return {"can_play": true, "unlimited": true, "label": "CLUB FRAIHA · PARTIDAS ILIMITADAS", "note": ""}
+    return _free_info(int(msg.get("limit", FREE_PER_DAY)) - int(msg.get("used", 0)), int(msg.get("limit", FREE_PER_DAY)))
+
+## Selo do lobby sem Club: quantas partidas grátis ainda restam hoje.
+func _free_info(left: int, limit := FREE_PER_DAY) -> Dictionary:
+    left = maxi(0, left)
+    var label := "PARTIDAS GRÁTIS DE HOJE JÁ USADAS"
+    if left == 1: label = "1 PARTIDA GRÁTIS HOJE"
+    elif left > 1: label = "%d PARTIDAS GRÁTIS HOJE" % left
+    return {"can_play": left > 0, "unlimited": false, "left": left, "label": label,
+        "note": ("Membros do Club FRAIHA jogam sem limite. Sem Club: %d partidas por dia para experimentar." % limit) if left > 0 else "Volte amanhã para mais partidas grátis, ou assine o Club FRAIHA para jogar sem limite."}
 
 ## Atualiza o selo do lobby.
 func refresh():
@@ -105,10 +123,10 @@ func request_start() -> bool:
             _update(_server_info({"unlimited": r.get("unlimited", false), "used": r.get("used", 1), "limit": r.get("limit", FREE_PER_DAY)}))
             return true
         if tp == "marcha_denied" and String(r.get("code", "")) != "not_configured":
-            _update(_server_info({"unlimited": false, "used": 1, "limit": FREE_PER_DAY}))
+            _update(_server_info({"unlimited": false, "used": int(r.get("used", FREE_PER_DAY)), "limit": int(r.get("limit", FREE_PER_DAY))}))
             return false
         # servidor sem a 0008 ou sem resposta: limite do aparelho
-    if _club():
+    if _club() or TEST_PHASE_UNLIMITED:
         _update(_local_info())
         return true
     if local_played_today():

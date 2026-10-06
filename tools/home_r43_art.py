@@ -43,5 +43,23 @@ for i in range(6):
     mk[i, :] = np.minimum(mk[i, :], v); mk[-1 - i, :] = np.minimum(mk[-1 - i, :], v)
     mk[:, i] = np.minimum(mk[:, i], v); mk[:, -1 - i] = np.minimum(mk[:, -1 - i], v)
 img.paste(m, (nx0, ny0), Image.fromarray(mk))
+# R44 · SAIR: o texto da arte ficava no alto da linha (feito para ter subtítulo). Agora fica um pouco
+# maior e centralizado na altura da linha (mesmo centro do ícone e da seta), mantendo a margem esquerda.
+b = np.asarray(img).astype(np.float32)
+TX0, TY0, TX1, TY1 = 704, 808, 739, 825          # caixa do "SAIR" na arte (com contorno)
+patch = b[TY0:TY1, TX0:TX1].copy()
+lum = patch.mean(2)
+alpha = np.clip((lum - 70) / 110, 0, 1)            # letras claras; o fundo verde é escuro
+bg = b[TY0 - 2:TY1 + 12, 905:905 + (TX1 - TX0 + 14)].copy()   # mesmo verde do botão, sem texto
+b[TY0 - 2:TY1 + 12, TX0 - 2:TX1 + 12] = bg
+SC = 1.22
+pw, ph = round((TX1 - TX0) * SC), round((TY1 - TY0) * SC)
+rgba = np.dstack([patch, alpha[..., None] * 255]).astype(np.uint8)
+txt = np.asarray(Image.fromarray(rgba, 'RGBA').resize((pw, ph), Image.LANCZOS)).astype(np.float32)
+cy = 823.0                                          # centro da linha (ícone 802..843, seta ~825)
+oy = round(cy - ph / 2 + 1); ox = TX0 + 1
+al = txt[..., 3:4] / 255.0
+b[oy:oy + ph, ox:ox + pw] = b[oy:oy + ph, ox:ox + pw] * (1 - al) + txt[..., :3] * al
+img = Image.fromarray(np.clip(b, 0, 255).astype(np.uint8))
 img.save(ROOT + '/ui_v022/assets/home_forest_v7.png')
 print('ok', (nx0, ny0, mw, mh))

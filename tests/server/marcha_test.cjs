@@ -1,8 +1,18 @@
 'use strict';
-// R32 · MARCHA REAL: sem Club = 1 partida por dia (servidor); Club = ilimitado.
+// R32 · MARCHA REAL: limite diário sem Club (aqui FRAIHA_MARCHA_FREE_PER_DAY=1); Club = ilimitado.
+// R44 · padrão (fase de testes): sem limite para ninguém.
 const { startServer, client, check, summary } = require('./helpers.cjs');
 (async () => {
-  const s = await startServer({ FRAIHA_DEV_AUTH: '1' });
+  // R44 · padrão: fase de testes, todos sem limite
+  const s0 = await startServer({ FRAIHA_DEV_AUTH: '1' });
+  const f = client(s0.port); await f.open();
+  f.send({ type: 'acct_auth', access_token: 'dev:livre' }); await f.next('acct_state');
+  f.send({ type: 'acct_create_profile', nickname: 'Livre' }); await f.next('acct_state');
+  let ok = true;
+  for (let i = 0; i < 5; i++) { f.send({ type: 'marcha_start' }); const r = await f.next(x => x.type === 'marcha_granted' || x.type === 'marcha_denied'); ok = ok && r.type === 'marcha_granted' && r.unlimited === true && r.free_for_all === true; }
+  check(ok, 'R44 fase de testes: sem Club, 5 partidas seguidas liberadas (sem limite)');
+  f.close(); s0.stop();
+  const s = await startServer({ FRAIHA_DEV_AUTH: '1', FRAIHA_MARCHA_FREE_PER_DAY: '1' });
   const c = client(s.port); await c.open();
   c.send({ type: 'acct_auth', access_token: 'dev:marcha' }); await c.next('acct_state');
   c.send({ type: 'acct_create_profile', nickname: 'Marchador' }); await c.next('acct_state');

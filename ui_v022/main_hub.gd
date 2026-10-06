@@ -298,6 +298,9 @@ func _build():
     var spirit = preload("res://ui_v022/water_spirit.gd").new()
     spirit.position = Vector2(1258, 642)
     spirit.size = Vector2(112, 112)
+    # R44 · tochas, água, passarinhos e o rabinho da gatinha (por baixo do espírito e dos painéis)
+    var fx = preload("res://ui_v022/home_fx.gd").new()
+    canvas.add_child(fx)
     canvas.add_child(spirit)
     var main = Control.new()
     main.name = "MainMenu"
@@ -1593,6 +1596,8 @@ func apply_theme(texture: Texture2D, theme_id: String = "wood"):
         if details != null: details.visible = _is_ref_art(texture)
         var spirit = canvas.get_node_or_null("WaterSpirit")
         if spirit != null: spirit.visible = _is_ref_art(texture)
+        var fx = canvas.get_node_or_null("HomeFx")
+        if fx != null: fx.visible = _is_ref_art(texture)
         _sync_chrome()
         _sync_menu_cover()
         var logo = canvas.get_node_or_null("ThemeLogo")

@@ -237,7 +237,7 @@ func start_game():
     var ok: bool = await access.request_start()
     _starting = false
     if not ok:
-        _flash("Você já jogou sua partida grátis de hoje.")
+        _flash("Você já jogou suas partidas grátis de hoje.")
         mode = "lobby"
         _redraw()
         return
