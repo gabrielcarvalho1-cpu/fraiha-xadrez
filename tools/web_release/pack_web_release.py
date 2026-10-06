@@ -6,9 +6,12 @@ Arquivos grandes vão em partes de 19 MiB (limite de cópia para o PC). ARQUIVOS
 TODOS os arquivos finais (caminho relativo, tamanho, SHA256). O MONTAR-UPLOAD confere cada um, então
 uma pasta voice/ (ou engines/) faltando ou corrompida PARA a montagem em vez de virar 404 no site.
 
+Imagens (.png) vão como <arquivo>.png.b64 (texto base64): a cópia para o PC recomprime PNGs pequenos
+(mesmos pixels, bytes diferentes) e isso quebraria a conferência de SHA256. O MONTAR-UPLOAD decodifica.
+
 Uso: pack_web_release.py <export_dir> <web_dir_do_repo> <saida> <TAG> <commit>
 """
-import hashlib, os, shutil, sys
+import base64, hashlib, os, shutil, sys
 
 PART = 19922944
 INDEX = ["index.html", "index.js", "index.wasm", "index.pck", "index.png", "index.icon.png",
@@ -66,6 +69,11 @@ def main(argv):
                     with open("%s.part%02d" % (dest, i), "wb") as w:
                         w.write(chunk)
                     i += 1
+        elif rel.lower().endswith(".png"):
+            with open(src, "rb") as f:
+                text = base64.encodebytes(f.read()).decode("ascii")
+            with open(dest + ".b64", "w", encoding="ascii", newline="\r\n") as w:
+                w.write(text)
         else:
             shutil.copyfile(src, dest)
         lines.append("%s  %d  %s" % (rel, size, digest))

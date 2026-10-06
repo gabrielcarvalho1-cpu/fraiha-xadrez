@@ -1,6 +1,6 @@
 # FRAIHA __TAG__ — monta a pasta UPLOAD com EXATAMENTE os arquivos do bucket R2 (fraiha-xadrez-web).
 # Lê ARQUIVOS-SHA256.txt (lista completa: index.*, engines/, voice/), junta as partes e confere
-# tamanho + SHA256 de CADA arquivo. Se faltar qualquer um (ex.: a pasta voice/), PARA com erro.
+# tamanho + SHA256 de CADA arquivo (decodifica as imagens .png.b64). Se faltar qualquer um (ex.: a pasta voice/), PARA com erro.
 # Não envia nada para a internet.
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -19,6 +19,11 @@ try {
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
     $src = Join-Path $root $winRel
     if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination $dest }
+    elseif (Test-Path -LiteralPath ($src + '.b64')) {
+      # imagens vêm em base64 (a cópia para o PC recomprime PNG e mudaria o SHA256)
+      $bytes = [Convert]::FromBase64String([System.IO.File]::ReadAllText($src + '.b64'))
+      [System.IO.File]::WriteAllBytes($dest, $bytes)
+    }
     else {
       $parts = @(Get-ChildItem -LiteralPath (Split-Path -Parent $src) -Filter ((Split-Path -Leaf $src) + '.part*') -ErrorAction SilentlyContinue | Sort-Object Name)
       if ($parts.Count -eq 0) { throw "FALTANDO: $rel (copie a pasta inteira de novo)." }

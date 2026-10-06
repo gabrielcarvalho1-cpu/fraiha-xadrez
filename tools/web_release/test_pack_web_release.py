@@ -46,6 +46,12 @@ class PackTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(out, "voice", "fraiha-voice-bridge-v1.js")))
             self.assertTrue(os.path.isfile(os.path.join(out, "index.pck.part02")))
             self.assertFalse(os.path.exists(os.path.join(out, "index.pck")))
+            # PNG vai em base64 e decodifica para os mesmos bytes do manifesto
+            import base64, hashlib
+            self.assertFalse(os.path.exists(os.path.join(out, "index.icon.png")))
+            raw = base64.b64decode(open(os.path.join(out, "index.icon.png.b64"), encoding="ascii").read())
+            row = [l for l in rows if l.split()[0] == "index.icon.png"][0].split()
+            self.assertEqual((len(raw), hashlib.sha256(raw).hexdigest().upper()), (int(row[1]), row[2]))
             for n in ["MONTAR-UPLOAD-RTEST.ps1", "MONTAR-UPLOAD-RTEST.cmd", "CONFERIR-SITE-RTEST.ps1", "CONFERIR-SITE-RTEST.cmd"]:
                 self.assertTrue(os.path.isfile(os.path.join(out, n)), n)
             self.assertNotIn("__TAG__", open(os.path.join(out, "MONTAR-UPLOAD-RTEST.ps1"), encoding="utf-8-sig").read())
