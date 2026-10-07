@@ -2,6 +2,7 @@ extends CanvasLayer
 ## Cartão de CONVITE para partida Casual (recebido ou enviado). O servidor decide tudo:
 ## este cartão só mostra o estado e pede aceitar/recusar/cancelar. Nunca aparece por cima de uma partida online.
 const Mobile = preload("res://ui_v022/mobile_layout.gd")
+const Kit = preload("res://ui_kit/kit.gd")
 const GOLD = Color("f4ce7f")
 const TEXT = Color("efe3c4")
 const DIM_TEXT = Color("a9b2a4")
@@ -29,10 +30,12 @@ func setup(service, avatar_callable: Callable = Callable(), hide_fn: Callable = 
     panel = PanelContainer.new()
     panel.name = "InviteCard"
     var style = StyleBoxFlat.new()
-    style.bg_color = Color("#16281cf7")
-    style.border_color = GOLD
+    style.bg_color = Color("#101a14f5")
+    style.border_color = Color("#c79a4a")
     style.set_border_width_all(2)
-    style.set_corner_radius_all(8)
+    style.set_corner_radius_all(6)
+    style.shadow_color = Color(0, 0, 0, 0.45)
+    style.shadow_size = 8
     for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 12)
     panel.add_theme_stylebox_override("panel", style)
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -134,14 +137,14 @@ func _finish(text: String):
     flash_left = 3.5
     _update_visibility()
     _layout()
+    _layout.call_deferred()
 
 # ---------- Construção ----------
 func _label(text: String, size := 16, color := TEXT, center := false) -> Label:
     var l = Label.new()
     l.text = text
     l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    l.add_theme_font_size_override("font_size", size)
-    l.add_theme_color_override("font_color", color)
+    Kit.label(l, size + 1, color, color == GOLD)
     if center: l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     box.add_child(l)
     return l
@@ -150,24 +153,9 @@ func _button(parent: Node, text: String, action: Callable, primary := false) -> 
     var b = Button.new()
     b.text = text
     b.focus_mode = Control.FOCUS_NONE
-    b.custom_minimum_size = Vector2(0, 50)   # alvo grande para toque; sem depender de hover
+    b.custom_minimum_size = Vector2(0, 46)   # alvo grande para toque; sem depender de hover
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    b.add_theme_font_size_override("font_size", 17)
-    var st = StyleBoxFlat.new()
-    st.bg_color = Color("2c4a2f") if primary else Color("14221d")
-    st.border_color = GOLD if primary else Color("84754b")
-    st.set_border_width_all(1)
-    st.set_corner_radius_all(6)
-    b.add_theme_stylebox_override("normal", st)
-    var hi = st.duplicate()
-    hi.bg_color = Color("36593a")
-    for state in ["hover", "pressed"]: b.add_theme_stylebox_override(state, hi)
-    var off = st.duplicate()
-    off.bg_color = Color("101a16")
-    off.border_color = Color("4b4a3a")
-    b.add_theme_stylebox_override("disabled", off)
-    b.add_theme_color_override("font_color", Color("f4edda"))
-    b.add_theme_color_override("font_disabled_color", Color("7d8479"))
+    Kit.button(b, "btn_verde" if primary else "btn_azul", 0.42, 16)   # R51 · molduras da referência
     b.pressed.connect(action)
     parent.add_child(b)
     return b
@@ -203,15 +191,13 @@ func _build():
     head.add_child(col)
     var title = Label.new()
     title.text = "CONVITE PARA PARTIDA" if incoming else "CONVITE ENVIADO"
-    title.add_theme_font_size_override("font_size", 15)
-    title.add_theme_color_override("font_color", GOLD)
+    Kit.label(title, 14, GOLD)
     col.add_child(title)
     var who = Label.new()
     who.name = "InviteWho"
     who.text = ("%s te convidou" if incoming else "Para %s") % String(other.get("nickname", ""))
     who.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    who.add_theme_font_size_override("font_size", 18)
-    who.add_theme_color_override("font_color", Color("f4edda"))
+    Kit.label(who, 19, Color("f4edda"))
     col.add_child(who)
     var game := String(invite.get("game", "chess"))
     var mode_text := "%s · %d min · Casual (sem PL)" % [String(invite.get("mode_name", "")).to_upper(), int(invite.get("minutes", 0))]
@@ -276,6 +262,12 @@ func _layout():
     panel.scale = Vector2.ONE * s
     var w = minf(460.0, (area.size.x - 16.0) / s)
     box.custom_minimum_size.x = w - 24.0
+    # R51 · textos com quebra de linha precisam da largura antes de medir (senão a caixa vira a tela inteira)
+    for c in box.get_children():
+        if c is Label: c.size.x = w - 24.0
+    box.size.x = w - 24.0
+    panel.custom_minimum_size = Vector2.ZERO
+    panel.size = Vector2(w, 0)
     panel.reset_size()
     panel.size.x = w
     # Abaixo da faixa dos avisos (toast), centralizado no topo.

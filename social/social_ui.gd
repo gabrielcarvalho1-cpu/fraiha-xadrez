@@ -12,6 +12,8 @@ const LEAGUES = ["Madeira","Ferro","Bronze","Prata","Ouro","Platina","Esmeralda"
 const MODES = [["ranked_3min", "RELÂMPAGO"], ["ranked_5min", "RÁPIDA"], ["ranked_10min", "NORMAL"], ["ranked_20min", "CONVENCIONAL"]]
 const PRESENCE = {"online": ["ONLINE", Color("7fd98a")], "in_match": ["EM PARTIDA", Color("f4ce7f")], "offline": ["OFFLINE", Color("8d968a")]}
 const REFRESH_S := 20.0
+const ART_K := 0.42            # R51 · escala da arte de referência dentro do painel (px locais por px da arte)
+const PANEL_W := 700.0
 var account
 var avatar_for: Callable        # id -> Texture2D (usa os avatares da Home)
 var dim: ColorRect
@@ -70,13 +72,16 @@ func setup(service, avatar_callable: Callable = Callable()):
     add_child(dim)
     panel = PanelContainer.new()
     panel.name = "FriendsPanel"
-    var style = StyleBoxFlat.new()
+    var style = StyleBoxFlat.new()   # (base do aviso/toast)
     style.bg_color = Color("#142217f7")
     style.border_color = Color("#b19758")
     style.set_border_width_all(2)
     style.set_corner_radius_all(8)
     for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 14)
-    panel.add_theme_stylebox_override("panel", style)
+    # R51 · moldura de madeira/cobre da referência AMIGOS (cantos, bandeira e bordas originais da arte)
+    var frame := Kit.box("painel_amigos", ART_K, Vector2(24, 20))
+    frame.content_margin_bottom = 30
+    panel.add_theme_stylebox_override("panel", frame)
     add_child(panel)
     scroll = ScrollContainer.new()
     preload("res://ui_v022/touch_scroll.gd").attach(scroll)
@@ -137,7 +142,7 @@ func _back():
         "list": close()
         "confirm": _show(String(confirm.get("return", "profile")))
         "dm": close_dm()
-        "invite_pick": _show("invite_friends" if not picker_game.is_empty() else "profile")
+        "invite_pick": _show("invite_friends" if not picker_game.is_empty() else invite_return)
         "invite_friends": close()
         "profile": _show("search" if not last_query.is_empty() and profile.get("from_search", false) else "list")
         _: _show("list")
@@ -228,7 +233,7 @@ func _on_message(msg: Dictionary):
             var who: Dictionary = msg.get("user", {}) if msg.get("user") is Dictionary else {}
             var nick = String(who.get("nickname", "Alguém"))
             match String(msg.get("event", "")):
-                "request_received": show_toast("%s te enviou um pedido de amizade." % nick)
+                "request_received": show_request_card(who)
                 "request_accepted": show_toast("%s aceitou seu pedido de amizade." % nick)
 
 func _arr(msg: Dictionary, key: String) -> Array:
@@ -250,11 +255,94 @@ func show_toast(text: String):
     toast.show()
     toast_left = 4.5
     _layout_toast()
+    _layout_toast.call_deferred()
+
+# ---------- R51 · Pedido de amizade recebido: cartãozinho com ACEITAR / RECUSAR (fora da tela de AMIGOS) ----------
+const Kit = preload("res://ui_kit/kit.gd")
+var req_card: PanelContainer
+var req_left := 0.0
+var req_uid := ""
+
+func show_request_card(who: Dictionary):
+    req_uid = String(who.get("user_id", ""))
+    if is_instance_valid(req_card): req_card.queue_free()
+    req_card = PanelContainer.new()
+    req_card.name = "FriendRequestCard"
+    var st = StyleBoxFlat.new()
+    st.bg_color = Color("#101a14f5")
+    st.border_color = Color("#c79a4a")
+    st.set_border_width_all(2)
+    st.set_corner_radius_all(6)
+    st.shadow_color = Color(0, 0, 0, 0.45)
+    st.shadow_size = 8
+    for side in ["left", "right", "top", "bottom"]: st.set("content_margin_" + side, 12)
+    req_card.add_theme_stylebox_override("panel", st)
+    req_card.mouse_filter = Control.MOUSE_FILTER_STOP
+    add_child(req_card)
+    var v = VBoxContainer.new()
+    v.add_theme_constant_override("separation", 10)
+    req_card.add_child(v)
+    var head = HBoxContainer.new()
+    head.add_theme_constant_override("separation", 10)
+    v.add_child(head)
+    var av = _avatar(head, String(who.get("avatar_id", "warrior")), 46)
+    av.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    var col = VBoxContainer.new()
+    col.add_theme_constant_override("separation", 2)
+    col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    head.add_child(col)
+    var t = Label.new(); t.text = "PEDIDO DE AMIZADE"; Kit.label(t, 13, Kit.GOLD); col.add_child(t)
+    var n = Label.new(); n.name = "RequestWho"
+    n.text = "%s quer ser seu amigo" % String(who.get("nickname", "Alguém"))
+    n.clip_text = true
+    Kit.label(n, 15, Kit.CREAM, false); col.add_child(n)
+    var row = HBoxContainer.new()
+    row.add_theme_constant_override("separation", 8)
+    v.add_child(row)
+    var uid := req_uid
+    for spec in [["ACEITAR", "btn_verde", "accept"], ["RECUSAR", "btn_azul", "decline"]]:
+        var b = Button.new()
+        b.name = "Request" + String(spec[2]).capitalize()
+        b.text = spec[0]
+        b.focus_mode = Control.FOCUS_NONE
+        b.custom_minimum_size.y = 40
+        b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        Kit.button(b, spec[1], 0.42, 14)
+        var action: String = spec[2]
+        b.pressed.connect(func():
+            _act(action, uid)
+            _hide_req_card())
+        row.add_child(b)
+    req_left = 20.0
+    _layout_req_card()
+    _layout_req_card.call_deferred()
+
+func _hide_req_card():
+    if is_instance_valid(req_card): req_card.queue_free()
+    req_card = null
+    req_uid = ""
+
+func _layout_req_card():
+    if not is_instance_valid(req_card): return
+    var mobile = Mobile.active(get_viewport())
+    var area = Mobile.safe_rect(get_viewport()) if mobile else get_viewport().get_visible_rect()
+    var s = 1.0 if mobile else 1.4
+    req_card.scale = Vector2.ONE * s
+    var w = minf(360.0, (area.size.x - 24.0) / s)
+    req_card.custom_minimum_size = Vector2(w, 0)
+    req_card.reset_size()
+    req_card.size.x = w
+    req_card.position = Vector2(area.position.x + (area.size.x - w * s) / 2.0, area.position.y + 12.0)
 
 func _process(delta):
     if toast.visible:
         toast_left -= delta
         if toast_left <= 0.0: toast.hide()
+    if is_instance_valid(req_card):
+        req_left -= delta
+        # some sozinho depois de um tempo (o pedido continua em AMIGOS > PEDIDOS RECEBIDOS) ou se a lista já tratou
+        if req_left <= 0.0 or (has_list and not data["received"].any(func(p): return String(p.get("user_id", "")) == req_uid)) and req_left < 18.0:
+            _hide_req_card()
     if is_open() and screen == "list":
         refresh_left -= delta
         if refresh_left <= 0.0: _request_list()
@@ -280,35 +368,19 @@ func _label(parent: Node, text: String, size := 16, color := TEXT, center := fal
     var l = Label.new()
     l.text = text
     l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    l.add_theme_font_size_override("font_size", size)
-    l.add_theme_color_override("font_color", color)
+    Kit.label(l, size + 1, color, color == GOLD)
     if center: l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     parent.add_child(l)
     return l
 
-func _button(parent: Node, text: String, action: Callable, primary := false, small := false) -> Button:
+func _button(parent: Node, text: String, action: Callable, primary := false, small := false, kind := "", icon_name := "") -> Button:
     var b = Button.new()
     b.text = text
     b.focus_mode = Control.FOCUS_NONE
-    b.custom_minimum_size.y = 38 if small else 46
-    b.add_theme_font_size_override("font_size", 14 if small else 16)
-    var style = StyleBoxFlat.new()
-    style.bg_color = Color("2c4a2f") if primary else Color("14221d")
-    style.border_color = GOLD if primary else Color("84754b")
-    style.set_border_width_all(1)
-    style.set_corner_radius_all(6)
-    style.content_margin_left = 8 if small else 12
-    style.content_margin_right = 8 if small else 12
-    b.add_theme_stylebox_override("normal", style)
-    var hover = style.duplicate()
-    hover.bg_color = Color("36593a")
-    for state in ["hover", "pressed"]: b.add_theme_stylebox_override(state, hover)
-    var off = style.duplicate()
-    off.bg_color = Color("101a16")
-    off.border_color = Color("4b4a3a")
-    b.add_theme_stylebox_override("disabled", off)
-    b.add_theme_color_override("font_color", Color("f4edda"))
-    b.add_theme_color_override("font_disabled_color", Color("7d8479"))
+    b.custom_minimum_size.y = 40 if small else 46
+    # R51 · molduras da referência: verde (ação principal), azul (secundária), vermelho (VOLTAR)
+    var k := kind if not kind.is_empty() else ("btn_verde" if primary else "btn_azul")
+    Kit.button(b, k, ART_K, 15 if small else 17, icon_name)
     b.pressed.connect(action)
     parent.add_child(b)
     return b
@@ -354,21 +426,72 @@ func _seal(parent: Node, p: Dictionary, px: int) -> TextureRect:
 static func _peer(uid: String, peer: Dictionary) -> Dictionary:
     return {"user_id": uid, "nickname": String(peer.get("nickname", "")), "avatar_id": String(peer.get("avatar_id", "warrior")), "badge": String(peer.get("badge", "")), "title": String(peer.get("title", ""))}
 
+const SECTION_ICON := {"ONLINE": "ico_sec_online", "EM PARTIDA": "ico_sec_partida", "OFFLINE": "ico_sec_offline"}
 func _section(title: String, count: int):
-    var l = _label(box, "%s (%d)" % [title, count], 15, GOLD)
+    var h = HBoxContainer.new()
+    h.name = "SectionRow_" + title.replace(" ", "_")
+    h.add_theme_constant_override("separation", 8)
+    box.add_child(h)
+    if SECTION_ICON.has(title): h.add_child(Kit.icon(SECTION_ICON[title], 18))
+    var l = Label.new()
+    l.text = "%s (%d)" % [title, count]
     l.name = "Section_" + title.replace(" ", "_")
-    var line = ColorRect.new()
-    line.color = Color("84754b")
-    line.custom_minimum_size.y = 1
-    box.add_child(line)
+    Kit.label(l, 18, Color("e8b25a"))
+    h.add_child(l)
+    var line = TextureRect.new()
+    line.texture = Kit.tex("sec_linha")
+    line.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    line.stretch_mode = TextureRect.STRETCH_SCALE
+    line.custom_minimum_size = Vector2(40, 6)
+    line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    h.add_child(line)
+
+## "Ninguém por aqui." na caixa com cantoneiras da referência.
+func _empty(text: String):
+    var c = PanelContainer.new()
+    c.add_theme_stylebox_override("panel", Kit.box("caixa_vazia", ART_K, Vector2(16, 10)))
+    c.custom_minimum_size.y = 42
+    box.add_child(c)
+    var l = Label.new()
+    l.text = text
+    l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    Kit.label(l, 16, DIM_TEXT, false)
+    c.add_child(l)
 
 ## Linha de jogador: avatar + nickname (toque abre o perfil) + status + botões de ação.
 func _row(p: Dictionary, status_text: String, status_color: Color, actions: Array) -> HBoxContainer:
+    var holder = PanelContainer.new()
+    holder.add_theme_stylebox_override("panel", Kit.box("caixa_linha", ART_K, Vector2(10, 7)))
+    box.add_child(holder)
+    var narrow := _narrow()
+    var outer = VBoxContainer.new()
+    outer.add_theme_constant_override("separation", 6)
+    holder.add_child(outer)
     var row = HBoxContainer.new()
     row.add_theme_constant_override("separation", 8)
     row.set_meta("user_id", String(p.get("user_id", "")))
-    box.add_child(row)
-    _frame(_avatar(row, String(p.get("avatar_id", "warrior")), 40), p)
+    outer.add_child(row)
+    var btn_row: HBoxContainer = row
+    if narrow and actions.size() > 0:
+        btn_row = HBoxContainer.new()
+        btn_row.add_theme_constant_override("separation", 6)
+        outer.add_child(btn_row)
+    var av := _avatar(row, String(p.get("avatar_id", "warrior")), 46)
+    _frame(av, p)
+    if status_color == PRESENCE["online"][1]:
+        # bolinha verde de online no canto do retrato (como na referência)
+        var dot = Panel.new()
+        var ds = StyleBoxFlat.new()
+        ds.bg_color = Color("36c25a"); ds.set_corner_radius_all(6)
+        ds.border_color = Color("0d1a10"); ds.set_border_width_all(1)
+        dot.add_theme_stylebox_override("panel", ds)
+        dot.size = Vector2(12, 12)
+        dot.position = Vector2(34, 34)
+        dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        av.add_child(dot)
     _seal(row, p, 28)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -381,7 +504,8 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
     name_btn.custom_minimum_size.x = 40
     name_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
     name_btn.focus_mode = Control.FOCUS_NONE
-    name_btn.add_theme_font_size_override("font_size", 16)
+    name_btn.add_theme_font_override("font", Kit.SERIF_BOLD)
+    name_btn.add_theme_font_size_override("font_size", 19)
     name_btn.add_theme_color_override("font_color", Color("f4edda"))
     name_btn.tooltip_text = "Ver perfil"
     var plain = StyleBoxEmpty.new()
@@ -391,27 +515,55 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
     name_btn.pressed.connect(func(): open_profile(uid, screen == "search"))
     col.add_child(name_btn)
     if not status_text.is_empty():
-        var st = _label(col, status_text, 13, status_color)
+        var st = _label(col, status_text, 15, status_color)
         st.autowrap_mode = TextServer.AUTOWRAP_OFF
         st.clip_text = true
+        st.add_theme_font_override("font", Kit.SERIF)
     for a in actions:
-        _button(row, a[0], a[1], a.size() > 2 and a[2], true)
+        var b := _button(btn_row, a[0], a[1], a.size() > 2 and a[2], true, String(a[3]) if a.size() > 3 else "", String(a[4]) if a.size() > 4 else "")
+        b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+        if narrow:
+            b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            b.add_theme_font_size_override("font_size", 15)
+        else:
+            b.custom_minimum_size.x = 150
+            b.add_theme_font_size_override("font_size", 17)
     return row
 
 func _show(which: String):
     screen = which
     _clear()
     var narrow = _narrow()
+    # moldura: no celular em pé, um pouco menor (a bandeira não encosta na placa do título)
+    var frame := Kit.box("painel_amigos", ART_K if not narrow else 0.3, Vector2(24 if not narrow else 16, 20 if not narrow else 16))
+    frame.content_margin_bottom = 30 if not narrow else 22
+    panel.add_theme_stylebox_override("panel", frame)
     var head = HBoxContainer.new()
     head.add_theme_constant_override("separation", 8)
     box.add_child(head)
-    var back = _button(head, "VOLTAR", _back, false, true)
+    var back = _button(head, "VOLTAR", _back, false, true, "btn_vermelho", "ico_voltar")
     back.name = "FriendsBack"
-    var title = _label(head, "AMIGOS", 22, GOLD, true)
-    title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    title.autowrap_mode = TextServer.AUTOWRAP_OFF
+    back.custom_minimum_size = Vector2(122, 44) if not narrow else Vector2(96, 40)
+    back.add_theme_font_size_override("font_size", 18 if not narrow else 15)
+    back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    # placa AMIGOS: cantos da arte (flores-de-lis e volutas) fixos, miolo esticado até ~44% da largura (referência)
+    var pc := CenterContainer.new()
+    pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    head.add_child(pc)
+    var plate := Kit.plate("placa_titulo", 290 if not narrow else 168, 66 if not narrow else 50, 170)
+    plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    pc.add_child(plate)
+    var title = Label.new()
+    title.text = "AMIGOS"
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    title.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    title.offset_top = -4
+    Kit.label(title, 26 if not narrow else 20, Color("f5d27a"))
+    title.add_theme_font_override("font", Kit.FONT_BOLD)
+    plate.add_child(title)
     var spacer = Control.new()
-    spacer.custom_minimum_size.x = back.get_combined_minimum_size().x
+    spacer.custom_minimum_size.x = 122 if not narrow else 0
     head.add_child(spacer)
     notice = _label(box, "", 14, ERROR, true)
     notice.name = "FriendsNotice"
@@ -427,13 +579,26 @@ func _show(which: String):
             search_input.placeholder_text = "Buscar jogador pelo nickname"
             search_input.max_length = 16
             search_input.text = last_query if which == "search" else ""
-            search_input.custom_minimum_size.y = 44
+            search_input.custom_minimum_size.y = 46
             search_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-            search_input.add_theme_font_size_override("font_size", 16)
+            search_input.add_theme_font_override("font", Kit.SERIF)
+            search_input.add_theme_font_size_override("font_size", 18)
+            search_input.add_theme_color_override("font_placeholder_color", Color("9a96c4"))
+            search_input.add_theme_color_override("font_color", Color("f1e6c8"))
+            var fst := Kit.box("campo", ART_K, Vector2(44, 6))
+            for st_name in ["normal", "focus", "read_only"]: search_input.add_theme_stylebox_override(st_name, fst)
+            if not narrow:
+                var lupa := Kit.icon("ico_lupa", 20)
+                lupa.position = Vector2(14, 13)
+                search_input.add_child(lupa)
+            else:
+                search_input.add_theme_stylebox_override("normal", Kit.box("campo", ART_K, Vector2(14, 6)))
+                search_input.add_theme_stylebox_override("focus", Kit.box("campo", ART_K, Vector2(14, 6)))
             search_input.text_submitted.connect(func(t): search(t))
             srow.add_child(search_input)
             var input_ref = search_input
-            _button(srow, "BUSCAR", func(): search(input_ref.text), true, true).custom_minimum_size.y = 44
+            var sb := _button(srow, "BUSCAR", func(): search(input_ref.text), true, true)
+            sb.custom_minimum_size = Vector2(112 if not narrow else 92, 46)
             if which == "search": _build_search()
             else: _build_list(narrow)
         "profile": _build_profile(narrow)
@@ -462,13 +627,17 @@ func _build_list(_narrow_layout: bool):
         var title = PRESENCE[key][0]
         _section(title, groups[key].size())
         if groups[key].is_empty():
-            _label(box, "Ninguém por aqui." if friends.size() else ("Você ainda não tem amigos. Busque pelo nickname acima." if key == "online" else "—"), 13, DIM_TEXT)
+            _empty("Ninguém por aqui." if friends.size() or key != "online" else "Você ainda não tem amigos. Busque pelo nickname acima.")
         for f in groups[key]:
             var fid = String(f.get("user_id", ""))
             var unread = int(f.get("unread", 0))
             var finfo: Dictionary = f
-            _row(f, PRESENCE[key][0].capitalize() if key != "in_match" else "Em partida", PRESENCE[key][1],
-                [[("MENSAGEM (%d)" % unread) if unread > 0 else "MENSAGEM", func(): open_dm(fid, finfo, "list"), unread > 0]])
+            var acts := [[("MENSAGEM (%d)" % unread) if unread > 0 else "MENSAGEM", func(): open_dm(fid, finfo, "list"), false, "btn_azul", "ico_balao"]]
+            # R51 · CONVIDAR direto na lista (como na referência), para amigo online
+            if key == "online":
+                var peer := _peer(fid, finfo)
+                acts.append(["CONVIDAR", func(): open_invite(fid, peer), true, "btn_verde", "ico_espadas"])
+            _row(f, PRESENCE[key][0].capitalize() if key != "in_match" else "Em partida", PRESENCE[key][1], acts)
     if data["sent"].size():
         _section("PEDIDOS ENVIADOS", data["sent"].size())
         for p in data["sent"]:
@@ -605,16 +774,19 @@ func _layout():
     dim.size = get_viewport().get_visible_rect().size
     var ui_scale = 1.0 if mobile else 1.4
     panel.scale = Vector2.ONE * ui_scale
-    var width = minf(560.0, (area.size.x - 16.0) / ui_scale)
-    box.custom_minimum_size.x = width - 28.0
+    var width = minf(PANEL_W, (area.size.x - 16.0) / ui_scale)
+    box.custom_minimum_size.x = width - 48.0
     if screen == "dm" and is_instance_valid(dm_scroll):
         # A conversa ocupa o espaço que sobra na tela (sem passar do painel).
         var avail = (area.size.y - 16.0) / ui_scale - 28.0
         var rest = box.get_combined_minimum_size().y - dm_scroll.custom_minimum_size.y
         dm_scroll.custom_minimum_size.y = clampf(avail - rest - 4.0, 120.0, 560.0)
     var wanted = box.get_combined_minimum_size().y + 28.0
+    var pad_x := 48.0
+    var pad_y := 50.0
+    wanted = box.get_combined_minimum_size().y + pad_y
     var height = minf(maxf(wanted, 0.0), (area.size.y - 16.0) / ui_scale)
-    scroll.custom_minimum_size = Vector2(width - 28.0, height - 28.0)
+    scroll.custom_minimum_size = Vector2(width - pad_x, height - pad_y)
     panel.custom_minimum_size = Vector2.ZERO
     panel.reset_size()
     panel.size = Vector2(width, height)
@@ -629,10 +801,14 @@ func _layout_toast():
     toast.scale = Vector2.ONE * s
     toast_label.add_theme_font_size_override("font_size", 15)
     var w = minf(460.0, (area.size.x - 24.0) / s)
-    toast_label.custom_minimum_size.x = w - 20.0
+    toast_label.custom_minimum_size.x = w - 24.0
+    toast_label.size.x = w - 24.0
+    toast.custom_minimum_size = Vector2.ZERO
+    toast.size = Vector2(w, toast_label.get_combined_minimum_size().y + 20.0)
     toast.reset_size()
     toast.size.x = w
     toast.position = Vector2(area.position.x + (area.size.x - w * s) / 2.0, area.position.y + 12.0)
+    _layout_req_card()
 
 # ---------- Mensagens privadas (DM) ----------
 ## Conversa a dois: "minha" = não enviada pelo amigo (não depende do id local da sessão).
@@ -847,9 +1023,11 @@ func _dm_scroll_end():
     if is_instance_valid(dm_scroll): dm_scroll.scroll_vertical = int(dm_scroll.get_v_scroll_bar().max_value)
 
 # ---------- Convite para partida Casual ----------
+var invite_return := "profile"   # R51 · de onde o convite saiu (lista de amigos ou perfil)
 func open_invite(uid: String, peer: Dictionary):
     invite_peer = _peer(uid, peer)
     invite_sending = false
+    invite_return = "list" if screen == "list" else "profile"
     _show("invite_pick")
 
 func send_invite(mode: String, game := "chess"):
@@ -871,8 +1049,8 @@ func _on_invite(msg: Dictionary):
             # convite feito de dentro do modo: fecha a lista; o cartão do convite mostra a espera
             close()
             return
-        # O cartão do convite (com CANCELAR e contagem) aparece no topo; volta ao perfil.
-        _show("profile")
+        # O cartão do convite (com CANCELAR e contagem) aparece no topo; volta para onde estava (lista ou perfil).
+        _show(invite_return)
         notice_text("Convite enviado para %s." % String(invite_peer.get("nickname", "")), Color("9fe0a8"))
     else:
         _show(screen if screen == "invite_friends" else "invite_pick")
