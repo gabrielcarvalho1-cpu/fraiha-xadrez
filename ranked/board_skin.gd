@@ -568,21 +568,15 @@ void fragment() {
     vec2 oa = max(max(-a, a - tex_size), vec2(0.0));
     float da = max(oa.x, oa.y);                       // distância até a arte (px da arte)
     float far = smoothstep(0.0, ramp, da);
-    // longe da arte o cenário vira fundo: desfocado e escuro (sem padrão repetido chamando atenção)
-    float r = 18.0 * far;
-    vec3 c = texture(TEXTURE, fold(a) / tex_size).rgb * 0.2;
-    for (int i = 0; i < 8; i++) {
-        float ang = float(i) * 0.785398;
-        vec2 d = vec2(cos(ang), sin(ang)) * r * (i % 2 == 0 ? 1.0 : 0.55);
-        c += texture(TEXTURE, fold(a + d) / tex_size).rgb * 0.1;
-    }
+    // cenário nítido (o jogador achou feio o desfocado); só uma leve sombra conforme a distância
+    vec3 c = texture(TEXTURE, fold(a) / tex_size).rgb;
     // emenda: os primeiros px da sobra repetem a própria borda da arte (espelhada, só 7 px: ali ainda é folhagem)
     // e passam suave para a floresta limpa; uma sombra leve marca a borda
     vec2 e = a;
     if (a.x < 0.0) e.x = min(-a.x, 7.0); else if (a.x >= tex_size.x) e.x = tex_size.x - 1.0 - min(a.x - tex_size.x, 7.0);
     if (a.y < 0.0) e.y = min(-a.y, 7.0); else if (a.y >= tex_size.y) e.y = tex_size.y - 1.0 - min(a.y - tex_size.y, 7.0);
     c = mix(texture(TEXTURE, (e + 0.5) / tex_size).rgb, c, smoothstep(1.0, 14.0, da));
-    float k = mix(0.9, 0.34, far) * (1.0 - 0.32 * exp(-da / 9.0));
+    float k = mix(0.95, 0.82, far) * (1.0 - 0.22 * exp(-da / 7.0));
     COLOR = vec4(c * k, 1.0);
 }
 """
@@ -610,7 +604,7 @@ void fragment() {
             _fill.set_shader_parameter("art_size", rect.size)
             _fill.set_shader_parameter("tex_size", tex.get_size())
             _fill.set_shader_parameter("clean", Vector4(clean.position.x, clean.position.y, clean.size.x, clean.size.y))
-            _fill.set_shader_parameter("ramp", 170.0)   # px da arte
+            _fill.set_shader_parameter("ramp", 260.0)   # px da arte
             f.queue_redraw()
             draw_texture_rect(tex, rect, false)
             return
