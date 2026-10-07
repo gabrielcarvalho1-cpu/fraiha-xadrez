@@ -42,6 +42,7 @@ var mobile_fullscreen: Button
 var mobile_music: Button
 var mobile_fx: Button
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
+var board_skin = null   # R49 · ranked/board_skin.gd
 var desk_restart: Button
 var desk_mark: Button          # MARCAR PARA REVISAR (sem engine; só guarda o lance)
 var desk_analyze: Button       # ANALISAR PARTIDA (só depois do fim)
@@ -124,6 +125,10 @@ func _ready():
     var ambient = preload("res://presentation_v019/ambient_life.gd").new()
     ambient.name = "AmbientLife"
     forest.add_child(ambient)
+    # R49 · pele do tabuleiro Ranked Madeira (arte de referência; só aparência)
+    board_skin = preload("res://ranked/board_skin.gd").new()
+    add_child(board_skin)
+    board_skin.setup(self)
     _layout()
     open_home()
 
@@ -419,6 +424,7 @@ func _refresh_desk_hud():
 
 func _layout_desk_hud():
     if not is_instance_valid(desk_panel) or MobileLayout.active(get_viewport()): return
+    if board_skin != null and board_skin.on: return   # R49: a pele já pôs cada botão no lugar da arte
     var size = get_viewport_rect().size
     home_button.position = Vector2(24, 20)
     home_button.size = Vector2(196, 54)
@@ -1095,6 +1101,7 @@ func _notification(what):
         request_quit()
 
 func _layout():
+    if board_skin != null: board_skin.before_layout()
     var size = get_viewport_rect().size
     var mobile = MobileLayout.active(get_viewport())
     game.mobile_presentation = mobile
@@ -1149,12 +1156,14 @@ func _layout():
         if match_chat != null: match_chat.layout(board_rect, false, get_viewport_rect())
     if not mobile: _layout_material_desktop()
     _refresh_desk_hud()
+    if board_skin != null: board_skin.after_layout()
 
 ## R38.3 · faixas de pontos/capturas no desktop: à direita do tabuleiro (adversário em cima, você embaixo);
 ## na ranqueada/online ficam coladas nas faixas de nome e relógio. Tela estreita: lado esquerdo.
 const MATERIAL_H := 52.0
 func _layout_material_desktop():
     if not is_instance_valid(material_hud): return
+    if board_skin != null and board_skin.on: return   # R49: a pele põe o material nos cartões da arte
     var board := Rect2(game.position + game.ORIGIN * game.scale.x, Vector2.ONE * game.BOARD * game.scale.x)
     var vs := get_viewport_rect().size
     var strips := mode in ["ranked", "casual"]

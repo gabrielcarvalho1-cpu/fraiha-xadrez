@@ -97,6 +97,7 @@ var _drag_submit := []           # [from, to] do lance que o jogador acabou de s
 const PREMOVE_TINT := Color(0.22,0.52,0.95,0.50)
 # Desktop: engrenagem e reiniciar viram botões do HUD (stage); o tabuleiro só desenha o painel de opções.
 var external_hud := false
+var hide_status := false        # R49 · pele do tabuleiro Ranked: sem a plaquinha de status embaixo (o relógio da vez acende)
 var presentation_rect := Rect2(0, 0, 1024, 1024)
 var settings_panel := Rect2(776, 60, 232, 136)
 var fullscreen_button := Rect2(788, 134, 208, 38)
@@ -407,7 +408,7 @@ func _draw_ui():
     _draw_status_and_settings(font)
 
 func _draw_status_and_settings(font):
-    if game_started:
+    if game_started and not hide_status:
         var label_width = font.get_string_size(status, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
         draw_style_box(_panel_style(), Rect2(512-label_width/2-18, 851, label_width+36, 38))
         draw_string(font,Vector2(512-label_width/2,877),status,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color("#eee0bc"))

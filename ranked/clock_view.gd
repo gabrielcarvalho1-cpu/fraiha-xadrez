@@ -6,6 +6,8 @@ var is_active := false
 var low := false
 
 var pulse := 0.0
+## R49 · pele da arte de referência: a ampulheta e a moldura já estão na arte; só os dígitos (cor = estado).
+var bare := false
 
 func _init():
     style = StyleBoxFlat.new()
@@ -29,6 +31,12 @@ func _init():
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     _restyle()
 
+func set_bare(on: bool):
+    if bare == on: return
+    bare = on
+    add_theme_stylebox_override("panel", StyleBoxEmpty.new() if on else style)
+    _restyle()
+
 func set_font_size(size: int):
     label.add_theme_font_size_override("font_size", size)
 
@@ -46,6 +54,7 @@ func _process(delta):
         queue_redraw()
 
 func _draw():
+    if bare: return
     # Ampulheta dourada à esquerda; gira suavemente quando o relógio está correndo.
     var c := Vector2(16, size.y / 2.0)
     var h := minf(size.y * 0.5, 20.0)
@@ -70,6 +79,7 @@ func _restyle():
         style.bg_color = Color("4a1410")
         style.border_color = Color("ff7a5c")
     var text = Color("fff1c4") if is_active else Color("b9b08f")
+    if bare: text = Color("ffe9a8") if is_active else Color("f3ede0")   # arte: dígitos claros; da vez, dourado
     if low: text = Color("ffb3a1") if is_active else Color("ff9d86")
     label.add_theme_color_override("font_color", text)
     queue_redraw()

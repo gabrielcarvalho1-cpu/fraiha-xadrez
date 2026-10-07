@@ -44,6 +44,7 @@ var last_mode := ""
 var hud_font := 18
 var two_line := false
 var kind := "ranked"
+var promo = null   # R49 · ranked/promotion_modal.gd
 
 func rated() -> bool:
     return kind == "ranked"
@@ -99,6 +100,24 @@ func setup(service, ranked_controller):
     box.add_theme_constant_override("separation", 10)
     scroll.add_child(box)
     for side in ["top", "bottom"]: strips[side] = _make_strip()
+    promo = preload("res://ranked/promotion_modal.gd").new()
+    var promo_layer := CanvasLayer.new()   # acima do chat (46) e das marcas da pele (47)
+    promo_layer.name = "PromotionLayer"
+    promo_layer.layer = 48
+    add_child(promo_layer)
+    promo_layer.add_child(promo)
+    promo.play_again.connect(func():
+        var m := String(promo.get_meta("mode", controller.last_result.get("mode", "")))
+        close_panel()
+        play_requested.emit()
+        controller.queue(m))
+    promo.back_to_ranked.connect(func():
+        play_requested.emit()
+        _show("modes"))
+    promo.analyze.connect(func():
+        close_panel()
+        var st = get_parent()
+        if st != null and st.has_method("open_analysis"): st.open_analysis())
     resign_button = Button.new()
     resign_button.text = "DESISTIR"
     resign_button.add_theme_font_size_override("font_size", 16)
@@ -231,9 +250,19 @@ func open_modes():
 func close_panel():
     screen = ""
     dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide()
+    if promo != null: promo.hide()
 
 func panel_open() -> bool:
-    return panel.visible or art_panel.visible
+    return panel.visible or art_panel.visible or (promo != null and promo.visible)
+
+## R49 · VOCÊ SUBIU DE LIGA! (ranked/promotion_modal.gd): os botões fazem o mesmo que no painel de resultado.
+func _promotion(r: Dictionary):
+    if account.ranked is Dictionary and r.has("stats"): account.ranked[String(r.mode)] = r.stats
+    dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide()
+    var st = get_parent()
+    var can: bool = st != null and st.has_method("analysis_available") and st.analysis_available()
+    promo.set_meta("mode", String(r.get("mode", "")))
+    promo.open(r, can)
 
 func _clear():
     for parent in [box, footer]:
@@ -294,6 +323,11 @@ func _show(which: String):
     screen = which
     _clear()
     notice = null
+    if promo != null: promo.hide()
+    # R49 · subida de liga: a tela da arte de referência no lugar do painel (mesmas ações)
+    if which == "result" and rated() and bool(controller.last_result.get("promoted", false)):
+        _promotion(controller.last_result)
+        return
     match which:
         "modes":
             if rated():

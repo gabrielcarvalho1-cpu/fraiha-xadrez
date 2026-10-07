@@ -16,6 +16,10 @@ var game = null                 # world.gd
 var top_rect := Rect2()         # faixa do adversário (coordenadas da tela)
 var bottom_rect := Rect2()      # faixa do jogador
 var compact := false            # celular: ícones menores, sem moldura
+## R49 · pele do tabuleiro Ranked Madeira: a linha "Material" do cartão de cada jogador (a arte já tem a moldura e
+## o peão). skin_font: fonte em px de tela; o texto "Material:  N" + as peças capturadas pequenas ao lado.
+var skin := false
+var skin_font := 17.0
 var _key := ""
 
 func _init():
@@ -68,6 +72,10 @@ func _draw():
     var them := "b" if me == "w" else "w"
     # R38.6 · só a VANTAGEM do momento (material no tabuleiro, como no Chess.com), nunca a soma do que foi capturado
     var adv: int = int(sm.diff) if me == "w" else -int(sm.diff)
+    if skin:
+        _skin_row(top_rect, sm.captured_by[them], -adv)
+        _skin_row(bottom_rect, sm.captured_by[me], adv)
+        return
     _row(top_rect, sm.captured_by[them], -adv, "ADVERSÁRIO")
     _row(bottom_rect, sm.captured_by[me], adv, "VOCÊ")
 
@@ -125,6 +133,30 @@ func _row(r: Rect2, codes: Array, adv: int, who: String):
         var dark_piece := code.begins_with("b")
         draw_circle(pr.get_center() + Vector2(0, ic * 0.04), ic * 0.44, Color(0.93, 0.86, 0.68, 0.55) if dark_piece else Color(0.02, 0.05, 0.03, 0.55))
         draw_texture_rect(tex, pr, false)
+
+func _skin_row(r: Rect2, codes: Array, adv: int):
+    if r.size.x <= 0.0: return
+    var font := get_theme_default_font()
+    var fs := int(round(skin_font))
+    var base := Vector2(r.position.x, r.get_center().y + fs * 0.36)
+    var txt := "Material:  %s" % (("+%d" % adv) if adv > 0 else "0")
+    draw_string_outline(font, base, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0, 0, 0, 0.6))
+    draw_string(font, base, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("f1ece2"))
+    if codes.is_empty(): return
+    var x := r.position.x + font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + fs * 1.2
+    var ic := r.size.y * 0.95
+    var need := ic
+    for k in range(1, codes.size()): need += ic * (0.42 if codes[k] == codes[k - 1] else 0.8)
+    var avail := r.end.x - x
+    if need > avail and need > 0.0: ic *= avail / need
+    for k in codes.size():
+        var code := String(codes[k])
+        if k > 0: x += ic * (0.42 if code == String(codes[k - 1]) else 0.8)
+        var tex: Texture2D = game.piece_textures.get(code)
+        if tex == null: continue
+        var ts := tex.get_size()
+        var sz := ts * (ic / maxf(ts.x, ts.y))
+        draw_texture_rect(tex, Rect2(Vector2(x + (ic - sz.x) / 2.0, r.get_center().y - sz.y / 2.0), sz), false)
 
 ## Vantagem exibida para a cor = material dela no tabuleiro − material do adversário, agora (testes).
 func advantage_for(color: String) -> int:
