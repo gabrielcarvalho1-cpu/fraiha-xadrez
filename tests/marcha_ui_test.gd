@@ -337,7 +337,7 @@ func run():
     t0 = Time.get_ticks_msec()
     while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 30000: await process_frame
     check(ui.g.turn == 0 and g.log.size() >= 4, "os 3 bots jogaram e a vez voltou (%d registros)" % g.log.size())
-    check(ui.cues_played.has("your_turn") and (ui.cues_played.has("step") or ui.cues_played.has("discard") or ui.cues_played.has("exit")), "sons: jogadas dos bots (passos, saída ou descarte) e aviso da sua vez")
+    check(ui.cues_played.has("your_turn") and (ui.cues_played.has("move") or ui.cues_played.has("discard") or ui.cues_played.has("exit")), "sons: jogadas dos bots (passos, saída ou descarte) e aviso da sua vez")
     # 7 dividido pela interface
     g.pawns[0][0] = {"zone": "track", "pos": 5}
     g.pawns[0][1] = {"zone": "track", "pos": 20}

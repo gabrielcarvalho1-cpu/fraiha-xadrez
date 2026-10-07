@@ -57,7 +57,11 @@ func run():
         click.button_index = MOUSE_BUTTON_LEFT
         click.position = stage.game.square_center(cell)
         stage.game._handle_game_input(click)
-    await process_frame
+    # R50: o som do lance sai sincronizado com a peça assentando (fim da animação), não no mesmo quadro
+    var waited := 0.0
+    while audio.last_cue != "wood" and waited < 1.5:
+        await process_frame
+        waited += 1.0 / 60.0
     check(audio.last_cue == "wood","real piece move still triggers chess sound")
     for resolution in [Vector2i(1920,1080),Vector2i(1600,900),Vector2i(1366,768)]:
         root.size = resolution

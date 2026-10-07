@@ -25,8 +25,16 @@ const SFX := {
     "victory": preload("res://marcha/audio/vitoria.wav"), "defeat": preload("res://marcha/audio/derrota.wav"),
     "arrive": preload("res://marcha/audio/chegada.wav"), "victory_final": preload("res://marcha/audio/vitoria_final.wav"),
     "promote": preload("res://marcha/audio/promocao_dama.wav"),     # R37: fanfarra da chegada (vira DAMA)
+    # R50 · sons enviados pelo dono do projeto
+    "move": preload("res://marcha/audio/r50/movimento.mp3"),         # a cada casa (toc quando o peão pousa)
 }
-const SFX_DB := {"promote": -3.0, "arrive": -6.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0}
+const MOVE_HIT := 0.50       # R50: o toc do movimento.mp3 acontece aos 0,5 s do arquivo
+const SFX_R50 := {
+    "capture": preload("res://marcha/audio/r50/captura.mp3"),
+    "swap": preload("res://marcha/audio/r50/troca.mp3"),
+    "arrive": preload("res://marcha/audio/r50/chegada.mp3"),         # chegada ao Salão (vira DAMA)
+}
+const SFX_DB := {"promote": -3.0, "arrive": -6.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
 
 const BOARD := preload("res://marcha/art/board.png")
 const BG := preload("res://marcha/art/table_bg.png")
@@ -846,15 +854,14 @@ func _animate(events: Array):
             "move":
                 var w: Array = e.pawn
                 var key := _key(w)
-                var si := 0
                 # R37 · cada casa é um pulinho suave (sobe e desce em arco, com aceleração e freio)
                 var from: Vector2 = pawn_point(w[0], w[1]) if not anim.has(key) else anim[key]
                 if not anim.has(key) and e.path.size() > 0:
                     from = _cell_of(w[0], _prev_cell(w, e))
                 for step in e.path:
                     var to: Vector2 = _cell_of(w[0], step)
-                    _cue("step", 0.92 + 0.04 * (si % 4))
-                    si += 1
+                    # R50 · um som por casa; começa no ponto em que o toc cai quando o peão pousa nesta casa
+                    _cue("move", 1.0, maxf(0.0, MOVE_HIT - STEP_TIME))
                     await _tween_hop(key, from, to, STEP_TIME, HOP_H)
                     from = to
                 if e.path.size() > 0: _origin[key] = e.path[e.path.size() - 1]
@@ -896,7 +903,7 @@ func _animate(events: Array):
             "crown":
                 # R35 · peão chegou às 4 casas do Salão: som de vitória + coroa estourando na casa
                 var w: Array = e.pawn
-                _cue("promote")
+                _cue("arrive")
                 celebs.append({"p": _cell_of(w[0], g.pawns[w[0]][w[1]]), "t": 0.0, "seat": int(w[0])})
                 _redraw()
                 await get_tree().create_timer(CROWN_WAIT).timeout
@@ -1060,10 +1067,11 @@ func on_press(p: Vector2):
         if not best.is_empty(): pick_pawn(best)
 
 var cues_played: Array = []      # testes: últimos efeitos pedidos
-func _cue(kind: String, pitch := 1.0):
+func _cue(kind: String, pitch := 1.0, from_pos := 0.0):
     cues_played.append(kind)
     if cues_played.size() > 60: cues_played.pop_front()
-    if SFX.has(kind): Sound.play(stage, SFX[kind], float(SFX_DB.get(kind, -8.0)), pitch)
+    var st: AudioStream = SFX_R50.get(kind, SFX.get(kind))
+    if st != null: Sound.play(stage, st, float(SFX_DB.get(kind, -8.0)), pitch, from_pos)
 
 func _on_hit(id: String):
     var audio = stage.get_node_or_null("GameAudio") if stage != null else null

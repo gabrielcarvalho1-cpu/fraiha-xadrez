@@ -12,6 +12,7 @@ var previous_board := {}
 var previous_end := false
 var previous_theme := ""
 var was_promotion := false
+var promoted_now := false
 var last_cue := ""
 var slot := 0
 
@@ -19,6 +20,13 @@ func _ready():
     stage = get_parent()
     for id in ["wood","metal","capture","check","mate","win","loss","promotion","ui","bell"]:
         streams[id] = load("res://audio_v025/"+id+".wav")
+    # R50 · sons padrão do xadrez (enviados pelo dono do projeto), iguais em todos os modos e temas
+    var lance: AudioStream = load("res://audio_v025/padrao/movimento.mp3")
+    streams["wood"] = lance
+    streams["metal"] = lance
+    streams["capture"] = load("res://audio_v025/padrao/captura.mp3")
+    streams["promotion"] = load("res://audio_v025/padrao/promocao.mp3")
+    streams["roque"] = load("res://audio_v025/padrao/roque.mp3")
     for i in range(4):
         var player = AudioStreamPlayer.new()
         player.volume_db = -14
@@ -38,7 +46,7 @@ func _ready():
     if web_music: _web_music_init()
     refresh_music()
 
-func play_cue(id: String):
+func play_cue(id: String, from_pos := 0.0):
     if not streams.has(id) or players.is_empty(): return
     last_cue = id
     var player = players[slot]
@@ -46,7 +54,22 @@ func play_cue(id: String):
     player.stream = streams[id]
     player.volume_db = -14
     player.pitch_scale = 1.0
-    player.play()
+    player.play(from_pos)
+
+## R50 · momento do "toc" dentro de cada som novo (o movimento.mp3 tem ~0,5 s quase mudo antes do toc).
+const HIT := {"wood": 0.50, "metal": 0.50, "capture": 0.07, "promotion": 0.07, "roque": 0.07}
+## Toca o som do lance com o toc caindo quando a peça assenta na casa (fim da animação do tabuleiro).
+## Sem animação (arrastar), o toc sai na hora. O arquivo não é alterado: só o ponto de início.
+func play_move_cue(id: String):
+    var game = stage.game
+    var left := 0.0
+    if not game.move_anim.is_empty() and game.move_anim_t < 1.0:
+        left = (1.0 - game.move_anim_t) * game.move_anim_len
+    var hit: float = HIT.get(id, 0.0)
+    if left <= hit:
+        play_cue(id, maxf(0.0, hit - left))
+    else:
+        get_tree().create_timer(left - hit).timeout.connect(play_cue.bind(id, 0.0))
 
 func toggle_music():
     var index = AudioServer.get_bus_index("Music")
@@ -60,14 +83,14 @@ func set_music_override(path: String):
     refresh_music()
 
 ## R34: efeito sonoro de um modo (mesmo bus "Effects": volume e MUTAR EFEITOS valem para ele).
-func play_stream(stream: AudioStream, db := -8.0, pitch := 1.0):
+func play_stream(stream: AudioStream, db := -8.0, pitch := 1.0, from_pos := 0.0):
     if stream == null or players.is_empty(): return
     var player = players[slot]
     slot = (slot+1)%players.size()
     player.stream = stream
     player.volume_db = db
     player.pitch_scale = pitch
-    player.play()
+    player.play(from_pos)
     last_cue = String(stream.resource_path).get_file().get_basename()
 
 func refresh_music():
@@ -157,18 +180,20 @@ func _process(_delta):
         return
     var captures: int = game.captured_white.size()+game.captured_black.size()
     if previous_count >= 0 and game.move_count == previous_count+1:
-        play_cue("capture" if captures > previous_captures else ("wood" if theme == "wood" else "metal"))
         var moved_before: String = previous_board.get(game.last_from,"")
         var moved_after: String = game.pieces.get(game.last_to,"")
+        # um som por lance: promoção > roque > captura > lance comum
         if moved_before.ends_with("P") and not moved_after.is_empty() and not moved_after.ends_with("P"):
-            play_cue("promotion")
-        var checked = game.bot.rules.in_check(game.turn) if game.bot != null else game._in_check(game.turn)
-        if checked and not game.game_over: play_cue("check")
-        # Partida online (Casual/Ranked): sininho quando o adversário joga e chega a sua vez.
-        if stage.mode in ["ranked","casual"] and game.bot != null and not game.game_over and game.turn == String(game.bot.human_color):
-            play_cue("bell")
-    if was_promotion and not game.promotion_pending and previous_count >= 0:
+            play_move_cue("promotion")
+            promoted_now = true
+        elif moved_before.ends_with("K") and absi(game.last_to.x - game.last_from.x) == 2:
+            play_move_cue("roque")
+        else:
+            play_move_cue("capture" if captures > previous_captures else ("wood" if theme == "wood" else "metal"))
+        # R50 · sem som de xeque e sem o sininho antigo de "sua vez" (tocava junto com o som novo do lance)
+    if was_promotion and not game.promotion_pending and previous_count >= 0 and not promoted_now:
         play_cue("promotion")
+    promoted_now = false
     if game.game_over and not previous_end and previous_count >= 0:
         var human: String = game.bot.human_color if game.bot != null else (game.online.color if game.online != null else "")
         if "MATE" in game.status:

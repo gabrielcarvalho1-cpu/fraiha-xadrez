@@ -14,9 +14,9 @@ static func music_off(stage):
     var a = audio(stage)
     if a != null and a.has_method("set_music_override"): a.set_music_override("")
 
-static func play(stage, stream: AudioStream, db := -8.0, pitch := 1.0):
+static func play(stage, stream: AudioStream, db := -8.0, pitch := 1.0, from_pos := 0.0):
     var a = audio(stage)
-    if a != null and a.has_method("play_stream"): a.play_stream(stream, db, pitch)
+    if a != null and a.has_method("play_stream"): a.play_stream(stream, db, pitch, from_pos)
 
 static func music_muted(hub) -> bool:
     return hub != null and bool(hub.get("music_muted"))
