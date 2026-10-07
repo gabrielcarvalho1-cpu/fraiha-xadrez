@@ -99,6 +99,25 @@ func layout():
     leaves.size = backdrop.size
     var portrait = size.x < 560.0
     var main = current_page == "main"
+    # R47 · Home em pé = composição da referência (mobile_home_ref.gd); deitado = lista de antes.
+    var want_ref := main and use_ref_home()
+    if main and want_ref != (is_instance_valid(ref_home) and ref_home.visible):
+        show_page.call_deferred("main")   # girou o celular: refaz a Home no formato certo
+    if is_instance_valid(ref_home) and ref_home.visible:
+        backdrop.visible = false
+        heading.visible = false
+        profile.hide()
+        back_button.hide()
+        scroll.visible = false
+        # a arte já tem margem própria nas bordas: usa a tela inteira e só desvia de recortes REAIS
+        # (entalhe/barra do sistema além da folga padrão de 8 px da área segura)
+        var full: Vector2 = get_viewport().get_visible_rect().size
+        var top_in := maxf(0.0, area.position.y - 8.0)
+        var bottom_in := maxf(0.0, full.y - area.end.y - 8.0)
+        ref_home.layout(Rect2(-area.position + Vector2(0, top_in), Vector2(full.x, full.y - top_in - bottom_in)), Rect2(-area.position, full))
+        return
+    backdrop.visible = true
+    scroll.visible = true
     # Home do celular sem faixa de título: o cartão do jogador e o menu ocupam a tela.
     hero.visible = false
     subtitle.visible = false
@@ -234,8 +253,44 @@ func _grid(parent: Node, columns: int) -> GridContainer:
     parent.add_child(grid)
     return grid
 
+## R47 · a Home da referência vale para o celular EM PÉ (alto e estreito); deitado fica a lista.
+func use_ref_home() -> bool:
+    var v := get_viewport().get_visible_rect().size if is_inside_tree() else Vector2(390, 844)
+    return v.y >= v.x * 1.3
+
+func _show_ref_home():
+    if not is_instance_valid(ref_home):
+        ref_home = load("res://ui_v022/mobile_home_ref.gd").new()
+        add_child(ref_home)
+        move_child(ref_home, backdrop.get_index() + 1)
+        ref_home.setup(hub, self)
+    ref_home.visible = true
+    ref_home.refresh()
+    club_row = ref_home.club_entry
+    sound_button = ref_home.sound_button
+    fullscreen_button = null
+    refresh_sound()
+
+## R47 · MAIS (barra de baixo da Home em pé): o que não cabe na Home da referência.
+func _more(content: VBoxContainer):
+    for title in ["CONFIGURAÇÕES", "CONHEÇA O FRAIHA"]:
+        var src = _source_button(title)
+        if src != null: _button(content, title, func(): src.pressed.emit())
+    if hub.screen_mode != null and hub.screen_mode.supported():
+        _button(content, "TELA CHEIA", func(): hub.screen_mode.toggle())
+    var quit = _source_button("SAIR")
+    if quit != null: _button(content, "SAIR", func(): quit.pressed.emit())
+
+func _source_button(title: String):
+    for b in hub.menu_buttons:
+        if hub.title_of(b) == title: return b
+    return null
+
+var ref_home = null
+
 func show_page(id: String):
     current_page = id
+    if is_instance_valid(ref_home) and not (id == "main" and use_ref_home()): ref_home.visible = false
     if is_instance_valid(borrowed):
         borrowed.reparent(borrowed_parent,false)
         borrowed = null
@@ -245,7 +300,7 @@ func show_page(id: String):
     profile.visible = id == "main"
     profile.text = hub.player_name + " · PERFIL"
     back_button.visible = id != "main"
-    heading.text = {"main":"FRAIHA XADREZ","bot":"JOGAR CONTRA O COMPUTADOR","bot_side":"ESCOLHA SEU LADO","profile":"PERFIL","ranking":"LIGAS E RANKING","about":"CONHEÇA O FRAIHA","settings":"CONFIGURAÇÕES","ranked":"JOGAR RANQUEADO","history":"HISTÓRICO DE PARTIDAS"}.get(id,"FRAIHA XADREZ")
+    heading.text = {"mais":"MAIS","main":"FRAIHA XADREZ","bot":"JOGAR CONTRA O COMPUTADOR","bot_side":"ESCOLHA SEU LADO","profile":"PERFIL","ranking":"LIGAS E RANKING","about":"CONHEÇA O FRAIHA","settings":"CONFIGURAÇÕES","ranked":"JOGAR RANQUEADO","history":"HISTÓRICO DE PARTIDAS"}.get(id,"FRAIHA XADREZ")
     if hub.page_scrolls.has(id):
         borrowed = hub.page_scrolls[id].get_child(0)
         borrowed_parent = borrowed.get_parent()
@@ -271,6 +326,9 @@ func show_page(id: String):
                 var cols := 2 if size.x > size.y else 1
                 ladder.setup(hub.bot_progress, cols, Vector2(0, 150), true)
                 ladder.challenge.connect(func(bid): hub._choose_difficulty(bid))
+            "main" when use_ref_home():
+                _show_ref_home()
+            "mais": _more(content)
             "main":
                 # HUD do topo: CLUB FRAIHA no canto superior esquerdo + botão SOM à direita.
                 var head_gap = Control.new()
@@ -391,11 +449,13 @@ func refresh_fullscreen():
     hub.refresh_fullscreen_button()
 
 func queue_redraw_cards():
+    if is_instance_valid(ref_home) and ref_home.visible: ref_home.refresh()
     for card in find_children("*", "", true, false):
         if card is ProfileCard: card.queue_redraw()
 
 func refresh_club(on: bool):
     if is_instance_valid(club_row): club_row.set_active(on)
+    if is_instance_valid(ref_home) and ref_home.visible: ref_home.refresh()
     for card in find_children("*", "", true, false):
         if card is ProfileCard: card.queue_redraw()
 

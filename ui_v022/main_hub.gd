@@ -17,7 +17,7 @@ const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
 const APP_VERSION = "0.37"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
-const FOREST = preload("res://ui_v022/assets/home_forest_v7.png")   # R36: arte de REFERÊNCIA aprovada pelo dono (tools/home_ref_v7.py): menu com pilares e tochas, 11 linhas com textos; só o que é vivo foi apagado
+const FOREST = preload("res://ui_v022/assets/home_forest_v8.png")   # R47: arte de REFERÊNCIA do dono (tools/home_ref_v8.py): menu em 3 linhas grandes + grade 2×3 + CONFIGURAÇÕES/SAIR; só o que é vivo foi apagado   # R36: arte de REFERÊNCIA aprovada pelo dono (tools/home_ref_v7.py): menu com pilares e tochas, 11 linhas com textos; só o que é vivo foi apagado
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
 ## R36 · linhas do menu na arte v7 (y da borda dourada de cima, altura até a de baixo) — medidas na referência
 # R43: menu da arte em 92% (tools/home_r43_art.py): x' = 554 + (x-530)*0,92 ; y' = 292 + (y-288)*0,92
@@ -26,8 +26,16 @@ const MENU_X := 621.16      # borda esquerda das linhas na arte v7 (R43: menu 92
 const MENU_W := 420.44      # até a borda direita (R43: menu 92%)
 const MENU_SCALE := 0.74   # R35: escala das linhas (o conteúdo encolhe por igual a partir de x=628)
 const MENU_TEXT_X := 705.8  # onde começam os textos das linhas na arte v7 (R43: menu 92%)
+## R47 · Home da referência do dono (arte v8). Mesma ordem de botões de sempre (títulos/ações abaixo);
+## cada um ganha o retângulo do botão DESENHADO na arte e os textos no lugar/medida da referência.
+## Textos: [título, Rect2(x, topo das maiúsculas, largura da tinta, altura das maiúsculas), fonte] e,
+## nas 3 linhas grandes, o subtítulo [texto, Rect2(x, topo, largura, 0)].
+const PC_MENU := [Rect2(607,340,436,69), Rect2(607,416,436,66), Rect2(605,490,440,72), Rect2(603,660,216,55), Rect2(602,597,217,55), Rect2(830,597,215,55), Rect2(603,722,216,54), Rect2(609,805,217,49), Rect2(830,722,215,54), Rect2(830,660,215,55), Rect2(837,805,204,49)]
+const PC_TITLE := [Rect2(699,358,296,15), Rect2(700,431,149,15), Rect2(707,505,232,19), Rect2(661,678,120,13), Rect2(661,618,97,13), Rect2(899,619,46,13), Rect2(671,742,55,13), Rect2(674,824,114,13), Rect2(899,742,131,13), Rect2(899,678,133,13), Rect2(903,824,32,13)]
+const PC_SUB := {0: ["Treine e evolua seu jogo", Rect2(700,381,184,0)], 1: ["Partida casual · fila automática", Rect2(702,455,220,0)], 2: ["Compita e conquiste seu lugar", Rect2(707,532,239,0)]}
+const PC_COVER := Rect2(606,322,438,543)   # miolo do menu entre os pilares (páginas internas)
 const FOREST_V2 = FOREST
-const FOREST_WIDE = preload("res://ui_v022/assets/home_forest_v7_wide.png")   # R43: laterais completadas (tools/home_wide_r43.py)
+const FOREST_WIDE = preload("res://ui_v022/assets/home_forest_v8_wide.png")   # R43: laterais completadas (tools/home_wide_r43.py)
 const WIDE_PAD := 84.0
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
@@ -2001,8 +2009,8 @@ func _build_reference_chrome():
     var clip = Control.new()
     clip.name = "RefPortraitClip"
     clip.clip_contents = true
-    clip.position = Vector2(1255,65) - pbtn.position   # R36: dentro da moldura dourada da arte v7
-    clip.size = Vector2(84,91)
+    clip.position = Vector2(1256,66) - pbtn.position   # R47: dentro da moldura dourada da arte v8
+    clip.size = Vector2(86,84)
     clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(clip)
     var portrait = TextureRect.new()
@@ -2100,35 +2108,23 @@ func _build_reference_chrome():
     cover.bg_color = Color(0.03,0.12,0.075)
     cover.set_corner_radius_all(4)
     ref_menu_cover.add_theme_stylebox_override("panel", cover)
-    ref_menu_cover.position = REF_MENU_RECT.position
-    ref_menu_cover.size = REF_MENU_RECT.size
+    ref_menu_cover.position = PC_COVER.position
+    ref_menu_cover.size = PC_COVER.size
     ref_menu_cover.clip_contents = false
     ref_menu_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
     canvas.add_child(ref_menu_cover)
     canvas.move_child(ref_menu_cover, canvas.get_node("MainMenu").get_index())
     ref_nodes.append(ref_menu_cover)
-    # Os louros do Ranqueado ficam sobre a borda da moldura: nas páginas internas, a borda é
-    # recomposta com as mesmas colunas da própria arte, logo abaixo (sem emenda).
-    for x in [600.0, 1041.6]:   # R43: colunas da moldura no menu em 92%
-        var patch = TextureRect.new()
-        patch.name = "RefLaurelPatch"
-        patch.texture = _slice(FOREST_V2, Rect2(x, 579.0, 20.2, 70.0))
-        patch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        patch.stretch_mode = TextureRect.STRETCH_SCALE
-        patch.position = Vector2(x, MENU_ROWS[2].x - 10.0)
-        patch.size = Vector2(20.2, MENU_ROWS[2].y + 20.0)
-        patch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        ref_menu_cover.add_child(patch)
-        patch.top_level = false
-        patch.position = Vector2(x, MENU_ROWS[2].x - 10.0) - ref_menu_cover.position
+    # R47: na arte v8 o Ranqueado não tem louros sobre a borda — nada a recompor nas páginas internas.
     # Botões do menu: ao passar o mouse / foco o PRÓPRIO botão da arte reluz (mesmos pixels,
     # somando luz nas partes douradas). Nada de caixa por cima nem texto extra.
     var glow_material = ShaderMaterial.new()
     glow_material.shader = preload("res://ui_v022/home_button_glow.gdshader")
-    for button in menu_buttons:
+    for i in menu_buttons.size():
+        var button: TextureButton = menu_buttons[i]
         var ranked = title_of(button) == "JOGAR RANQUEADO"
-        var offset = Vector2(-20, -10) if ranked else Vector2(0, -2)
-        var region = Rect2(button.position + offset, button.size + (Vector2(40, 20) if ranked else Vector2(0, 4)))
+        var offset = Vector2(-3, -3)
+        var region = Rect2(PC_MENU[i].position + offset, PC_MENU[i].size + Vector2(6, 6))
         var atlas = AtlasTexture.new()
         atlas.atlas = FOREST
         atlas.region = region
@@ -2151,29 +2147,31 @@ func _build_reference_chrome():
         button.focus_exited.connect(func(): hover.hide())
         # R44.1: os textos NÃO ficam mais na arte (serrilhavam ao reduzir): o jogo escreve com a fonte
         # do jogo, nítida em qualquer tamanho de tela. Mesma coluna, mesmo tamanho em todas as linhas.
-        _ref_caption(button, ranked)
+        _ref_caption(button, i)
 
-func _ref_caption(button: TextureButton, ranked: bool):
+## R47 · textos do botão no lugar e na medida do texto da referência (ui_v022/ref_text.gd).
+func _ref_caption(button: TextureButton, i: int):
     var cap := Control.new()
     cap.name = "RefCaption"
     cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
     cap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     button.add_child(cap)
-    var box := VBoxContainer.new()
-    box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    box.alignment = BoxContainer.ALIGNMENT_CENTER
-    box.add_theme_constant_override("separation", -2)
-    var left := (MENU_TEXT_X + (16.0 if ranked else 0.0)) - MENU_X
-    box.position = Vector2(left, 0)
-    box.size = Vector2(MENU_W - left - 56.0, button.size.y)
-    cap.add_child(box)
-    var sub := String(button.get_meta("subtitle", ""))
-    var t := _label(box, String(button.get_meta("title", "")), 19 if ranked else 15, GOLD if ranked else CREAM)
-    t.autowrap_mode = TextServer.AUTOWRAP_OFF
-    t.add_theme_constant_override("outline_size", 0)
-    if not sub.is_empty() and button.get_meta("title", "") != "SAIR":
-        var st := _label(box, sub, 14 if ranked else 12, CREAM if ranked else Color("cfd3c8"))
-        st.autowrap_mode = TextServer.AUTOWRAP_OFF
+    var RefText = preload("res://ui_v022/ref_text.gd")
+    var origin: Vector2 = PC_MENU[i].position
+    var big: bool = PC_SUB.has(i)
+    var ranked: bool = i == 2
+    var tr: Rect2 = PC_TITLE[i]
+    var t = RefText.make(String(button.get_meta("title", "")), Rect2(tr.position - origin, tr.size), "default" if big else "squeeze", Color("ffd36e") if ranked else Color("f6f1e4"))
+    t.name = "RefTitle"
+    t.bold = 1 if big else 0
+    if not big: t.outline_size = 2
+    cap.add_child(t)
+    if big:
+        var sr: Rect2 = PC_SUB[i][1]
+        var st = RefText.make(String(PC_SUB[i][0]), Rect2(sr.position - origin, Vector2(sr.size.x, 0)), "default", Color("f1ede2"))
+        st.name = "RefSubtitle"
+        st.outline_size = 2
+        cap.add_child(st)
     cap.hide()
 
 func _sync_chrome():
@@ -2192,7 +2190,15 @@ func _sync_chrome():
     if not desk_profile.is_empty(): desk_profile.stack.visible = not ref
     for n in ranked_extras: n.visible = not ref
     # Botões: na arte de referência o botão já está desenhado; o nosso vira área de clique transparente.
-    for button in menu_buttons:
+    for i in menu_buttons.size():
+        var button: TextureButton = menu_buttons[i]
+        # R47: na arte de referência cada botão fica sobre o botão desenhado; nos temas antigos, a coluna v7
+        if not button.has_meta("legacy_rect"): button.set_meta("legacy_rect", Rect2(button.position, button.size))
+        var lr: Rect2 = button.get_meta("legacy_rect")
+        var rr: Rect2 = PC_MENU[i] if ref else lr
+        button.position = rr.position
+        button.custom_minimum_size = Vector2(0, rr.size.y)
+        button.size = rr.size
         if not button.has_meta("atlas_texture"): button.set_meta("atlas_texture", button.texture_normal)
         var tex = null if ref else button.get_meta("atlas_texture")
         button.texture_normal = tex
@@ -2209,11 +2215,13 @@ func _sync_chrome():
         account_card.size = Vector2(322,72) if ref else Vector2(326,62)
         account_card.get_node("AccountIcon").visible = not ref
         var words = account_card_title.get_parent().get_parent()
-        words.position = Vector2(95,12) if ref else Vector2(70,8)
-        words.size = Vector2(172,50) if ref else Vector2(214,48)
-        account_card_title.add_theme_font_size_override("font_size", 20 if ref else 18)
-        account_card_subtitle.add_theme_font_size_override("font_size", 14 if ref else 13)
-        account_card_subtitle.add_theme_color_override("font_color", Color("e8e2d0") if ref else MUTED)
+        words.position = Vector2(95,10) if ref else Vector2(70,8)
+        words.size = Vector2(196,60) if ref else Vector2(214,48)
+        account_card_title.add_theme_font_size_override("font_size", 22 if ref else 18)   # R47: medida da referência
+        account_card_subtitle.add_theme_font_size_override("font_size", 18 if ref else 13)
+        account_card_subtitle.add_theme_color_override("font_color", Color("f2efe6") if ref else MUTED)
+        for l in [account_card_title, account_card_subtitle]:   # 1 linha visível: a altura acompanha a fonte
+            l.custom_minimum_size.y = ceilf(l.get_theme_font_size("font_size") * 1.42)
         for c in account_card.get_children():
             if c is Control and c.name != "AccountIcon" and c != words and not c is MarginContainer: c.visible = not ref
     _refresh_ref_account()

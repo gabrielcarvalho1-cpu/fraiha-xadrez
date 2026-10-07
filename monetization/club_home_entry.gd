@@ -11,6 +11,15 @@ var compact := false   # celular: fita mais baixa, texto menor
 ## R36 · Home v7: a placa (moldura de madeira/ouro e medalhão com coroa) é da própria arte de referência;
 ## aqui só entram os textos vivos, o selo ✓ (ativo) ou a seta (inativo) e o brilho do hover.
 var over_art := false
+## R47 · medidas do texto sobre a placa da arte (padrão = Home do PC; a Home do celular troca:
+## só o título, maior, e a seta na ponta da placa do celular).
+var art_tx := 79.0
+var art_title_y := 31.0
+var art_title_size := 23
+var art_title_room := 196.0
+var art_sub := true
+var art_sub_y := 50.0
+var art_seal := Vector2(291, 30)
 var t := 0.0
 
 # Gradiente metálico do ouro (de cima para baixo)
@@ -187,21 +196,22 @@ func _draw_over_art():
     var down := button_pressed or (is_hovered() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))
     var pulse := 0.5 + 0.5 * sin(t * 2.4)
     if lit:   # luz quente por dentro da placa
-        draw_rect(Rect2(74, 7, 248, 50), Color(1.0, 0.86, 0.45, 0.07))
+        draw_rect(Rect2(art_tx - 5.0, 7, size.x - art_tx - 3.0, size.y - 12.0), Color(1.0, 0.86, 0.45, 0.07))
     var f := get_theme_default_font()
     var title := "CLUB ATIVO" if active else "CLUB FRAIHA"
     var sub := "Análises ilimitadas · moldura premium" if active else "Jogue. Analise. Evolua."
-    var tx := 79.0
+    var tx := art_tx
     var dy := 1.0 if down else 0.0
-    var tfs := Art.fit(f, title, 23, 196.0, 14)
+    var tfs := Art.fit(f, title, art_title_size, art_title_room, 14)
     var gold := Color("ffd76e") if lit else Color("f2c65a")
-    draw_string_outline(f, Vector2(tx, 31 + dy), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, 5, Color(0.08, 0.05, 0.0, 0.85))
-    draw_string_outline(f, Vector2(tx, 31 + dy), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, 1, gold)   # traço mais encorpado
-    draw_string(f, Vector2(tx, 31 + dy), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, gold)
-    var sfs := Art.fit(f, sub, 12, 196.0, 9)
-    draw_string_outline(f, Vector2(tx, 50 + dy), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, 3, Color(0.05, 0.03, 0.0, 0.8))
-    draw_string(f, Vector2(tx, 50 + dy), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, Color("f1ead6"))
-    var sc := Vector2(291, 30 + dy)
+    draw_string_outline(f, Vector2(tx, art_title_y + dy), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, 5, Color(0.08, 0.05, 0.0, 0.85))
+    draw_string_outline(f, Vector2(tx, art_title_y + dy), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, 1, gold)   # traço mais encorpado
+    draw_string(f, Vector2(tx, art_title_y + dy), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, gold)
+    if art_sub:
+        var sfs := Art.fit(f, sub, 12, 196.0, 9)
+        draw_string_outline(f, Vector2(tx, art_sub_y + dy), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, 3, Color(0.05, 0.03, 0.0, 0.8))
+        draw_string(f, Vector2(tx, art_sub_y + dy), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, Color("f1ead6"))
+    var sc := art_seal + Vector2(0, dy)
     if active:
         # selo dourado com ✓ (igual à referência), com um leve pulso
         draw_circle(sc + Vector2(0, 2), 19.0, Color(0, 0, 0, 0.45))

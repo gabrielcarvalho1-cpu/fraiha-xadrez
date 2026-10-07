@@ -4,12 +4,12 @@ extends Control
 ## (só a barriga: cabeça, orelhas, patas e contorno ficam parados).
 ## Tudo em coordenadas do canvas 1672 x 941, por cima da arte e por baixo dos painéis/botões.
 ## Só recortes da PRÓPRIA arte animados por shader (nada redesenhado) + luz aditiva discreta.
-const FOREST := preload("res://ui_v022/assets/home_forest_v7.png")
+const FOREST := preload("res://ui_v022/assets/home_forest_v8.png")   # R47: arte de referência v8
 
 ## [centro da chama, tamanho do recorte, raio da luz]
 const TORCHES := [
-    [Vector2(590, 532), Vector2(36, 52), 48.0],     # pilar esquerdo do menu (R44: moldura nova)
-    [Vector2(1052, 532), Vector2(36, 52), 48.0],    # pilar direito do menu (R44: moldura nova)
+    [Vector2(579, 540), Vector2(36, 52), 48.0],     # pilar esquerdo do menu (R47: arte v8)
+    [Vector2(1069, 540), Vector2(36, 52), 48.0],    # pilar direito do menu (R47: arte v8)
     [Vector2(1266, 494), Vector2(24, 34), 34.0],    # tocha da ponte
     [Vector2(1471, 490), Vector2(24, 34), 34.0],    # tocha da direita
     [Vector2(392, 327), Vector2(52, 50), 40.0],     # lanterna da árvore
