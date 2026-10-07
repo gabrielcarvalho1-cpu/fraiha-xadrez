@@ -1301,8 +1301,10 @@ func _build_history_page():
     var panel := Control.new()
     panel.name = "HistoryPage"
     # R51b · abaixo da faixa "ESTRATÉGIA PARA IR MAIS LONGE" do logo; fora da moldura a Home aparece
-    panel.scale = Vector2.ONE * (PAGE_W / HIST_REF.x)
-    panel.position = Vector2((DESIGN.x - PAGE_W) / 2.0, PAGE_TOP)
+    # R51c · centralizado na área útil: entre a faixa do logo e o rodapé que nunca é cortado
+    var hk := PAGE_W / HIST_REF.x
+    panel.scale = Vector2.ONE * hk
+    panel.position = Vector2((DESIGN.x - HIST_REF.x * hk) / 2.0, (HIST_AREA.x + HIST_AREA.y - HIST_REF.y * hk) / 2.0).round()
     panel.size = HIST_REF
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
     canvas.add_child(panel)
@@ -1340,15 +1342,77 @@ func _build_history_page():
     scroll.position = Vector2(64, 224)
     scroll.size = Vector2(1736, 508)
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER   # a barra é a da arte
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER   # a barra visível é a da arte (abaixo)
     panel.add_child(scroll)
     preload("res://ui_v022/touch_scroll.gd").attach(scroll)
+    _history_scrollbar(panel, scroll)
     history_list = VBoxContainer.new()
     history_list.name = "HistoryList"
     history_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     history_list.add_theme_constant_override("separation", 8)
     scroll.add_child(history_list)
     RefPage.hotspot(panel, Rect2(84, 742, 428, 60), back, "HistoryBack")
+
+## R51c · A barra de rolagem da direita é a própria arte (trilho azul, alça de marfim e setas douradas),
+## agora funcional: trilho e alça são recortes da hist_bg; arrastar, clicar no trilho e nas setas rola a lista,
+## e rolar a lista (roda/arrasto) move a alça. Lista curta: a alça fica parada no topo, como na referência.
+const HIST_BAR := Rect2(1804, 237, 30, 473)        # trilho: abaixo da seta de cima até antes da seta de baixo
+const HIST_BAR_GRAB := Rect2(1804, 237, 30, 103)   # alça de marfim com as pontas douradas
+const HIST_BAR_TRACK := Rect2(1804, 343, 30, 368)  # trilho azul liso (ponta arredondada embaixo)
+const HIST_BAR_UP := Rect2(1800, 210, 38, 27)
+const HIST_BAR_DOWN := Rect2(1800, 710, 38, 24)
+const HIST_AREA := Vector2(306, 925)               # faixa vertical útil do canvas para o painel
+func _history_scrollbar(panel: Control, scroll: ScrollContainer) -> void:
+    var tex := RefPage.tex("hist_bg")
+    var bar := VScrollBar.new()
+    bar.name = "HistoryBar"
+    bar.position = HIST_BAR.position
+    bar.size = HIST_BAR.size
+    bar.custom_minimum_size = Vector2(HIST_BAR.size.x, 0)
+    bar.focus_mode = Control.FOCUS_NONE
+    bar.step = 0
+    var track := StyleBoxTexture.new()
+    track.texture = tex
+    track.region_rect = HIST_BAR_TRACK
+    track.texture_margin_top = 4
+    track.texture_margin_bottom = 12
+    for st in ["scroll", "scroll_focus"]: bar.add_theme_stylebox_override(st, track)
+    for k in [["grabber", Color.WHITE], ["grabber_highlight", Color(1.12, 1.08, 1.0)], ["grabber_pressed", Color(0.9, 0.88, 0.85)]]:
+        var g := StyleBoxTexture.new()
+        g.texture = tex
+        g.region_rect = HIST_BAR_GRAB
+        g.texture_margin_top = 14
+        g.texture_margin_bottom = 14
+        g.modulate_color = k[1]
+        bar.add_theme_stylebox_override(k[0], g)
+    var empty_icon := ImageTexture.create_from_image(Image.create(1, 1, false, Image.FORMAT_RGBA8))
+    for ic in ["increment", "increment_highlight", "increment_pressed", "decrement", "decrement_highlight", "decrement_pressed"]:
+        bar.add_theme_icon_override(ic, empty_icon)
+    panel.add_child(bar)
+    var inner := scroll.get_v_scroll_bar()
+    var syncing := [false]
+    var sync := func():
+        syncing[0] = true
+        var fits: bool = inner.max_value <= inner.page + 0.5
+        bar.set_meta("fits", fits)
+        bar.mouse_filter = Control.MOUSE_FILTER_IGNORE if fits else Control.MOUSE_FILTER_STOP
+        if fits:   # nada para rolar: alça no tamanho e lugar da arte
+            bar.max_value = HIST_BAR.size.y
+            bar.page = HIST_BAR_GRAB.size.y
+            bar.value = 0
+        else:
+            bar.max_value = inner.max_value
+            bar.page = inner.page
+            bar.value = scroll.scroll_vertical
+        syncing[0] = false
+    inner.changed.connect(sync)
+    inner.value_changed.connect(func(_v): sync.call())
+    bar.value_changed.connect(func(v):
+        if not syncing[0] and not bar.get_meta("fits", false): scroll.scroll_vertical = int(round(v)))
+    sync.call()
+    # setas douradas da arte (em cima e embaixo do trilho)
+    RefPage.hotspot(panel, HIST_BAR_UP, func(): scroll.scroll_vertical -= 136, "HistoryBarUp")
+    RefPage.hotspot(panel, HIST_BAR_DOWN, func(): scroll.scroll_vertical += 136, "HistoryBarDown")
 
 func refresh_history():
     if history_list == null: return
@@ -1617,10 +1681,13 @@ func _badge(parent: Node, league_id: String, dimensions: Vector2) -> TextureRect
     parent.add_child(icon)
     return icon
 
-## R51 · LIGAS: a página é a imagem de referência do dono (ui_kit/pages/ligas_bg.png); o jogo desenha por cima
-## o nome/liga/PL do jogador, o estado de cada liga, a liga escolhida (brasão, título, descrição) e a prévia.
+## R51d · LIGAS: painel próprio desenhado pela referência nova do dono (tools/ui_ref/ligas_v2.png → ui_kit/pages/
+## ligas_bg.png, fundo transparente: nenhum pedaço do cenário). Abre por cima da Home escurecida, com fade, centrado.
+## O jogo desenha por cima o nome/liga/PL, o estado de cada liga, a liga escolhida (brasão, título, estado,
+## descrição), a prévia (cenário + peças) e o destaque sutil do cartão escolhido.
 const FONT_CINZEL = preload("res://account/fonts/Cinzel-Bold.woff")   # versaletes (títulos das referências)
-const LIGA_TILES := [[78, 210], [220, 349], [358, 487], [496, 625], [634, 763], [771, 900], [909, 1038], [1047, 1176], [1185, 1314], [1322, 1451], [1460, 1590]]
+const LIGA_TILES := [[107, 233], [240, 365], [373, 498], [506, 632], [640, 765], [773, 899], [907, 1032], [1040, 1166], [1174, 1298], [1306, 1432], [1440, 1571]]
+const LIGA_TILE_Y := Vector2(250, 447)
 var ranking_header: Label
 var ranking_fill: ColorRect
 var league_sel_frame: Panel
@@ -1632,23 +1699,25 @@ func _build_ranking():
     panel.name = "RankingPage"
     panel.set_meta("ref_full", true)
     pages.ranking = panel
-    ranking_header = RefPage.text(panel, "", Rect2(540, 88, 1000, 56), 36, Color("f3d89a"), true, HORIZONTAL_ALIGNMENT_LEFT)
+    ranking_header = RefPage.text(panel, "", Rect2(566, 112, 940, 56), 36, Color("f3d89a"), true, HORIZONTAL_ALIGNMENT_LEFT)
     ranking_header.name = "RankingHeader"
     ranking_fill = ColorRect.new()
-    ranking_fill.color = Color("e3b24f")
-    ranking_fill.position = Vector2(130, 151)
-    ranking_fill.size = Vector2(0, 12)
+    ranking_fill.color = Color("d9a948")
+    ranking_fill.position = Vector2(153, 176)
+    ranking_fill.size = Vector2(0, 16)
     ranking_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
     panel.add_child(ranking_fill)
-    # destaque da liga escolhida (moldura dourada com brilho, como a Madeira na referência)
+    # destaque da liga escolhida: sutil — fio dourado suave, brilho leve e o miolo um pouco mais claro
     league_sel_frame = Panel.new()
     var sf := StyleBoxFlat.new()
+    # (sem sombra: a sombra do StyleBoxFlat pinta o miolo inteiro e deixa o brasão lavado)
     sf.bg_color = Color(0, 0, 0, 0)
-    sf.border_color = Color("f2c35a")
-    sf.set_border_width_all(3)
-    sf.set_corner_radius_all(4)
-    sf.shadow_color = Color(1.0, 0.78, 0.3, 0.55)
-    sf.shadow_size = 10
+    sf.draw_center = false
+    sf.border_color = Color(0.98, 0.86, 0.55, 0.95)
+    sf.set_border_width_all(5)
+    sf.border_blend = true          # o fio dourado se desfaz para dentro: brilho leve só na borda
+    sf.set_corner_radius_all(3)
+    sf.set_expand_margin_all(1)
     league_sel_frame.add_theme_stylebox_override("panel", sf)
     league_sel_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
     panel.add_child(league_sel_frame)
@@ -1657,20 +1726,20 @@ func _build_ranking():
         var entry = entries[i]
         var id: String = entry.league_id
         var xr: Array = LIGA_TILES[i]
-        var button := RefPage.hotspot(panel, Rect2(xr[0], 222, xr[1] - xr[0], 202), func(): _select_league(id), "League_" + id)
+        var button := RefPage.hotspot(panel, Rect2(xr[0], LIGA_TILE_Y.x, xr[1] - xr[0], LIGA_TILE_Y.y - LIGA_TILE_Y.x), func(): _select_league(id), "League_" + id)
         for st in ["hover", "pressed"]: button.add_theme_stylebox_override(st, StyleBoxEmpty.new())
         button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
         button.tooltip_text = entry.display_name + " · 0–100 PL"
-        var status := RefPage.text(panel, "", Rect2(xr[0], 388, xr[1] - xr[0], 24), 14, Color("d8cdb2"), false)
+        var status := RefPage.text(panel, "", Rect2(xr[0], 413, xr[1] - xr[0], 24), 14, Color("d8cdb2"), false)
         status.name = "LeagueStatus_" + id
         league_status_labels[id] = status
         league_buttons[id] = button
-    league_detail_badge = RefPage.image(panel, null, Rect2(70, 452, 274, 316))
+    league_detail_badge = RefPage.image(panel, null, Rect2(52, 412, 338, 436))   # a arte do brasão tem margem própria
     league_detail_badge.name = "LeagueDetailBadge"
-    league_detail_title = RefPage.text(panel, "", Rect2(332, 462, 560, 56), 40, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
+    league_detail_title = RefPage.text(panel, "", Rect2(352, 478, 540, 56), 40, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
     league_detail_title.add_theme_font_override("font", FONT_CINZEL)
-    league_chip = RefPage.text(panel, "", Rect2(352, 525, 172, 30), 20, Color("efe6cf"), true)
-    league_desc = RefPage.text(panel, "", Rect2(344, 568, 548, 104), 21, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
+    league_chip = RefPage.text(panel, "", Rect2(376, 541, 146, 29), 20, Color("efe6cf"), true)
+    league_desc = RefPage.text(panel, "", Rect2(358, 588, 528, 104), 21, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
     league_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     league_desc.vertical_alignment = VERTICAL_ALIGNMENT_TOP
     league_desc.clip_text = false
@@ -1679,11 +1748,11 @@ func _build_ranking():
     league_details = Label.new()
     league_details.visible = false
     panel.add_child(league_details)
-    preview_caption = RefPage.text(panel, "", Rect2(960, 452, 600, 42), 28, Color("f3d27e"), true)
+    preview_caption = RefPage.text(panel, "", Rect2(944, 472, 628, 40), 28, Color("f3d27e"), true)
     preview_caption.add_theme_font_override("font", FONT_CINZEL)
     league_scene_preview = TextureRect.new()
-    league_scene_preview.position = Vector2(968, 512)
-    league_scene_preview.size = Vector2(334, 254)
+    league_scene_preview.position = Vector2(958, 528)
+    league_scene_preview.size = Vector2(334, 249)
     league_scene_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     league_scene_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     league_scene_preview.clip_contents = true
@@ -1695,14 +1764,14 @@ func _build_ranking():
     league_scene_preview.mouse_entered.connect(func(): _zoom_preview(true))
     league_scene_preview.mouse_exited.connect(func(): _zoom_preview(false))
     for i in range(6):
-        var cx := 1326.0 + (i % 3) * 81.0
-        var cy := 522.0 + (i / 3) * 120.0
+        var cx := 1314.0 + (i % 3) * 78.0
+        var cy := 540.0 + (i / 3) * 116.0
         var piece := RefPage.image(panel, null, Rect2(cx + 4, cy, 74, 110), false)
         league_preview_pieces.append(piece)
     league_preview_button = _button(panel,2,"TESTAR UNIVERSO","Prévia de desenvolvimento · sem alterar PL",Vector2(968,700),_preview_league,Vector2(334,60))
     league_preview_button.visible = DEV_PREVIEW_BUTTON
-    RefPage.hotspot(panel, Rect2(70, 806, 478, 82), back, "RankingBack")
-    RefPage.hotspot(panel, Rect2(588, 806, 452, 82), func(): piece_set_requested.emit("classic"), "ClassicPieces")
+    RefPage.hotspot(panel, Rect2(97, 808, 471, 80), back, "RankingBack")
+    RefPage.hotspot(panel, Rect2(597, 808, 444, 80), func(): piece_set_requested.emit("classic"), "ClassicPieces")
     set_ranked_unlock(ranked_unlock_index)
 
 func _refresh_ranking_header():
@@ -1710,7 +1779,7 @@ func _refresh_ranking_header():
     var d: Dictionary = league_profile.data
     var cur = LeagueCatalog.entry(d.current_league, d)
     ranking_header.text = "%s — %s   ·   %d / 100 PL" % [player_name, cur.display_name, int(d.lp)]
-    ranking_fill.size.x = 1410.0 * clampf(float(d.lp) / 100.0, 0.0, 1.0)
+    ranking_fill.size.x = 1365.0 * clampf(float(d.lp) / 100.0, 0.0, 1.0)
 
 var review_all := false   # R37.3 · conferência visual (theme_manager.review_all): todas as ligas para olhar
 func league_unlocked(id: String) -> bool:
@@ -1758,8 +1827,8 @@ func _select_league(id: String):
         var i := LeagueCatalog.index_of(id)
         if i >= 0 and i < LIGA_TILES.size():
             var xr: Array = LIGA_TILES[i]
-            league_sel_frame.position = Vector2(float(xr[0]) - 1, 220)
-            league_sel_frame.size = Vector2(float(xr[1] - xr[0]) + 2, 206)
+            league_sel_frame.position = Vector2(float(xr[0]) + 1, LIGA_TILE_Y.x + 1)
+            league_sel_frame.size = Vector2(float(xr[1] - xr[0]) - 1, LIGA_TILE_Y.y - LIGA_TILE_Y.x - 1)
     var textures = ThemeCatalog.piece_textures(theme) if available else {}
     league_scene_preview.texture = ThemeCatalog.texture(ThemeCatalog.get_theme(theme).arena_path) if available else null
     for i in range(league_preview_pieces.size()):
@@ -1918,7 +1987,12 @@ func show_page(id: String):
     _sync_ref_full(pages[id].has_meta("ref_full"))
     _sync_menu_cover()
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
-    if id == "ranking": _select_league(selected_league)
+    if id == "ranking":
+        _select_league(selected_league)
+        # R51d · o painel de ligas abre com fade suave (Home escurecida atrás)
+        var rp: Control = pages[id]
+        rp.modulate.a = 0.0
+        create_tween().tween_property(rp, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
     if id == "profile": _refresh_avatars()
     if id == "history": refresh_history()
     if is_instance_valid(mobile_ui): mobile_ui.show_page(id)

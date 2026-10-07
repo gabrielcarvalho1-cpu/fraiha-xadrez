@@ -25,7 +25,6 @@ FRAME = {
     'about_bg': dict(ref='conheca', inner=(100, 44, 1796, 795), clip=(96, 36, 1800, 829), keep=[(880, 0, 1016, 60)]),
     'config_bg': dict(ref='config', inner=(40, 80, 1310, 1140), cuts=[(0, 300, 36, 1000), (1316, 300, 1353, 1000)]),
     'bots_bg': dict(ref='bots', inner=(60, 110, 1610, 910)),
-    'ligas_bg': dict(ref='ligas', inner=(60, 110, 1610, 910), cuts=[(0, 400, 55, 850), (1615, 400, 1672, 850)]),
     'perfil_bg': dict(ref='perfil', inner=(20, 40, 1210, 370)),
 }
 def frame_alpha(a, inner, clip=None, keep=(), cuts=()):
@@ -256,6 +255,91 @@ def build_ligas():
     save(out, 'ligas_bg')
     print('ligas ok')
 
+# ======================================================================= LIGAS v2 (R51d)
+## Referência nova do dono (tools/ui_ref/ligas_v2.png): o painel já vem recortado (fundo transparente, com
+## bandeiras e tochas). Nada do cenário entra. Saem só as partes vivas (o jogo desenha): nome/liga/PL, estado de
+## cada liga, o destaque da Madeira (vira cartão comum), brasão/título/estado/descrição da liga escolhida,
+## título da prévia, cenário e peças.
+LIGA2_TILES = [(107, 233), (240, 365), (373, 498), (506, 632), (640, 765), (773, 899), (907, 1032), (1040, 1166),
+               (1174, 1298), (1306, 1432), (1440, 1571)]
+LIGA2_Y = (250, 447)
+
+def flat_fill(a, box, feather=3, ring=6):
+    """Preenche a caixa com o fundo liso do painel. O tom vem do entorno escuro (estimativa de baixa frequência:
+    inpaint numa cópia reduzida, ignorando dourados/folhas), então acompanha o degradê do painel sem emenda."""
+    x0, y0, x1, y1 = box
+    h, w = a.shape[:2]
+    rx0, ry0, rx1, ry1 = max(0, x0 - 48), max(0, y0 - 48), min(w, x1 + 48), min(h, y1 + 48)
+    crop = a[ry0:ry1, rx0:rx1, :3].astype(np.float32)
+    bad = (lum(np.clip(crop, 0, 255).astype(np.uint8)) > 34).astype(np.uint8)
+    bad[y0 - ry0:y1 - ry0, x0 - rx0:x1 - rx0] = 1
+    k = 6
+    sw, sh = max(2, crop.shape[1] // k), max(2, crop.shape[0] // k)
+    small = cv2.resize(crop, (sw, sh), interpolation=cv2.INTER_AREA)
+    sbad = (cv2.resize(bad.astype(np.float32), (sw, sh), interpolation=cv2.INTER_AREA) > 0.05).astype(np.uint8)
+    small = cv2.inpaint(np.clip(small, 0, 255).astype(np.uint8), sbad, 4, cv2.INPAINT_TELEA).astype(np.float32)
+    small = cv2.GaussianBlur(small, (5, 5), 0)
+    est = cv2.resize(small, (crop.shape[1], crop.shape[0]), interpolation=cv2.INTER_LINEAR)
+    m = np.zeros(crop.shape[:2], np.float32)
+    m[y0 - ry0:y1 - ry0, x0 - rx0:x1 - rx0] = 1
+    if feather: m = cv2.GaussianBlur(m, (feather * 2 + 1, feather * 2 + 1), 0)
+    rng = np.random.default_rng(x0 * 7 + y0)
+    fill = np.clip(est + rng.normal(0, 1.0, crop.shape[:2] + (1,)), 0, 255)
+    out = a.astype(float)
+    out[ry0:ry1, rx0:rx1, :3] = crop * (1 - m[..., None]) + fill * m[..., None]
+    return out
+
+def build_ligas_v2():
+    src = np.array(Image.open(os.path.join(REF, 'ligas_v2.png')).convert('RGBA')).astype(int)
+    al = src[..., 3].copy()
+    al[al >= 240] = 255
+    a = src[..., :3].copy()
+    out = a.astype(float)
+    # 1) cabeçalho: fica "SISTEMA DE LIGAS ·"; sai "Gabriel — Madeira · 0 / 100 PL"
+    out = flat_fill(out, (558, 112, 1112, 168))
+    # 2) cartão da Madeira: moldura comum (cópia da faixa do Ferro, com a joia e o vão) + brasão/nome da Madeira
+    y0, y1 = 238, 460
+    out[y0:y1, 107:240] = a[y0:y1, 240:373]
+    # margem esquerda (o brilho do destaque vazava): espelho da margem direita, igual ao resto do painel
+    out[y0:y1, 76:107] = a[y0:y1, 1572:1603][:, ::-1]
+    # miolo do cartão copiado: sai brasão/nome/estado do Ferro
+    out = flat_fill(out, (113, 258, 228, 440), feather=2, ring=3)
+    # brasão + nome da Madeira (fonte: cartão destacado, centro 165.5 -> novo centro 170)
+    sub = a[262:412, 104:228]
+    l = lum(sub); sat = sub.max(axis=2) - sub.min(axis=2)
+    bgc = np.median(a[300:400, 104:112].reshape(-1, 3), axis=0)
+    dist = np.abs(sub - bgc[None, None, :]).sum(axis=2)
+    ff = ((dist < 70) & (l < 90)).astype(np.uint8) * 255   # fundo verde do cartão
+    fm = np.zeros((sub.shape[0] + 2, sub.shape[1] + 2), np.uint8)
+    reg = ff.copy()
+    for (x, yy) in [(0, 0), (sub.shape[1] - 1, 0), (0, sub.shape[0] - 1), (sub.shape[1] - 1, sub.shape[0] - 1), (2, 70), (sub.shape[1] - 3, 70)]:
+        if reg[yy, x] == 255: cv2.floodFill(reg, fm, (x, yy), 128)
+    keep = (reg != 128)
+    keep &= ~((dist < 70) & (l < 90))          # sobras do verde do cartão destacado
+    keep &= ~(((sub[..., 1] - sub[..., 0]) > 12) & (l < 75))   # sombra verde escura em volta do brasão
+    keep[:, :3] = False; keep[:, -3:] = False
+    keep = cv2.morphologyEx(keep.astype(np.uint8) * 255, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8)) > 0
+    sx = 4
+    tgt = out[262:412, 104 + sx:228 + sx]
+    tgt[keep] = sub[keep]
+    out[262:412, 104 + sx:228 + sx] = tgt
+    # 3) estado de cada liga (DISPONÍVEL / BLOQUEADA) sai
+    for (x0, x1) in LIGA2_TILES:
+        out = flat_fill(out, (x0 + 10, 413, x1 - 10, 437), feather=2, ring=3)
+    # 4) painel da liga: brasão com folhas, título, texto do chip e descrição saem
+    out = flat_fill(out, (100, 472, 338, 788), feather=4, ring=6)
+    out = flat_fill(out, (330, 574, 350, 700), feather=2, ring=3)     # pontas de folha da coroa do brasão
+    out = flat_fill(out, (344, 476, 896, 534))
+    out = flat_fill(out, (378, 543, 520, 568), feather=1, ring=2)
+    out = flat_fill(out, (348, 582, 896, 694))
+    # 5) prévia: título, cenário e peças saem (as molduras ficam)
+    out = flat_fill(out, (1040, 472, 1460, 512))
+    out = flat_fill(out, (956, 526, 1294, 779), feather=1, ring=2)
+    out = flat_fill(out, (1314, 534, 1550, 772), feather=2, ring=3)
+    rgba = np.dstack([np.clip(out, 0, 255).astype(np.uint8), al.astype(np.uint8)])
+    Image.fromarray(rgba, 'RGBA').save(os.path.join(OUT, 'ligas_bg.png'))
+    print('ligas v2 ok')
+
 # ======================================================================= HISTÓRICO DE PARTIDAS
 HIST_TABS = [(68, 310), (320, 590), (601, 800), (812, 1065), (1077, 1277), (1290, 1541), (1555, 1793)]
 HIST_TAB_Y = (140, 207)
@@ -474,7 +558,7 @@ def build_perfil():
 
 if __name__ == '__main__':
     build_bots()
-    build_ligas()
+    build_ligas_v2()   # R51d: referência nova já recortada (a antiga build_ligas fica só como histórico)
     build_historico()
     build_conheca()
     build_config()
