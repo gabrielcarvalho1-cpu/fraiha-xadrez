@@ -373,8 +373,10 @@ func _build_profile():
     profile_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _single_line(profile_name)
     var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
-    _label(words, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 14, GOLD).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    desk_league_label = _label(words, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 14, GOLD)
+    desk_league_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _progress(words,league_profile.data.lp,8)
+    desk_league_bar = words.get_child(words.get_child_count() - 1)
     var caption = _label(words, "Ligas conquistadas no Ranked", 11, MUTED)
     caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     _single_line(caption)
@@ -1974,6 +1976,53 @@ var ref_menu_cover: Panel
 var ref_hovers := {}
 var ranked_extras: Array = []
 
+var ref_league_label: Label
+var ref_league_fill: ColorRect
+var desk_league_label: Label
+var desk_league_bar: Control
+
+## Liga/PL do cartão da Home = a do RANKED da conta (servidor), no ritmo em que o jogador está melhor
+## (maior liga; empate → mais PL). O perfil local nunca ganha PL; sem conta continua Madeira 0.
+## Antes o cartão lia só o perfil local e ficava "Madeira · 0 / 100 PL" mesmo depois de subir de liga.
+static func best_ranked_standing(ranked) -> Dictionary:
+    var best := {}
+    if not ranked is Dictionary: return best
+    for mode in ranked:
+        var st = ranked[mode]
+        if not st is Dictionary: continue
+        var lg := clampi(int(st.get("league", 0)), 0, LeagueCatalog.IDS.size() - 1)
+        var pl := clampi(int(st.get("pl", 0)), 0, 100)
+        if best.is_empty() or lg > int(best.league) or (lg == int(best.league) and pl > int(best.pl)):
+            best = {"league": lg, "pl": pl, "mode": String(mode), "highest": clampi(int(st.get("highest_league", lg)), lg, LeagueCatalog.IDS.size() - 1)}
+    return best
+
+func apply_ranked_standing(ranked):
+    var best := best_ranked_standing(ranked)
+    var d: Dictionary = league_profile.data
+    var lid: String = LeagueCatalog.IDS[int(best.league)] if not best.is_empty() else "madeira"
+    var lp: int = int(best.pl) if not best.is_empty() else 0
+    var hid: String = LeagueCatalog.IDS[int(best.highest)] if not best.is_empty() else "madeira"
+    if String(d.current_league) == lid and int(d.lp) == lp and String(d.get("highest_league", "")) == hid: return
+    # Só em memória (o arquivo local não recebe PL do servidor).
+    d.current_league = lid
+    d.lp = lp
+    d.highest_league = hid
+    _refresh_league_widgets()
+
+func _refresh_league_widgets():
+    var d: Dictionary = league_profile.data
+    var cur = LeagueCatalog.entry(d.current_league, d)
+    var txt := "%s · %d / 100 PL" % [cur.display_name, int(d.lp)]
+    var k := clampf(float(d.lp) / 100.0, 0.0, 1.0)
+    if is_instance_valid(ref_league_label): ref_league_label.text = txt
+    if is_instance_valid(ref_league_fill): ref_league_fill.size.x = 177.0 * k
+    if is_instance_valid(desk_league_label): desk_league_label.text = txt
+    if is_instance_valid(desk_league_bar) and desk_league_bar.has_method("set_value"): desk_league_bar.set_value(float(d.lp))
+    elif is_instance_valid(desk_league_bar) and "value" in desk_league_bar: desk_league_bar.value = float(d.lp)
+    if not desk_profile.is_empty() and is_instance_valid(desk_profile.portrait): attach_league_frame(desk_profile.portrait)
+    _use_profile(ref_mode)
+    if is_instance_valid(mobile_ui) and mobile_ui.has_method("queue_redraw_cards"): mobile_ui.queue_redraw_cards()
+
 func _is_ref_art(texture: Texture2D) -> bool:
     return texture == FOREST_V2
 
@@ -2037,6 +2086,7 @@ func _build_reference_chrome():
     name_label.size = Vector2(150,36)
     var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
     var league = _label(pbtn, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 18, GOLD)
+    ref_league_label = league
     _single_line(league)
     league.position = Vector2(1360,87) - pbtn.position
     league.size = Vector2(196,28)
@@ -2044,6 +2094,7 @@ func _build_reference_chrome():
     fill.color = GOLD
     fill.position = Vector2(1365,121) - pbtn.position   # R36: dentro da barra dourada da arte v7
     fill.size = Vector2(177.0 * clampf(league_profile.data.lp / 100.0, 0.0, 1.0), 5)
+    ref_league_fill = fill
     fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(fill)
     # Insígnia da liga: a arte já traz a da Madeira; outras ligas cobrem com a insígnia viva.

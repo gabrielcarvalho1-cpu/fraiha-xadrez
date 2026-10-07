@@ -593,6 +593,7 @@ func _sync_theme_unlocks():
     else:
         confirmed = account.refresh_token.is_empty() and not account.redirect_pending # convidado
     hub.set_ranked_unlock(index)
+    hub.apply_ranked_standing(account.ranked if account.has_profile() else {})   # cartão da Home = liga/PL do Ranked
     if is_instance_valid(theme_manager): theme_manager.sync_unlocks(index, confirmed)
 
 func _open_ranked():
@@ -1418,6 +1419,10 @@ func _refresh_analysis_buttons():
 
 func _on_online_result(msg: Dictionary):
     if voice != null: voice.exit_match("match_end")   # R45 · fim oficial da partida: sai da voz
+    # Resultado do Ranked traz a liga/PL novos: a Home (cartão do jogador) e os temas liberados atualizam na hora.
+    if msg.get("stats") is Dictionary and String(msg.get("mode", "")).begins_with("ranked_") and account.ranked is Dictionary:
+        account.ranked[String(msg.mode)] = msg.stats
+        _sync_theme_unlocks()
     if recorder == null: return
     recorder.finish_online(String(msg.get("match_id", "")), String(msg.get("outcome", "")), String(msg.get("reason_text", msg.get("reason", ""))))
 
