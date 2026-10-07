@@ -9,6 +9,7 @@ extends Node
 const ART_PC := preload("res://ranked/art/board_pc.png")
 const ART_MOB := preload("res://ranked/art/board_mob.png")
 const PC_SIZE := Vector2(1672, 941)
+const PC_CLEAN := Rect2(0, 86, 300, 855)   # floresta/rio à esquerda do tabuleiro, abaixo do INÍCIO: sem interface
 const MOB_SIZE := Vector2(888, 1772)
 const FONT_BOLD := preload("res://account/fonts/Cinzel-Bold.woff")
 const FONT_SEMI := preload("res://account/fonts/Cinzel-SemiBold.woff")
@@ -255,6 +256,7 @@ func apply() -> void:
     bg.tex = ART_MOB if mobile else ART_PC
     bg.rect = Rect2(off, size * k)
     bg.full = Rect2(Vector2.ZERO, vs)
+    bg.clean = Rect2() if mobile else PC_CLEAN
     bg.visible = true
     bg.queue_redraw()
     _rec(stage.forest, "visible", false)
@@ -536,9 +538,83 @@ class ArtBg extends Node2D:
     var tex: Texture2D
     var rect := Rect2()
     var full := Rect2()
-    ## Sobras da tela: a própria borda da arte, espelhada (o cenário continua sem emenda e sem duplicar a interface).
+    ## PC: região da arte SEM interface (só floresta). As sobras da tela vêm só daqui — nunca da borda inteira,
+    ## que tem INÍCIO, barra de cima e painéis (espelhar a borda duplicava a interface em janela mais larga/alta).
+    var clean := Rect2()
+    var _fill: ShaderMaterial
+    const FILL_SHADER := """
+shader_type canvas_item;
+uniform vec2 full_size; uniform vec2 art_pos; uniform vec2 art_size; uniform vec2 tex_size;
+uniform vec4 clean; uniform float ramp;
+float pp(float t, float L) { return clamp(L - abs(mod(t, 2.0 * L) - L), 0.5, L - 0.5); }
+// ponto fora da arte (px da arte) -> ponto dentro da floresta limpa
+vec2 fold(vec2 a) {
+    float cx1 = clean.x + clean.z; float cy1 = clean.y + clean.w;
+    vec2 s;
+    // esquerda: espelho a partir da coluna 0 da arte (continua o cenário sem emenda);
+    // direita/cima/baixo: floresta limpa em vai-e-vem (a borda da arte ali é interface)
+    if (a.x < clean.x) s.x = clean.x + pp(clean.x - a.x, clean.z);
+    else if (a.x >= tex_size.x) s.x = clean.x + pp(a.x - tex_size.x, clean.z);
+    else if (a.x > cx1) s.x = clean.x + pp(a.x - clean.x, clean.z);
+    else s.x = a.x;
+    if (a.y < clean.y) s.y = clean.y + pp(clean.y - a.y, clean.w);
+    else if (a.y > cy1) s.y = cy1 - pp(a.y - cy1, clean.w);
+    else s.y = a.y;
+    return s;
+}
+void fragment() {
+    vec2 sp = UV * full_size;
+    vec2 a = (sp - art_pos) / art_size * tex_size;
+    vec2 oa = max(max(-a, a - tex_size), vec2(0.0));
+    float da = max(oa.x, oa.y);                       // distância até a arte (px da arte)
+    float far = smoothstep(0.0, ramp, da);
+    // longe da arte o cenário vira fundo: desfocado e escuro (sem padrão repetido chamando atenção)
+    float r = 18.0 * far;
+    vec3 c = texture(TEXTURE, fold(a) / tex_size).rgb * 0.2;
+    for (int i = 0; i < 8; i++) {
+        float ang = float(i) * 0.785398;
+        vec2 d = vec2(cos(ang), sin(ang)) * r * (i % 2 == 0 ? 1.0 : 0.55);
+        c += texture(TEXTURE, fold(a + d) / tex_size).rgb * 0.1;
+    }
+    // emenda: os primeiros px da sobra repetem a própria borda da arte (espelhada, só 7 px: ali ainda é folhagem)
+    // e passam suave para a floresta limpa; uma sombra leve marca a borda
+    vec2 e = a;
+    if (a.x < 0.0) e.x = min(-a.x, 7.0); else if (a.x >= tex_size.x) e.x = tex_size.x - 1.0 - min(a.x - tex_size.x, 7.0);
+    if (a.y < 0.0) e.y = min(-a.y, 7.0); else if (a.y >= tex_size.y) e.y = tex_size.y - 1.0 - min(a.y - tex_size.y, 7.0);
+    c = mix(texture(TEXTURE, (e + 0.5) / tex_size).rgb, c, smoothstep(1.0, 14.0, da));
+    float k = mix(0.9, 0.34, far) * (1.0 - 0.32 * exp(-da / 9.0));
+    COLOR = vec4(c * k, 1.0);
+}
+"""
+    ## Sobras da tela: celular = a própria borda da arte, espelhada; PC = floresta limpa (nó filho com o shader, atrás da arte).
     func _draw():
         if tex == null: return
+        if clean.has_area():
+            if _fill == null:
+                _fill = ShaderMaterial.new()
+                _fill.shader = Shader.new()
+                _fill.shader.code = FILL_SHADER
+                var n := Sprite2D.new()   # cobre a tela toda; o shader recorta a arte e escurece as sobras
+                n.name = "Fill"
+                n.centered = false
+                n.show_behind_parent = true
+                n.material = _fill
+                add_child(n)
+            var f: Sprite2D = get_node("Fill")
+            f.texture = tex
+            f.position = full.position
+            f.scale = full.size / tex.get_size()
+            f.visible = true
+            _fill.set_shader_parameter("full_size", full.size)
+            _fill.set_shader_parameter("art_pos", rect.position)
+            _fill.set_shader_parameter("art_size", rect.size)
+            _fill.set_shader_parameter("tex_size", tex.get_size())
+            _fill.set_shader_parameter("clean", Vector4(clean.position.x, clean.position.y, clean.size.x, clean.size.y))
+            _fill.set_shader_parameter("ramp", 170.0)   # px da arte
+            f.queue_redraw()
+            draw_texture_rect(tex, rect, false)
+            return
+        if has_node("Fill"): get_node("Fill").visible = false
         var ts := tex.get_size()
         var k := rect.size.x / ts.x
         var tint := Color(0.86, 0.88, 0.85)
