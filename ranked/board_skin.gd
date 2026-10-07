@@ -7,6 +7,8 @@ extends Node
 ## Ativa quando: partida RANKED · tema Madeira ("wood") · PC ou celular em pé. Fora disso, tudo volta como era.
 ## Tudo que é alterado fica registrado e é desfeito ao sair (restore) — o layout normal do stage refaz o resto.
 const ART_PC := preload("res://ranked/art/board_pc.png")
+const ART_PC_BOT := preload("res://ranked/art/board_pc_bot.png")
+const ART_MOB_BOT := preload("res://ranked/art/board_mob_bot.png")   # R51 · celular: barra de LANCES no lugar do CHAT, sem voz   # R51 · contra o computador: quadro de lances no lugar do chat
 const ART_MOB := preload("res://ranked/art/board_mob.png")
 const PC_SIZE := Vector2(1672, 941)
 ## R50 · peças em pixel art do Ranked Madeira (PNGs finais do Aseprite, sem nenhuma alteração).
@@ -111,7 +113,8 @@ func setup(owner_stage) -> void:
 # ------------------------------------------------------------------ quando vale
 func wanted() -> bool:
     if stage == null or stage.game == null: return false
-    if stage.mode != "ranked" or not stage.game.visible: return false
+    # R51 · contra o computador usa o mesmo layout do Ranked Madeira (a partida força o tema Madeira)
+    if not (stage.mode == "ranked" or stage.mode == "bot") or not stage.game.visible: return false
     if String(stage.game.visual_theme) != "wood": return false
     if MobileLayout.active(stage.get_viewport()): return MobileLayout.is_portrait(stage.get_viewport())
     return true
@@ -160,6 +163,8 @@ func _ov(ctrl: Control, what: String, nm: String, val) -> void:
         "const": ctrl.add_theme_constant_override(nm, int(val))
 
 func restore() -> void:
+    for id in bot_after: bot_after[id].hide()
+    if is_instance_valid(bot_moves): bot_moves.hide()
     for key in _orig:
         var e: Array = _orig[key]
         var obj = e[0]
@@ -269,7 +274,8 @@ func apply() -> void:
     hits.clear()
     on = true
     # fundo: a arte; o cenário/tabuleiro pintado do tema e as laterais somem enquanto a pele vale
-    bg.tex = ART_MOB if mobile else ART_PC
+    var bot_mode: bool = stage.mode == "bot"
+    bg.tex = (ART_MOB_BOT if bot_mode else ART_MOB) if mobile else (ART_PC_BOT if bot_mode else ART_PC)
     bg.rect = Rect2(off, size * k)
     bg.full = Rect2(Vector2.ZERO, vs)
     bg.clean = Rect2() if mobile else PC_CLEAN
@@ -292,6 +298,7 @@ func apply() -> void:
     layer.show()
     if mobile: _apply_mobile(M)
     else: _apply_pc(M)
+    if stage.mode == "bot": _apply_bot(M)
 
 func _skin_strips(M: Dictionary) -> void:
     var ui = stage.ranked_ui
@@ -424,8 +431,121 @@ func _apply_mobile(M: Dictionary) -> void:
         c.panel.size = R(M.chat_open).size
     if menu != null and menu.visible: _layout_menu()
 
+# ------------------------------------------------------------------ R51 · partida contra o computador
+var bot_moves: RichTextLabel     # lista de lances no lugar do chat (PC)
+var _bot_moves_n := -1
+
+func _apply_bot(M: Dictionary) -> void:
+    for n in [stage.get("match_plaque"), stage.get("desk_person")]:
+        if n != null: _rec(n, "visible", false)
+    # sem chat contra o computador: o quadro do chat vira a lista de lances (escondo os controles do chat)
+    var c = stage.match_chat
+    if c != null:
+        for n in [c.panel, c.restore_button]: _rec(n, "visible", false)
+    if kind != "pc":
+        # celular: sem voz e sem chat; a barra do chat vira a linha dos últimos lances
+        var mv = stage.mobile_voice
+        if mv != null:
+            for n in [mv.mic, mv.ear]: _rec(n, "visible", false)
+        for i in range(hits.size() - 1, -1, -1):
+            if String(hits[i][2]) in ["mic", "ear", "chatbar"]: hits.remove_at(i)
+        mob_buttons.chatbar.hide()
+        _ensure_bot_moves()
+        bot_moves.show()
+        bot_moves.scroll_following = false
+        var r := R(Rect2(MOB.chatbar.position.x + 34, MOB.chatbar.position.y + 14, MOB.chatbar.size.x - 68, MOB.chatbar.size.y - 22))
+        bot_moves.position = r.position
+        bot_moves.size = r.size
+        _style_bot_moves(30)
+        return
+    _ensure_bot_moves()
+    bot_moves.show()
+    bot_moves.scroll_following = true
+    bot_moves.position = R(Rect2(M.chat.position.x + 36, M.chat.position.y + 30, M.chat.size.x - 70, M.chat.size.y - 50)).position
+    bot_moves.size = R(Rect2(0, 0, M.chat.size.x - 70, M.chat.size.y - 50)).size
+    _style_bot_moves(21)
+
+func _ensure_bot_moves() -> void:
+    if is_instance_valid(bot_moves): return
+    bot_moves = RichTextLabel.new()
+    bot_moves.name = "BotMoves"
+    bot_moves.bbcode_enabled = true
+    bot_moves.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    marks.add_sibling(bot_moves)
+
+func _style_bot_moves(fs: float) -> void:
+    var Kit = load("res://ui_kit/kit.gd")
+    bot_moves.add_theme_font_override("normal_font", Kit.SERIF)
+    bot_moves.add_theme_font_override("bold_font", FONT_BOLD)
+    bot_moves.add_theme_font_size_override("normal_font_size", int(round(fs * k)))
+    bot_moves.add_theme_font_size_override("bold_font_size", int(round((fs + 3) * k)))
+    bot_moves.add_theme_color_override("default_color", Color("efe6d2"))
+    _bot_moves_n = -1
+
+## Texto do quadro de lances (título LANCES + pares numerados).
+func _bot_moves_text(log: Array) -> String:
+    var t := "[b][color=#f3d27e]LANCES[/color][/b]\n"
+    if log.is_empty(): return t + "\n[color=#a8a294]A partida começa com as BRANCAS.[/color]"
+    t += "[table=3]"
+    for i in range(0, log.size(), 2):
+        t += "[cell][color=#a8a294]%d.[/color]   [/cell][cell]%s      [/cell][cell]%s[/cell]" % [i / 2 + 1, _esc(String(log[i])), _esc(String(log[i + 1])) if i + 1 < log.size() else ""]
+    return t + "[/table]"
+
+## Celular: uma linha com os últimos lances (os mais novos à direita).
+func _bot_moves_line(log: Array) -> String:
+    var t := "[b][color=#f3d27e]LANCES[/color][/b]   "
+    if log.is_empty(): return t + "[color=#a8a294]a partida começa com as BRANCAS[/color]"
+    var first := maxi(0, log.size() - 6)
+    if first % 2 == 1: first -= 1
+    for i in range(first, log.size()):
+        if i % 2 == 0: t += "[color=#a8a294]%d.[/color] " % (i / 2 + 1)
+        t += _esc(String(log[i])) + "  "
+    return t
+
+static func _esc(t: String) -> String:
+    return t.replace("[", "(").replace("]", ")")
+
+func _keep_bot() -> void:
+    var bc = stage.bot_controller
+    if is_instance_valid(bot_moves) and bot_moves.visible and bc.san_log.size() != _bot_moves_n:
+        _bot_moves_n = bc.san_log.size()
+        bot_moves.text = _bot_moves_text(bc.san_log) if kind == "pc" else _bot_moves_line(bc.san_log)
+    # fim da partida: JOGAR DE NOVO e ANALISAR no lugar do DESISTIR (PC; no celular ficam no menu ⋮)
+    var over: bool = stage.game.game_over and kind == "pc"
+    if over and bot_after.is_empty(): _make_bot_after()
+    for id in bot_after:
+        var b: Button = bot_after[id]
+        b.visible = over
+    if over:
+        var r := R(PC.resign)
+        var w := r.size.x * 1.45
+        bot_after.again.position = Vector2(r.end.x - w, r.position.y)
+        bot_after.again.size = Vector2(w, r.size.y)
+        bot_after.analyze.position = Vector2(r.end.x - 2.0 * w - 10.0 * k, r.position.y)
+        bot_after.analyze.size = Vector2(w, r.size.y)
+
+var bot_after := {}
+func _make_bot_after() -> void:
+    var Kit = load("res://ui_kit/kit.gd")
+    for spec in [["again", "JOGAR DE NOVO", "btn_verde"], ["analyze", "ANALISAR", "btn_azul"]]:
+        var b := Button.new()
+        b.name = "BotAfter_" + spec[0]
+        b.text = spec[1]
+        b.focus_mode = Control.FOCUS_NONE
+        Kit.button(b, spec[2], 0.4 * k / 0.8, int(round(16 * k)))
+        marks.add_sibling(b)
+        bot_after[spec[0]] = b
+    bot_after.again.pressed.connect(func():
+        stage.game.restart_match()
+        stage.game.queue_redraw())
+    bot_after.analyze.pressed.connect(func(): stage.open_analysis())
+
 ## A cada quadro: o que o jogo atualiza sozinho e precisa continuar no lugar da arte.
 func _keep() -> void:
+    if stage.mode == "bot": _keep_bot()
+    # R51 · o botão antigo ANALISAR PARTIDA (barra de cima) cobria os ícones da arte: com a pele ele não aparece
+    # (contra o bot: ANALISAR no lugar do DESISTIR; no Ranked: no painel de resultado; no celular: menu ⋮)
+    if kind == "pc" and stage.desk_analyze != null and stage.desk_analyze.visible: stage.desk_analyze.visible = false
     var ui = stage.ranked_ui
     if ui != null:
         var M: Dictionary = MOB if kind == "mob" else PC
@@ -445,7 +565,7 @@ func _keep() -> void:
             ui.resign_button.position = R(PC.resign).position
     if kind == "mob":
         var cb: Button = mob_buttons.chatbar
-        cb.visible = stage.match_chat != null and stage.match_chat.active()
+        cb.visible = stage.mode != "bot" and stage.match_chat != null and stage.match_chat.active()
 
 ## Texto vivo maior que a caixa da arte: a fonte encolhe até caber (base = tamanho medido na referência).
 func _fit(l: Label, font: Font, base_fs: float) -> void:
@@ -531,7 +651,8 @@ func toggle_menu() -> void:
         col.remove_child(ch)
         ch.queue_free()
     var st = stage
-    if st.mobile_restart != null and st.mobile_restart.visible: _menu_item(col, "DESISTIR", func(): st.mobile_restart.pressed.emit()).name = "MenuResign"
+    var bot_over: bool = st.mode == "bot" and st.game.game_over
+    if st.mobile_restart != null and st.mobile_restart.visible: _menu_item(col, "JOGAR DE NOVO" if bot_over else "DESISTIR", func(): st.mobile_restart.pressed.emit()).name = "MenuResign"
     if st.mobile_mark != null and st.mobile_mark.visible: _menu_item(col, "MARCAR PARA REVISAR", func(): st.mobile_mark.pressed.emit())
     if st.mobile_analyze != null and st.mobile_analyze.visible: _menu_item(col, "ANALISAR PARTIDA", func(): st.mobile_analyze.pressed.emit())
     _menu_item(col, "MÚSICA: " + ("DESLIGADA" if ModeSound.music_muted(st.hub) else "LIGADA"), func(): ModeSound.toggle_music(st.hub))
@@ -676,8 +797,8 @@ class Marks extends Control:
                 "ear": off_state = st.voice != null and st.voice.active() and bool(st.voice.speaker_muted)
             if off_state: _slash(r, k)
         if skin.kind == "pc": _voice_pc(st, k)
-        else: _voice_mob(st, k)
-        if skin.kind == "mob": _unread(st, k)
+        elif st.mode != "bot": _voice_mob(st, k)
+        if skin.kind == "mob" and st.mode != "bot": _unread(st, k)
 
     func _slash(r: Rect2, k: float):
         var c := r.get_center()
@@ -689,8 +810,8 @@ class Marks extends Control:
     func _voice_pc(st, k: float):
         var v = st.voice
         var M: Dictionary = skin.PC
-        var avail: bool = v != null and v.available() and v.in_match()
-        var txt: String = v.status_text() if avail else "Voz indisponível neste navegador"
+        var avail: bool = st.mode != "bot" and v != null and v.available() and v.in_match()
+        var txt: String = v.status_text() if avail else ("Sem voz contra o computador" if st.mode == "bot" else "Voz indisponível neste navegador")
         if not avail:
             for id in ["mic", "ear", "off"]: draw_rect(skin.R(M[id]).grow(-3.0 * k), Color(0.05, 0.04, 0.03, 0.62))
         elif v != null and not v.active():

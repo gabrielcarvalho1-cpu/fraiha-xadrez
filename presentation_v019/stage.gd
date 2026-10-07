@@ -43,6 +43,8 @@ var mobile_music: Button
 var mobile_fx: Button
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
 var board_skin = null   # R49 · ranked/board_skin.gd
+var bot_view = null     # R51 · dados dos cartões do Ranked na partida contra o computador (bot/bot_view.gd)
+var _bot_forced_wood := ""   # R51 · tema salvo do jogador enquanto a partida contra o bot usa a Madeira
 var desk_restart: Button
 var desk_mark: Button          # MARCAR PARA REVISAR (sem engine; só guarda o lance)
 var desk_analyze: Button       # ANALISAR PARTIDA (só depois do fim)
@@ -126,6 +128,7 @@ func _ready():
     ambient.name = "AmbientLife"
     forest.add_child(ambient)
     # R49 · pele do tabuleiro Ranked Madeira (arte de referência; só aparência)
+    bot_view = preload("res://bot/bot_view.gd").new(self, bot_controller)
     board_skin = preload("res://ranked/board_skin.gd").new()
     add_child(board_skin)
     board_skin.setup(self)
@@ -706,6 +709,9 @@ func _build_mobile_controls(overlay: CanvasLayer):
                 if mode == "casual":
                     casual_ui._confirm_resign()
                     return
+                if mode == "bot" and board_skin != null and board_skin.on and bot_controller.in_match():
+                    ranked_ui._confirm_resign()
+                    return
                 game._new_game()
                 game.queue_redraw())
         elif caption == "Música":
@@ -785,7 +791,7 @@ func _process(delta):
         if match_chat.toggle_button.visible != want_chat:
             match_chat.toggle_button.visible = want_chat
             _layout.call_deferred()
-    mobile_status.visible = mobile and mode in ["local", "bot"]
+    mobile_status.visible = mobile and mode in ["local", "bot"] and not (board_skin != null and board_skin.on)   # R51: com a pele, o relógio aceso mostra a vez
     var short_status = _mobile_status_text()
     if mobile_status.text != short_status: mobile_status.text = short_status
     mobile_promotion.visible = mobile and playing and game.promotion_pending and (game.online == null or game.promotion_color == game.online.color)
@@ -834,6 +840,22 @@ func _clear_selection():
     game.legal_moves.clear()
     game.queue_redraw()
 
+## R51 · contra o computador o layout é o do Ranked Madeira para todos: tema Madeira durante a partida
+## (sem gravar como escolha do jogador); ao sair, volta o tema que ele usa.
+func _bot_theme_guard():
+    if theme_manager == null: return
+    if mode == "bot" and _bot_forced_wood.is_empty():
+        _bot_forced_wood = String(theme_manager.active_theme)
+        if _bot_forced_wood != "wood": theme_manager.apply_theme("wood", false)
+    elif mode != "bot" and not _bot_forced_wood.is_empty():
+        var back := _bot_forced_wood
+        _bot_forced_wood = ""
+        if back != "wood" and String(theme_manager.active_theme) == "wood": theme_manager.apply_theme(back, false)
+
+## R51 · DESISTIR na partida contra o computador (botão do layout do Ranked).
+func resign_bot():
+    if mode == "bot": bot_controller.resign()
+
 func _refresh_input():
     var audio = get_node_or_null("GameAudio")
     if audio != null: audio.refresh_music()
@@ -841,11 +863,12 @@ func _refresh_input():
     bot_controller.set_paused(not pending_navigation.is_empty())
     if ranked != null:
         ranked.set_paused(not pending_navigation.is_empty())
-        ranked_ui.hud.visible = mode == "ranked"
+        ranked_ui.hud.visible = mode == "ranked" or (mode == "bot" and board_skin != null and board_skin.wanted())
     if casual != null:
         casual.set_paused(not pending_navigation.is_empty())
         casual_ui.hud.visible = mode == "casual"
     bot_info.visible = MobileLayout.active(get_viewport()) and mode in ["bot", "local"]
+    _bot_theme_guard()
     _refresh_bot_caption()
     game.set_process_unhandled_input(playing and pending_navigation.is_empty())
     # On mobile the online menu has its own full-width back button.

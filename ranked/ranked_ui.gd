@@ -412,11 +412,11 @@ func _show(which: String):
             _result(controller.last_result)
         "confirm_resign":
             _label("DESISTIR?", 22, GOLD, true)
-            _label("A desistência conta como DERROTA nesta modalidade e o relógio continua correndo enquanto você decide." if rated() else "A desistência encerra a partida como DERROTA (Casual: não altera PL). O relógio continua correndo enquanto você decide.", 16, Color("efe3c4"), true)
+            _label("A desistência conta como DERROTA contra o computador. O relógio continua correndo enquanto você decide." if src() != controller else "A desistência conta como DERROTA nesta modalidade e o relógio continua correndo enquanto você decide." if rated() else "A desistência encerra a partida como DERROTA (Casual: não altera PL). O relógio continua correndo enquanto você decide.", 16, Color("efe3c4"), true)
             _button(box, "CONTINUAR JOGANDO", close_panel, true)
             _button(box, "DESISTIR", func():
                 close_panel()
-                controller.resign())
+                src().resign())
     dim.show(); panel.show()
     # Desktop: escolha de ritmo com a arte da referência (a lista acima continua sendo a fonte das ações).
     art_panel.visible = which == "modes" and not Mobile.active(get_viewport())
@@ -605,7 +605,7 @@ func _on_problem(text: String):
         if notice != null: notice.text = text
 
 func _confirm_resign():
-    if controller.in_match(): _show("confirm_resign")
+    if src().in_match(): _show("confirm_resign")
 
 func _narrow() -> bool:
     return get_viewport().get_visible_rect().size.x < 700.0 or (Mobile.active(get_viewport()) and Mobile.is_portrait(get_viewport()))
@@ -626,19 +626,32 @@ func _process(_delta):
         result_bar.value = move_toward(result_bar.value, bar_target, 40.0 * _delta)
     if hud.visible: _refresh_strips()
 
+## R51 · de onde vêm os dados dos cartões: o controlador do Ranked ou, na partida contra o computador, o bot_view
+## (mesmo layout do Ranked Madeira para todos).
+func src():
+    var st = get_parent()
+    if kind == "ranked" and st != null and String(st.get("mode")) == "bot" and st.get("bot_view") != null: return st.bot_view
+    return controller
+
 func _refresh_strips():
-    var me = controller.human_color
+    var ctl = src()
+    var me = ctl.human_color
     var opp = "b" if me == "w" else "w"
     for pair in [["top", opp], ["bottom", me]]:
         var strip = strips[pair[0]]
         strip.color = pair[1]
-        var info = controller.player(pair[1])
+        var info = ctl.player(pair[1])
         var who = "Você" if pair[1] == me else String(info.get("nickname", "Adversário"))
         if pair[1] != me and not bool(info.get("connected", true)): who += " (reconectando…)"
         var lg := clampi(int(info.get("league", 0)), 0, 10)
         strip.name.text = who
         var ttl := Cosmetics.title_text(Cosmetics.public_title(info if pair[1] != me else PlayerPortrait.self_info(hub)))
-        if rated():
+        if info.has("sub"):
+            strip.sub.text = String(info.sub)
+            strip.emblem.texture = ThemeCatalog.badge_texture(Catalog.IDS[lg])
+            strip.emblem.visible = strip.emblem.texture != null
+            strip.plaque.accent = LEAGUE_ACCENT[lg]
+        elif rated():
             strip.sub.text = "%s · %d PL%s" % [LEAGUES[lg].to_upper(), int(info.get("pl", 0)), ("  ·  " + ttl) if ttl != "" and not two_line else ""]
             strip.emblem.texture = ThemeCatalog.badge_texture(Catalog.IDS[lg])
             strip.emblem.visible = strip.emblem.texture != null
@@ -669,6 +682,9 @@ func _refresh_strips():
         strip.portrait.hub = hub
         strip.portrait.mine = mine_side
         strip.portrait.set_info(look)
+        var bot_pt: bool = info.get("portrait_tex") is Texture2D
+        if bot_pt: strip.portrait.avatar_rect.texture = info.portrait_tex
+        strip.portrait.avatar_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if bot_pt else TextureRect.STRETCH_KEEP_ASPECT_COVERED
         strip.portrait.visible = true   # R46: retrato pequeno também no celular deitado (placa aprovada)
         var bid: String = Cosmetics.public_badge(info) if pair[1] != me else (String(hub.current_badge()) if hub != null and hub.has_method("current_badge") else "")
         if bid != strip.seal_id:
@@ -678,12 +694,12 @@ func _refresh_strips():
         strip.seal.visible = strip.seal.texture != null and not two_line
         strip.portrait.seal_rect.texture = strip.seal.texture
         strip.portrait.seal_rect.visible = two_line and strip.seal.texture != null
-        var running = controller.status == "playing" and controller.clock.active == pair[1]
-        strip.clock.show_time(controller.clock.remaining_ms(pair[1]), running)
+        var running = ctl.status == "playing" and ctl.clock.active == pair[1]
+        strip.clock.show_time(ctl.clock.remaining_ms(pair[1]), running)
         strip.style.border_color = Color(0, 0, 0, 0)
         strip.plaque.active = running
-    resign_button.visible = controller.in_match() and not Mobile.active(get_viewport())
-    if controller.status == "playing" and account.server_ready: link_label.text = ""
+    resign_button.visible = ctl.in_match() and not Mobile.active(get_viewport())
+    if ctl.status == "playing" and account.server_ready: link_label.text = ""
 
 # Posiciona as faixas dos jogadores em volta do tabuleiro (retângulo em pixels de tela).
 const PLAQUE_H := 98.0

@@ -32,6 +32,13 @@ var guard: Callable             # fair play (definido pelo stage)
 var move_log: Array = []        # [{ms, kind}] para medição/QA
 var _sf_job := -1
 var _rng := RandomNumberGenerator.new()
+## R51 · relógio de 10 min por lado (só contra o computador; a partida LOCAL de 2 humanos não usa).
+const LocalClock = preload("res://bot/local_clock.gd")
+var clock = LocalClock.new()
+var flagged := ""         # cor que perdeu no tempo ("" = ninguém)
+var status := "idle"      # "playing" | "finished" (mesmo nome que os cartões do Ranked leem)
+var resigned := false     # R51 · o jogador desistiu (DESISTIR no layout do Ranked)
+var san_log: Array = []   # R51 · lances em notação (lista de lances no lugar do chat)
 
 func start(world: Node, level: String, side: String):
     stop()
@@ -75,6 +82,28 @@ func restart():
     paused = false
     thinking = not local_mode and rules.turn != human_color
     think_delay = 0.25
+    flagged = ""
+    resigned = false
+    san_log.clear()
+    clock.reset()
+    status = "playing"
+    if not local_mode: clock.start(rules.turn)
+    _sync_view()
+
+func in_match() -> bool:
+    return active and not local_mode and status == "playing"
+
+## R51 · DESISTIR (contra o computador): derrota registrada no histórico; nada vai ao servidor.
+func resign():
+    if not in_match(): return
+    resigned = true
+    epoch += 1
+    completed.clear()
+    if coop_search != null:
+        coop_search.abort()
+        coop_search = null
+    if sf_engine != null and _sf_job >= 0: sf_engine.cancel()
+    _sf_job = -1
     _sync_view()
 
 func stop():
@@ -143,7 +172,10 @@ func _apply(move: Dictionary) -> bool:
     if not local_mode and guard.is_valid() and bool(guard.call()): return false
     var before: Dictionary = rules.board.duplicate()
     var moving_color: String = rules.turn
+    var san_txt := ""
+    if not local_mode: san_txt = Notation.san(rules, move)
     if not rules.play(move): return false
+    if not local_mode: san_log.append(san_txt)
     # Removed enemy sprites are derived from the authoritative engine result,
     # which also accounts for en passant, castling and promotions.
     for square in before:
@@ -154,6 +186,7 @@ func _apply(move: Dictionary) -> bool:
             game._spawn_capture(game.square_center(square), code)
     thinking = not local_mode and rules.turn != human_color
     think_delay = 0.25
+    if not local_mode: clock.start(rules.turn)
     _sync_view()
     # Apresentação: anima o lance (o bot e, na partida local, os dois lados recebem o destaque forte).
     game.show_move(before, move.from, move.to, local_mode or moving_color != human_color)
@@ -169,8 +202,20 @@ func _sync_view():
     game.promotion_pending = false
     game.promotion_cell = Vector2i(-1,-1)
     var result: String = rules.outcome()
-    game.game_over = not result.is_empty()
+    game.game_over = not result.is_empty() or not flagged.is_empty() or resigned
     if game.game_over:
+        clock.stop()
+        status = "finished"
+    if resigned:
+        thinking = false
+        game.status = "DERROTA — VOCÊ DESISTIU"
+    elif not flagged.is_empty():
+        thinking = false
+        # sem a palavra "MATE": o registro e a escada de bots tratam por VITÓRIA/DERROTA
+        if flagged == human_color: game.status = "DERROTA — SEU TEMPO ESGOTOU"
+        elif _only_king(human_color): game.status = "EMPATE — TEMPO ESGOTADO SEM MATERIAL"
+        else: game.status = "VITÓRIA — TEMPO DO BOT ESGOTOU"
+    elif game.game_over:
         thinking = false
         match result:
             "mate": game.status = "XEQUE-MATE! " + ("BRANCAS VENCEM" if rules.turn == "b" else "PRETAS VENCEM")
@@ -186,8 +231,33 @@ func _sync_view():
         game.status = ("XEQUE! " if rules.in_check(human_color) else "") + "SUA VEZ · " + ("BRANCAS" if human_color == "w" else "PRETAS")
     game.queue_redraw()
 
+## Lado com material insuficiente para dar mate (só rei, ou rei + 1 bispo/cavalo): vitória no tempo vira empate.
+func _only_king(color: String) -> bool:
+    var minors := 0
+    for sq in rules.board:
+        var code: String = rules.board[sq]
+        if code[0] != color or code[1] == "K": continue
+        if code[1] in ["B", "N"]: minors += 1
+        else: return false
+    return minors <= 1
+
 func _process(delta: float):
     if active and not local_mode and guard.is_valid() and bool(guard.call()): stop()
+    # R51 · relógio de 10 min (corre também enquanto o bot pensa, como numa partida de verdade)
+    if active and not local_mode and status == "playing" and is_instance_valid(game) and not game.game_over:
+        clock.tick(delta)
+        var f: String = clock.flagged()
+        if not f.is_empty():
+            flagged = f
+            epoch += 1
+            completed.clear()
+            if coop_search != null:
+                coop_search.abort()
+                coop_search = null
+            if sf_engine != null and _sf_job >= 0: sf_engine.cancel()
+            _sf_job = -1
+            _sync_view()
+            return
     if worker != null and worker.is_started() and not worker.is_alive():
         var result = worker.wait_to_finish()
         worker = null
