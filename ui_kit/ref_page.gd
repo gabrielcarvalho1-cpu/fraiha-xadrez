@@ -12,12 +12,24 @@ static func tex(name: String) -> Texture2D:
     var p := "res://ui_kit/pages/%s.png" % name
     return load(p) if ResourceLoader.exists(p) else null
 
-## Página que cobre a tela inteira de desenho (1672 x 941) com a arte da referência.
-static func full_page(canvas: Control, bg_name: String, size: Vector2) -> Control:
+## Página na arte da referência (1672 x 941) — R51b: só a moldura e o miolo (fora dela a arte é transparente
+## e a Home aparece em volta). Reduzida em `k` e centrada dentro da área segura do canvas, para nada ser
+## cortado quando a janela não é 16:9; uma camada invisível atrás segura os cliques da tela toda.
+## dim > 0: a Home atrás fica escurecida (a camada passa das bordas do canvas, para a janela inteira escurecer igual).
+static func full_page(canvas: Control, bg_name: String, size: Vector2, k := 0.92, dim := 0.0) -> Control:
     var page := Control.new()
     page.size = size
+    page.scale = Vector2.ONE * k
+    page.position = (size - size * k) / 2.0
     page.mouse_filter = Control.MOUSE_FILTER_STOP
     canvas.add_child(page)
+    var block := ColorRect.new()
+    block.name = "ClickBlock"
+    block.color = Color(0.02, 0.03, 0.02, dim)
+    block.position = -page.position / k - size * 2.0 / k
+    block.size = size * 5.0 / k
+    block.mouse_filter = Control.MOUSE_FILTER_STOP
+    page.add_child(block)
     var bg := TextureRect.new()
     bg.name = "RefBg"
     bg.texture = tex(bg_name)

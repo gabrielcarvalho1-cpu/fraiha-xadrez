@@ -13,10 +13,57 @@ OUT = os.path.join(ROOT, 'ui_kit', 'pages')
 os.makedirs(OUT, exist_ok=True)
 
 def load(n): return np.array(Image.open(os.path.join(REF, n + '.png')).convert('RGB'))
-def save(a, n):
-    Image.fromarray(a.astype(np.uint8)).save(os.path.join(OUT, n + '.png'))
 def save_rgba(a, n):
     Image.fromarray(a.astype(np.uint8), 'RGBA').save(os.path.join(OUT, n + '.png'))
+
+## R51b · Só a MOLDURA e o miolo da referência: tudo que é cenário em volta (pilares, tochas, céu, mata)
+## fica transparente, para a Home do jogo aparecer em volta. O contorno dourado da moldura é a barreira:
+## enche-se a partir das bordas da imagem por tudo que não é dourado; fica só o pedaço ligado ao miolo.
+## inner = retângulo certamente dentro da moldura; clip = caixa externa máxima; cuts = sobras a apagar.
+FRAME = {
+    'hist_bg': dict(ref='historico', inner=(40, 50, 1850, 815)),
+    'about_bg': dict(ref='conheca', inner=(100, 44, 1796, 795), clip=(96, 36, 1800, 829), keep=[(880, 0, 1016, 60)]),
+    'config_bg': dict(ref='config', inner=(40, 80, 1310, 1140), cuts=[(0, 300, 36, 1000), (1316, 300, 1353, 1000)]),
+    'bots_bg': dict(ref='bots', inner=(60, 110, 1610, 910)),
+    'ligas_bg': dict(ref='ligas', inner=(60, 110, 1610, 910), cuts=[(0, 400, 55, 850), (1615, 400, 1672, 850)]),
+    'perfil_bg': dict(ref='perfil', inner=(20, 40, 1210, 370)),
+}
+def frame_alpha(a, inner, clip=None, keep=(), cuts=()):
+    r, g, b = [a[..., i].astype(int) for i in range(3)]
+    gold = (r > 140) & (g > 90) & (r - b > 60) & (r >= g)
+    bar = cv2.dilate(gold.astype(np.uint8) * 255, np.ones((3, 3), np.uint8))
+    x0, y0, x1, y1 = inner
+    bar[y0:y1, x0:x1] = 255
+    h, w = bar.shape
+    fm = np.zeros((h + 2, w + 2), np.uint8)
+    seeds = [(x, 0) for x in range(0, w, 5)] + [(x, h - 1) for x in range(0, w, 5)] + \
+            [(0, y) for y in range(0, h, 5)] + [(w - 1, y) for y in range(0, h, 5)]
+    for (x, y) in seeds:
+        if bar[y, x] == 0: cv2.floodFill(bar, fm, (x, y), 128)
+    kept = (bar != 128).astype(np.uint8)
+    _, lab = cv2.connectedComponents(kept, connectivity=8)
+    kept = (lab == lab[(y0 + y1) // 2, (x0 + x1) // 2]).astype(np.uint8) * 255
+    if clip is not None:
+        cm = np.zeros_like(kept)
+        cx0, cy0, cx1, cy1 = clip
+        cm[cy0:cy1, cx0:cx1] = 255
+        for (kx0, ky0, kx1, ky1) in keep: cm[ky0:ky1, kx0:kx1] = 255
+        kept &= cm
+    for (kx0, ky0, kx1, ky1) in cuts: kept[ky0:ky1, kx0:kx1] = 0
+    _, lab = cv2.connectedComponents((kept > 0).astype(np.uint8), connectivity=8)
+    kept = (lab == lab[(y0 + y1) // 2, (x0 + x1) // 2]).astype(np.uint8) * 255
+    kept = cv2.dilate(kept, np.ones((3, 3), np.uint8))       # o contorno escuro do dourado fica
+    return cv2.GaussianBlur(kept, (3, 3), 0)
+
+def save(a, n):
+    if n in FRAME:
+        f = dict(FRAME[n])
+        al = frame_alpha(load(f.pop('ref')), **f)
+        rgb = a.astype(np.uint8).copy()
+        rgb[al == 0] = 0
+        Image.fromarray(np.dstack([rgb, al]), 'RGBA').save(os.path.join(OUT, n + '.png'))
+        return
+    Image.fromarray(a.astype(np.uint8)).save(os.path.join(OUT, n + '.png'))
 
 def inpaint(a, mask, r=6):
     bgr = cv2.cvtColor(a.astype(np.uint8), cv2.COLOR_RGB2BGR)

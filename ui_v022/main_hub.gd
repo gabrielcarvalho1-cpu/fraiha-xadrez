@@ -610,8 +610,9 @@ func _build_pages():
     # esticada só na altura), abas, cartões, detalhe e botões com peças recortadas da mesma arte.
     var profile_panel := Control.new()
     profile_panel.name = "ProfilePage"
-    profile_panel.position = Vector2(110, 260)
     profile_panel.size = Vector2(1452, 640)
+    profile_panel.scale = Vector2.ONE * (PAGE_W / 1452.0)
+    profile_panel.position = Vector2((DESIGN.x - PAGE_W) / 2.0, PAGE_TOP + 10)
     profile_panel.mouse_filter = Control.MOUSE_FILTER_STOP
     canvas.add_child(profile_panel)
     pages["profile"] = profile_panel
@@ -794,10 +795,10 @@ const CONFIG_REF := Vector2(1353, 1162)
 func _build_settings_page():
     var panel := Control.new()
     panel.name = "SettingsPage"
-    var k := 660.0 / CONFIG_REF.y
+    var k := 612.0 / CONFIG_REF.y
     panel.size = CONFIG_REF
     panel.scale = Vector2.ONE * k
-    panel.position = Vector2((DESIGN.x - CONFIG_REF.x * k) / 2.0, 262)
+    panel.position = Vector2((DESIGN.x - CONFIG_REF.x * k) / 2.0, PAGE_TOP + 4)
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
     canvas.add_child(panel)
     RefPage.image(panel, RefPage.tex("config_bg"), Rect2(Vector2.ZERO, CONFIG_REF)).stretch_mode = TextureRect.STRETCH_SCALE
@@ -948,7 +949,7 @@ func _sync_ref_full(on: bool):
         _ref_hidden.clear()
 
 func _build_bot_ladder_page():
-    var panel := RefPage.full_page(canvas, "bots_bg", DESIGN)
+    var panel := RefPage.full_page(canvas, "bots_bg", DESIGN, 0.92, 0.72)
     panel.name = "BotLadderPage"
     panel.set_meta("ref_full", true)
     pages["bot"] = panel
@@ -1289,6 +1290,9 @@ const HISTORY_FILTERS := [["all", "TODAS"], ["bot", "COMPUTADOR"], ["casual", "O
 ## R51 · HISTÓRICO no PC: a página é a imagem de referência do dono (ui_kit/pages/hist_bg.png, desenhada em
 ## coordenadas da referência e reduzida para o painel), com as abas e as linhas montadas com peças da própria arte.
 const HIST_REF := Vector2(1890, 832)
+## R51b · páginas na arte de referência: só moldura + miolo, entre a faixa do logo e o rodapé da tela.
+const PAGE_TOP := 302.0
+const PAGE_W := 1380.0
 const HIST_TABS := [[68, 310], [320, 590], [601, 800], [812, 1065], [1077, 1277], [1290, 1541], [1555, 1793]]
 const HIST_ICONS := {"all": "ico_todas", "bot": "ico_computador", "casual": "ico_online", "ranked": "ico_ranqueada", "local": "ico_local", "marcha": "ico_marcha", "xeque": "ico_xeque"}
 var hist_tab_art := {}
@@ -1296,9 +1300,10 @@ var hist_tab_art := {}
 func _build_history_page():
     var panel := Control.new()
     panel.name = "HistoryPage"
-    panel.position = Vector2(110, 260)
+    # R51b · abaixo da faixa "ESTRATÉGIA PARA IR MAIS LONGE" do logo; fora da moldura a Home aparece
+    panel.scale = Vector2.ONE * (PAGE_W / HIST_REF.x)
+    panel.position = Vector2((DESIGN.x - PAGE_W) / 2.0, PAGE_TOP)
     panel.size = HIST_REF
-    panel.scale = Vector2.ONE * (1452.0 / HIST_REF.x)
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
     canvas.add_child(panel)
     pages["history"] = panel
@@ -1530,9 +1535,9 @@ func _build_about_page():
     var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
     var panel := Control.new()
     panel.name = "AboutPage"
-    panel.position = Vector2(110, 260)
+    panel.scale = Vector2.ONE * (PAGE_W / ABOUT_REF.x)
+    panel.position = Vector2((DESIGN.x - PAGE_W) / 2.0, PAGE_TOP)
     panel.size = ABOUT_REF
-    panel.scale = Vector2.ONE * (1452.0 / ABOUT_REF.x)
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
     canvas.add_child(panel)
     pages["about"] = panel
@@ -1623,7 +1628,7 @@ var league_chip: Label
 var league_desc: Label
 
 func _build_ranking():
-    var panel := RefPage.full_page(canvas, "ligas_bg", DESIGN)
+    var panel := RefPage.full_page(canvas, "ligas_bg", DESIGN, 0.92, 0.72)
     panel.name = "RankingPage"
     panel.set_meta("ref_full", true)
     pages.ranking = panel
