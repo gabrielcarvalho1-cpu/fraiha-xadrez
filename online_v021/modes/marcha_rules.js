@@ -5,7 +5,7 @@
 // Mudou regra no .gd → muda aqui também e regenera o fixture (tools/marcha_parity_fixture.gd).
 const { rngFrom } = require('./rng');
 
-const RULESET_VERSION = 'marcha-real-9';   // R38.4: o J pode usar o SEU peão que acabou de sair (no seu Portão)
+const RULESET_VERSION = 'marcha-real-10';  // R51: distribuição garante Ás/Rei para quem tem peão no Pátio
 const TRACK = 76;
 const ARM = 19;
 const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -42,8 +42,31 @@ class Marcha {
     if ((this.round_no - 1) % DEAL_CYCLE.length === 0 && this.round_no > 1) this.newDeck();
     const n = Marcha.handSizeFor(this.round_no);
     for (let s = 0; s < 4; s++) for (let k = 0; k < n; k++) {
-      if (!this.deck.length) return;
+      if (!this.deck.length) break;
       this.hands[s].push(this.deck.pop());
+    }
+    this.ensureStarters();
+  }
+  // R51 · quem tem peão no Pátio e nenhuma carta de saída (Ás/Rei) troca a ÚLTIMA carta da mão por uma de saída:
+  // primeiro do monte, senão de um reino com 2+ cartas de saída ou que não precise. 52 cartas, 4 de cada (igual ao .gd).
+  static starterCount(h) { return h.filter(r => r === 'A' || r === 'K').length; }
+  inHome(seat) { return this.pawns[seat].filter(p => p.zone === 'home').length; }
+  needsStarter(s) { return this.inHome(this.controlled(s)) > 0 && Marcha.starterCount(this.hands[s]) === 0 && this.hands[s].length > 0; }
+  ensureStarters() {
+    const isS = r => r === 'A' || r === 'K';
+    for (let s = 0; s < 4; s++) {
+      if (!this.needsStarter(s)) continue;
+      const h = this.hands[s], give = h[h.length - 1];
+      let got = false;
+      for (let d = this.deck.length - 1; d >= 0; d--) if (isS(this.deck[d])) { h[h.length - 1] = this.deck[d]; this.deck[d] = give; got = true; break; }
+      if (got) continue;
+      for (const o of [1, 2, 3]) {
+        const t = (s + o) % 4, c = Marcha.starterCount(this.hands[t]);
+        if (c === 0 || (c === 1 && this.inHome(this.controlled(t)) > 0)) continue;
+        const ht = this.hands[t];
+        for (let k = ht.length - 1; k >= 0; k--) if (isS(ht[k])) { h[h.length - 1] = ht[k]; ht[k] = give; got = true; break; }
+        if (got) break;
+      }
     }
   }
 

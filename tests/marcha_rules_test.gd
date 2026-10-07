@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-9", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-10", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
     var h1: int = g.hands[1].size()
@@ -267,5 +267,22 @@ func _initialize():
     check(size_ok, "R38.3: cada ciclo dá 4, 4 e 5 cartas para cada jogador")
     check(cyc_ok, "R38.3: cada ciclo usa as 52 cartas, exatamente 4 de cada valor; depois embaralha de novo")
     check(fd.deck_cycle() == 4 and fd.round_no == 10, "R38.3: ciclo do baralho conta certo (rodada 10 = ciclo 4)")
+    # ---------- R51 · distribuição: quem tem peão no Pátio recebe Ás ou Rei ----------
+    var sem_saida := 0
+    for sd in range(1, 301):
+        var gs = Rules.new()
+        gs.setup(sd)
+        for st in 4:
+            if Rules._starter_count(gs.hands[st]) == 0: sem_saida += 1
+    check(sem_saida == 0, "R51: 1ª rodada — todo reino (com peões no Pátio) começa com Ás ou Rei (%d mãos sem)" % sem_saida)
+    var gt = Rules.new()
+    gt.setup(77)
+    var all_cards: Array = gt.deck.duplicate()
+    for st in 4: all_cards.append_array(gt.hands[st])
+    var cnt := {}
+    for r in all_cards: cnt[r] = int(cnt.get(r, 0)) + 1
+    var four_each := cnt.size() == 13
+    for r in cnt: if cnt[r] != 4: four_each = false
+    check(all_cards.size() == 52 and four_each, "R51: a garantia não muda o baralho (52 cartas, 4 de cada)")
     print("RESULT %d/%d" % [checks - failures, checks], " OK" if failures == 0 else " FALHAS=%d" % failures)
     quit(failures)

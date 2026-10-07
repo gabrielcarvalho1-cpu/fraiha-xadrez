@@ -25,7 +25,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-9"   # R38.4: o J pode usar o SEU peão que acabou de sair (no seu Portão)
+const RULESET_VERSION := "marcha-real-10"  # R51: distribuição garante Ás/Rei para quem tem peão no Pátio
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -99,8 +99,46 @@ func deal():
     var n := hand_size_for(round_no)
     for s in 4:
         for k in n:
-            if deck.is_empty(): return
+            if deck.is_empty(): break
             hands[s].append(deck.pop_back())
+    _ensure_starters()
+
+## R51 · quem tem peão no Pátio e nenhuma carta de saída (Ás/Rei) troca a ÚLTIMA carta da mão por uma de saída:
+## primeiro do monte (a do topo mais próxima), senão de um reino que tenha 2+ cartas de saída ou que não precise
+## (sem peão no Pátio). O baralho continua com 52 cartas, 4 de cada valor — só muda quem recebe.
+const STARTERS := ["A", "K"]
+static func _starter_count(h: Array) -> int:
+    var c := 0
+    for r in h:
+        if r in STARTERS: c += 1
+    return c
+
+func _needs_starter(s: int) -> bool:
+    return in_home(controlled(s)) > 0 and _starter_count(hands[s]) == 0 and not hands[s].is_empty()
+
+func _ensure_starters():
+    for s in 4:
+        if not _needs_starter(s): continue
+        var give: String = hands[s][hands[s].size() - 1]
+        var got := false
+        for d in range(deck.size() - 1, -1, -1):
+            if deck[d] in STARTERS:
+                hands[s][hands[s].size() - 1] = deck[d]
+                deck[d] = give
+                got = true
+                break
+        if got: continue
+        for o in [1, 2, 3]:
+            var t: int = (s + o) % 4
+            var c := _starter_count(hands[t])
+            if c == 0 or (c == 1 and in_home(controlled(t)) > 0): continue
+            for k in range(hands[t].size() - 1, -1, -1):
+                if hands[t][k] in STARTERS:
+                    hands[s][hands[s].size() - 1] = hands[t][k]
+                    hands[t][k] = give
+                    got = true
+                    break
+            if got: break
 
 static func team_of(seat: int) -> int:
     return seat % 2
