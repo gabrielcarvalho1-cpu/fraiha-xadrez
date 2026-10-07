@@ -568,10 +568,14 @@ func _result(r: Dictionary):
         badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
         badge.custom_minimum_size = Vector2(88, 88)
         badge_row.add_child(badge)
+    if bool(r.get("demoted", false)):
+        # R51 · perdeu com 0 PL: volta para a liga de baixo (com 75 PL)
+        _label("REBAIXADO", 24, Color("ff9d86"), true)
+        _label("de %s para %s" % [LEAGUES[int(r.get("league_before", 0))], LEAGUES[after_league]], 15, Color("c4cbbd"), true)
     _label(LEAGUES[after_league].to_upper(), 18, Color("f4edda"), true)
     _label("%d / 100 PL" % after_pl, 16, Color("c4cbbd"), true)
-    # Barra anima do PL anterior ao atual (reinicia do zero ao promover).
-    var start_value = 0.0 if bool(r.get("promoted", false)) else float(r.get("pl_before", after_pl))
+    # Barra anima do PL anterior ao atual (reinicia do zero ao promover; no rebaixamento desce do topo).
+    var start_value = 0.0 if bool(r.get("promoted", false)) else (100.0 if bool(r.get("demoted", false)) else float(r.get("pl_before", after_pl)))
     result_bar = _bar(box, start_value)
     bar_target = after_pl
     if not bool(r.get("saved", true)):

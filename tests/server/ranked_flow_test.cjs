@@ -34,7 +34,7 @@ const mv = (c, id, f, t, promotion) => c.send({ type: 'ranked_move', match_id: i
     g.a.send({ type: 'ranked_resign', match_id: g.id });
     const ra = await g.a.next('ranked_result'), rb = await g.b.next('ranked_result');
     check(ra.outcome === 'loss' && rb.outcome === 'win' && ra.reason === 'resign', `${mode}: desistência = derrota`);
-    check(ra.pl_change === 0 && rb.pl_change === 6 && rb.pl_after === 6 && ra.saved && rb.saved, `${mode}: +6 para o vencedor, perda limitada a 0 PL`);
+    check(ra.pl_change === 0 && rb.pl_change === 15 && rb.pl_after === 15 && ra.league_after === 0 && !ra.demoted && ra.saved && rb.saved, `${mode}: +15 para o vencedor; Madeira com 0 PL não perde nem rebaixa`);
     g.a.send({ type: 'acct_refresh' }); const acc = await g.a.next('acct_state');
     const others = Object.entries(acc.ranked).filter(([k]) => k !== mode);
     check(acc.ranked[mode].losses === 1 && acc.ranked[mode].matches === 1 && others.every(([, v]) => v.matches === 0), `${mode}: estatística só na modalidade correta`);

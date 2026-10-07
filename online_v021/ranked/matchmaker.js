@@ -17,8 +17,15 @@ class Matchmaker {
     const steps = Math.floor(waited / this.cfg.expandEveryMs);
     return steps === 0 ? null : Math.min(this.cfg.maxWindow, this.cfg.initialPlWindow + steps * this.cfg.expandStep);
   }
+  // R51 · Ranked: só uma liga de diferença (Prata ↔ Bronze/Prata/Ouro). A Madeira, sem liga abaixo,
+  // também alcança o Bronze (Madeira ↔ Madeira/Ferro/Bronze). A faixa de PL ampliada respeita esse teto.
+  static leaguesOk(la, lb) {
+    const lo = Math.min(la, lb), gap = Math.abs(la - lb);
+    return gap <= 1 || (lo === 0 && gap <= 2);
+  }
   compatible(a, b, now) {
     if (this.open) return true;
+    if (!Matchmaker.leaguesOk(a.stats.league, b.stats.league)) return false;
     const waited = Math.max(now - a.since, now - b.since);
     const w = this.window(waited);
     if (w === null) return a.stats.league === b.stats.league && Math.abs(a.stats.pl - b.stats.pl) <= this.cfg.initialPlWindow;

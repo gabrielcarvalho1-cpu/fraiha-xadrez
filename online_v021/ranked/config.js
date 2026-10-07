@@ -26,7 +26,7 @@ const CONFIG = {
     initialPlWindow: 20,                                   // mesma liga, ±20 PL
     expandEveryMs: num(env.FRAIHA_MM_EXPAND_MS, 10000),    // a cada 10 s amplia
     expandStep: 40,                                        // +40 na faixa (liga*100+PL)
-    maxWindow: 1100,                                       // acaba aceitando qualquer liga
+    maxWindow: 300,                                        // R51: nunca passa de 1 liga (Madeira: 2)
   },
   tickMs: 200,
 };

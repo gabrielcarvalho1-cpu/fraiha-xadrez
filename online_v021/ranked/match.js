@@ -94,7 +94,7 @@ class RankedMatch {
     return { type: 'ranked_result', match_id: this.id, mode: this.mode, mode_name: ALL_MODES[this.mode].name, you: c,
       outcome: r.winner === 'draw' ? 'draw' : r.winner === c ? 'win' : 'loss', reason: r.reason, reason_text: REASONS[r.reason] || r.reason,
       pl_change: mine.applied, league_before: before.league, pl_before: before.pl, league_after: mine.stats.league, pl_after: mine.stats.pl,
-      promoted: mine.promoted, stats: mine.stats, saved };
+      promoted: mine.promoted, demoted: !!mine.demoted, stats: mine.stats, saved };
   }
 }
 module.exports = { RankedMatch, REASONS };
