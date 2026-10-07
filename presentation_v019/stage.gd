@@ -1000,7 +1000,7 @@ func request_quit():
 func _request_navigation(destination: String):
     _clear_selection()
     # Returning from an empty board or a pending connection is lossless.
-    var needs_confirmation = destination == "quit" or online.joined or mode in ["online","bot"] or (mode == "local" and game.move_count > 0) or (mode == "ranked" and ranked.in_match()) or (mode == "casual" and casual.in_match())
+    var needs_confirmation = destination == "quit" or online.joined or mode == "online" or (mode == "bot" and not game.game_over) or (mode == "local" and game.move_count > 0) or (mode == "ranked" and ranked.in_match()) or (mode == "casual" and casual.in_match())
     pending_navigation = destination
     navigation_confirmed = false
     _refresh_input()

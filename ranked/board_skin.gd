@@ -507,6 +507,9 @@ static func _esc(t: String) -> String:
 
 func _keep_bot() -> void:
     var bc = stage.bot_controller
+    # o HUD antigo da partida contra o bot volta a se mostrar a cada atualização do stage: fica escondido aqui
+    for n in [stage.get("match_plaque"), stage.get("desk_person")]:
+        if n != null and n.visible: n.visible = false
     if is_instance_valid(bot_moves) and bot_moves.visible and bc.san_log.size() != _bot_moves_n:
         _bot_moves_n = bc.san_log.size()
         bot_moves.text = _bot_moves_text(bc.san_log) if kind == "pc" else _bot_moves_line(bc.san_log)

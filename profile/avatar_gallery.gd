@@ -88,6 +88,7 @@ class Card extends Button:
     var gallery
     var avatar := ""
     var portrait: TextureRect
+    var frame_art: NinePatchRect
     func _init():
         flat = true
         set_meta("no_club_frame", true)   # avatares de escolha não recebem a moldura do Club
@@ -138,7 +139,22 @@ class Card extends Button:
         elif lit:
             sb.shadow_color = Color(1.0, 0.85, 0.45, 0.30)
             sb.shadow_size = 6
-        draw_style_box(sb, r)
+        # R51 · moldura recortada da referência (escolhido / comum / bloqueado), quando o kit existe
+        var art_name: String = "pf_card_sel" if st == "selected" else ("pf_card_locked" if st == "locked" else "pf_card")
+        var ap := "res://ui_kit/pages/%s.png" % art_name
+        if ResourceLoader.exists(ap):
+            if frame_art == null:
+                frame_art = NinePatchRect.new()
+                frame_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+                for m in ["patch_margin_left", "patch_margin_right", "patch_margin_top", "patch_margin_bottom"]: frame_art.set(m, 14)
+                frame_art.show_behind_parent = true
+                add_child(frame_art)
+                move_child(frame_art, 0)
+            frame_art.texture = load(ap)
+            frame_art.size = size
+            frame_art.modulate = Color(1.2, 1.15, 1.0) if (lit or gallery.focus_id == avatar) else Color.WHITE
+        else:
+            draw_style_box(sb, r)
         var pr := Rect2(portrait.position, portrait.size)
         # sem arte: silhueta + brasão da liga
         if tex == null:
@@ -165,19 +181,19 @@ class Card extends Button:
             draw_arc(lc + Vector2(0, -3), 5.0, PI, TAU, 12, Color("e6d6a8"), 2.0)
             draw_rect(Rect2(lc + Vector2(-6, -2), Vector2(12, 9)), Color("e6d6a8"))
         # selo EM USO
-        if st == "selected":
+        if st == "selected" and frame_art == null:
             var f2 := get_theme_default_font()
             var tag := Rect2(pr.position + Vector2(pr.size.x / 2.0 - 30, pr.size.y - 16), Vector2(60, 18))
             draw_rect(tag, Color("163b25"))
             draw_rect(tag, EMERALD, false, 1.5)
             draw_string(f2, tag.position + Vector2(0, 13), "EM USO", HORIZONTAL_ALIGNMENT_CENTER, tag.size.x, 11, Color("c9ffd9"))
         # legenda
-        var font := get_theme_default_font()
+        var font: Font = preload("res://ui_kit/fonts/Alegreya-Bold.woff") if frame_art != null else get_theme_default_font()
         var name_col := GOLD if st in ["unlocked", "selected"] else (CREAM if st == "no_art_unlocked" else MUTED)
         var e2: Dictionary = Catalog.entry(avatar)
         var y := pr.end.y + 16
         var title := String(e2.get("name", avatar)).to_upper()
-        var fs := _fit(font, title, 13, size.x - 8)
+        var fs := _fit(font, title, 15 if frame_art != null else 13, size.x - 8)
         var cut := title.rfind(" ")
         if fs < 11 and cut > 0 and size.y - pr.end.y >= 50.0:
             # nome comprido em cartão estreito (celular): duas linhas em vez de cortar o texto
@@ -192,10 +208,13 @@ class Card extends Button:
         var sub := ""
         match st:
             "locked": sub = "BLOQUEADO"
-            "selected": sub = "SELECIONADO"
+            "selected": sub = "EM USO" if frame_art != null else "SELECIONADO"
             "unlocked": sub = "Inicial" if String(e2.get("source", "")) == "initial" else "Conquistado"
             "no_art_unlocked": sub = "Conquistado · arte em breve"
-        draw_string(font, Vector2(4, y + 15), sub, HORIZONTAL_ALIGNMENT_CENTER, size.x - 8, 11, Color("e89a7a") if st == "locked" else (EMERALD if st == "selected" else MUTED))
+        var sub_col: Color = Color("e89a7a") if st == "locked" else (EMERALD if st == "selected" else MUTED)
+        if frame_art != null and st == "selected": sub_col = Color("f4fff6")
+        elif frame_art != null and st != "locked": sub_col = Color("ece3cc")
+        draw_string(font, Vector2(4, y + 16), sub, HORIZONTAL_ALIGNMENT_CENTER, size.x - 8, 13 if frame_art != null else 11, sub_col)
         tooltip_text = _tip(st, e2)
     func _tip(st: String, e: Dictionary) -> String:
         if st == "locked": return "BLOQUEADO · " + gallery.hint(avatar)
