@@ -124,15 +124,16 @@ func _row(r: Rect2, codes: Array, adv: int, who: String):
     for k in codes.size():
         var code := String(codes[k])
         if k > 0: x += ic * (0.42 if code == String(codes[k - 1]) else 0.8)
-        var tex: Texture2D = game.piece_textures.get(code)
+        var icon: Array = game.piece_icon(code)
+        var tex: Texture2D = icon[0]
         if tex == null: continue
-        var ts := tex.get_size()
+        var ts: Vector2 = icon[1].size
         var sz := ts * (ic / maxf(ts.x, ts.y))
         var pr := Rect2(Vector2(x + (ic - sz.x) / 2.0, cy - sz.y / 2.0), sz)
         # disco suave atrás (claro nas peças escuras, escuro nas claras) para ler sobre qualquer fundo
         var dark_piece := code.begins_with("b")
         draw_circle(pr.get_center() + Vector2(0, ic * 0.04), ic * 0.44, Color(0.93, 0.86, 0.68, 0.55) if dark_piece else Color(0.02, 0.05, 0.03, 0.55))
-        draw_texture_rect(tex, pr, false)
+        draw_texture_rect_region(tex, pr, icon[1])
 
 func _skin_row(r: Rect2, codes: Array, adv: int):
     if r.size.x <= 0.0: return
@@ -152,11 +153,12 @@ func _skin_row(r: Rect2, codes: Array, adv: int):
     for k in codes.size():
         var code := String(codes[k])
         if k > 0: x += ic * (0.42 if code == String(codes[k - 1]) else 0.8)
-        var tex: Texture2D = game.piece_textures.get(code)
+        var icon: Array = game.piece_icon(code)
+        var tex: Texture2D = icon[0]
         if tex == null: continue
-        var ts := tex.get_size()
+        var ts: Vector2 = icon[1].size
         var sz := ts * (ic / maxf(ts.x, ts.y))
-        draw_texture_rect(tex, Rect2(Vector2(x + (ic - sz.x) / 2.0, r.get_center().y - sz.y / 2.0), sz), false)
+        draw_texture_rect_region(tex, Rect2(Vector2(x + (ic - sz.x) / 2.0, r.get_center().y - sz.y / 2.0), sz), icon[1])
 
 ## Vantagem exibida para a cor = material dela no tabuleiro − material do adversário, agora (testes).
 func advantage_for(color: String) -> int:

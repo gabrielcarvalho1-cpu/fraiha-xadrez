@@ -9,6 +9,22 @@ extends Node
 const ART_PC := preload("res://ranked/art/board_pc.png")
 const ART_MOB := preload("res://ranked/art/board_mob.png")
 const PC_SIZE := Vector2(1672, 941)
+## R50 · peças em pixel art do Ranked Madeira (PNGs finais do Aseprite, sem nenhuma alteração).
+## Rect2 = parte desenhada de cada PNG (o resto é transparente).
+const PECAS := {
+    "wP": [preload("res://ranked/pecas/peao_branco.png"), Rect2(18, 17, 51, 61)],
+    "wR": [preload("res://ranked/pecas/torre_branca.png"), Rect2(19, 15, 52, 68)],
+    "wN": [preload("res://ranked/pecas/cavalo_branco.png"), Rect2(15, 12, 55, 71)],
+    "wB": [preload("res://ranked/pecas/bispo_branco.png"), Rect2(17, 9, 53, 72)],
+    "wQ": [preload("res://ranked/pecas/dama_branca.png"), Rect2(14, 8, 72, 74)],
+    "wK": [preload("res://ranked/pecas/rei_branco.png"), Rect2(18, 9, 51, 74)],
+    "bP": [preload("res://ranked/pecas/peao_preto.png"), Rect2(15, 14, 51, 65)],
+    "bR": [preload("res://ranked/pecas/torre_preta.png"), Rect2(17, 11, 54, 71)],
+    "bN": [preload("res://ranked/pecas/cavalo_preto.png"), Rect2(14, 8, 56, 73)],
+    "bB": [preload("res://ranked/pecas/bispo_preto.png"), Rect2(14, 4, 53, 76)],
+    "bQ": [preload("res://ranked/pecas/dama_preta.png"), Rect2(13, 7, 62, 75)],
+    "bK": [preload("res://ranked/pecas/rei_preto.png"), Rect2(16, 8, 51, 73)],
+}
 const PC_CLEAN := Rect2(0, 86, 300, 855)   # floresta/rio à esquerda do tabuleiro, abaixo do INÍCIO: sem interface
 const MOB_SIZE := Vector2(888, 1772)
 const FONT_BOLD := preload("res://account/fonts/Cinzel-Bold.woff")
@@ -269,6 +285,7 @@ func apply() -> void:
     g.position = br.position - g.ORIGIN * g.scale
     g.update_presentation(Rect2(-g.position / g.scale.x, vs / g.scale.x))
     _rec(g, "hide_status", true)
+    _rec(g, "piece_override", PECAS)
     g.queue_redraw()
     _skin_strips(M)
     _skin_material(M)

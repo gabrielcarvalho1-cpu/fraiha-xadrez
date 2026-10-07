@@ -9,6 +9,11 @@ const BOARD := TILE * 8
 const ORIGIN := Vector2(210,186)
 var arena_bg: Texture2D
 var piece_textures := {}
+## R50 · peças próprias de uma pele (só a do Ranked Madeira usa): código -> [Texture2D, Rect2 da parte desenhada do sprite].
+## Desenhadas na proporção original do PNG, numa escala única para todas as peças (sem esticar, sem filtro).
+var piece_override := {}
+var piece_sprite_scale := 0.84      # unidades do tabuleiro (casa = 75) por pixel do sprite
+const PIECE_SPRITE_BASE := 28.0     # base do desenho, abaixo do centro da casa
 var visual_theme := "wood"
 var board_palette := [Color("a8aca5"),Color("364955")]
 ## R31 · LABORATÓRIO (acesso antecipado Fundador/Club): letras e números nas casas da borda.
@@ -352,9 +357,24 @@ func _finish_promotion(kind:String):
     _update_game_state()
     queue_redraw()
 
+## Textura + região de uma peça (a da pele, se houver; senão a do tema) — também usada no placar de material.
+func piece_icon(code: String) -> Array:
+    if piece_override.has(code): return piece_override[code]
+    var t: Texture2D = piece_textures.get(code)
+    return [t, Rect2(Vector2.ZERO, t.get_size()) if t != null else Rect2()]
+
 func _piece(center:Vector2, code:String, alpha := 1.0):
     # V0.12: peças com contraste/volume reforçados e pixelização menos destrutiva.
     if alpha <= 0.0: return
+    if piece_override.has(code):
+        var tx: Texture2D = piece_override[code][0]
+        var rg: Rect2 = piece_override[code][1]
+        var sz: Vector2 = rg.size * piece_sprite_scale
+        # o nó do tabuleiro pode estar com escala x/y um pouquinho diferente (encaixe na arte): desfaz aqui
+        if scale.x > 0.0: sz.x *= scale.y / scale.x
+        draw_ellipse_shadow(center + Vector2(0, PIECE_SPRITE_BASE - 1.0), Vector2(sz.x*0.40, 3), Color(0.02,0.025,0.015,0.28*alpha))
+        draw_texture_rect_region(tx, Rect2(Vector2(center.x - sz.x/2.0, center.y + PIECE_SPRITE_BASE - sz.y), sz), rg, Color(1,1,1,alpha))
+        return
     if piece_textures.has(code) and piece_textures[code]:
         var tex:Texture2D = piece_textures[code]
         var heights = {"P":46.0,"R":54.0,"N":57.0,"B":60.0,"Q":64.0,"K":66.0}
