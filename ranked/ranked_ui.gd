@@ -45,6 +45,13 @@ var hud_font := 18
 var two_line := false
 var kind := "ranked"
 var promo = null   # R49 · ranked/promotion_modal.gd
+## R52c · BUSCANDO ADVERSÁRIO: painel/modal da referência (ui_kit/pages/buscando_bg.png, 1448 x 1086),
+## centralizado por cima do jogo escurecido, com fade. Título, molduras e CANCELAR são da arte;
+## ritmo e contador são do jogo. (O painel de texto antigo continua montado por baixo, oculto.)
+const SEARCH_REF := Vector2(1448, 1086)
+var search_art: Control
+var search_mode_label: Label
+var search_time_label: Label
 
 func rated() -> bool:
     return kind == "ranked"
@@ -79,6 +86,7 @@ func setup(service, ranked_controller):
     add_child(art_frame)
     add_child(art_panel)
     art_panel.setup(self)
+    _build_search_art()
     panel = PanelContainer.new()
     var style = StyleBoxEmpty.new()
     style.content_margin_left = 34
@@ -251,18 +259,88 @@ func _strip_hover(strip: Dictionary, entered: bool):
 func open_modes():
     _show("modes")
 
+func _build_search_art():
+    search_art = Control.new()
+    search_art.name = "SearchArt"
+    search_art.size = SEARCH_REF
+    search_art.mouse_filter = Control.MOUSE_FILTER_STOP
+    search_art.visible = false
+    add_child(search_art)
+    var bg := TextureRect.new()
+    bg.name = "SearchBg"
+    bg.texture = load("res://ui_kit/pages/buscando_bg.png")
+    bg.size = SEARCH_REF
+    bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    bg.stretch_mode = TextureRect.STRETCH_SCALE
+    bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+    bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    search_art.add_child(bg)
+    var serif: Font = load("res://ui_kit/fonts/Alegreya-Bold.woff")
+    search_mode_label = _art_label(serif, Rect2(380, 672, 688, 64), 44, Color("efe3c4"))
+    search_mode_label.name = "SearchMode"
+    search_time_label = _art_label(serif, Rect2(644, 742, 160, 62), 46, Color("e6e0cf"))
+    search_time_label.name = "SearchTime"
+    var cancel := Button.new()
+    cancel.name = "SearchCancel"
+    cancel.flat = true
+    cancel.focus_mode = Control.FOCUS_NONE
+    cancel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    cancel.position = Vector2(250, 820)
+    cancel.size = Vector2(950, 140)
+    var lit := StyleBoxFlat.new()
+    lit.bg_color = Color(1.0, 0.86, 0.45, 0.10)
+    lit.set_corner_radius_all(10)
+    for st in ["normal", "focus", "disabled"]: cancel.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+    for st in ["hover", "pressed"]: cancel.add_theme_stylebox_override(st, lit)
+    cancel.pressed.connect(func():
+        controller.cancel_queue()
+        _show("modes"))
+    search_art.add_child(cancel)
+
+func _art_label(font: Font, r: Rect2, px: int, color: Color) -> Label:
+    var l := Label.new()
+    l.position = r.position
+    l.size = r.size
+    l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    l.clip_text = true
+    l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    l.add_theme_font_override("font", font)
+    l.add_theme_font_size_override("font_size", px)
+    l.add_theme_color_override("font_color", color)
+    l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+    l.add_theme_constant_override("outline_size", 6)
+    search_art.add_child(l)
+    return l
+
+## texto do ritmo: diminui a fonte até caber entre as molduras (nada é cortado)
+func _set_search_mode(t: String):
+    search_mode_label.text = t
+    var f: Font = search_mode_label.get_theme_font("font")
+    for px in [44, 40, 36, 32, 28]:
+        search_mode_label.add_theme_font_size_override("font_size", px)
+        if f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x <= search_mode_label.size.x - 16.0: break
+
+## centralizado, cabendo em 92% da tela (celular em pé: limitado pela largura)
+func _layout_search_art():
+    var vs := get_viewport().get_visible_rect().size
+    dim.size = vs
+    var k := minf(vs.x * 0.92 / SEARCH_REF.x, vs.y * 0.92 / SEARCH_REF.y)
+    search_art.scale = Vector2.ONE * k
+    search_art.position = ((vs - SEARCH_REF * k) / 2.0).round()
+
 func close_panel():
     screen = ""
-    dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide()
+    dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide(); search_art.hide()
     if promo != null: promo.hide()
 
 func panel_open() -> bool:
-    return panel.visible or art_panel.visible or (promo != null and promo.visible)
+    return panel.visible or art_panel.visible or search_art.visible or (promo != null and promo.visible)
 
 ## R49 · VOCÊ SUBIU DE LIGA! (ranked/promotion_modal.gd): os botões fazem o mesmo que no painel de resultado.
 func _promotion(r: Dictionary):
     if account.ranked is Dictionary and r.has("stats"): account.ranked[String(r.mode)] = r.stats
-    dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide()
+    dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide(); search_art.hide()
     var st = get_parent()
     var can: bool = st != null and st.has_method("analysis_available") and st.analysis_available()
     promo.set_meta("mode", String(r.get("mode", "")))
@@ -419,6 +497,23 @@ func _show(which: String):
                 src().resign())
     dim.show(); panel.show()
     # Desktop: escolha de ritmo com a arte da referência (a lista acima continua sendo a fonte das ações).
+    var was_search := search_art.visible
+    search_art.visible = which == "searching"
+    if search_art.visible:
+        var mi = _mode_info(controller_mode_or_last())
+        _set_search_mode("%s · %d min" % [mi[1], mi[2]] if rated() else "CASUAL · %s · %d min" % [mi[1], mi[2]])
+        search_time_label.text = "0:00"
+        panel.hide()
+        art_frame.hide()
+        _layout_search_art()
+        if not was_search:   # fade de entrada (igual às outras telas)
+            search_art.modulate.a = 0.0
+            dim.modulate.a = 0.0
+            var tw := create_tween().set_parallel(true)
+            tw.tween_property(search_art, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
+            tw.tween_property(dim, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
+    else:
+        dim.modulate.a = 1.0
     art_panel.visible = which == "modes" and not Mobile.active(get_viewport())
     if art_panel.visible:
         panel.hide()
@@ -612,13 +707,20 @@ func _narrow() -> bool:
 
 func _process(_delta):
     if panel.visible: _layout_panel()
+    if search_art.visible: _layout_search_art()
     if art_panel.visible:
         dim.size = get_viewport().get_visible_rect().size
         art_panel.layout(get_viewport().get_visible_rect().size)
     if screen == "searching" and is_instance_valid(search_label):
         var s = (Time.get_ticks_msec() - search_started) / 1000
         search_label.text = "%d:%02d" % [s / 60, s % 60]
+        if is_instance_valid(search_time_label): search_time_label.text = search_label.text
         if controller.requeue_pending: search_label.text += "  ·  reconectando…"
+        if is_instance_valid(search_mode_label) and search_art.visible:
+            var mi = _mode_info(controller_mode_or_last())
+            var base: String = "%s · %d min" % [mi[1], mi[2]] if rated() else "CASUAL · %s · %d min" % [mi[1], mi[2]]
+            var want: String = "RECONECTANDO…" if controller.requeue_pending else base
+            if search_mode_label.text != want: _set_search_mode(want)
     if screen == "found" and is_instance_valid(found_label):
         var left = maxi(0, controller.starts_in_ms - (Time.get_ticks_msec() - controller.state_at))
         found_label.text = "Começa em %d…" % ceili(left / 1000.0) if left > 0 else ""
