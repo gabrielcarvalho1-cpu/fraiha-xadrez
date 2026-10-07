@@ -266,6 +266,7 @@ func _show_ref_home():
         ref_home.setup(hub, self)
     ref_home.visible = true
     ref_home.refresh()
+    refresh_online(hub.casual_available())
     club_row = ref_home.club_entry
     sound_button = ref_home.sound_button
     fullscreen_button = null
@@ -447,6 +448,18 @@ func _fit_club():
 
 func refresh_fullscreen():
     hub.refresh_fullscreen_button()
+
+## R48 · botão JOGAR ONLINE da Home em pé reflete o Casual aberto/fechado no servidor.
+func refresh_online(on: bool):
+    if not is_instance_valid(ref_home): return
+    var b = ref_home.buttons.get("JOGAR ONLINE")
+    if b == null: return
+    var rs = b.find_child("RefSubtitle", true, false)
+    if rs != null:
+        rs.color = Color("f6f2e8") if on else Color("ffb08f")
+        rs.set_text("Partida casual · fila automática" if on else hub.ONLINE_OFF_TEXT)
+    var rt = b.find_child("RefTitle", true, false)
+    if rt != null: rt.modulate = Color.WHITE if on else Color(1, 1, 1, 0.6)
 
 func queue_redraw_cards():
     if is_instance_valid(ref_home) and ref_home.visible: ref_home.refresh()

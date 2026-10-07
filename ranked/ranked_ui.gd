@@ -49,10 +49,14 @@ var promo = null   # R49 · ranked/promotion_modal.gd
 func rated() -> bool:
     return kind == "ranked"
 
-## Ritmos MOSTRADOS: no Ranked, só os que o servidor diz que estão abertos (Admin controla a liquidez).
+## Ritmos MOSTRADOS: só os que o servidor diz que estão abertos (Admin controla a liquidez) — Ranked e Casual.
 func mode_list() -> Array:
-    if not rated(): return CASUAL_MODES
+    if not rated(): return CASUAL_MODES.filter(func(m): return account == null or account.casual_mode_open(String(m[0])))
     return MODES.filter(func(m): return account == null or account.ranked_mode_open(String(m[0])))
+
+## Texto quando o Admin fechou todos os ritmos (ou a fila inteira).
+func unavailable_title() -> String:
+    return "RANQUEADA TEMPORARIAMENTE INDISPONÍVEL" if rated() else "CASUAL TEMPORARIAMENTE INDISPONÍVEL"
 
 func all_modes() -> Array:
     return MODES if rated() else CASUAL_MODES
@@ -133,7 +137,7 @@ func setup(service, ranked_controller):
     controller.finished.connect(func(_m): _show("result"))
     controller.problem.connect(_on_problem)
     controller.state_changed.connect(func(): if screen == "found" and controller.status == "playing": close_panel())
-    account.changed.connect(func(): if screen == "modes": _show("modes"))
+    account.changed.connect(_refresh_modes_keep_notice)
     get_viewport().size_changed.connect(_layout_panel)
     close_panel()
     hud.hide()
@@ -346,9 +350,9 @@ func _show(which: String):
             var shown := mode_list()
             if shown.is_empty():
                 # Admin fechou todos os ritmos: nada de tela vazia nem cartões bloqueados.
-                var off = _label("RANQUEADA TEMPORARIAMENTE INDISPONÍVEL", 20, GOLD, true)
-                off.name = "RankedUnavailable"
-                _label("Novas filas serão abertas em breve.", 16, Color("efe3c4"), true)
+                var off = _label(unavailable_title(), 20, GOLD, true)
+                off.name = "RankedUnavailable" if rated() else "CasualUnavailable"
+                _label("Novas filas serão abertas em breve." if rated() else "As partidas online voltam em breve. Enquanto isso, jogue contra o computador.", 16, Color("efe3c4"), true)
             # Grade sem buracos: linhas de 2 (1 no celular estreito); linha com 1 cartão fica centralizada.
             var per_row := 1 if _narrow() else 2
             var grid = VBoxContainer.new()
@@ -368,7 +372,7 @@ func _show(which: String):
                     if rated(): _mode_card(row, item)
                     else: _casual_card(row, item)
                 if lone: row.add_child(_spacer(0.5))
-            if not rated():
+            if not rated() and not shown.is_empty():   # Casual fechado: sem convite (o servidor também recusa)
                 var inv = _button(box, "CONVIDAR AMIGO PARA UMA PARTIDA", func(): invite_requested.emit(), true)
                 inv.name = "InviteFriendButton"
             notice = _label("", 15, Color("ff9d86"), true)
@@ -580,6 +584,14 @@ func _result(r: Dictionary):
     _button(box, "VOLTAR AO RANKED", func():
         play_requested.emit()
         _show("modes"))
+
+## A tela de ritmos se refaz quando o servidor muda a lista (Admin). O aviso já mostrado (ex.: "modo
+## temporariamente desativado" para quem foi tirado da fila) continua visível depois de refazer.
+func _refresh_modes_keep_notice():
+    if screen != "modes": return
+    var keep: String = notice.text if is_instance_valid(notice) else ""
+    _show("modes")
+    if not keep.is_empty() and is_instance_valid(notice): notice.text = keep
 
 func _on_problem(text: String):
     if text.is_empty(): return

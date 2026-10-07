@@ -39,9 +39,9 @@ class Metrics {
   // hooks chamados pelo jogo (opcionais; nunca lançam para o chamador)
   onPaired(family, mode, waitsMs) { const at = this.now(); for (const ms of waitsMs) this.waits.push({ at, family, mode, ms: Math.max(0, ms) }); this.trim(this.waits, at); }
   onMatch(kind, family, mode, reason = '') { const at = this.now(); this.events.push({ at, kind, family, mode, reason: String(reason || '') }); this.trim(this.events, at); }
-  avgWait(family, sinceMs) {
+  avgWait(family, sinceMs, mode = null) {
     const since = this.now() - sinceMs;
-    const xs = this.waits.filter(w => w.at >= since && (!family || w.family === family));
+    const xs = this.waits.filter(w => w.at >= since && (!family || w.family === family) && (!mode || w.mode === mode));
     return xs.length ? { avg_ms: Math.round(xs.reduce((a, w) => a + w.ms, 0) / xs.length), samples: xs.length } : { avg_ms: null, samples: 0 };
   }
   today(kind) {

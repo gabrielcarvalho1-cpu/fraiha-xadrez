@@ -99,7 +99,7 @@ func layout(viewport_size: Vector2):
         queue_hits[i].disabled = b == null or b.disabled
         var r := _card_button(i)
         queue_hits[i].position = r.position
-    invite_hit.visible = not ui.rated()
+    invite_hit.visible = not ui.rated() and not _modes().is_empty()   # Casual fechado: sem convite
     queue_redraw()
 
 func _fit(font: Font, text: String, fs: int, width: float) -> int:
@@ -172,8 +172,8 @@ func _draw():
             var src := Rect2(CARD_SRC.position + Vector2((j % 2) * CARD_DX, (j / 2) * CARD_DY), CARD_SRC.size)
             draw_texture_rect_region(ART, Rect2(CARD_SRC.position + _slot(i, n), CARD_SRC.size), src)
         if n == 0:
-            _center(TITLE_FONT, "RANQUEADA TEMPORARIAMENTE INDISPONÍVEL", 564, 600, 38, 900, Color("f6d27a"), 7, Color(0.12, 0.06, 0.0, 0.9))
-            _center(font, "Novas filas serão abertas em breve.", 564, 650, 22, 800, Color("efe6cf"))
+            _center(TITLE_FONT, ui.unavailable_title(), 564, 600, 38, 900, Color("f6d27a"), 7, Color(0.12, 0.06, 0.0, 0.9))
+            _center(font, "Novas filas serão abertas em breve." if rated else "As partidas online voltam em breve. Enquanto isso, jogue contra o computador.", 564, 650, 22, 800, Color("efe6cf"))
     for i in n:
         var item: Array = modes[i]
         var o := _slot(i, n)
@@ -196,7 +196,7 @@ func _draw():
         elif hover == "q%d" % i:
             draw_rect(r.grow(-6), Color(1.0, 0.88, 0.5, 0.10))
     if hover == "back": draw_rect(BACK.grow(-12), Color(1.0, 0.88, 0.5, 0.08))
-    if not rated:
+    if not rated and n > 0:
         # R35.1 · CONVIDAR AMIGO (casual): botão verde e ouro no mesmo estilo dos cartões
         var ir := INVITE
         draw_rect(ir, Color("0d2a1a") if hover != "invite" else Color("174a2c"))

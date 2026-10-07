@@ -2365,6 +2365,7 @@ var _avatar_resent := {}       # contas para as quais a foto local já foi reenv
 
 func _on_account_changed():
     _refresh_name_boxes()
+    refresh_online_button()
     # Foto da conta ainda não está no cache local → baixa da URL pública.
     if account != null and account.has_profile() and avatar_store != null:
         var url: String = account.avatar_url()
@@ -2378,6 +2379,29 @@ func _on_account_changed():
             if not local_bytes.is_empty(): account.upload_avatar(local_bytes)
         _server_avatar_url = url
     _refresh_avatars()
+
+## R48 · JOGAR ONLINE reflete o servidor: com o Casual fechado pelo Admin (todos os ritmos ou a fila inteira),
+## o subtítulo vira "Temporariamente indisponível" (PC e celular). O clique continua abrindo a tela, que
+## mostra CASUAL TEMPORARIAMENTE INDISPONÍVEL sem nenhum ritmo para entrar; o servidor também recusa.
+const ONLINE_OFF_TEXT := "Temporariamente indisponível"
+func casual_available() -> bool:
+    return account == null or not account.has_method("casual_available") or account.casual_available()
+
+func refresh_online_button():
+    var on := casual_available()
+    for b in menu_buttons:
+        if title_of(b) != "JOGAR ONLINE": continue
+        var sub := "Partida casual · fila automática" if on else ONLINE_OFF_TEXT
+        var rs = b.find_child("RefSubtitle", true, false)
+        if rs != null:
+            rs.color = Color("f1ede2") if on else Color("ffb08f")
+            rs.set_text(sub)
+        var rt = b.find_child("RefTitle", true, false)
+        if rt != null:
+            rt.modulate = Color.WHITE if on else Color(1, 1, 1, 0.6)
+        var labels = b.find_children("*", "Label", true, false)
+        if labels.size() >= 2: labels[1].text = String(b.get_meta("subtitle", "")) if on else ONLINE_OFF_TEXT
+    if is_instance_valid(mobile_ui) and mobile_ui.has_method("refresh_online"): mobile_ui.refresh_online(on)
 
 func _refresh_name_boxes():
     var logged: bool = account != null and account.has_profile()

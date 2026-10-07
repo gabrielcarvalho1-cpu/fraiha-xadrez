@@ -95,27 +95,31 @@ export function queues(ctx) {
     } catch (e) { if (!ctx.alive() || (e instanceof ApiError && e.kind === 'revoked')) return; toast(e instanceof ApiError ? e.text : 'Falha ao aplicar', 'err'); }
     if (ctx.alive()) ctx.refresh();
   }
-  // Ritmo do Ranked: o jogo deixa de MOSTRAR o ritmo fechado (servidor é a fonte de verdade).
-  async function toggleMode(m) {
-    const enable = !m.enabled;
-    const ok = await confirmAction({ title: `${enable ? 'Ativar' : 'Desativar'} RANKED ${m.label} (${m.minutes} min)`,
-      body: enable ? 'O ritmo volta a aparecer na tela JOGAR RANQUEADO e aceita entrada na fila.' : 'Some da tela JOGAR RANQUEADO dos jogadores. Quem estiver esperando neste ritmo sai da fila com aviso. Partidas em andamento continuam.',
+  // Ritmo (Ranked e Casual): o jogo deixa de MOSTRAR o ritmo fechado (servidor é a fonte de verdade).
+  const SCREEN = { ranked: 'JOGAR RANQUEADO', casual: 'JOGAR ONLINE' };
+  const NONE = { ranked: 'RANQUEADA INDISPONÍVEL', casual: 'CASUAL INDISPONÍVEL' };
+  async function toggleMode(q, m) {
+    const enable = !m.enabled, fam = FAMILY_LABEL[q.family].toUpperCase();
+    const ok = await confirmAction({ title: `${enable ? 'Ativar' : 'Desativar'} ${fam} ${m.label} (${m.minutes} min)`,
+      body: enable ? `O ritmo volta a aparecer na tela ${SCREEN[q.family]} e aceita entrada na fila.` : `Some da tela ${SCREEN[q.family]} dos jogadores. Quem estiver esperando neste ritmo sai da fila com aviso. Partidas em andamento continuam.`,
       confirmWord: m.word, actionLabel: enable ? 'Ativar ritmo' : 'Desativar ritmo', danger: !enable });
     if (!ok || !ctx.alive()) return;
     try {
-      const r = await ctx.api.post('/admin/api/queues/ranked/' + m.mode, { enabled: enable, reason: ok.reason, confirm: m.mode });
-      toast(r.changed ? `RANKED ${m.label} ${enable ? 'ATIVADO' : 'DESATIVADO'} · o jogo mostra: ${r.open_modes.length ? r.open_modes.length + ' ritmo(s)' : 'RANQUEADA INDISPONÍVEL'}` : 'Nada mudou (já estava assim) · registrado no Admin Log');
+      const r = await ctx.api.post(`/admin/api/queues/${q.family}/` + m.mode, { enabled: enable, reason: ok.reason, confirm: m.mode });
+      toast(r.changed ? `${fam} ${m.label} ${enable ? 'ATIVADO' : 'DESATIVADO'} · o jogo mostra: ${r.open_modes.length ? r.open_modes.length + ' ritmo(s)' : NONE[q.family]}` : 'Nada mudou (já estava assim) · registrado no Admin Log');
     } catch (e) { if (!ctx.alive() || (e instanceof ApiError && e.kind === 'revoked')) return; toast(e instanceof ApiError ? e.text : 'Falha ao aplicar', 'err'); }
     if (ctx.alive()) ctx.refresh();
   }
+  const modeStats = m => [m.waiting ? `${m.waiting} na fila` : 'fila vazia', m.longest_wait_ms !== null && m.longest_wait_ms !== undefined ? `maior ${fmtDur(m.longest_wait_ms)}` : '',
+    m.avg_wait_ms !== null && m.avg_wait_ms !== undefined ? `média ${fmtDur(m.avg_wait_ms)}` : '', `${m.active_matches || 0} partida(s)`, `${m.active_players || 0} jogando`].filter(Boolean).join(' · ');
   const modeRows = q => h('div', { class: 'modes' },
-    h('div', { class: 'dim', style: 'font-size:12px;margin:10px 0 6px' }, 'Ritmos (o jogo mostra só os abertos)', q.enabled ? '' : ' — Ranked inteiro DESATIVADO acima'),
+    h('div', { class: 'dim', style: 'font-size:12px;margin:10px 0 6px' }, 'Ritmos (o jogo mostra só os abertos)', q.enabled ? '' : ` — ${FAMILY_LABEL[q.family]} inteiro DESATIVADO acima`),
     q.modes.map(m => h('div', { class: 'moderow', dataset: { mode: m.mode, open: String(m.open) } },
       h('span', {}, h('b', {}, m.label), h('span', { class: 'dim' }, ` ${m.minutes} min`)),
-      h('span', { class: 'dim' }, m.waiting ? `${m.waiting} na fila` : ''),
+      h('span', { class: 'dim modestats' }, modeStats(m)),
       h('span', { class: 'badge ' + (m.enabled ? 'on' : 'off') }, m.enabled ? 'ON' : 'OFF'),
-      canWrite ? h('button', { class: 'btn sm ' + (m.enabled ? 'danger' : 'ok'), dataset: { action: 'mode-toggle' }, onclick: () => toggleMode(m) }, m.enabled ? 'Desativar' : 'Ativar') : '')),
-    h('div', { class: 'dim', style: 'font-size:11px;margin-top:6px' }, `Ao reiniciar o servidor: ${q.boot_default === 'todos abertos' ? 'todos abertos' : 'padrão de FRAIHA_RANKED_MODES_OPEN'}.`));
+      canWrite ? h('button', { class: 'btn sm ' + (m.enabled ? 'danger' : 'ok'), dataset: { action: 'mode-toggle' }, onclick: () => toggleMode(q, m) }, m.enabled ? 'Desativar' : 'Ativar') : '')),
+    h('div', { class: 'dim', style: 'font-size:11px;margin-top:6px' }, `Ao reiniciar o servidor: ${q.boot_default === 'todos abertos' ? 'todos abertos' : 'padrão de ' + q.boot_default}.`));
   return {
     error: f.error,
     async load() {
@@ -322,7 +326,7 @@ export function audit(ctx) {
   const f = frame(ctx, 'Admin Log', 'Toda ação administrativa real é registrada pelo SERVIDOR antes de responder.');
   const ACT = { 'queue.disable': 'desativou', 'queue.enable': 'ativou', 'queue.mode_disable': 'desativou ritmo', 'queue.mode_enable': 'ativou ritmo', clube_grant: 'concedeu Clube', clube_change: 'alterou Clube', clube_revoke: 'revogou Clube', founder_grant: 'concedeu Fundador', founder_revoke: 'revogou Fundador' };
   const st = x => !x ? '—' : 'enabled' in x ? (x.enabled ? 'ativo' : 'desativado') : `Clube ${x.club}${x.club_expires_at ? ' até ' + new Date(x.club_expires_at).toLocaleDateString('pt-BR') : x.club === 'ATIVO' ? ' sem expiração' : ''} · Fundador ${x.founder ? 'SIM' : 'NÃO'}`;
-  const tgt = t => !t ? '—' : t.mode ? `${FAMILY_LABEL[t.family]} ${t.mode.replace('ranked_', '')}` : t.family ? FAMILY_LABEL[t.family] : t.user_id ? `${t.nickname || '?'} (${t.user_id.slice(0, 8)})` : JSON.stringify(t);
+  const tgt = t => !t ? '—' : t.mode ? `${FAMILY_LABEL[t.family]} ${t.mode.replace(/^(ranked|casual)_/, '')}` : t.family ? FAMILY_LABEL[t.family] : t.user_id ? `${t.nickname || '?'} (${t.user_id.slice(0, 8)})` : JSON.stringify(t);
   return {
     error: f.error,
     async load() {

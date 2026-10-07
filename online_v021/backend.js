@@ -89,6 +89,7 @@ class Backend {
       if (mode) { if (!modeAfter.enabled) this.lastPurged = this.onModeClosed(family, mode); }
       else if (!after.enabled) this.lastPurged = this.onModeClosed(family);
       if (family === 'ranked') this.broadcastRankedModes();   // o jogo mostra só os ritmos abertos (sem nova build)
+      if (family === 'casual') this.broadcastCasualModes();   // idem na tela JOGAR ONLINE (contas e convidados)
     });
     this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o), backend: this }) : null;
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
@@ -233,13 +234,19 @@ class Backend {
   onBlocked(a, b) { if (this.invites) this.invites.onRelationChanged(a, b); }
   onUnfriended(a, b) { if (this.invites) this.invites.onRelationChanged(a, b); }
   // Entrar em fila (Casual/Ranked) cancela o convite pendente do jogador; durante o aceite, a fila é recusada.
-  // mode (opcional): ritmo do Ranked (ranked_3min…). Casual/XEQUE/MARCHA: só a família.
+  // mode (opcional): ritmo do Ranked/Casual (ranked_3min…, casual_3min…). XEQUE/MARCHA: só a família.
   modeOpen(family, mode = null) {
     if (!this.modeControls) return true;
-    if (family === 'ranked' && mode) return this.modeControls.isRankedModeOpen(mode);
+    if (mode && ModeControls.hasModes(family)) return this.modeControls.isModeOpen(family, mode);
     return this.modeControls.isOpen(family);
   }
   rankedModesOpen() { return this.modeControls ? this.modeControls.openRankedModes() : ['ranked_3min', 'ranked_5min', 'ranked_10min', 'ranked_20min']; }
+  casualModesOpen() { return this.modeControls ? this.modeControls.openModes('casual') : ['casual_3min', 'casual_5min', 'casual_10min', 'casual_20min']; }
+  // Avisa TODOS os conectados (contas E convidados: o Casual aceita convidado) quais ritmos do Casual estão abertos.
+  broadcastCasualModes() {
+    const msg = { type: 'casual_modes', modes: this.casualModesOpen() };
+    for (const set of this.online.values()) for (const ws of set) { if (ws.readyState === undefined || ws.readyState === 1) this.send(ws, msg); }
+  }
   // Avisa TODAS as contas conectadas quais ritmos do Ranked estão abertos (a tela JOGAR RANQUEADO se refaz).
   broadcastRankedModes() {
     const msg = { type: 'ranked_modes', modes: this.rankedModesOpen() };
@@ -313,7 +320,7 @@ class Backend {
     const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile) } : null;
     this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,
       needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind,
-      ranked_modes: this.rankedModesOpen(),
+      ranked_modes: this.rankedModesOpen(), casual_modes: this.casualModesOpen(),
       entitlements: entitlements ? { is_founder: !!entitlements.is_founder, club_active: !!entitlements.club_active, club_expires_at: entitlements.club_expires_at || null } : null,
       founder_perks: this.payments ? this.payments.founderPerks(entitlements) : null,
       cosmetics: look ? { avatar_id: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame } : null,
@@ -322,7 +329,7 @@ class Backend {
   }
   // Convidado: identidade só em memória, recuperável pelo token (reconexão ao Casual).
   guestAuth(ws, m) {
-    if (ws.user && ws.profile) return this.send(ws, { type: 'guest_state', account: true, nickname: ws.profile.nickname });
+    if (ws.user && ws.profile) return this.send(ws, { type: 'guest_state', account: true, nickname: ws.profile.nickname, casual_modes: this.casualModesOpen() });
     const now = Date.now();
     if (ws.guestAuthAt && now - ws.guestAuthAt < 2000) return this.send(ws, { type: 'guest_error', message: 'Aguarde um instante.' });
     this.invalidate(ws);
@@ -337,7 +344,7 @@ class Backend {
     g.seen = now;
     ws.guest = g;
     this.setIdentity(ws, { id: g.id, nickname: g.nickname, avatar: 'warrior', guest: true });
-    this.send(ws, { type: 'guest_state', token, nickname: g.nickname });
+    this.send(ws, { type: 'guest_state', token, nickname: g.nickname, casual_modes: this.casualModesOpen() });
     if (this.casual) this.casual.onAuthenticated(ws);
   }
   sweepGuests() {

@@ -68,6 +68,27 @@ func _set_ranked_modes(list) -> bool:
     ranked_modes_known = true
     return changed_now
 
+## R48 · ritmos do CASUAL abertos (mesmo controle do Ranked; o Casual aceita convidado: vem também no guest_state).
+## Ainda sem resposta do servidor = mostra os 4; o servidor sempre confere a entrada.
+var casual_modes: Array = []
+var casual_modes_known := false
+
+func casual_mode_open(id: String) -> bool:
+    return not casual_modes_known or casual_modes.has(id)
+
+## Algum ritmo do Casual aberto? (botão JOGAR ONLINE da Home)
+func casual_available() -> bool:
+    return not casual_modes_known or not casual_modes.is_empty()
+
+func _set_casual_modes(list) -> bool:
+    if not list is Array: return false
+    var clean: Array = []
+    for m in list: if m is String: clean.append(m)
+    var changed_now := not casual_modes_known or clean != casual_modes
+    casual_modes = clean
+    casual_modes_known = true
+    return changed_now
+
 func _ready():
     var config = ConfigFile.new()
     if config.load("res://online.cfg") == OK:
@@ -491,6 +512,7 @@ func _receive(msg: Dictionary):
         needs_nickname = bool(msg.get("needs_nickname", false))
         persistent_backend = bool(msg.get("persistent", false))
         if msg.has("ranked_modes"): _set_ranked_modes(msg.get("ranked_modes"))
+        if msg.has("casual_modes"): _set_casual_modes(msg.get("casual_modes"))
         if msg.get("entitlements") is Dictionary:
             # R39 · extras do Fundador (link do grupo) chegam junto, só para quem é Fundador de verdade
             var ent: Dictionary = (msg.entitlements as Dictionary).duplicate()
@@ -531,6 +553,9 @@ func _receive(msg: Dictionary):
     elif type == "ranked_modes":
         # Admin abriu/fechou um ritmo do Ranked: a tela JOGAR RANQUEADO se refaz (account.changed).
         if _set_ranked_modes(msg.get("modes")): changed.emit()
+    elif type == "casual_modes":
+        # Admin abriu/fechou um ritmo (ou o Casual inteiro): JOGAR ONLINE se refaz (account.changed).
+        if _set_casual_modes(msg.get("modes")): changed.emit()
     elif type == "acct_entitlements":
         entitlements_changed.emit(msg.get("entitlements", {}) if msg.get("entitlements") is Dictionary else {})
     elif type == "bot_progress":
@@ -540,6 +565,7 @@ func _receive(msg: Dictionary):
     elif type == "acct_logged_out":
         pass
     elif type == "guest_state":
+        if msg.has("casual_modes"): _set_casual_modes(msg.get("casual_modes"))
         if not bool(msg.get("account", false)):
             guest_ready = true
             guest_nickname = String(msg.get("nickname", "Convidado"))

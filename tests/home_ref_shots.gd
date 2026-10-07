@@ -3,6 +3,7 @@ extends SceneTree
 ## Uso (numa CÓPIA do projeto, com xvfb): tests/run_home_ref_shots.sh <pasta>
 ## Env: HOME_SHOT_OUT=<arquivo.png>  HOME_SHOT_SIZE=1672x941  HOME_SHOT_CSS=427x921 (só celular)
 ##      HOME_SHOT_LOGGED=1 → conta de exemplo "SextoSen1" (só a interface; nada de rede)
+##      HOME_SHOT_CASUAL_OFF=1 → Home com o Casual fechado (JOGAR ONLINE indisponível)
 ##      HOME_SHOT_HOVER=2,5 → liga o brilho de hover desses botões do PC (conferência visual)
 var stage
 
@@ -39,6 +40,9 @@ func run():
     var acc = stage.get_node_or_null("AccountUI")
     if acc != null and acc.has_method("hide_ui"): acc.hide_ui()
     if stage.get("account_ui") != null: stage.account_ui.hide_ui()
+    if OS.get_environment("HOME_SHOT_CASUAL_OFF") == "1":   # R48: Casual fechado pelo Admin (como o servidor avisaria)
+        stage.account._set_casual_modes([])
+        hub.refresh_online_button()
     var pg := OS.get_environment("HOME_SHOT_PAGE")   # abre uma página interna antes da captura
     if pg == "mais" and is_instance_valid(hub.mobile_ui): hub.mobile_ui.show_page("mais")
     elif not pg.is_empty(): hub.show_page(pg)

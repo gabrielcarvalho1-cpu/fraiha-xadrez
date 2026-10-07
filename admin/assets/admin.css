@@ -176,5 +176,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue); }
 .av { width: 36px; height: 36px; border-radius: 50%; flex: none; object-fit: cover; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line2); color: var(--gold2); font-weight: 800; }
 .modal select, .modal input[type=date] { width: 100%; }
 @media (max-width: 700px) { .onrow { grid-template-columns: 1fr; } }
-.moderow { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.moderow { display: grid; grid-template-columns: 1fr auto auto; grid-template-areas: "name badge btn" "stats stats stats"; gap: 2px 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.moderow > span:first-child { grid-area: name; }
+.moderow > .badge { grid-area: badge; }
+.moderow > .btn { grid-area: btn; }
 .moderow .btn.sm { min-width: 82px; }
+.moderow .modestats { grid-area: stats; font-size: 11px; }

@@ -81,14 +81,14 @@ class AdminService {
         return out(404, { error: 'not_found' });
       }
       if (req.method === 'POST') {
-        const rm = /^\/admin\/api\/queues\/ranked\/([a-z0-9_]+)$/.exec(path);
+        const rm = /^\/admin\/api\/queues\/(ranked|casual)\/([a-z0-9_]+)$/.exec(path);
         if (rm) {
           if (!need('queues.write')) return;
           if (this.limited('write:' + admin.id, 20)) return out(429, { error: 'rate_limited' });
           let body;
           try { body = await readJson(req, 4096); }
           catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
-          return this.setRankedMode(admin, rm[1], body, out);
+          return this.setFamilyMode(admin, rm[1], rm[2], body, out);
         }
         const qm = /^\/admin\/api\/queues\/([a-z]+)$/.exec(path);
         if (qm) {
@@ -172,7 +172,7 @@ class AdminService {
     for (const f of ModeControls.families()) {
       const q = s.queue[f] || null, ms = s.matches.filter(m => m.family === f);
       const w = this.metrics.avgWait(f, 3600e3);
-      out.push({ ...ctl[f], has_queue: !!q, ...(f === 'ranked' ? { modes: this.controls.rankedModesSnapshot().map(m => ({ ...m, waiting: (q || []).filter(e => e.mode === m.mode).length })), boot_default: this.env.FRAIHA_RANKED_MODES_OPEN ? 'FRAIHA_RANKED_MODES_OPEN' : 'todos abertos' } : {}),
+      out.push({ ...ctl[f], has_queue: !!q, ...(ModeControls.hasModes(f) ? { modes: this.modeRows(f, q || [], ms), boot_default: this.env[ModeControls.bootEnv(f)] ? ModeControls.bootEnv(f) : 'todos abertos' } : {}),
         waiting: q ? real(q.length, '') : none('sem fila pública: partidas começam por convite'),
         longest_wait_ms: q ? (q.length ? real(Math.max(...q.map(e => e.wait_ms))) : real(null, 'fila vazia')) : none('sem fila'),
         avg_wait_ms: q ? (w.samples ? partial(w.avg_ms, `${w.samples} pareamentos na última hora`) : none('sem pareamentos na última hora')) : none('sem fila'),
@@ -180,6 +180,15 @@ class AdminService {
         by_mode: q ? Object.entries(q.reduce((o, e) => (o[e.mode] = (o[e.mode] || 0) + 1, o), {})).map(([mode, n]) => ({ mode, waiting: n })) : [] });
     }
     return { at: new Date(this.now()).toISOString(), rule: 'Desativar impede novas entradas e novos pareamentos; quem estava na fila sai com aviso; partidas em andamento continuam.', persistent: false, queues: out };
+  }
+  // Por ritmo (filas reais do servidor): status, na fila, maior espera, tempo médio (1 h), partidas e jogadores ativos.
+  modeRows(family, q, ms) {
+    return this.controls.modesSnapshot(family).map(m => {
+      const mq = q.filter(e => e.mode === m.mode), mm = ms.filter(x => x.mode === m.mode), w = this.metrics.avgWait(family, 3600e3, m.mode);
+      return { ...m, waiting: mq.length, longest_wait_ms: mq.length ? Math.max(...mq.map(e => e.wait_ms)) : null,
+        avg_wait_ms: w.samples ? w.avg_ms : null, avg_samples: w.samples,
+        active_matches: mm.length, active_players: mm.reduce((n, x) => n + x.players.filter(p => p.uid).length, 0) };
+    });
   }
   matches() {
     const now = this.now(), s = liveSnapshot(this.backend, now);
@@ -243,9 +252,9 @@ class AdminService {
       audit_persistent: this.audit.persistent, controls_persistent: false, admins: this.access.admins.size };
   }
   // ---------------------------------------------------------------- ação real
-  // Ritmo do Ranked (3/5/10/20 min): o jogo deixa de MOSTRAR o ritmo fechado; quem esperava nele sai da fila.
-  setRankedMode(admin, mode, body, out) {
-    if (!ModeControls.rankedModeIds().includes(mode)) return out(404, { error: 'unknown_queue' });
+  // Ritmo do Ranked/Casual (3/5/10/20 min): o jogo deixa de MOSTRAR o ritmo fechado; quem esperava nele sai da fila.
+  setFamilyMode(admin, family, mode, body, out) {
+    if (!ModeControls.modeIds(family).includes(mode)) return out(404, { error: 'unknown_queue' });
     if (!body || typeof body !== 'object' || Array.isArray(body)) return out(400, { error: 'bad_request', detail: 'corpo JSON obrigatório' });
     const extra = Object.keys(body).filter(k => !['enabled', 'reason', 'confirm'].includes(k));
     if (extra.length) return out(400, { error: 'bad_request', detail: 'campos não permitidos: ' + extra.slice(0, 5).join(', ') });
@@ -253,19 +262,21 @@ class AdminService {
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
     if (reason.length < 3) return out(400, { error: 'reason_required' });
     if (String(body.confirm || '') !== mode) return out(400, { error: 'confirmation_required', detail: `confirm deve ser "${mode}"` });
-    const snap = () => this.controls.rankedModesSnapshot().find(m => m.mode === mode);
+    const snap = () => this.controls.modesSnapshot(family).find(m => m.mode === mode);
+    const open = () => this.controls.openModes(family);
     const cur = snap();
     const action = body.enabled ? 'queue.mode_enable' : 'queue.mode_disable';
     if (cur.enabled === body.enabled) {
-      const a = this.audit.record({ actor: admin, action, target: { family: 'ranked', mode }, before: { enabled: cur.enabled }, after: { enabled: cur.enabled }, result: 'noop', reason });
-      return out(200, { mode: cur, open_modes: this.backend.rankedModesOpen(), changed: false, audit_id: a.id });
+      const a = this.audit.record({ actor: admin, action, target: { family, mode }, before: { enabled: cur.enabled }, after: { enabled: cur.enabled }, result: 'noop', reason });
+      return out(200, { mode: cur, open_modes: open(), changed: false, audit_id: a.id });
     }
     this.backend.lastPurged = 0;
-    const { before, after } = this.controls.setRankedMode(mode, body.enabled, { id: admin.id, name: admin.name }, reason);
-    const a = this.audit.record({ actor: admin, action, target: { family: 'ranked', mode }, before: { enabled: before.enabled }, after: { enabled: after.enabled }, result: 'ok', reason,
-      meta: body.enabled ? { open_modes: this.backend.rankedModesOpen() } : { removed_from_queue: this.backend.lastPurged || 0, open_modes: this.backend.rankedModesOpen() } });
-    return out(200, { mode: snap(), open_modes: this.backend.rankedModesOpen(), changed: true, audit_id: a.id });
+    const { before, after } = this.controls.setMode(family, mode, body.enabled, { id: admin.id, name: admin.name }, reason);
+    const a = this.audit.record({ actor: admin, action, target: { family, mode }, before: { enabled: before.enabled }, after: { enabled: after.enabled }, result: 'ok', reason,
+      meta: body.enabled ? { open_modes: open() } : { removed_from_queue: this.backend.lastPurged || 0, open_modes: open() } });
+    return out(200, { mode: snap(), open_modes: open(), changed: true, audit_id: a.id });
   }
+  setRankedMode(admin, mode, body, out) { return this.setFamilyMode(admin, 'ranked', mode, body, out); }
   setQueue(admin, family, body, out) {
     if (!ModeControls.families().includes(family)) return out(404, { error: 'unknown_queue' });
     if (!body || typeof body.enabled !== 'boolean') return out(400, { error: 'bad_request', detail: 'enabled (boolean) obrigatório' });
