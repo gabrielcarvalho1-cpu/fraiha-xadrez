@@ -606,47 +606,29 @@ func _build_pages():
     _build_ranking()
     _build_about_page()
     _build_history_page()
-    # R51 · PERFIL no visual da referência do dono: moldura/título/VOLTAR da arte (ui_kit/pages/perfil_bg.png,
-    # esticada só na altura), abas, cartões, detalhe e botões com peças recortadas da mesma arte.
-    var profile_panel := Control.new()
+    # R52b · PERFIL DO JOGADOR: painel/modal próprio na referência nova (ui_kit/pages/perfil_bg.png, 1774 x 887),
+    # centralizado por cima da Home escurecida (fade em show_page). Abas, cartões, detalhe, nome, estatísticas
+    # e textos são do jogo; molduras, barra de rolagem e os 3 botões de baixo são da arte.
+    var profile_panel := RefPage.modal(canvas, "perfil_bg", PROFILE_REF, DESIGN)
     profile_panel.name = "ProfilePage"
-    profile_panel.size = Vector2(1452, 640)
-    profile_panel.scale = Vector2.ONE * (PAGE_W / 1452.0)
-    profile_panel.position = Vector2((DESIGN.x - PAGE_W) / 2.0, PAGE_TOP + 10)
-    profile_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-    canvas.add_child(profile_panel)
     pages["profile"] = profile_panel
-    var pbg := NinePatchRect.new()
-    pbg.texture = RefPage.tex("perfil_bg")
-    pbg.patch_margin_top = 110
-    pbg.patch_margin_bottom = 30
-    pbg.patch_margin_left = 30
-    pbg.patch_margin_right = 30
-    pbg.size = Vector2(1230, 640 / 1.1805)
-    pbg.scale = Vector2.ONE * 1.1805
-    pbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    pbg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-    profile_panel.add_child(pbg)
-    RefPage.hotspot(profile_panel, Rect2(56, 16, 156, 47), back, "ProfileBack")
-    var divider := ColorRect.new()
-    divider.color = Color(0.55, 0.43, 0.2, 0.55)
-    divider.position = Vector2(229, 96)
-    divider.size = Vector2(2, 500)
-    divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    profile_panel.add_child(divider)
-    # GALERIA DE PROGRESSÃO (esquerda): todos os avatares; bloqueados em cinza com o requisito.
-    gallery_count = RefPage.text(profile_panel, "", Rect2(350, 64, 280, 26), 17, Color("f0cf7a"), false)
+    RefPage.hotspot(profile_panel, Rect2(89, 99, 210, 58), back, "ProfileBack")
+    # GALERIA (centro): todos os avatares; bloqueados em cinza com o requisito.
+    gallery_count = RefPage.text(profile_panel, "", Rect2(488, 194, 344, 30), 21, Color("f0cf7a"), true)
     gallery_count.name = "GalleryCount"
     var gscroll = ScrollContainer.new()
     gscroll.name = "AvatarGalleryScroll"
-    gscroll.position = Vector2(244,92)
-    gscroll.size = Vector2(570,500)
+    gscroll.position = Vector2(340, 232)
+    gscroll.size = Vector2(662, 598)
     gscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    gscroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER   # a barra visível é a da arte
     profile_panel.add_child(gscroll)
+    preload("res://ui_v022/touch_scroll.gd").attach(gscroll)
     avatar_gallery = load("res://profile/avatar_gallery.gd").new()
     avatar_gallery.name = "AvatarGallery"
     gscroll.add_child(avatar_gallery)
-    avatar_gallery.setup(self, 4, Vector2(128,152))
+    avatar_gallery.setup(self, 4, Vector2(152, 190))
+    for c in ["h_separation", "v_separation"]: avatar_gallery.add_theme_constant_override(c, 14)
     avatar_gallery.inspected.connect(_inspect_avatar)
     # R32: ÍCONES separados dos avatares — aba própria, mesma área, botão APLICAR ÍCONE no detalhe.
     var bscroll = ScrollContainer.new()
@@ -654,14 +636,24 @@ func _build_pages():
     bscroll.position = gscroll.position
     bscroll.size = gscroll.size
     bscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    bscroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
     bscroll.visible = false
     profile_panel.add_child(bscroll)
+    preload("res://ui_v022/touch_scroll.gd").attach(bscroll)
     badge_gallery = load("res://profile/badge_gallery.gd").new()
     badge_gallery.name = "BadgeGallery"
     bscroll.add_child(badge_gallery)
-    badge_gallery.setup(self, 4, Vector2(128,152))
+    badge_gallery.setup(self, 4, Vector2(152, 190))
+    for c in ["h_separation", "v_separation"]: badge_gallery.add_theme_constant_override(c, 14)
     badge_gallery.inspected.connect(_inspect_badge)
     gallery_scrolls = {"avatars": gscroll, "icons": bscroll}
+    # barra de rolagem da arte (trilho azul + alça dourada), funcional para as duas galerias
+    for sc in [gscroll, bscroll]:
+        var bar := _art_scrollbar(profile_panel, sc, "perfil_bg", PF_BAR, PF_BAR_GRAB, PF_BAR_TRACK, PF_BAR_UP, PF_BAR_DOWN, 204, "GalleryBar")
+        var scr: ScrollContainer = sc
+        for n in bar: n.visible = scr.visible
+        scr.visibility_changed.connect(func():
+            for n in bar: n.visible = scr.visible)
     var tabs = Control.new()
     tabs.name = "ProfileTabs"
     tabs.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -669,63 +661,96 @@ func _build_pages():
     var ti := 0
     for pair in [["avatars", "AVATARES", "pf_ico_avatares"], ["icons", "ÍCONES", "pf_ico_icones"]]:
         var tab_id: String = pair[0]
-        var tr := Rect2(30, 96 + ti * 84, 196, 60)
+        var tr := Rect2(90, 226 + ti * 104, 228, 84)
         ti += 1
         var tart := NinePatchRect.new()
         tart.name = "TabArt"
         tart.texture = RefPage.tex("pf_tab")
-        for m in ["patch_margin_left", "patch_margin_right", "patch_margin_top", "patch_margin_bottom"]: tart.set(m, 12)
+        for m in ["patch_margin_left", "patch_margin_right", "patch_margin_top", "patch_margin_bottom"]: tart.set(m, 16)
         tart.position = tr.position
         tart.size = tr.size
         tart.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        tart.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
         tabs.add_child(tart)
-        RefPage.image(tabs, RefPage.tex(pair[2]), Rect2(tr.position.x + 18, tr.position.y + 12, 40, 36))
-        var tl := RefPage.text(tabs, pair[1], Rect2(tr.position.x + 64, tr.position.y, 126, tr.size.y), 20, Color("f1e6c8"), true)
+        RefPage.image(tabs, RefPage.tex(pair[2]), Rect2(tr.position.x + 18, tr.position.y + 16, 48, 52))
+        var tl := RefPage.text(tabs, pair[1], Rect2(tr.position.x + 74, tr.position.y, 146, tr.size.y), 23, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
         tl.add_theme_font_override("font", FONT_CINZEL)
         var tb := RefPage.hotspot(tabs, tr, func(): set_profile_tab(tab_id), "Tab_" + tab_id)
+        tb.name = "ProfileTabIcons" if tab_id == "icons" else "ProfileTabAvatars"
         tb.set_meta("art", tart)
         profile_tabs[tab_id] = tb
-    for id in avatar_gallery.cards: avatar_choices[id] = avatar_gallery.cards[id]
+    for id in avatar_gallery.cards:
+        avatar_choices[id] = avatar_gallery.cards[id]
+        avatar_gallery.cards[id].name = "AvatarCard_" + String(id)
     # Foto própria: escolher arquivo → enquadrar → salvar (512x512). Remover volta ao avatar.
-    var photo_row = HBoxContainer.new()
-    photo_row.name = "PhotoRow"
-    photo_row.position = Vector2(816,572)
-    photo_row.size = Vector2(596,50)
-    photo_row.add_theme_constant_override("separation", 12)
-    profile_panel.add_child(photo_row)
-    var change_photo = _ref_image_button("pf_btn_alterar", Vector2(178,50))
-    change_photo.name = "ChangePhoto"
-    change_photo.pressed.connect(pick_photo)
-    photo_row.add_child(change_photo)
-    var remove_photo = _ref_image_button("pf_btn_remover", Vector2(180,50))
-    remove_photo.name = "RemovePhoto"
-    remove_photo.pressed.connect(remove_custom_avatar)
-    photo_row.add_child(remove_photo)
+    # Os 3 botões de baixo já estão desenhados na arte: aqui só as áreas de clique.
+    var change_photo := RefPage.hotspot(profile_panel, Rect2(1070, 775, 194, 58), pick_photo, "ChangePhoto")
+    change_photo.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    var remove_photo := RefPage.hotspot(profile_panel, Rect2(1279, 775, 193, 58), remove_custom_avatar, "RemovePhoto")
+    remove_photo.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     # R31: ícone, título, moldura, universo e peças exclusivos (Fundador / Club).
-    var personalize = _ref_image_button("pf_btn_personalizar", Vector2(204,50))
-    personalize.name = "OpenPersonalize"
+    var personalize := RefPage.hotspot(profile_panel, Rect2(1487, 775, 203, 58), func(): open_premium("personalize"), "OpenPersonalize")
+    personalize.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     personalize.tooltip_text = "Ícone, título, moldura, universo e peças"
-    personalize.pressed.connect(func(): open_premium("personalize"))
-    photo_row.add_child(personalize)
-    avatar_note = _label(profile_panel, "", 13, MUTED)
+    # avisos (bloqueado, aplicado…) na coluna da esquerda, abaixo das abas
+    avatar_note = RefPage.text(profile_panel, "", Rect2(104, 440, 200, 380), 17, MUTED, false)
     avatar_note.name = "AvatarNote"
-    avatar_note.position = Vector2(250,598)
-    avatar_note.size = Vector2(560,20)
-    # DETALHE (direita, topo): avatar em foco, nome, origem e status.
-    avatar_detail = _build_avatar_detail(profile_panel, Rect2(834,78,584,160))
+    avatar_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    avatar_note.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+    # DETALHE (direita, topo): avatar em foco (círculo com o anel da arte), nome, origem, status e APLICAR.
+    avatar_detail = _build_avatar_detail(profile_panel, Rect2(1066, 190, 620, 188))
+    var dbox: Panel = avatar_detail.box
+    dbox.add_theme_stylebox_override("panel", StyleBoxEmpty.new())   # a moldura é a da arte
+    var pic: TextureRect = avatar_detail.pic
+    pic.position = Vector2(32, 26)
+    pic.size = Vector2(138, 138)
+    var circle := ShaderMaterial.new()
+    circle.shader = Shader.new()
+    circle.shader.code = "shader_type canvas_item;\nuniform bool gray = false;\nvoid fragment(){ vec4 c = texture(TEXTURE, UV); float d = distance(UV, vec2(0.5)); vec3 rgb = c.rgb; if (gray) { float l = dot(rgb, vec3(0.3, 0.59, 0.11)); rgb = vec3(l) * 0.75; } COLOR = vec4(rgb, c.a * (1.0 - smoothstep(0.485, 0.5, d))); }"
+    pic.set_meta("circle", circle)
+    pic.material = circle
+    var ring := TextureRect.new()
+    ring.name = "DetailRing"
+    ring.texture = RefPage.tex("pf_anel")
+    ring.position = Vector2(100.5, 94.5) - Vector2(79.5, 79.5)
+    ring.size = Vector2(159, 159)
+    ring.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    dbox.add_child(ring)
+    var words: Control = avatar_detail.title.get_parent().get_parent()
+    words.position = Vector2(200, 18)
+    words.size = Vector2(410, 100)
+    avatar_detail.title.add_theme_font_size_override("font_size", 34)
+    var apply: Button = avatar_detail.apply
+    apply.position = Vector2(357, 121)
+    apply.size = Vector2(234, 52)
+    for st in ["normal", "hover", "pressed", "focus", "disabled"]:
+        var ab := StyleBoxTexture.new()
+        ab.texture = RefPage.tex("pf_btn_aplicar")
+        ab.texture_margin_left = 14; ab.texture_margin_right = 14; ab.texture_margin_top = 14; ab.texture_margin_bottom = 14
+        ab.modulate_color = {"hover": Color(1.15, 1.12, 1.05), "pressed": Color(0.88, 0.88, 0.88), "disabled": Color(0.5, 0.55, 0.52)}.get(st, Color.WHITE)
+        apply.add_theme_stylebox_override(st, ab)
+    apply.add_theme_font_override("font", Kit.SERIF_BOLD)
+    apply.add_theme_font_size_override("font_size", 20)
+    for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: apply.add_theme_color_override(c, Color("f6e7bf"))
+    apply.add_theme_color_override("font_disabled_color", Color("b7c4b4"))
+    apply.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
+    apply.add_theme_constant_override("outline_size", 3)
+    # NOME PÚBLICO (conta) / nome local (sem conta) — abaixo do detalhe
     var right_scroll = ScrollContainer.new()
     right_scroll.name = "ProfileInfoScroll"
-    right_scroll.position = Vector2(840,246)
-    right_scroll.size = Vector2(578,316)
+    right_scroll.position = Vector2(1068, 386)
+    right_scroll.size = Vector2(624, 166)
     right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     profile_panel.add_child(right_scroll)
+    preload("res://ui_v022/touch_scroll.gd").attach(right_scroll)
     var right_holder = MarginContainer.new()
     right_holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    right_holder.add_theme_constant_override("margin_right", 10)
+    right_holder.add_theme_constant_override("margin_right", 6)
     right_scroll.add_child(right_holder)
     var profile = VBoxContainer.new()
     profile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    profile.add_theme_constant_override("separation", 10)
+    profile.add_theme_constant_override("separation", 6)
     right_holder.add_child(profile)
     # Selo Fundador (Pacote Fundador): emblema + título; só aparece para quem tem o pacote.
     founder_row = HBoxContainer.new()
@@ -736,7 +761,7 @@ func _build_pages():
     seal.name = "FounderSeal"
     founder_seal = seal
     seal.texture = FOUNDER_BADGE
-    seal.custom_minimum_size = Vector2(64, 64)
+    seal.custom_minimum_size = Vector2(56, 56)
     seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     seal.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     founder_row.add_child(seal)
@@ -753,19 +778,22 @@ func _build_pages():
     nickname_editor = preload("res://account/nickname_editor.gd").new()
     profile.add_child(nickname_editor)
     if account != null: nickname_editor.setup(account, 18)
+    _style_name_editor(nickname_editor)
     # Sem conta: nome local só para a partida contra o computador / tela inicial.
     local_name_box = VBoxContainer.new()
     local_name_box.name = "LocalNameBox"
     local_name_box.add_theme_constant_override("separation", 6)
     profile.add_child(local_name_box)
-    _label(local_name_box,"NOME LOCAL (SEM CONTA)",16,GOLD)
+    var lt := _label(local_name_box,"NOME LOCAL (SEM CONTA)",20,GOLD)
+    lt.add_theme_font_override("font", FONT_CINZEL)
     var name_input = LineEdit.new()
     name_input.name = "PlayerName"
-    name_input.custom_minimum_size.y = 46
+    name_input.custom_minimum_size.y = 50
     name_input.max_length = 20
     name_input.text = player_name
     name_input.placeholder_text = "Seu nome"
-    name_input.add_theme_font_size_override("font_size",20)
+    name_input.add_theme_font_size_override("font_size",22)
+    _style_name_field(name_input)
     local_name_box.add_child(name_input)
     name_input.text_changed.connect(func(value):
         player_name = value.strip_edges()
@@ -775,14 +803,33 @@ func _build_pages():
         _save_preferences()
     )
     _refresh_name_boxes()
-    var stats_grid = GridContainer.new()
-    stats_grid.columns = 2
-    stats_grid.add_theme_constant_override("h_separation", 18)
-    stats_grid.add_theme_constant_override("v_separation", 4)
-    profile.add_child(stats_grid)
+    # ESTATÍSTICAS por ritmo, nas 4 células da arte (os ícones já estão na arte)
+    var cells := [Rect2(1116, 562, 246, 100), Rect2(1422, 562, 262, 100), Rect2(1116, 672, 246, 92), Rect2(1422, 672, 262, 92)]
+    var mi := 0
     for mode in Ranked.MODES:
-        var cell = _body(stats_grid,ranked.summary(mode),13)
-        cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        if mi >= cells.size(): break
+        var cr: Rect2 = cells[mi]
+        mi += 1
+        var lines: PackedStringArray = String(ranked.summary(mode)).split("\n")
+        var head: String = lines[0] if lines.size() > 0 else ""
+        var cut := head.find(" · ")
+        var title := head.left(cut).to_upper() if cut > 0 else head.to_upper()
+        var first := head.substr(cut + 3) if cut > 0 else ""
+        var t := RefPage.text(profile_panel, title, Rect2(cr.position.x, cr.position.y, cr.size.x, 24), 17, Color("f3c95f"), true, HORIZONTAL_ALIGNMENT_LEFT)
+        t.name = "Stats_" + String(mode)
+        var rest: Array = [first]
+        for k in range(1, lines.size()):
+            var ln: String = lines[k]
+            var lc := ln.rfind(" · ")
+            if k == 1 and lc > 0:   # "0 vitórias · 0 derrotas · 0 empates" / "0 partidas" (como na referência)
+                rest.append(ln.left(lc))
+                rest.append(ln.substr(lc + 3))
+            else:
+                rest.append(ln)
+        var body := RefPage.text(profile_panel, "\n".join(PackedStringArray(rest)), Rect2(cr.position.x, cr.position.y + 24, cr.size.x, cr.size.y - 24), 14, Color("e7e0cc"), false, HORIZONTAL_ALIGNMENT_LEFT)
+        body.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+        body.size.y = 72.0 if cr.position.y < 600 else 68.0
+        body.add_theme_constant_override("line_spacing", -3)
     set_profile_tab("avatars")
     _build_settings_page()
 
@@ -791,49 +838,82 @@ func _build_pages():
 ## sem rolar; no celular a mesma coluna é emprestada pelo mobile_hub (page_scrolls).
 ## R51 · CONFIGURAÇÕES no PC: a página é a imagem de referência do dono (ui_kit/pages/config_bg.png);
 ## o jogo põe por cima os valores vivos (volumes, pré-move, versão), os sliders e as áreas de clique.
-const CONFIG_REF := Vector2(1353, 1162)
+const CONFIG_REF := Vector2(1448, 1086)   # R52: referência nova (painel já recortado)
+const PROFILE_REF := Vector2(1774, 887)   # R52b: referência nova do PERFIL (painel já recortado)
+const PF_BAR := Rect2(1014, 232, 20, 546)
+const PF_BAR_GRAB := Rect2(1014, 232, 20, 124)
+const PF_BAR_TRACK := Rect2(1014, 360, 20, 418)
+const PF_BAR_UP := Rect2(1004, 204, 40, 30)
+const PF_BAR_DOWN := Rect2(1004, 778, 40, 44)
+
+## R52b · campo e botão do nome na arte da referência (campo azul-escuro, SALVAR NOME azul)
+func _style_name_field(e: LineEdit):
+    var fb := StyleBoxTexture.new()
+    fb.texture = RefPage.tex("pf_field")
+    fb.texture_margin_left = 12; fb.texture_margin_right = 12; fb.texture_margin_top = 12; fb.texture_margin_bottom = 12
+    fb.content_margin_left = 20; fb.content_margin_right = 14
+    for st in ["normal", "focus", "read_only"]: e.add_theme_stylebox_override(st, fb)
+    e.add_theme_font_override("font", Kit.SERIF_BOLD)
+    e.add_theme_color_override("font_color", Color("f1e6c8"))
+
+func _style_name_editor(ed):
+    if ed == null: return
+    if ed.get("title") is Label:
+        ed.title.add_theme_font_override("font", FONT_CINZEL)
+        ed.title.add_theme_font_size_override("font_size", 23)
+        ed.title.text = "✦  SEU NOME PÚBLICO" if not ed.title.text.begins_with("✦") else ed.title.text
+    if ed.get("input") is LineEdit:
+        _style_name_field(ed.input)
+        ed.input.custom_minimum_size.y = 50
+        ed.input.add_theme_font_size_override("font_size", 22)
+    if ed.get("save_button") is Button:
+        var b: Button = ed.save_button
+        b.custom_minimum_size = Vector2(178, 50)
+        for st in ["normal", "hover", "pressed", "focus", "disabled"]:
+            var sb := StyleBoxTexture.new()
+            sb.texture = RefPage.tex("pf_btn_salvar")
+            sb.texture_margin_left = 12; sb.texture_margin_right = 12; sb.texture_margin_top = 12; sb.texture_margin_bottom = 12
+            sb.modulate_color = {"hover": Color(1.15, 1.12, 1.05), "pressed": Color(0.88, 0.88, 0.88), "disabled": Color(0.5, 0.52, 0.55)}.get(st, Color.WHITE)
+            b.add_theme_stylebox_override(st, sb)
+        b.add_theme_font_override("font", Kit.SERIF_BOLD)
+        b.add_theme_font_size_override("font_size", 19)
+        for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, Color("f6e7bf"))
 func _build_settings_page():
-    var panel := Control.new()
+    # R52 · painel/modal próprio: centralizado por cima da Home escurecida (fade em show_page)
+    var panel := RefPage.modal(canvas, "config_bg", CONFIG_REF, DESIGN)
     panel.name = "SettingsPage"
-    var k := 612.0 / CONFIG_REF.y
-    panel.size = CONFIG_REF
-    panel.scale = Vector2.ONE * k
-    panel.position = Vector2((DESIGN.x - CONFIG_REF.x * k) / 2.0, PAGE_TOP + 4)
-    panel.mouse_filter = Control.MOUSE_FILTER_STOP
-    canvas.add_child(panel)
-    RefPage.image(panel, RefPage.tex("config_bg"), Rect2(Vector2.ZERO, CONFIG_REF)).stretch_mode = TextureRect.STRETCH_SCALE
     # FRAIHA PREMIUM (Fundador + Club): a arte já desenha a entrada; o botão do jogo fica por cima, invisível
     var premium_entry = preload("res://monetization/premium_entry.gd").new()
     premium_entry.pressed.connect(func(): open_premium())
     panel.add_child(premium_entry)
-    premium_entry.position = Vector2(92, 212)
-    premium_entry.size = Vector2(1172, 178)
+    premium_entry.position = Vector2(126, 222)
+    premium_entry.size = Vector2(1196, 188)
     premium_entry.self_modulate = Color(1, 1, 1, 0)
-    music_volume_label = RefPage.text(panel, "", Rect2(190, 490, 700, 44), 34, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
+    music_volume_label = RefPage.text(panel, "", Rect2(232, 496, 700, 44), 30, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
     music_volume_label.add_theme_font_override("font", FONT_CINZEL)
-    var music_slider = _ref_slider(panel, "MusicVolume", Rect2(196, 530, 1060, 52))
+    var music_slider = _ref_slider(panel, "MusicVolume", Rect2(238, 532, 1056, 60))
     music_slider.value = round(music_volume*100)
     music_slider.value_changed.connect(_set_music_volume)
     _set_music_volume(music_slider.value,false)
-    volume_label = RefPage.text(panel, "", Rect2(190, 606, 700, 44), 34, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
+    volume_label = RefPage.text(panel, "", Rect2(232, 610, 700, 44), 30, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
     volume_label.add_theme_font_override("font", FONT_CINZEL)
-    var slider = _ref_slider(panel, "EffectsVolume", Rect2(196, 649, 1060, 52))
+    var slider = _ref_slider(panel, "EffectsVolume", Rect2(238, 648, 1056, 60))
     slider.value = round(volume*100)
     slider.value_changed.connect(_set_volume)
     _set_volume(slider.value, false)
-    premove_button = RefPage.hotspot(panel, Rect2(88, 790, 1178, 128), _toggle_premove, "PremoveToggle")
-    var pt := RefPage.text(panel, "", Rect2(306, 806, 860, 58), 44, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
+    premove_button = RefPage.hotspot(panel, Rect2(126, 782, 1196, 130), _toggle_premove, "PremoveToggle")
+    var pt := RefPage.text(panel, "", Rect2(340, 800, 820, 52), 40, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
     pt.add_theme_font_override("font", FONT_CINZEL)
-    var ps := RefPage.text(panel, "", Rect2(312, 858, 860, 44), 32, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
+    var ps := RefPage.text(panel, "", Rect2(346, 848, 820, 40), 28, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
     premove_button.set_meta("ref_labels", [pt, ps])
     _refresh_premove_button()
     var note := Label.new()
     note.name = "SettingsNote"
     note.text = "Preferências salvas automaticamente. O botão de som da tela inicial silencia tudo."
-    note.visible = false   # a frase já está na arte
+    note.visible = false
     panel.add_child(note)
-    RefPage.hotspot(panel, Rect2(90, 988, 696, 112), back, "SettingsBack")
-    var ver := RefPage.text(panel, "FRAIHA Xadrez · versão %s" % APP_VERSION, Rect2(900, 1034, 380, 40), 22, Color("d8d0bc"), false, HORIZONTAL_ALIGNMENT_RIGHT)
+    RefPage.hotspot(panel, Rect2(132, 932, 668, 98), back, "SettingsBack")
+    var ver := RefPage.text(panel, "FRAIHA Xadrez · versão %s" % APP_VERSION, Rect2(900, 980, 422, 40), 21, Color("e3dccb"), false, HORIZONTAL_ALIGNMENT_RIGHT)
     ver.name = "SettingsVersion"
     pages["settings"] = panel
 
@@ -847,15 +927,16 @@ func _ref_slider(parent: Control, node_name: String, rect: Rect2) -> HSlider:
     slider.max_value = 100
     slider.step = 1
     slider.focus_mode = Control.FOCUS_NONE
+    # trilho da arte: a parte dourada (39 px, com as bordas) cobre o trilho; o botão esmeralda vai por cima
     var track := StyleBoxEmpty.new()
-    track.content_margin_top = 13
-    track.content_margin_bottom = 13
+    track.content_margin_top = 19.5
+    track.content_margin_bottom = 19.5
     slider.add_theme_stylebox_override("slider", track)
     var fill := StyleBoxTexture.new()
     fill.texture = RefPage.tex("slider_fill")
-    fill.content_margin_top = 13
-    fill.content_margin_bottom = 13
-    fill.expand_margin_left = -8
+    fill.content_margin_top = 19.5
+    fill.content_margin_bottom = 19.5
+    fill.expand_margin_left = -4
     for st in ["grabber_area", "grabber_area_highlight"]: slider.add_theme_stylebox_override(st, fill)
     var knob := RefPage.tex("slider_knob")
     slider.add_theme_icon_override("grabber", knob)
@@ -930,8 +1011,9 @@ func _choose_difficulty(id: String):
 ## o jogo desenha por cima, nos cartões da arte, o estado de cada bot e os botões.
 const RefPage = preload("res://ui_kit/ref_page.gd")
 const Kit = preload("res://ui_kit/kit.gd")
-const BOT_CARDS_R1 := [[68, 311], [328, 569], [586, 826], [843, 1084], [1102, 1342], [1358, 1601]]
-const BOT_CARDS_R2 := [[68, 356], [379, 667], [690, 980], [1001, 1290], [1313, 1602]]
+const BOT_CARDS_R1 := [[100, 332], [347, 581], [596, 828], [842, 1075], [1090, 1322], [1336, 1572]]   # R52: referência nova
+const BOT_CARDS_R2 := [[100, 380], [395, 680], [695, 977], [993, 1277], [1292, 1572]]
+const BOT_CARD_Y := [Vector2(215, 517), Vector2(531, 807)]
 var bot_ref_page: Control
 var bot_ref_cards: Control
 
@@ -949,13 +1031,13 @@ func _sync_ref_full(on: bool):
         _ref_hidden.clear()
 
 func _build_bot_ladder_page():
-    var panel := RefPage.full_page(canvas, "bots_bg", DESIGN, 0.92, 0.72)
+    # R52 · painel/modal próprio: centralizado por cima da Home escurecida (fade em show_page)
+    var panel := RefPage.modal(canvas, "bots_bg", DESIGN, DESIGN)
     panel.name = "BotLadderPage"
-    panel.set_meta("ref_full", true)
     pages["bot"] = panel
     bot_ref_page = panel
-    RefPage.hotspot(panel, Rect2(86, 826, 542, 78), back, "BotBack")
-    storage_note = RefPage.text(panel, "", Rect2(780, 846, 760, 44), 18, Color("efe6d2"), false, HORIZONTAL_ALIGNMENT_LEFT)
+    RefPage.hotspot(panel, Rect2(118, 826, 537, 80), back, "BotBack")
+    storage_note = RefPage.text(panel, "", Rect2(788, 845, 740, 40), 19, Color("efe6d2"), false, HORIZONTAL_ALIGNMENT_LEFT)
     bot_progress.changed.connect(_refresh_storage_note)
     bot_progress.changed.connect(_refresh_bot_ref_cards)
     _refresh_storage_note()
@@ -979,36 +1061,41 @@ func _refresh_bot_ref_cards():
         var x0 := float(xr[0])
         var x1 := float(xr[1])
         var cx := (x0 + x1) / 2.0
-        var y_name := 351.0 if top else 661.0
-        var gap := 0.0 if top else 0.0
+        var cy: Vector2 = BOT_CARD_Y[0] if top else BOT_CARD_Y[1]
+        var y_name := 357.0 if top else 661.0
         if st == "available":
-            var glow := NinePatchRect.new()
-            glow.texture = RefPage.tex("bots_glow")
-            for m in ["patch_margin_left", "patch_margin_right", "patch_margin_top", "patch_margin_bottom"]: glow.set(m, 40)
-            var y0 := 203.0 if top else 528.0
-            var y1 := 512.0 if top else 804.0
-            glow.position = Vector2(x0 - 10, y0 - 10)
-            glow.size = Vector2(x1 - x0 + 21, y1 - y0 + 21)
-            glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-            glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-            bot_ref_cards.add_child(glow)
+            # destaque sutil (mesmo da liga escolhida): fio dourado suave que se desfaz para dentro
+            var hl := Panel.new()
+            var sf := StyleBoxFlat.new()
+            sf.draw_center = false
+            sf.border_color = Color(0.98, 0.86, 0.55, 0.95)
+            sf.set_border_width_all(5)
+            sf.border_blend = true
+            sf.set_corner_radius_all(3)
+            sf.set_expand_margin_all(1)
+            hl.add_theme_stylebox_override("panel", sf)
+            hl.position = Vector2(x0 + 1, cy.x + 1)
+            hl.size = Vector2(x1 - x0 - 1, cy.y - cy.x - 1)
+            hl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            hl.name = "BotHighlight"
+            bot_ref_cards.add_child(hl)
         var locked := st == "locked"
-        RefPage.text(bot_ref_cards, String(b.name), Rect2(x0 + 8, y_name - 16 + gap, x1 - x0 - 16, 32), 24, Color("f6cf6d") if not locked else Color("cbb98a"), true)
-        RefPage.text(bot_ref_cards, String(b.get("title", "")), Rect2(x0 + 8, y_name + 12, x1 - x0 - 16, 28), 17, Color("ece3cc") if not locked else Color("b8b3a3"))
-        var sy := y_name + 57.0 if top else y_name + 56.0
+        RefPage.text(bot_ref_cards, String(b.name), Rect2(x0 + 10, y_name - 17, x1 - x0 - 20, 34), 24, Color("f6cf6d") if not locked else Color("cbb98a"), true)
+        RefPage.text(bot_ref_cards, String(b.get("title", "")), Rect2(x0 + 10, y_name + 11, x1 - x0 - 20, 28), 17, Color("ece3cc") if not locked else Color("b8b3a3"))
+        var sy := y_name + 56.0 if top else y_name + 57.0
         match st:
-            "defeated": RefPage.icon_text(bot_ref_cards, RefPage.tex("ico_check"), "DERROTADO", Vector2(cx, sy), 19, Color("6fe07c"), 22)
-            "available": RefPage.icon_text(bot_ref_cards, RefPage.tex("ico_espadas_ouro"), "DISPONÍVEL", Vector2(cx, sy), 19, Color("f6cf6d"), 24)
+            "defeated": RefPage.icon_text(bot_ref_cards, RefPage.tex("ico_check"), "DERROTADO", Vector2(cx, sy), 19, Color("6fe07c"), 20)
+            "available": RefPage.icon_text(bot_ref_cards, RefPage.tex("ico_espadas_ouro"), "DISPONÍVEL", Vector2(cx, sy), 19, Color("f6cf6d"), 22)
             _: RefPage.icon_text(bot_ref_cards, RefPage.tex("ico_cadeado"), "BLOQUEADO", Vector2(cx, sy), 19, Color("b3ad9c"), 24)
         var reward: String = "Prêmio: " + load("res://bot/bot_ladder_ui.gd").reward_text(b.get("reward", {}), true)
-        RefPage.text(bot_ref_cards, reward, Rect2(x0 + 8, sy + (15 if top else 11), x1 - x0 - 16, 30), 16, Color("ece3cc") if not locked else Color("b8b3a3"))
-        var by := 456.0 if top else 757.0
-        var bh := 44.0 if top else 36.0
+        RefPage.text(bot_ref_cards, reward, Rect2(x0 + 10, sy + 16 if top else sy + 11, x1 - x0 - 20, 28), 16, Color("ece3cc") if not locked else Color("b8b3a3"))
+        var by := 459.0 if top else 755.0
+        var bh := 48.0 if top else 44.0
         var art: String = {"defeated": "btn_jogar_de_novo", "available": "btn_desafiar", "locked": "btn_bloqueado"}[st]
         var lbl: String = {"defeated": "JOGAR DE NOVO", "available": "DESAFIAR", "locked": "BLOQUEADO"}[st]
         var col: Color = {"defeated": Color("f3d27e"), "available": Color("ffe7a6"), "locked": Color("8d8f86")}[st]
         var bid := id
-        var btn := RefPage.art_button(bot_ref_cards, art, lbl, Rect2(x0 + 16, by, x1 - x0 - 32, bh), 19, col, func(): _choose_difficulty(bid))
+        var btn := RefPage.art_button(bot_ref_cards, art, lbl, Rect2(x0 + 12, by, x1 - x0 - 24, bh), 19, col, func(): _choose_difficulty(bid))
         btn.name = "Challenge_" + id
         btn.disabled = locked
 
@@ -1220,7 +1307,7 @@ func _refresh_avatar_detail():
     var e: Dictionary = AvatarCatalog.entry(id)
     var st: String = avatar_gallery.state_of(id)
     avatar_detail.pic.texture = avatar_texture(id) if AvatarCatalog.has_art(id) else null
-    avatar_detail.pic.material = avatar_gallery.gray_material() if st == "locked" else null
+    _detail_material(st == "locked")
     avatar_detail.title.text = String(e.get("name", id)).to_upper()
     var src := String(e.get("source", ""))
     avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else ("Exclusivo do Pacote Fundador" if src == "founder" else ("Exclusivo do Club FRAIHA" if src == "club" else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot"))))
@@ -1243,12 +1330,22 @@ func _refresh_avatar_detail():
         b.text = "EM USO" if st == "selected" else ("BLOQUEADO" if st in ["locked", "no_art_unlocked"] else "APLICAR AVATAR")
         b.disabled = st != "unlocked"
 
+## retrato do detalhe: recortado em círculo (anel da arte) e em cinza quando bloqueado
+func _detail_material(locked: bool):
+    var pic: TextureRect = avatar_detail.pic
+    if pic.has_meta("circle"):
+        var m: ShaderMaterial = pic.get_meta("circle")
+        m.set_shader_parameter("gray", locked)
+        pic.material = m
+    else:
+        pic.material = avatar_gallery.gray_material() if locked else null
+
 func _refresh_badge_detail():
     var id: String = inspected_badge
     var st: String = badge_gallery.state_of(id)
     var shown: String = Cosmetics.effective("badge", id, is_founder(), club_active()) if id == "auto" else id
     avatar_detail.pic.texture = Cosmetics.badge_texture(shown, false)
-    avatar_detail.pic.material = avatar_gallery.gray_material() if st == "locked" else null
+    _detail_material(st == "locked")
     avatar_detail.title.text = badge_gallery.display_name(id).to_upper()
     var req := Cosmetics.requirement("badge", id) if id != "auto" else ""
     avatar_detail.origin.text = "Selo ao lado do seu nome (Home, Perfil, Amigos, chat e partidas)" if req.is_empty() else ("Exclusivo do Pacote Fundador" if req == "founder" else "Exclusivo do Club FRAIHA")
@@ -1289,27 +1386,19 @@ const HISTORY_FILTERS := [["all", "TODAS"], ["bot", "COMPUTADOR"], ["casual", "O
 
 ## R51 · HISTÓRICO no PC: a página é a imagem de referência do dono (ui_kit/pages/hist_bg.png, desenhada em
 ## coordenadas da referência e reduzida para o painel), com as abas e as linhas montadas com peças da própria arte.
-const HIST_REF := Vector2(1890, 832)
+const HIST_REF := Vector2(1672, 941)   # R52: referência nova (painel já recortado)
 ## R51b · páginas na arte de referência: só moldura + miolo, entre a faixa do logo e o rodapé da tela.
 const PAGE_TOP := 302.0
 const PAGE_W := 1380.0
-const HIST_TABS := [[68, 310], [320, 590], [601, 800], [812, 1065], [1077, 1277], [1290, 1541], [1555, 1793]]
+const HIST_TABS := [[67, 289], [301, 532], [544, 717], [729, 956], [968, 1144], [1156, 1374], [1386, 1603]]
 const HIST_ICONS := {"all": "ico_todas", "bot": "ico_computador", "casual": "ico_online", "ranked": "ico_ranqueada", "local": "ico_local", "marcha": "ico_marcha", "xeque": "ico_xeque"}
 var hist_tab_art := {}
 
 func _build_history_page():
-    var panel := Control.new()
+    # R52 · painel/modal próprio: centralizado por cima da Home escurecida (fade em show_page)
+    var panel := RefPage.modal(canvas, "hist_bg", HIST_REF, DESIGN)
     panel.name = "HistoryPage"
-    # R51b · abaixo da faixa "ESTRATÉGIA PARA IR MAIS LONGE" do logo; fora da moldura a Home aparece
-    # R51c · centralizado na área útil: entre a faixa do logo e o rodapé que nunca é cortado
-    var hk := PAGE_W / HIST_REF.x
-    panel.scale = Vector2.ONE * hk
-    panel.position = Vector2((DESIGN.x - HIST_REF.x * hk) / 2.0, (HIST_AREA.x + HIST_AREA.y - HIST_REF.y * hk) / 2.0).round()
-    panel.size = HIST_REF
-    panel.mouse_filter = Control.MOUSE_FILTER_STOP
-    canvas.add_child(panel)
     pages["history"] = panel
-    RefPage.image(panel, RefPage.tex("hist_bg"), Rect2(Vector2.ZERO, HIST_REF)).stretch_mode = TextureRect.STRETCH_SCALE
     var filters := Control.new()
     filters.name = "HistoryFilters"
     filters.size = HIST_REF
@@ -1319,10 +1408,10 @@ func _build_history_page():
         var f: Array = HISTORY_FILTERS[i]
         var fid: String = f[0]
         var xr: Array = HIST_TABS[i]
-        var r := Rect2(xr[0], 140, xr[1] - xr[0], 67)
+        var r := Rect2(xr[0] - 2, 204, xr[1] - xr[0] + 5, 75)
         var art := NinePatchRect.new()
         art.texture = RefPage.tex("hist_tab")
-        for m in ["patch_margin_left", "patch_margin_right", "patch_margin_top", "patch_margin_bottom"]: art.set(m, 14)
+        for m in ["patch_margin_left", "patch_margin_right", "patch_margin_top", "patch_margin_bottom"]: art.set(m, 18)
         art.position = r.position
         art.size = r.size
         art.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1330,19 +1419,26 @@ func _build_history_page():
         filters.add_child(art)
         hist_tab_art[fid] = art
         var ic: Texture2D = RefPage.tex(HIST_ICONS[fid])
-        var iw := 40.0 * ic.get_size().x / ic.get_size().y if ic != null else 0.0
-        RefPage.image(filters, ic, Rect2(xr[0] + 26, 154, iw, 40))
-        RefPage.text(filters, String(f[1]), Rect2(xr[0] + 26 + iw, 150, xr[1] - xr[0] - 40 - iw, 46), 22, Color("f1e6c8"))
+        var iw := 38.0 * ic.get_size().x / ic.get_size().y if ic != null else 0.0
+        iw = minf(iw, 52.0)
+        # ícone + texto centralizados juntos na aba (sem encostar)
+        var label_t := String(f[1])
+        var tw: float = filters.get_theme_default_font().get_string_size(label_t, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
+        var gx: float = xr[0] + ((xr[1] - xr[0]) - (iw + 12.0 + tw)) / 2.0
+        gx = maxf(gx, xr[0] + 16.0)
+        RefPage.image(filters, ic, Rect2(gx, 222, iw, 38))
+        RefPage.text(filters, label_t, Rect2(gx + iw + 12.0, 218, xr[1] - gx - iw - 22.0, 46), 20, Color("f1e6c8"), false, HORIZONTAL_ALIGNMENT_LEFT)
         var b := RefPage.hotspot(filters, r, func():
             history_filter = fid
             refresh_history(), "HistoryFilter_" + fid)
         history_filter_buttons[fid] = b
     var scroll = ScrollContainer.new()
     scroll.name = "HistoryScroll"
-    scroll.position = Vector2(64, 224)
-    scroll.size = Vector2(1736, 508)
+    scroll.position = Vector2(68, 296)
+    scroll.size = Vector2(1506, 512)
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER   # a barra visível é a da arte (abaixo)
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+    scroll.clip_contents = true   # a barra visível é a da arte (abaixo)
     panel.add_child(scroll)
     preload("res://ui_v022/touch_scroll.gd").attach(scroll)
     _history_scrollbar(panel, scroll)
@@ -1351,36 +1447,43 @@ func _build_history_page():
     history_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     history_list.add_theme_constant_override("separation", 8)
     scroll.add_child(history_list)
-    RefPage.hotspot(panel, Rect2(84, 742, 428, 60), back, "HistoryBack")
+    RefPage.hotspot(panel, Rect2(85, 816, 418, 62), back, "HistoryBack")
 
 ## R51c · A barra de rolagem da direita é a própria arte (trilho azul, alça de marfim e setas douradas),
 ## agora funcional: trilho e alça são recortes da hist_bg; arrastar, clicar no trilho e nas setas rola a lista,
 ## e rolar a lista (roda/arrasto) move a alça. Lista curta: a alça fica parada no topo, como na referência.
-const HIST_BAR := Rect2(1804, 237, 30, 473)        # trilho: abaixo da seta de cima até antes da seta de baixo
-const HIST_BAR_GRAB := Rect2(1804, 237, 30, 103)   # alça de marfim com as pontas douradas
-const HIST_BAR_TRACK := Rect2(1804, 343, 30, 368)  # trilho azul liso (ponta arredondada embaixo)
-const HIST_BAR_UP := Rect2(1800, 210, 38, 27)
-const HIST_BAR_DOWN := Rect2(1800, 710, 38, 24)
-const HIST_AREA := Vector2(306, 925)               # faixa vertical útil do canvas para o painel
+const HIST_BAR := Rect2(1586, 318, 22, 458)        # trilho: abaixo da seta de cima até antes da seta de baixo
+const HIST_BAR_GRAB := Rect2(1586, 318, 22, 106)   # alça de marfim com as pontas douradas
+const HIST_BAR_TRACK := Rect2(1586, 425, 22, 352)  # trilho azul liso (ponta arredondada embaixo)
+const HIST_BAR_UP := Rect2(1574, 286, 46, 32)
+const HIST_BAR_DOWN := Rect2(1574, 776, 46, 32)
 func _history_scrollbar(panel: Control, scroll: ScrollContainer) -> void:
-    var tex := RefPage.tex("hist_bg")
+    var parts := _art_scrollbar(panel, scroll, "hist_bg", HIST_BAR, HIST_BAR_GRAB, HIST_BAR_TRACK, HIST_BAR_UP, HIST_BAR_DOWN, 104, "HistoryBar")
+    parts[1].name = "HistoryBarUp"
+    parts[2].name = "HistoryBarDown"
+
+## R51c/R52b · barra de rolagem que É a arte (trilho e alça recortados do fundo da página), funcional:
+## arrastar a alça, clicar no trilho e nas setas rola a lista; rolar a lista (roda/arrasto) move a alça.
+## Lista curta: a alça fica parada no topo, como na referência. Devolve [barra, seta de cima, seta de baixo].
+func _art_scrollbar(panel: Control, scroll: ScrollContainer, bg: String, bar_r: Rect2, grab_r: Rect2, track_r: Rect2, up_r: Rect2, down_r: Rect2, step: int, bar_name: String) -> Array:
+    var tex := RefPage.tex(bg)
     var bar := VScrollBar.new()
-    bar.name = "HistoryBar"
-    bar.position = HIST_BAR.position
-    bar.size = HIST_BAR.size
-    bar.custom_minimum_size = Vector2(HIST_BAR.size.x, 0)
+    bar.name = bar_name
+    bar.position = bar_r.position
+    bar.size = bar_r.size
+    bar.custom_minimum_size = Vector2(bar_r.size.x, 0)
     bar.focus_mode = Control.FOCUS_NONE
     bar.step = 0
     var track := StyleBoxTexture.new()
     track.texture = tex
-    track.region_rect = HIST_BAR_TRACK
+    track.region_rect = track_r
     track.texture_margin_top = 4
     track.texture_margin_bottom = 12
     for st in ["scroll", "scroll_focus"]: bar.add_theme_stylebox_override(st, track)
     for k in [["grabber", Color.WHITE], ["grabber_highlight", Color(1.12, 1.08, 1.0)], ["grabber_pressed", Color(0.9, 0.88, 0.85)]]:
         var g := StyleBoxTexture.new()
         g.texture = tex
-        g.region_rect = HIST_BAR_GRAB
+        g.region_rect = grab_r
         g.texture_margin_top = 14
         g.texture_margin_bottom = 14
         g.modulate_color = k[1]
@@ -1397,8 +1500,8 @@ func _history_scrollbar(panel: Control, scroll: ScrollContainer) -> void:
         bar.set_meta("fits", fits)
         bar.mouse_filter = Control.MOUSE_FILTER_IGNORE if fits else Control.MOUSE_FILTER_STOP
         if fits:   # nada para rolar: alça no tamanho e lugar da arte
-            bar.max_value = HIST_BAR.size.y
-            bar.page = HIST_BAR_GRAB.size.y
+            bar.max_value = bar_r.size.y
+            bar.page = grab_r.size.y
             bar.value = 0
         else:
             bar.max_value = inner.max_value
@@ -1410,9 +1513,9 @@ func _history_scrollbar(panel: Control, scroll: ScrollContainer) -> void:
     bar.value_changed.connect(func(v):
         if not syncing[0] and not bar.get_meta("fits", false): scroll.scroll_vertical = int(round(v)))
     sync.call()
-    # setas douradas da arte (em cima e embaixo do trilho)
-    RefPage.hotspot(panel, HIST_BAR_UP, func(): scroll.scroll_vertical -= 136, "HistoryBarUp")
-    RefPage.hotspot(panel, HIST_BAR_DOWN, func(): scroll.scroll_vertical += 136, "HistoryBarDown")
+    var up := RefPage.hotspot(panel, up_r, func(): scroll.scroll_vertical -= step, bar_name + "Up")
+    var down := RefPage.hotspot(panel, down_r, func(): scroll.scroll_vertical += step, bar_name + "Down")
+    return [bar, up, down]
 
 func refresh_history():
     if history_list == null: return
@@ -1440,7 +1543,7 @@ func build_history_list(parent: VBoxContainer, compact: bool):
         empty.name = "HistoryEmpty"
         if not compact and not hist_tab_art.is_empty():
             empty.add_theme_font_size_override("font_size", 24)
-            empty.custom_minimum_size = Vector2(1700, 0)
+            empty.custom_minimum_size = Vector2(1500, 0)
             empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
@@ -1515,36 +1618,36 @@ func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
 
 ## Linha do histórico na arte da referência (coordenadas da referência; a página é reduzida inteira).
 func _history_row_ref(e: Dictionary, st, mh) -> Control:
+    # R52 · linha da referência nova (1506 x 96): escudo, faixa e moldura vêm da arte; o resto é do jogo
     var MH = preload("res://analysis/match_history.gd")
     var mode := String(e.get("mode", ""))
     var res := String(e.get("result", ""))
     var row := Control.new()
     row.name = "HistoryRow"
-    row.custom_minimum_size = Vector2(1734, 85)
+    row.custom_minimum_size = Vector2(1506, 96)
     row.mouse_filter = Control.MOUSE_FILTER_PASS
-    var art := RefPage.image(row, RefPage.tex("hist_row_win" if res in ["win", "draw", ""] or mode == "local" else "hist_row_loss"), Rect2(0, 0, 1734, 85))
+    var lost: bool = res in ["loss", "abandon"] and mode != "local"
+    var art := RefPage.image(row, RefPage.tex("hist_row_loss" if lost else "hist_row_win"), Rect2(0, 0, 1506, 96))
     art.stretch_mode = TextureRect.STRETCH_SCALE
     if res == "draw" or mode == "local": art.modulate = Color(0.86, 0.86, 0.78)
-    var res_txt: String = String(MH.result_name(res, mode))
-    var col: Color = Color("6fe07a") if res == "win" else (Color("ff5b4c") if res in ["loss", "abandon"] else Color("f3d27e"))
-    if mode == "local": col = Color("f3d27e")
-    RefPage.text(row, res_txt, Rect2(126, 8, 340, 38), 30, col, false, HORIZONTAL_ALIGNMENT_LEFT)
-    var mname: String = MH.mode_name(mode).to_upper()
+    var res_txt: String = String(MH.result_name(res, mode)).to_upper()
+    var col: Color = Color("6fe07a") if res == "win" else (Color("ff5b5b") if lost else Color("f3d27e"))
+    RefPage.text(row, res_txt, Rect2(120, 16, 300, 42), 29, col, false, HORIZONTAL_ALIGNMENT_LEFT)
     if mode == "bot":
-        RefPage.image(row, RefPage.tex("ico_computador"), Rect2(136, 48, 30, 28))
-        RefPage.text(row, "CONTRA COMPUTADOR", Rect2(176, 44, 300, 34), 20, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
+        RefPage.image(row, RefPage.tex("ico_computador"), Rect2(122, 58, 30, 26))
+        RefPage.text(row, "CONTRA COMPUTADOR", Rect2(158, 52, 236, 36), 16, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
     else:
-        RefPage.text(row, mname, Rect2(126, 44, 340, 34), 22, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
-    RefPage.image(row, RefPage.tex(String(HIST_ICONS.get(mode, "ico_todas"))), Rect2(432, 12, 46, 44))
+        RefPage.text(row, MH.mode_name(mode).to_upper(), Rect2(120, 52, 300, 36), 22, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
+    RefPage.image(row, RefPage.tex(String(HIST_ICONS.get(mode, "ico_todas"))), Rect2(384, 16, 50, 46))
     var opp := String(e.get("opponent", ""))
     var d := Time.get_datetime_dict_from_unix_time(int(e.get("finished_at", e.get("started_at", 0))))
-    RefPage.text(row, ("vs  " + opp) if not opp.is_empty() and mode != "local" else MH.mode_name(mode), Rect2(497, 6, 380, 40), 27, Color("f1e6c8"), false, HORIZONTAL_ALIGNMENT_LEFT)
-    RefPage.text(row, "%02d/%02d/%d %02d:%02d" % [d.day, d.month, d.year, d.hour, d.minute], Rect2(497, 44, 380, 34), 22, Color("e7ddc4"), false, HORIZONTAL_ALIGNMENT_LEFT)
+    RefPage.text(row, ("vs  " + opp) if not opp.is_empty() and mode != "local" else MH.mode_name(mode), Rect2(460, 14, 330, 42), 26, Color("f1e6c8"), false, HORIZONTAL_ALIGNMENT_LEFT)
+    RefPage.text(row, "%02d/%02d/%d %02d:%02d" % [d.day, d.month, d.year, d.hour, d.minute], Rect2(460, 52, 330, 34), 21, Color("e7ddc4"), false, HORIZONTAL_ALIGNMENT_LEFT)
     var chess: bool = String(e.get("mode_id", MH.CHESS_MODE_ID)) == MH.CHESS_MODE_ID
     var info := ""
     if chess:
         var white := String(e.get("color", "w")) != "b"
-        RefPage.image(row, RefPage.tex("ico_peao_branco" if white else "ico_peao_preto"), Rect2(836, 14, 46, 58))
+        RefPage.image(row, RefPage.tex("ico_peao_branco" if white else "ico_peao_preto"), Rect2(742, 20, 48, 58))
         info = "%d lances   ·   %s" % [int(e.get("plies", 0)), "Brancas" if white else "Pretas"]
     else:
         var data: Dictionary = e.get("data", {}) if e.get("data") is Dictionary else {}
@@ -1556,26 +1659,24 @@ func _history_row_ref(e: Dictionary, st, mh) -> Control:
     var rec = mh.record_of(e) if mh != null and chess else null
     var an: Dictionary = st.analysis_entry_for(rec) if chess and st != null and st.has_method("analysis_entry_for") else {}
     if not an.is_empty(): info += "   ·   precisão %d%%" % int(round(float(an.get("accuracy", 0.0))))
-    RefPage.text(row, info, Rect2(896 if chess else 836, 22, 600, 44), 22, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
-    var btn_r := Rect2(1494, 14, 216, 56)
+    RefPage.text(row, info, Rect2(806 if chess else 744, 28, 440, 42), 21, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
+    # botão da arte (moldura + lupa): o texto e o clique são do jogo
+    var btn_r := Rect2(1273, 15, 215, 67)
+    var txt_r := Rect2(1334, 15, 150, 67)
     if not chess:
-        RefPage.text(row, "SEM ANÁLISE", btn_r, 19, Color("8c8a7e"), true)
+        RefPage.text(row, "SEM ANÁLISE", txt_r, 17, Color("8c8a7e"), true)
         return row
     var can_review: bool = not an.is_empty() and st.analysis_history != null and st.analysis_history.has_report(an)
-    RefPage.image(row, Kit.tex("ico_lupa"), Rect2(1512, 26, 34, 34))
+    var main := RefPage.hotspot(row, btn_r, func():
+        if can_review: st.open_history_report(an)
+        elif rec != null: st.open_analysis_for(rec), "HistoryReview" if can_review else "HistoryAnalyze")
+    main.disabled = not can_review and (rec == null or rec.moves.size() < 2)
+    if not can_review: main.tooltip_text = "Usa uma análise da cota do dia (Club: ilimitado)"
+    RefPage.text(row, "REVER\nANÁLISE" if can_review else "ANALISAR", txt_r, 17 if can_review else 24, Color("8c8a7e") if main.disabled else Color("f6d27a"), true)
     if can_review:
-        var rv := RefPage.hotspot(row, btn_r, func(): st.open_history_report(an), "HistoryReview")
-        rv.text = "     REVER ANÁLISE"
-        _hist_btn_font(rv, 21)
-        var az := RefPage.art_button(row, "btn_jogar_de_novo", "ANALISAR DE NOVO", Rect2(1270, 18, 210, 48), 17, Color("f3d27e"), func(): if rec != null: st.open_analysis_for(rec))
+        var az := RefPage.art_button(row, "btn_jogar_de_novo", "ANALISAR DE NOVO", Rect2(1040, 22, 218, 52), 16, Color("f3d27e"), func(): if rec != null: st.open_analysis_for(rec))
         az.name = "HistoryAnalyze"
         az.disabled = rec == null or rec.moves.size() < 2
-    else:
-        var az2 := RefPage.hotspot(row, btn_r, func(): if rec != null: st.open_analysis_for(rec), "HistoryAnalyze")
-        az2.text = "     ANALISAR"
-        _hist_btn_font(az2, 26)
-        az2.disabled = rec == null or rec.moves.size() < 2
-        az2.tooltip_text = "Usa uma análise da cota do dia (Club: ilimitado)"
     return row
 
 func _hist_btn_font(b: Button, px: int):
@@ -1588,42 +1689,42 @@ func _hist_btn_font(b: Button, px: int):
 
 ## R51 · CONHEÇA O FRAIHA no PC: a página é a imagem de referência do dono (ui_kit/pages/about_bg.png),
 ## desenhada em coordenadas da referência; o menu da esquerda e o conteúdo do tópico são do jogo.
-const ABOUT_REF := Vector2(1896, 829)
-const ABOUT_NAV := [[204, 268], [279, 342], [352, 417], [427, 491], [502, 567], [577, 643]]
+const ABOUT_REF := Vector2(1772, 888)   # R52: referência nova (painel já recortado)
+const ABOUT_NAV := [[220, 286], [296, 360], [371, 436], [445, 510], [521, 585], [595, 661]]
+var about_nav_labels: Array = []
 const ABOUT_ICONS := ["about_ico_projeto", "about_ico_como", "about_ico_ligas", "about_ico_modos", "about_ico_perso", "about_ico_comunidade"]
 var about_nav_art: Array = []
 var about_icon: TextureRect
 var about_lead: Label
+var about_topic := 0
 
 func _build_about_page():
     var topics = [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
-    var panel := Control.new()
+    # R52 · painel/modal próprio: centralizado por cima da Home escurecida (fade em show_page)
+    var panel := RefPage.modal(canvas, "about_bg", ABOUT_REF, DESIGN)
     panel.name = "AboutPage"
-    panel.scale = Vector2.ONE * (PAGE_W / ABOUT_REF.x)
-    panel.position = Vector2((DESIGN.x - PAGE_W) / 2.0, PAGE_TOP)
-    panel.size = ABOUT_REF
-    panel.mouse_filter = Control.MOUSE_FILTER_STOP
-    canvas.add_child(panel)
     pages["about"] = panel
-    RefPage.image(panel, RefPage.tex("about_bg"), Rect2(Vector2.ZERO, ABOUT_REF)).stretch_mode = TextureRect.STRETCH_SCALE
-    about_icon = RefPage.image(panel, null, Rect2(662, 224, 112, 106))
-    about_title = RefPage.text(panel, "", Rect2(818, 232, 760, 72), 54, Color("f5cf6a"), true, HORIZONTAL_ALIGNMENT_LEFT)
+    about_icon = RefPage.image(panel, null, Rect2(626, 248, 92, 94))
+    about_title = RefPage.text(panel, "", Rect2(766, 250, 660, 74), 50, Color("f5cf6a"), true, HORIZONTAL_ALIGNMENT_LEFT)
     about_title.add_theme_font_override("font", FONT_CINZEL)
-    about_lead = RefPage.text(panel, "", Rect2(672, 366, 1080, 56), 36, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
+    about_lead = RefPage.text(panel, "", Rect2(620, 384, 720, 56), 34, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
     about_lead.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     about_lead.clip_text = false
-    about_body = RefPage.text(panel, "", Rect2(676, 446, 1060, 270), 29, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
+    about_body = RefPage.text(panel, "", Rect2(620, 470, 720, 276), 27, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
     about_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     about_body.vertical_alignment = VERTICAL_ALIGNMENT_TOP
     about_body.clip_text = false
-    about_body.add_theme_constant_override("line_spacing", 6)
+    about_body.add_theme_constant_override("line_spacing", 5)
+    about_nav_art.clear()
+    about_nav_labels.clear()
     for i in range(topics.size()):
         var topic: Array = topics[i]
         var yr: Array = ABOUT_NAV[i]
-        var r := Rect2(122, yr[0], 466, yr[1] - yr[0])
+        var r := Rect2(121, yr[0] - 2, 433, yr[1] - yr[0] + 4)
         var art := NinePatchRect.new()
         art.texture = RefPage.tex("about_btn")
-        for m in ["patch_margin_left", "patch_margin_right", "patch_margin_top", "patch_margin_bottom"]: art.set(m, 16)
+        for m in ["patch_margin_left", "patch_margin_right", "patch_margin_top", "patch_margin_bottom"]: art.set(m, 18)
+        art.patch_margin_right = 70   # a seta › da arte fica inteira
         art.position = r.position
         art.size = r.size
         art.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1631,14 +1732,18 @@ func _build_about_page():
         panel.add_child(art)
         about_nav_art.append(art)
         var ic: Texture2D = RefPage.tex(ABOUT_ICONS[i])
-        var ih := 44.0
-        RefPage.image(panel, ic, Rect2(152, r.position.y + (r.size.y - ih) / 2.0, 56, ih))
-        var tl := RefPage.text(panel, String(topic[0]), Rect2(236, r.position.y, 290, r.size.y), 24, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
+        var ih := 40.0
+        var iw := minf(58.0, ih * ic.get_size().x / ic.get_size().y) if ic != null else 0.0
+        RefPage.image(panel, ic, Rect2(178 - iw / 2.0, r.position.y + (r.size.y - ih) / 2.0, iw, ih))
+        var tl := RefPage.text(panel, String(topic[0]), Rect2(226, r.position.y, 276, r.size.y), 21, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
         tl.add_theme_font_override("font", FONT_CINZEL)
-        RefPage.text(panel, "›", Rect2(530, r.position.y - 4, 40, r.size.y), 44, Color("f5c652"), true)
+        for px in [21, 20, 19, 18, 17]:   # nome longo encolhe para não passar da seta
+            tl.add_theme_font_size_override("font_size", px)
+            if FONT_CINZEL.get_string_size(tl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x <= 270.0: break
+        about_nav_labels.append(tl)
         var idx := i
         RefPage.hotspot(panel, r, func(): _show_about_topic(topics, idx), "AboutTopic%d" % i)
-    RefPage.hotspot(panel, Rect2(122, 672, 466, 80), back, "AboutBack")
+    RefPage.hotspot(panel, Rect2(122, 685, 430, 82), back, "AboutBack")
     _show_about_topic(topics, 0)
 
 func _show_about_topic(topics: Array, i: int):
@@ -1649,11 +1754,19 @@ func _show_about_topic(topics: Array, i: int):
     var lead_ok := parts.size() > 1 and parts[0].length() <= 60
     about_lead.text = parts[0] if lead_ok else ""
     about_body.text = parts[1] if lead_ok else String(topic[1])
-    about_body.position.y = 446.0 if lead_ok else 372.0
+    about_body.position.y = 470.0 if lead_ok else 384.0
+    about_body.size.y = 746.0 - about_body.position.y
+    # texto longo: diminui a fonte até caber no quadro (nada passa da moldura)
+    for px in [27, 25, 23, 21, 19]:
+        about_body.add_theme_font_size_override("font_size", px)
+        var lines := about_body.get_line_count()
+        if lines * (about_body.get_line_height() + 5) <= about_body.size.y: break
     var big := RefPage.tex("about_ico_projeto_big") if i == 0 else RefPage.tex(ABOUT_ICONS[i])
     about_icon.texture = big
+    about_topic = i
     for k in about_nav_art.size():
         about_nav_art[k].texture = RefPage.tex("about_btn_sel" if k == i else "about_btn")
+        if k < about_nav_labels.size(): about_nav_labels[k].add_theme_color_override("font_color", Color("f6d46e") if k == i else Color("f1e6c8"))
 
 func _progress(parent: Node, value: int, height: int = 14):
     var bar = ProgressBar.new()
@@ -1693,11 +1806,17 @@ var ranking_fill: ColorRect
 var league_sel_frame: Panel
 var league_chip: Label
 var league_desc: Label
+## R51e · PEÇAS CLÁSSICAS: o botão liga/desliga o conjunto clássico e mostra o estado (antes não dava retorno)
+var current_piece_set := ""
+var classic_sub: Label
+var classic_frame: Panel
+var classic_btn: Control
 
 func _build_ranking():
     var panel := RefPage.full_page(canvas, "ligas_bg", DESIGN, 0.92, 0.72)
     panel.name = "RankingPage"
     panel.set_meta("ref_full", true)
+    panel.set_meta("modal", true)
     pages.ranking = panel
     ranking_header = RefPage.text(panel, "", Rect2(566, 112, 940, 56), 36, Color("f3d89a"), true, HORIZONTAL_ALIGNMENT_LEFT)
     ranking_header.name = "RankingHeader"
@@ -1771,8 +1890,41 @@ func _build_ranking():
     league_preview_button = _button(panel,2,"TESTAR UNIVERSO","Prévia de desenvolvimento · sem alterar PL",Vector2(968,700),_preview_league,Vector2(334,60))
     league_preview_button.visible = DEV_PREVIEW_BUTTON
     RefPage.hotspot(panel, Rect2(97, 808, 471, 80), back, "RankingBack")
-    RefPage.hotspot(panel, Rect2(597, 808, 444, 80), func(): piece_set_requested.emit("classic"), "ClassicPieces")
+    classic_btn = RefPage.hotspot(panel, Rect2(597, 808, 444, 80), _toggle_classic_pieces, "ClassicPieces")
+    classic_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    classic_sub = RefPage.text(panel, "Usar o conjunto original", Rect2(690, 849, 290, 30), 20, Color("efe6cf"), false)
+    classic_sub.name = "ClassicPiecesSub"
+    classic_frame = Panel.new()
+    classic_frame.add_theme_stylebox_override("panel", league_sel_frame.get_theme_stylebox("panel"))
+    classic_frame.position = Vector2(603, 813)
+    classic_frame.size = Vector2(432, 70)
+    classic_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    classic_frame.visible = false
+    panel.add_child(classic_frame)
+    _refresh_classic_state()
     set_ranked_unlock(ranked_unlock_index)
+
+func _toggle_classic_pieces():
+    # clássicas em uso → volta às peças da liga ("" = acompanha o cenário); senão, liga as clássicas
+    var want := "" if current_piece_set == "classic" else "classic"
+    piece_set_requested.emit(want)
+    if want == "classic": current_piece_set = "classic"   # sem o gerenciador (testes), o estado segue o clique
+    elif current_piece_set == "classic": current_piece_set = ""
+    _refresh_classic_state()
+
+## chamado pelo gerenciador de temas sempre que cenário/peças mudam (stage.gd)
+func on_theme_changed(_theme_id: String, piece_set_id: String):
+    current_piece_set = piece_set_id
+    _refresh_classic_state()
+
+func _refresh_classic_state():
+    if not is_instance_valid(classic_sub): return
+    var on := current_piece_set == "classic"
+    classic_sub.text = "Em uso · clique para desligar" if on else "Usar o conjunto original"
+    classic_sub.add_theme_color_override("font_color", Color("cfe7a8") if on else Color("efe6cf"))
+    classic_sub.add_theme_font_size_override("font_size", 18 if on else 20)
+    classic_btn.tooltip_text = "Voltar às peças da liga" if on else "Usar as peças clássicas"
+    classic_frame.visible = on
 
 func _refresh_ranking_header():
     if not is_instance_valid(ranking_header): return
@@ -1802,10 +1954,11 @@ func _zoom_preview(on: bool):
     _preview_tween = create_tween()
     _preview_tween.tween_property(league_scene_preview, "scale", Vector2.ONE * (PREVIEW_ZOOM if on else 1.0), 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
-func _select_league(id: String):
+func _select_league(id: String, apply_theme_now := true):
     selected_league = id
     var unlocked = league_unlocked(id)
-    if unlocked: theme_preview_requested.emit(LeagueCatalog.theme_for(id))
+    # R51e · só um clique de verdade na liga troca cenário/peças; abrir a página não mexe na escolha do jogador
+    if unlocked and apply_theme_now: theme_preview_requested.emit(LeagueCatalog.theme_for(id))
     var entry = LeagueCatalog.entry(id,league_profile.data)
     league_detail_title.text = "LIGA " + entry.display_name.to_upper() + "  ·  0–100 PL"
     if is_instance_valid(league_chip): league_detail_title.text = "Liga " + entry.display_name + "  ·  0–100 PL"
@@ -1987,9 +2140,9 @@ func show_page(id: String):
     _sync_ref_full(pages[id].has_meta("ref_full"))
     _sync_menu_cover()
     if page_scrolls.has(id): page_scrolls[id].scroll_vertical = 0
-    if id == "ranking":
-        _select_league(selected_league)
-        # R51d · o painel de ligas abre com fade suave (Home escurecida atrás)
+    if id == "ranking": _select_league(selected_league, false)
+    # R51d/R52 · painéis/modais abrem com fade suave (Home escurecida atrás)
+    if pages[id].has_meta("modal"):
         var rp: Control = pages[id]
         rp.modulate.a = 0.0
         create_tween().tween_property(rp, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)

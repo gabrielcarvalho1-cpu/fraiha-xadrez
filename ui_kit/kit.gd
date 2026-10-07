@@ -20,6 +20,13 @@ const FRAMES := {
     "caixa_vazia": ["caixa_vazia", 56, 56, 30, 30],
     "campo": ["campo", 26, 26, 30, 30],
     "painel_amigos": ["painel_amigos", 90, 230, 178, 75],
+    # R52b · peças da referência nova de AMIGOS (painel/modal do PC)
+    "fr_btn_verde": ["fr_btn_verde", 34, 34, 28, 28],
+    "fr_btn_azul": ["fr_btn_azul", 34, 34, 28, 28],
+    "fr_campo": ["fr_campo", 30, 30, 30, 30],
+    "fr_caixa_vazia": ["fr_caixa_vazia", 40, 40, 28, 28],
+    "fr_caixa_secao": ["fr_caixa_secao", 30, 30, 22, 22],
+    "fr_caixa_linha": ["fr_caixa_linha", 34, 34, 30, 30],
 }
 static var _cache := {}
 

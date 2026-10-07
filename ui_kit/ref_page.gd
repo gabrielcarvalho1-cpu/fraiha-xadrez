@@ -41,6 +41,37 @@ static func full_page(canvas: Control, bg_name: String, size: Vector2, k := 0.92
     page.add_child(bg)
     return page
 
+## R52 · Painel/modal próprio (padrão aprovado nas Ligas): a página fica nas coordenadas da referência
+## (ref_size, fundo transparente fora da moldura), reduzida para caber em `frac` da tela e centralizada;
+## atrás, uma camada escurece a Home inteira e segura os cliques. show_page faz o fade de entrada.
+static func modal(canvas: Control, bg_name: String, ref_size: Vector2, design: Vector2, dim := 0.72, frac := 0.92) -> Control:
+    var k := minf(design.x * frac / ref_size.x, design.y * frac / ref_size.y)
+    var page := Control.new()
+    page.size = ref_size
+    page.scale = Vector2.ONE * k
+    page.position = ((design - ref_size * k) / 2.0).round()
+    page.mouse_filter = Control.MOUSE_FILTER_STOP
+    page.set_meta("ref_full", true)
+    page.set_meta("modal", true)
+    canvas.add_child(page)
+    var block := ColorRect.new()
+    block.name = "ClickBlock"
+    block.color = Color(0.02, 0.03, 0.02, dim)
+    block.position = -page.position / k - design * 2.0 / k
+    block.size = design * 5.0 / k
+    block.mouse_filter = Control.MOUSE_FILTER_STOP
+    page.add_child(block)
+    var bg := TextureRect.new()
+    bg.name = "RefBg"
+    bg.texture = tex(bg_name)
+    bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    bg.stretch_mode = TextureRect.STRETCH_SCALE
+    bg.size = ref_size
+    bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+    page.add_child(bg)
+    return page
+
 ## Texto centralizado (ou alinhado) numa caixa; serif = Alegreya (títulos), senão a fonte padrão (textos).
 static func text(parent: Control, t: String, rect: Rect2, px: int, color: Color, serif := false, align := HORIZONTAL_ALIGNMENT_CENTER, bold := true) -> Label:
     var l := Label.new()

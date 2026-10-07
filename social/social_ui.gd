@@ -14,6 +14,17 @@ const PRESENCE = {"online": ["ONLINE", Color("7fd98a")], "in_match": ["EM PARTID
 const REFRESH_S := 20.0
 const ART_K := 0.42            # R51 · escala da arte de referência dentro do painel (px locais por px da arte)
 const PANEL_W := 700.0
+## R52b · PC: painel/modal próprio na arte da referência nova (ui_kit/pages/amigos_bg.png, 1448 x 1086),
+## centralizado por cima da Home escurecida, com fade. O conteúdo continua o mesmo (em unidades lógicas:
+## a arte é desenhada 1/WIDE_LS do tamanho dela e o painel inteiro é ampliado para caber em 92% da tela).
+## Celular e janela estreita continuam no layout antigo.
+const WIDE_REF := Vector2(1448, 1086)
+const WIDE_LS := 1.757
+const WIDE_K := 1.0 / WIDE_LS
+const WIDE_CONTENT := Rect2(92, 224, 1266, 764)   # área do conteúdo na arte (abaixo do VOLTAR/placa AMIGOS)
+const WIDE_BACK := Rect2(76, 100, 270, 95)        # VOLTAR desenhado na arte
+var chrome: Control                                # por cima do painel (mesma transformação): VOLTAR da arte
+var _wide_now := false
 var account
 var avatar_for: Callable        # id -> Texture2D (usa os avatares da Home)
 var dim: ColorRect
@@ -91,6 +102,24 @@ func setup(service, avatar_callable: Callable = Callable()):
     box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     box.add_theme_constant_override("separation", 8)
     scroll.add_child(box)
+    chrome = Control.new()
+    chrome.name = "FriendsChrome"
+    chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(chrome)
+    var wb := Button.new()
+    wb.name = "FriendsBack"
+    wb.flat = true
+    wb.focus_mode = Control.FOCUS_NONE
+    wb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    wb.position = WIDE_BACK.position / WIDE_LS
+    wb.size = WIDE_BACK.size / WIDE_LS
+    var lit := StyleBoxFlat.new()
+    lit.bg_color = Color(1.0, 0.86, 0.45, 0.10)
+    lit.set_corner_radius_all(6)
+    for st in ["normal", "focus", "disabled"]: wb.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+    for st in ["hover", "pressed"]: wb.add_theme_stylebox_override(st, lit)
+    wb.pressed.connect(func(): _back())
+    chrome.add_child(wb)
     toast = PanelContainer.new()
     toast.name = "FriendsToast"
     var ts = style.duplicate()
@@ -120,10 +149,15 @@ func open():
     notice_text("")
     _show("list")
     _request_list()
+    if _wide_now:   # R52b · fade de entrada (igual às outras telas do PC)
+        for n in [panel, chrome, dim]: n.modulate.a = 0.0
+        var tw := create_tween().set_parallel(true)
+        for n in [panel, chrome, dim]: tw.tween_property(n, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
 
 func hide_ui():
     screen = ""
     dim.hide(); panel.hide()
+    if is_instance_valid(chrome): chrome.hide()
     if is_instance_valid(search_input) and search_input.has_focus(): search_input.release_focus()
 
 func close():
@@ -380,7 +414,13 @@ func _button(parent: Node, text: String, action: Callable, primary := false, sma
     b.custom_minimum_size.y = 40 if small else 46
     # R51 · molduras da referência: verde (ação principal), azul (secundária), vermelho (VOLTAR)
     var k := kind if not kind.is_empty() else ("btn_verde" if primary else "btn_azul")
-    Kit.button(b, k, ART_K, 15 if small else 17, icon_name)
+    if _wide() and k in ["btn_verde", "btn_azul"]:
+        # R52b · botões da referência nova (verde = principal, azul = mensagem/secundária)
+        var ic: String = {"ico_balao": "fr_ico_balao", "ico_espadas": "fr_ico_convidar"}.get(icon_name, icon_name)
+        Kit.button(b, "fr_" + k, WIDE_K, 15 if small else 17, ic)
+        b.custom_minimum_size.y = 46 if small else 50
+    else:
+        Kit.button(b, k, ART_K, 15 if small else 17, icon_name)
     b.pressed.connect(action)
     parent.add_child(b)
     return b
@@ -427,12 +467,22 @@ static func _peer(uid: String, peer: Dictionary) -> Dictionary:
     return {"user_id": uid, "nickname": String(peer.get("nickname", "")), "avatar_id": String(peer.get("avatar_id", "warrior")), "badge": String(peer.get("badge", "")), "title": String(peer.get("title", ""))}
 
 const SECTION_ICON := {"ONLINE": "ico_sec_online", "EM PARTIDA": "ico_sec_partida", "OFFLINE": "ico_sec_offline"}
+const SECTION_ICON_WIDE := {"ONLINE": "fr_ico_online", "EM PARTIDA": "fr_ico_partida", "OFFLINE": "fr_ico_offline"}
 func _section(title: String, count: int):
     var h = HBoxContainer.new()
     h.name = "SectionRow_" + title.replace(" ", "_")
     h.add_theme_constant_override("separation", 8)
-    box.add_child(h)
-    if SECTION_ICON.has(title): h.add_child(Kit.icon(SECTION_ICON[title], 18))
+    if _wide():
+        # R52b · faixa da seção na moldura fina da referência
+        var sp := PanelContainer.new()
+        sp.add_theme_stylebox_override("panel", Kit.box("fr_caixa_secao", WIDE_K, Vector2(14, 6)))
+        sp.custom_minimum_size.y = 36
+        box.add_child(sp)
+        sp.add_child(h)
+        h.add_child(Kit.icon(SECTION_ICON_WIDE.get(title, "fr_ico_offline"), 22))
+    else:
+        box.add_child(h)
+        if SECTION_ICON.has(title): h.add_child(Kit.icon(SECTION_ICON[title], 18))
     var l = Label.new()
     l.text = "%s (%d)" % [title, count]
     l.name = "Section_" + title.replace(" ", "_")
@@ -450,8 +500,8 @@ func _section(title: String, count: int):
 ## "Ninguém por aqui." na caixa com cantoneiras da referência.
 func _empty(text: String):
     var c = PanelContainer.new()
-    c.add_theme_stylebox_override("panel", Kit.box("caixa_vazia", ART_K, Vector2(16, 10)))
-    c.custom_minimum_size.y = 42
+    c.add_theme_stylebox_override("panel", Kit.box("fr_caixa_vazia", WIDE_K, Vector2(22, 8)) if _wide() else Kit.box("caixa_vazia", ART_K, Vector2(16, 10)))
+    c.custom_minimum_size.y = 48 if _wide() else 42
     box.add_child(c)
     var l = Label.new()
     l.text = text
@@ -464,7 +514,9 @@ func _empty(text: String):
 ## Linha de jogador: avatar + nickname (toque abre o perfil) + status + botões de ação.
 func _row(p: Dictionary, status_text: String, status_color: Color, actions: Array) -> HBoxContainer:
     var holder = PanelContainer.new()
-    holder.add_theme_stylebox_override("panel", Kit.box("caixa_linha", ART_K, Vector2(10, 7)))
+    var wide := _wide()
+    holder.add_theme_stylebox_override("panel", Kit.box("fr_caixa_linha", WIDE_K, Vector2(14, 6)) if wide else Kit.box("caixa_linha", ART_K, Vector2(10, 7)))
+    if wide: holder.custom_minimum_size.y = 70
     box.add_child(holder)
     var narrow := _narrow()
     var outer = VBoxContainer.new()
@@ -479,7 +531,19 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
         btn_row = HBoxContainer.new()
         btn_row.add_theme_constant_override("separation", 6)
         outer.add_child(btn_row)
-    var av := _avatar(row, String(p.get("avatar_id", "warrior")), 46)
+    var av := _avatar(row, String(p.get("avatar_id", "warrior")), 50 if wide else 46)
+    if wide:
+        # anel dourado da referência em volta do retrato
+        var ring := TextureRect.new()
+        ring.texture = Kit.tex("fr_anel")
+        ring.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        ring.stretch_mode = TextureRect.STRETCH_SCALE
+        ring.size = Vector2(66, 66)
+        ring.position = Vector2(-8, -8)
+        ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        ring.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+        av.add_child(ring)
+        av.custom_minimum_size.x = 60
     _frame(av, p)
     if status_color == PRESENCE["online"][1]:
         # bolinha verde de online no canto do retrato (como na referência)
@@ -505,7 +569,7 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
     name_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
     name_btn.focus_mode = Control.FOCUS_NONE
     name_btn.add_theme_font_override("font", Kit.SERIF_BOLD)
-    name_btn.add_theme_font_size_override("font_size", 19)
+    name_btn.add_theme_font_size_override("font_size", 22 if wide else 19)
     name_btn.add_theme_color_override("font_color", Color("f4edda"))
     name_btn.tooltip_text = "Ver perfil"
     var plain = StyleBoxEmpty.new()
@@ -515,9 +579,18 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
     name_btn.pressed.connect(func(): open_profile(uid, screen == "search"))
     col.add_child(name_btn)
     if not status_text.is_empty():
-        var st = _label(col, status_text, 15, status_color)
+        var st_parent: Node = col
+        if wide and status_color in [PRESENCE["online"][1], PRESENCE["offline"][1], PRESENCE["in_match"][1]]:
+            var sr := HBoxContainer.new()
+            sr.add_theme_constant_override("separation", 6)
+            col.add_child(sr)
+            var dot_name: String = "fr_ico_online" if status_color == PRESENCE["online"][1] else ("fr_ico_partida" if status_color == PRESENCE["in_match"][1] else "fr_ico_dot_off")
+            sr.add_child(Kit.icon(dot_name, 14))
+            st_parent = sr
+        var st = _label(st_parent, status_text, 15, status_color)
         st.autowrap_mode = TextServer.AUTOWRAP_OFF
         st.clip_text = true
+        if st_parent != col: st.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         st.add_theme_font_override("font", Kit.SERIF)
     for a in actions:
         var b := _button(btn_row, a[0], a[1], a.size() > 2 and a[2], true, String(a[3]) if a.size() > 3 else "", String(a[4]) if a.size() > 4 else "")
@@ -534,6 +607,18 @@ func _show(which: String):
     screen = which
     _clear()
     var narrow = _narrow()
+    _wide_now = _wide()
+    if _wide_now:
+        # R52b · arte inteira da referência nova; VOLTAR e placa AMIGOS são da arte (VOLTAR clicável no chrome)
+        var wf := StyleBoxTexture.new()
+        wf.texture = load("res://ui_kit/pages/amigos_bg.png")
+        wf.content_margin_left = WIDE_CONTENT.position.x / WIDE_LS
+        wf.content_margin_top = WIDE_CONTENT.position.y / WIDE_LS
+        wf.content_margin_right = (WIDE_REF.x - WIDE_CONTENT.end.x) / WIDE_LS
+        wf.content_margin_bottom = (WIDE_REF.y - WIDE_CONTENT.end.y) / WIDE_LS
+        panel.add_theme_stylebox_override("panel", wf)
+        _build_body(which, narrow)
+        return
     # moldura: no celular em pé, um pouco menor (a bandeira não encosta na placa do título)
     var frame := Kit.box("painel_amigos", ART_K if not narrow else 0.3, Vector2(24 if not narrow else 16, 20 if not narrow else 16))
     frame.content_margin_bottom = 30 if not narrow else 22
@@ -565,9 +650,13 @@ func _show(which: String):
     var spacer = Control.new()
     spacer.custom_minimum_size.x = 122 if not narrow else 0
     head.add_child(spacer)
+    _build_body(which, narrow)
+
+func _build_body(which: String, narrow: bool):
     notice = _label(box, "", 14, ERROR, true)
     notice.name = "FriendsNotice"
     notice.hide()
+    var wide := _wide_now
     match which:
         "list", "search":
             var srow = HBoxContainer.new()
@@ -579,15 +668,20 @@ func _show(which: String):
             search_input.placeholder_text = "Buscar jogador pelo nickname"
             search_input.max_length = 16
             search_input.text = last_query if which == "search" else ""
-            search_input.custom_minimum_size.y = 46
+            search_input.custom_minimum_size.y = 50 if wide else 46
             search_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
             search_input.add_theme_font_override("font", Kit.SERIF)
             search_input.add_theme_font_size_override("font_size", 18)
             search_input.add_theme_color_override("font_placeholder_color", Color("9a96c4"))
             search_input.add_theme_color_override("font_color", Color("f1e6c8"))
-            var fst := Kit.box("campo", ART_K, Vector2(44, 6))
+            var fst := Kit.box("fr_campo" if wide else "campo", WIDE_K if wide else ART_K, Vector2(48 if wide else 44, 6))
             for st_name in ["normal", "focus", "read_only"]: search_input.add_theme_stylebox_override(st_name, fst)
-            if not narrow:
+            if wide:
+                search_input.add_theme_font_size_override("font_size", 19)
+                var lupa2 := Kit.icon("fr_ico_lupa", 26)
+                lupa2.position = Vector2(15, 12)
+                search_input.add_child(lupa2)
+            elif not narrow:
                 var lupa := Kit.icon("ico_lupa", 20)
                 lupa.position = Vector2(14, 13)
                 search_input.add_child(lupa)
@@ -598,7 +692,8 @@ func _show(which: String):
             srow.add_child(search_input)
             var input_ref = search_input
             var sb := _button(srow, "BUSCAR", func(): search(input_ref.text), true, true)
-            sb.custom_minimum_size = Vector2(112 if not narrow else 92, 46)
+            sb.custom_minimum_size = Vector2(150 if wide else (112 if not narrow else 92), 50 if wide else 46)
+            if wide: sb.add_theme_font_size_override("font_size", 19)
             if which == "search": _build_search()
             else: _build_list(narrow)
         "profile": _build_profile(narrow)
@@ -608,6 +703,7 @@ func _show(which: String):
         "invite_friends": _build_invite_friends()
     if reconnecting and is_instance_valid(notice) and not notice.visible: notice_text("Reconectando…", GOLD)
     dim.show(); panel.show()
+    chrome.visible = wide
     _layout()
     _layout.call_deferred()
 
@@ -764,11 +860,19 @@ func _build_confirm():
     _button(box, "CANCELAR", func(): _show("profile"))
 
 # ---------- Layout ----------
+## PC (não celular, janela larga): painel/modal da referência nova.
+func _wide() -> bool:
+    return not _narrow() and not Mobile.active(get_viewport())
+
 func _narrow() -> bool:
     return get_viewport().get_visible_rect().size.x < 700.0 or (Mobile.active(get_viewport()) and Mobile.is_portrait(get_viewport()))
 
 func _layout():
     if not panel.visible: return
+    if _wide_now:
+        _layout_wide()
+        _layout_toast()
+        return
     var mobile = Mobile.active(get_viewport())
     var area = Mobile.safe_rect(get_viewport()) if mobile else get_viewport().get_visible_rect()
     dim.size = get_viewport().get_visible_rect().size
@@ -792,6 +896,54 @@ func _layout():
     panel.size = Vector2(width, height)
     panel.position = area.position + (area.size - panel.size * ui_scale) / 2.0
     _layout_toast()
+
+## R52b · tamanho fixo (proporção da arte), centralizado; a lista rola dentro do painel.
+func _layout_wide():
+    var vs := get_viewport().get_visible_rect().size
+    dim.size = vs
+    var k := minf(vs.x * 0.92 / WIDE_REF.x, vs.y * 0.92 / WIDE_REF.y)
+    var logical := WIDE_REF / WIDE_LS
+    var s := k * WIDE_LS
+    var cw := WIDE_CONTENT.size.x / WIDE_LS
+    var ch := WIDE_CONTENT.size.y / WIDE_LS
+    box.custom_minimum_size.x = cw - 14.0
+    if screen == "dm" and is_instance_valid(dm_scroll):
+        var rest = box.get_combined_minimum_size().y - dm_scroll.custom_minimum_size.y
+        dm_scroll.custom_minimum_size.y = clampf(ch - rest - 6.0, 120.0, 560.0)
+    scroll.custom_minimum_size = Vector2(cw, ch)
+    panel.custom_minimum_size = Vector2.ZERO
+    panel.reset_size()
+    panel.size = logical
+    panel.scale = Vector2.ONE * s
+    panel.position = ((vs - logical * s) / 2.0).round()
+    chrome.position = panel.position
+    chrome.scale = panel.scale
+    chrome.size = logical
+    _style_scrollbar()
+
+## barra de rolagem fina dourada (funcional: arrastar, roda do mouse, clique no trilho)
+func _style_scrollbar():
+    var bar := scroll.get_v_scroll_bar()
+    if bar.has_meta("fraiha"): return
+    bar.set_meta("fraiha", true)
+    var tr := StyleBoxFlat.new()
+    tr.bg_color = Color(0.02, 0.06, 0.05, 0.85)
+    tr.border_color = Color(0.72, 0.56, 0.24, 0.8)
+    tr.set_border_width_all(1)
+    tr.set_corner_radius_all(4)
+    tr.content_margin_left = 5; tr.content_margin_right = 5
+    var gr := StyleBoxFlat.new()
+    gr.bg_color = Color("d9b05a")
+    gr.border_color = Color("6e4f1c")
+    gr.set_border_width_all(1)
+    gr.set_corner_radius_all(4)
+    var gh: StyleBoxFlat = gr.duplicate()
+    gh.bg_color = Color("f3d27e")
+    bar.add_theme_stylebox_override("scroll", tr)
+    bar.add_theme_stylebox_override("scroll_focus", tr)
+    bar.add_theme_stylebox_override("grabber", gr)
+    bar.add_theme_stylebox_override("grabber_highlight", gh)
+    bar.add_theme_stylebox_override("grabber_pressed", gh)
 
 func _layout_toast():
     if not toast.visible: return

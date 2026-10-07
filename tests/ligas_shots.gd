@@ -42,11 +42,22 @@ func run():
     _click(prata.get_global_rect().get_center())
     await _shot(tag + "_prata.png")
     print("CHECK clique_prata selecionada=", hub.selected_league)
-    var classic := [false]
-    hub.piece_set_requested.connect(func(_s): classic[0] = true)
-    _click(panel.find_child("ClassicPieces", true, false).get_global_rect().get_center())
+    var tm = stage.get_node("ThemeManager")
+    var cb: Control = panel.find_child("ClassicPieces", true, false)
+    var sub: Label = panel.find_child("ClassicPiecesSub", true, false)
+    print("CHECK classicas_antes pecas=", tm.active_piece_set, " texto=", sub.text)
+    _click(cb.get_global_rect().get_center())
+    await _shot(tag + "_classicas_ligadas.png")
+    print("CHECK classicas_ligadas pecas=", tm.active_piece_set, " salvo=", tm.saved_piece_set, " texto=", sub.text)
+    # reabrir a página não pode desfazer a escolha
+    hub.show_page("main")
     for i in range(4): await process_frame
-    print("CHECK pecas_classicas=", classic[0])
+    hub.show_page("ranking")
+    for i in range(4): await process_frame
+    print("CHECK reabrir pecas=", tm.active_piece_set, " texto=", sub.text)
+    _click(cb.get_global_rect().get_center())
+    for i in range(6): await process_frame
+    print("CHECK classicas_desligadas pecas=", tm.active_piece_set, " salvo=", tm.saved_piece_set, " texto=", sub.text)
     _click(panel.find_child("RankingBack", true, false).get_global_rect().get_center())
     for i in range(6): await process_frame
     print("CHECK voltar pagina=", hub.page)

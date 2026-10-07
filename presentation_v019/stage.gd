@@ -122,6 +122,9 @@ func _ready():
         hub.theme_preview_requested.connect(theme_manager.choose_theme)
     if hub.has_signal("piece_set_requested"):
         hub.piece_set_requested.connect(theme_manager.choose_piece_set)
+    if hub.has_method("on_theme_changed"):
+        theme_manager.theme_changed.connect(hub.on_theme_changed)
+        hub.on_theme_changed(theme_manager.active_theme, theme_manager.active_piece_set)
     _setup_account()
     # Vida sutil no cenário (fogo, água, vaga-lumes, pássaros); só apresentação.
     var ambient = preload("res://presentation_v019/ambient_life.gd").new()

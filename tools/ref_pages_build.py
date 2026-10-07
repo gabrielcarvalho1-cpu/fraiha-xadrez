@@ -336,6 +336,8 @@ def build_ligas_v2():
     out = flat_fill(out, (1040, 472, 1460, 512))
     out = flat_fill(out, (956, 526, 1294, 779), feather=1, ring=2)
     out = flat_fill(out, (1314, 534, 1550, 772), feather=2, ring=3)
+    # 6) subtítulo do botão PEÇAS CLÁSSICAS sai: o jogo escreve ("Usar o conjunto original" / "Em uso ...")
+    out = flat_fill(out, (722, 851, 946, 877), feather=2, ring=3)
     rgba = np.dstack([np.clip(out, 0, 255).astype(np.uint8), al.astype(np.uint8)])
     Image.fromarray(rgba, 'RGBA').save(os.path.join(OUT, 'ligas_bg.png'))
     print('ligas v2 ok')

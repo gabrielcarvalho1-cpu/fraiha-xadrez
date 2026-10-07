@@ -15,8 +15,10 @@ func _shot(name: String):
     print("SHOT ", p)
 
 func run():
-    DisplayServer.window_set_size(Vector2i(1672, 941))
-    root.size = Vector2i(1672, 941)
+    var sz := OS.get_environment("HIST_SHOT_SIZE").split("x") if OS.get_environment("HIST_SHOT_SIZE") != "" else PackedStringArray(["1672", "941"])
+    var px := Vector2i(int(sz[0]), int(sz[1]))
+    DisplayServer.window_set_size(px)
+    root.size = px
     root.content_scale_size = Vector2i.ZERO
     stage = load("res://presentation_v019/stage.tscn").instantiate()
     root.add_child(stage)
@@ -52,15 +54,23 @@ func run():
     print("CHECK volta lista=0 barra=", bar.value if bar != null else -1.0)
     # clique de verdade (evento de mouse) na seta de baixo e arraste da alça
     var panel: Control = hub.pages["history"]
-    var down: Vector2 = panel.get_global_transform() * Vector2(1819, 722)
+    var down: Vector2 = panel.get_global_transform() * Vector2(1597, 792)
     _click(down)
     for i in range(4): await process_frame
     print("CHECK seta_baixo scroll=", scroll.scroll_vertical)
-    var g0: Vector2 = panel.get_global_transform() * Vector2(1819, 330)
-    var g1: Vector2 = panel.get_global_transform() * Vector2(1819, 650)
+    var g0: Vector2 = panel.get_global_transform() * Vector2(1597, 370)
+    var g1: Vector2 = panel.get_global_transform() * Vector2(1597, 700)
     _mouse(g0, true); _move(g0, g1); _mouse(g1, false)
     for i in range(4): await process_frame
     print("CHECK arrastar_alca scroll=", scroll.scroll_vertical)
+    # aba COMPUTADOR filtra (clique de verdade) e VOLTAR fecha
+    _click(panel.find_child("HistoryFilter_bot", true, false).get_global_rect().get_center())
+    for i in range(4): await process_frame
+    print("CHECK filtro=", hub.history_filter, " linhas=", hub.history_list.get_child_count())
+    await _shot("4_filtro_computador.png")
+    _click(panel.find_child("HistoryBack", true, false).get_global_rect().get_center())
+    for i in range(6): await process_frame
+    print("CHECK voltar pagina=", hub.page)
     quit(0)
 
 func _mouse(p: Vector2, down: bool):
