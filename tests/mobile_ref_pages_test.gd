@@ -221,5 +221,53 @@ func run():
 	rp.scroll.scroll_vertical = int(bar_b.max_value)
 	await frames(3)
 	check(await tap_hot("VOLTAR_FIM") and hub.page == "main" and not rp.visible, "VOLTAR do fim da escada volta à Home")
+
+	# ---------------- PERFIL
+	hub.show_page("profile")
+	await frames(6)
+	check(rp.visible and rp.page_id == "profile", "PERFIL abre o painel da referência")
+	var gal = rp.find_child("AvatarGalleryMobile", true, false)
+	var cnt: Label = rp.find_child("GalleryCountRefMobile", true, false)
+	check(gal != null and gal.ref_cards and gal.columns == 3, "galeria de avatares em 3 colunas com os cartões da referência")
+	check(cnt != null and gal != null and cnt.text == "%d de %d" % [gal.count_unlocked(), gal.cards.size()], "COLEÇÃO DE AVATARES com o número real (%s)" % (cnt.text if cnt else "-"))
+	if gal != null:
+		var pr2: Rect2 = rp.panel.get_global_rect()
+		var inside2 := true
+		for id in gal.cards:
+			var g: Rect2 = gal.cards[id].get_global_rect()
+			if g.position.x < pr2.position.x or g.end.x > pr2.end.x: inside2 = false
+		check(inside2, "cartões dentro do painel (largura)")
+		var before_av: String = hub.avatar_id
+		var pick := ""
+		var locked_av := ""
+		for id in gal.cards:
+			var st: String = gal.state_of(id)
+			if st == "unlocked" and pick.is_empty(): pick = id
+			if st == "locked" and locked_av.is_empty(): locked_av = id
+		var apply: Button = rp.find_child("ApplyAvatarMobile", true, false)
+		if not locked_av.is_empty():
+			rp.scroll.ensure_control_visible(gal.cards[locked_av])
+			await frames(3)
+			await tap(gal.cards[locked_av])
+			await frames(2)
+			check(apply != null and apply.disabled, "avatar bloqueado: APLICAR desabilitado")
+		if not pick.is_empty():
+			rp.scroll.ensure_control_visible(gal.cards[pick])
+			await frames(3)
+			await tap(gal.cards[pick])
+			await frames(2)
+			check(apply != null and not apply.disabled, "avatar conquistado: APLICAR liberado")
+			rp.scroll.ensure_control_visible(apply)
+			await frames(3)
+			await tap(apply)
+			await frames(3)
+			check(hub.avatar_id == pick and gal.state_of(pick) == "selected", "APLICAR AVATAR troca o avatar de verdade (%s)" % pick)
+			var card_sel = gal.cards[pick]
+			check(card_sel.ref_sub != null and card_sel.ref_sub.text == "EM USO", "cartão mostra EM USO")
+			hub.apply_avatar(before_av)
+			await frames(2)
+	rp.scroll.scroll_vertical = 0
+	await frames(3)
+	check(await tap_hot("VOLTAR") and hub.page == "main" and not rp.visible, "VOLTAR do Perfil volta à Home")
 	print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
 	quit(0 if failures == 0 else 1)

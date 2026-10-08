@@ -429,7 +429,6 @@ func show_page(id: String):
                 tail.custom_minimum_size.y = 90
                 tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
                 content.add_child(tail)
-            "profile": _profile(content)
             "ranking": _ranking(content)
             "settings": _settings(content)
     scroll.scroll_vertical = 0
@@ -496,7 +495,9 @@ func _touch_content(node: Node):
     if node is HSlider: node.custom_minimum_size.y = 48
     for child in node.get_children(): _touch_content(child)
 
-func _profile(content: VBoxContainer):
+## width > 0 (R53 · painel da referência, mobile_ref_page.gd): largura do miolo do painel; a grade fica em 3
+## colunas como na arte, em pé e deitado. Mesmos controles e mesmas funções do hub nos dois casos.
+func _profile(content: VBoxContainer, width := 0.0):
     # GALERIA DE PROGRESSÃO: todos os avatares; bloqueados em cinza com o requisito (mesma do PC).
     var count = _text(content, "", 16)
     count.name = "GalleryCountMobile"
@@ -504,9 +505,10 @@ func _profile(content: VBoxContainer):
     gallery.name = "AvatarGalleryMobile"
     gallery.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     content.add_child(gallery)
-    var cols := 5 if size.x > size.y else 3
-    var cw := floorf((size.x - 40.0 - 10.0 * (cols - 1)) / cols)
-    gallery.setup(hub, cols, Vector2(cw, cw + 48.0))
+    var cols := 3 if width > 0.0 else (5 if size.x > size.y else 3)
+    var cw := floorf(((width + 40.0 if width > 0.0 else size.x) - 40.0 - 10.0 * (cols - 1)) / cols)
+    gallery.ref_cards = width > 0.0   # R53 · cartões no visual da referência do celular
+    gallery.setup(hub, cols, Vector2(cw, roundf(cw * 296.0 / 222.0)) if width > 0.0 else Vector2(cw, cw + 48.0))
     count.text = "COLEÇÃO DE AVATARES · %d de %d" % [gallery.count_unlocked(), gallery.cards.size()]
     var detail = _text(content, "", 14)
     detail.name = "AvatarDetailMobile"

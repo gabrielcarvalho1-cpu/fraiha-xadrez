@@ -210,7 +210,43 @@ def build_ranqueado():
     c = fill_smooth(c, (150, 768, 772, 816), ring=6, thr=60, green=True, sigma=20)   # V · D · E · partidas
     save(c, al, 'rk_card', *RK_CARD)
 
+# ---------------------------------------------------------------- PERFIL (ref5)
+# topo (cabeçalho, VOLTAR, faixa COLEÇÃO DE AVATARES sem o número) · fatia lisa entre as linhas de cartões
+# (laterais da moldura) repetida para o miolo crescer com a galeria e os controles do Perfil · fim.
+PF_TOP = (0, 440)
+PF_TILE = (748, 764)
+PF_END = (1530, 1598)
+def build_perfil():
+    a = load('mob_perfil')
+    al = key_alpha(a)
+    b = colcopy(a, (610, 362, 738, 412), 740)        # "7 de 19" (vivo)
+    save(b, al, 'pf_top', *PF_TOP)
+    save(a, al, 'pf_tile', *PF_TILE)
+    save(a, al, 'pf_end', *PF_END)
+    # cartão do avatar do celular (conquistado: o da Arqueira), sem retrato,
+    # nome e texto do selo (o jogo desenha); 222 x 296. Retrato em (10..212, 10..194) do cartão.
+    from ref_pages_v2 import fill_smooth
+    # bloqueado: o do Rei Dourado (nome curto: sobra coluna limpa para apagar o nome)
+    for n, (x0, y0) in [('pf_mcard', (340, 448)), ('pf_mcard_locked', (590, 1086))]:
+        c = a[y0:y0 + 296, x0:x0 + 222].copy()
+        c = colcopy(c, (24, 197, 206, 238), 20)                                 # nome (vivo)
+        c = colcopy(c, (34, 246, 190, 280), 30)                                 # texto do selo (vivo)
+        al2 = np.full(c.shape[:2], 255.0)
+        # janela do retrato transparente (o retrato do jogo aparece por baixo da moldura); os losangos dos
+        # cantos, que na arte ficam por cima do retrato, continuam
+        win = np.zeros(c.shape[:2], bool)
+        win[12:193, 12:210] = True
+        lum = c.mean(axis=2)
+        corner = np.zeros_like(win)
+        for (cy, cx) in [(12, 12), (12, 209), (192, 12), (192, 209)]:
+            corner[max(0, cy - 16):cy + 16, max(0, cx - 16):cx + 16] = True
+        keep = corner & (lum > 70)
+        keep = cv2.dilate(keep.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
+        al2[win & ~keep] = 0.0
+        al2 = cv2.GaussianBlur(al2, (3, 3), 0.7)
+        save_rgba(np.dstack([np.clip(c, 0, 255), al2]).astype(np.uint8), n)
+
 if __name__ == '__main__':
     only = sys.argv[1:]
-    for name, fn in [('mais', build_mais), ('conheca', build_conheca), ('historico', build_historico), ('ligas', build_ligas), ('bots', build_bots), ('ranqueado', build_ranqueado)]:
+    for name, fn in [('mais', build_mais), ('conheca', build_conheca), ('historico', build_historico), ('ligas', build_ligas), ('bots', build_bots), ('ranqueado', build_ranqueado), ('perfil', build_perfil)]:
         if not only or name in only: fn()

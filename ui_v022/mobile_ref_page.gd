@@ -14,7 +14,7 @@ const SCENE_REGION := Rect2(1100, 250, 572, 691)
 const GLOW = preload("res://ui_v022/home_button_glow.gdshader")
 const REF_W := 900.0
 const MAX_W := 460.0
-const PAGES := ["mais", "about", "history", "ranking", "bot"]
+const PAGES := ["mais", "about", "history", "ranking", "bot", "profile"]
 const CREAM := Color("efe6cf")
 const GOLD := Color("f5cf6a")
 const INK := Color("2b1d0e")
@@ -126,6 +126,7 @@ func _build():
 		"history": _build_history()
 		"ranking": _build_ranking()
 		"bot": _build_bots()
+		"profile": _build_profile()
 	scroll.scroll_vertical = 0
 
 ## Remonta a página atual mantendo a rolagem (ex.: tocou numa liga) — uma vez por toque, não por quadro.
@@ -637,3 +638,24 @@ func _piece(parent: Control, n: String, rect_ref: Rect2) -> TextureRect:
 	r.size = rect_ref.size * s
 	parent.add_child(r)
 	return r
+
+# ------------------------------------------------------------------ PERFIL (ref5)
+func _build_profile():
+	var content := _content_box(92, 448, 716, 14)
+	content.name = "ProfileContentMobile"
+	mobile._profile(content, 716.0 * s)
+	var count: Label = content.get_node_or_null("GalleryCountMobile")
+	var gallery = content.get_node_or_null("AvatarGalleryMobile")
+	if count != null: count.hide()   # o número vai na faixa COLEÇÃO DE AVATARES da arte
+	# textos do Perfil (detalhe, títulos, resumo do Ranked) na fonte serifada clara do painel
+	for l in content.get_children():
+		if l is Label:
+			l.add_theme_font_override("font", Kit.SERIF)
+			l.add_theme_color_override("font_color", CREAM)
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_grow_panel("pf_top", "pf_tile", "pf_end", 0.0, content, 26.0)
+	var top: TextureRect = panel.get_node("Band_pf_top")
+	_hot(panel, top, Rect2(128, 238, 646, 96), 0.0, "VOLTAR", func(): hub.back())
+	var n_txt := "%d de %d" % [gallery.count_unlocked(), gallery.cards.size()] if gallery != null else ""
+	var cnt := _label(panel, n_txt, R(614, 360, 140, 54), 44, Color("f3c55a"), Kit.SERIF_BOLD, HORIZONTAL_ALIGNMENT_LEFT, 6)
+	cnt.name = "GalleryCountRefMobile"

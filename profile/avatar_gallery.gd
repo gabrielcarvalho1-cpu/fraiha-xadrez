@@ -22,6 +22,11 @@ var hub
 var card_size := Vector2(128, 166)
 var cards := {}
 var focus_id := ""   # R32: avatar em foco (tocado), ainda não aplicado
+## R53 · cartões do celular no visual da referência (ui_kit/mobile/pf_mcard*.png: moldura por cima do retrato,
+## nome e selo "Inicial / Conquistado / BLOQUEADO / EM USO" embaixo). Desligado = cartões de sempre (PC).
+var ref_cards := false
+const REF_CARD := Vector2(222, 296)
+const REF_PORTRAIT := Rect2(12, 12, 198, 181)
 static var _gray: Shader
 
 func setup(p_hub, p_columns: int, p_card: Vector2):
@@ -109,10 +114,66 @@ class Card extends Button:
         _layout()
     func _layout():
         if portrait == null: return
+        if gallery != null and gallery.ref_cards:
+            var k: Vector2 = size / gallery.REF_CARD
+            portrait.position = gallery.REF_PORTRAIT.position * k
+            portrait.size = gallery.REF_PORTRAIT.size * k
+            _ref_nodes()
+            ref_frame.size = size
+            ref_name.position = Vector2(8, 196) * k
+            ref_name.size = Vector2(206, 42) * k
+            ref_sub.position = Vector2(26, 244) * k
+            ref_sub.size = Vector2(170, 38) * k
+            queue_redraw()
+            return
         var side := minf(size.x - 16.0, size.y - 46.0)
         portrait.position = Vector2((size.x - side) / 2.0, 8)
         portrait.size = Vector2(side, side)
         queue_redraw()
+    var ref_frame: TextureRect
+    var ref_name: Label
+    var ref_sub: Label
+    func _ref_nodes():
+        if ref_frame != null: return
+        ref_frame = TextureRect.new()
+        ref_frame.name = "RefCardFrame"
+        ref_frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        ref_frame.stretch_mode = TextureRect.STRETCH_SCALE
+        ref_frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+        ref_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        add_child(ref_frame)   # depois do retrato: a moldura (e os losangos dos cantos) ficam por cima
+        for i in 2:
+            var l := Label.new()
+            l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+            l.clip_text = true
+            l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            l.add_theme_font_override("font", preload("res://ui_kit/fonts/Alegreya-Bold.woff"))
+            l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+            l.add_theme_constant_override("outline_size", 2)
+            add_child(l)
+            if i == 0: ref_name = l
+            else: ref_sub = l
+    func _draw_ref(st: String, e2: Dictionary):
+        var k: float = size.x / gallery.REF_CARD.x
+        var locked := st == "locked"
+        ref_frame.texture = load("res://ui_kit/mobile/pf_mcard_locked.png" if locked else "res://ui_kit/mobile/pf_mcard.png")
+        var focused: bool = gallery.focus_id == avatar
+        ref_frame.modulate = Color(0.72, 1.3, 0.86) if st == "selected" else (Color(1.25, 1.18, 1.0) if (focused or is_hovered()) else Color.WHITE)
+        var title := String(e2.get("name", avatar)).to_upper()
+        var fs := _fit(ref_name.get_theme_font("font"), title, int(round(30 * k)), size.x - 14.0)
+        if ref_name.text != title: ref_name.text = title
+        ref_name.add_theme_font_size_override("font_size", maxi(7, fs))
+        ref_name.add_theme_color_override("font_color", Color("efe6cf") if not locked else Color("c9c9c4"))
+        var sub := "BLOQUEADO"
+        match st:
+            "selected": sub = "EM USO"
+            "unlocked": sub = "Inicial" if String(e2.get("source", "")) == "initial" else "Conquistado"
+            "no_art_unlocked": sub = "Arte em breve"
+        if ref_sub.text != sub: ref_sub.text = sub
+        ref_sub.add_theme_font_size_override("font_size", maxi(7, _fit(ref_sub.get_theme_font("font"), sub, int(round(28 * k)), ref_sub.size.x - 6.0)))
+        ref_sub.add_theme_color_override("font_color", Color("f08a7c") if locked else (Color("c9ffd9") if st == "selected" else Color("efe6cf")))
+        tooltip_text = _tip(st, e2)
     func _draw():
         if gallery == null or portrait == null: return
         var st: String = gallery.state_of(avatar)
@@ -120,6 +181,21 @@ class Card extends Button:
         var tex: Texture2D = gallery.hub.avatar_texture(avatar) if has_art else null
         portrait.texture = tex
         portrait.material = gallery.gray_material() if st == "locked" and tex != null else null
+        if gallery.ref_cards:
+            if ref_frame == null: _layout()
+            if tex == null:
+                # sem arte: silhueta + brasão da liga (mesmo desenho dos cartões do PC), por baixo da moldura
+                var pr0 := Rect2(portrait.position, portrait.size)
+                draw_rect(pr0, Color("0a120e"))
+                var hc0 := Color("1f2a24") if st == "locked" else Color("2c3a30")
+                draw_circle(pr0.position + pr0.size * Vector2(0.5, 0.42), pr0.size.x * 0.17, hc0)
+                draw_colored_polygon(PackedVector2Array([pr0.position + pr0.size * Vector2(0.18, 1.0), pr0.position + pr0.size * Vector2(0.26, 0.70), pr0.position + pr0.size * Vector2(0.5, 0.62), pr0.position + pr0.size * Vector2(0.74, 0.70), pr0.position + pr0.size * Vector2(0.82, 1.0)]), hc0)
+                var b0 := ThemeCatalog.badge_texture(String(Catalog.entry(avatar).get("league", "")))
+                if b0 != null:
+                    var bs0 := pr0.size.x * 0.38
+                    draw_texture_rect(b0, Rect2(pr0.end - Vector2(bs0 + 4, bs0 + 4), Vector2(bs0, bs0)), false, Color(1, 1, 1, 0.45 if st == "locked" else 0.95))
+            _draw_ref(st, Catalog.entry(avatar))
+            return
         var lit := is_hovered() or has_focus()
         var r := Rect2(Vector2.ZERO, size)
         # base do cartão
