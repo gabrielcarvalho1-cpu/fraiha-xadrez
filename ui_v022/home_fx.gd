@@ -138,7 +138,7 @@ func _ready():
     _cat_mat.set_shader_parameter("r", BELLY_R / BELLY_RECT.size)
     for i in PUFF_POOL:
         var d = Disc.new(1.0, Color(0.93, 0.93, 0.95, 1.0))
-        d.visible = false
+        d.modulate.a = 0.0   # R52f · escondido por alfa: visible redesenharia o disco ao reaparecer (buffers novos na Web)
         add_child(d)
         _puff_discs.append(d)
 
@@ -213,16 +213,12 @@ func _update_puffs():
         var k: float = pf.age / pf.life
         var d = _puff_discs[shown]
         shown += 1
-        if not is_equal_approx(d.radius, pf.r0):
-            d.radius = pf.r0
-            d.queue_redraw()
-        d.visible = true
         d.position = pf.p
-        # raio r0 + 10k: escala do disco de raio r0
-        d.scale = Vector2.ONE * ((pf.r0 + 10.0 * k) / pf.r0)
+        # R52f · raio r0 + 10k = escala do disco de raio 1 (mesma geometria; nunca redesenha, mesmo trocando de fumaça)
+        d.scale = Vector2.ONE * (pf.r0 + 10.0 * k)
         d.modulate.a = 0.26 * sin(PI * minf(1.0, k * 1.15)) * (1.0 - k)
     for i in range(shown, PUFF_POOL):
-        _puff_discs[i].visible = false
+        _puff_discs[i].modulate.a = 0.0
 
 func _draw():
     # (fumacinha: discos em _puff_discs, animados em _update_puffs)

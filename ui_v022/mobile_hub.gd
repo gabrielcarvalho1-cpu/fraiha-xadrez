@@ -117,11 +117,11 @@ func layout():
         ref_home.layout(Rect2(-area.position + Vector2(0, top_in), Vector2(full.x, full.y - top_in - bottom_in)), Rect2(-area.position, full))
         return
     backdrop.visible = true
-    scroll.visible = true
+    scroll.visible = not side_modal_on
     # Home do celular sem faixa de título: o cartão do jogador e o menu ocupam a tela.
     hero.visible = false
     subtitle.visible = false
-    heading.visible = not main
+    heading.visible = not main and not side_modal_on
     heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if main else HORIZONTAL_ALIGNMENT_LEFT
     heading.add_theme_font_size_override("font_size", (34 if portrait else 26) if main else 22)
     if main:
@@ -288,6 +288,7 @@ func _source_button(title: String):
     return null
 
 var ref_home = null
+var side_modal_on := false   # R52f · ESCOLHA SEU LADO aberto no painel da arte
 
 func show_page(id: String):
     current_page = id
@@ -302,7 +303,16 @@ func show_page(id: String):
     profile.text = hub.player_name + " · PERFIL"
     back_button.visible = id != "main"
     heading.text = {"mais":"MAIS","main":"FRAIHA XADREZ","bot":"JOGAR CONTRA O COMPUTADOR","bot_side":"ESCOLHA SEU LADO","profile":"PERFIL","ranking":"LIGAS E RANKING","about":"CONHEÇA O FRAIHA","settings":"CONFIGURAÇÕES","ranked":"JOGAR RANQUEADO","history":"HISTÓRICO DE PARTIDAS"}.get(id,"FRAIHA XADREZ")
-    if hub.page_scrolls.has(id):
+    # R52f · ESCOLHA SEU LADO: no celular a tela é o painel da arte (hub.side_art, por cima de tudo); a página
+    # antiga do celular (título, VOLTAR, botões) não é montada nem aparece por trás do painel.
+    var side_modal: bool = id == "bot_side" and is_instance_valid(hub.get("side_art"))
+    side_modal_on = side_modal
+    heading.visible = not side_modal
+    scroll.visible = not side_modal
+    if side_modal: back_button.visible = false
+    if side_modal:
+        pass   # nada a montar: o painel da arte é a tela inteira
+    elif hub.page_scrolls.has(id):
         borrowed = hub.page_scrolls[id].get_child(0)
         borrowed_parent = borrowed.get_parent()
         borrowed.reparent(scroll,false)
@@ -415,6 +425,7 @@ func show_page(id: String):
             "profile": _profile(content)
             "ranking": _ranking(content)
             "about": _about(content)
+            "settings": _settings(content)
             "history":
                 var hl = VBoxContainer.new()
                 hl.name = "HistoryListMobile"
@@ -597,16 +608,85 @@ func _ranking(content: VBoxContainer):
     if hub.DEV_PREVIEW_BUTTON: _button(content,"TESTAR UNIVERSO",hub._preview_league)
     _button(content,"PEÇAS CLÁSSICAS",func(): hub.piece_set_requested.emit("classic"))
 
+## R52f · CONFIGURAÇÕES no celular. Desde o R51 a página do PC é a arte de referência (sem coluna em
+## page_scrolls) e o celular abria o painel vazio. Aqui a coluna é montada com os mesmos controles e as
+## mesmas funções do hub (volumes, pré-move, Premium): o que muda aqui muda no PC e é salvo igual.
+func _settings(content: VBoxContainer):
+    content.name = "SettingsContentMobile"
+    var premium_entry = preload("res://monetization/premium_entry.gd").new()
+    premium_entry.name = "PremiumEntryMobile"
+    premium_entry.pressed.connect(func(): hub.open_premium())
+    content.add_child(premium_entry)
+    hub._settings_section(content, "ÁUDIO")
+    var music_label := _text(content, "", 18)
+    music_label.name = "MusicVolumeLabelMobile"
+    var music: HSlider = hub._settings_slider(content, "MusicVolumeMobile")
+    music.value = round(hub.music_volume * 100)
+    music_label.text = "MÚSICA  ·  %d%%" % round(music.value)
+    music.value_changed.connect(func(v):
+        hub._set_music_volume(v)
+        music_label.text = "MÚSICA  ·  %d%%" % round(v))
+    var fx_label := _text(content, "", 18)
+    fx_label.name = "EffectsVolumeLabelMobile"
+    var fx: HSlider = hub._settings_slider(content, "EffectsVolumeMobile")
+    fx.value = round(hub.volume * 100)
+    fx_label.text = "EFEITOS SONOROS  ·  %d%%" % round(fx.value)
+    fx.value_changed.connect(func(v):
+        hub._set_volume(v)
+        fx_label.text = "EFEITOS SONOROS  ·  %d%%" % round(v))
+    hub._settings_section(content, "PARTIDA")
+    var premove: TextureButton = hub._page_button(content, 1, "", "", func(): pass)
+    premove.name = "PremoveToggleMobile"
+    var paint_premove := func():
+        var labels := premove.get_child(0).get_child(0)
+        (labels.get_child(0) as Label).text = "PRÉ-MOVE: " + ("LIGADO" if hub.premove_enabled else "DESLIGADO")
+        (labels.get_child(1) as Label).text = "Jogue na vez do adversário" if hub.premove_enabled else "Toque para ligar"
+    premove.pressed.connect(func():
+        hub._toggle_premove()
+        paint_premove.call())
+    paint_premove.call()
+    var note := _text(content, "Preferências salvas automaticamente. O botão de som da tela inicial silencia tudo.", 14)
+    note.name = "SettingsNoteMobile"
+    note.add_theme_color_override("font_color", Color("b9b29c"))
+    var ver := _text(content, "FRAIHA Xadrez · versão %s" % hub.APP_VERSION, 13)
+    ver.name = "SettingsVersionMobile"
+    ver.add_theme_color_override("font_color", Color("b9b29c"))
+    _touch_content(content)
+
+## R52f · CONHEÇA O FRAIHA no celular. Desde o R51 os tópicos do PC são hotspots (Button "AboutTopic%d") sobre a
+## arte de referência, não mais TextureButton: o celular procurava só TextureButton e ficava sem os tópicos.
+## Os nomes vêm dos rótulos da página do PC; o texto inclui a frase de abertura (about_lead) + o corpo.
 func _about(content: VBoxContainer):
     var grid = _grid(content,2)
-    var text = _text(content,hub.about_title.text+"\n\n"+hub.about_body.text,18)
+    grid.name = "AboutTopicsMobile"
+    var text = _text(content,_about_text(),18)
+    text.name = "AboutTextMobile"
+    var labels: Array = hub.get("about_nav_labels") if hub.get("about_nav_labels") is Array else []
+    var found := 0
+    for i in labels.size():
+        var hs = hub.pages.about.find_child("AboutTopic%d" % i, true, false)
+        if not (hs is BaseButton): continue
+        found += 1
+        var source: BaseButton = hs
+        var b = _button(grid,String(labels[i].text),func():
+            source.pressed.emit()
+            text.text = _about_text()
+        )
+        b.name = "AboutTopicMobile%d" % i
+    if found > 0: return
+    # contrato antigo (páginas de TextureButton), mantido para builds sem a arte de referência
     for original in hub.pages.about.find_children("*","TextureButton",true,false):
         if hub.title_of(original).begins_with("VOLTAR"): continue
         var source = original
         _button(grid,hub.title_of(source),func():
             source.pressed.emit()
-            text.text = hub.about_title.text+"\n\n"+hub.about_body.text
+            text.text = _about_text()
         )
+
+func _about_text() -> String:
+    var lead = hub.get("about_lead")
+    var lead_text: String = lead.text if lead is Label else ""
+    return hub.about_title.text + "\n\n" + (lead_text + "\n\n" if not lead_text.is_empty() else "") + hub.about_body.text
 
 ## Nada da página pode ser mais largo que a tela: botões cortam o texto (…) em vez de
 ## esticar a grade; em retrato, grades de botões viram 1 coluna e a de avatares 2.

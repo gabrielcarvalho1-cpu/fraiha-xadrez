@@ -38,7 +38,7 @@ func _init():
         var inner = Disc.new(1.0, Color(0.85, 0.97, 1.0, 0.75))
         n.add_child(outer)
         n.add_child(inner)
-        n.visible = false
+        n.modulate.a = 0.0   # R52f · escondido por alfa: mostrar/esconder com visible redesenha os discos (buffers novos na Web)
         _part_root.add_child(n)
         _part_nodes.append([n, outer, inner])
     _light_root = Node2D.new()
@@ -57,7 +57,7 @@ func _process(delta):
         p.pos += p.vel * delta
         p.vel.x += sin(t * 2.0 + p.seed) * 6.0 * delta
     for p in parts:
-        if p.life <= 0.0: _part_nodes[p.slot][0].visible = false   # some e libera o nó
+        if p.life <= 0.0: _part_nodes[p.slot][0].modulate.a = 0.0   # some (por alfa, sem redesenho) e libera o nó
     parts = parts.filter(func(p): return p.life > 0.0)
     if parts.size() < MAX_PARTS and randf() < delta * 5.0:
         var used := {}
@@ -67,12 +67,11 @@ func _process(delta):
         var np := {"pos": Vector2(randf_range(size.x * 0.25, size.x * 0.8), randf_range(size.y * 0.35, size.y * 0.95)),
             "vel": Vector2(randf_range(-4, 4), randf_range(-14, -6)), "life": randf_range(2.0, 4.0), "max": 3.0, "seed": randf() * TAU, "r": randf_range(0.8, 1.8), "slot": slot}
         parts.append(np)
-        # raio novo só quando a partícula nasce (nó fixo para ela até apagar: nada é redesenhado por quadro)
+        # R52f · raio da partícula = escala do disco de raio 1 (mesma geometria: o círculo tem sempre o mesmo
+        # número de pontos). Nascer não redesenha mais nada (antes: 2 redesenhos = buffers novos a cada partícula).
         var sl: Array = _part_nodes[slot]
-        sl[1].radius = np.r * 2.4
-        sl[2].radius = np.r
-        sl[1].queue_redraw()
-        sl[2].queue_redraw()
+        sl[1].scale = Vector2.ONE * (np.r * 2.4)
+        sl[2].scale = Vector2.ONE * np.r
     _update_discs()
     queue_redraw()   # só retângulos de textura (reflexo + espírito): não cria buffers
 
@@ -102,7 +101,6 @@ func _update_discs():
     # partículas azuladas (pool de nós; o raio só muda quando nasce uma partícula)
     for p in parts:
         var n: Node2D = _part_nodes[p.slot][0]
-        n.visible = true
         n.position = p.pos + Vector2(0, m.bob)
         n.modulate.a = clampf(p.life / p.max, 0.0, 1.0) * clampf((p.max - p.life) * 2.0, 0.0, 1.0)
     # luz do espírito tocando a água logo abaixo (brilho elíptico)

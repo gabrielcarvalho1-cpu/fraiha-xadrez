@@ -63,10 +63,15 @@ func run():
     check(r.position.x >= 0 and r.position.y >= 0 and r.end.x <= vs.x + 0.5 and r.end.y <= vs.y + 0.5, "painel inteiro na tela (nada cortado)")
     check(absf(r.position.x - (vs.x - r.end.x)) <= 1.0 and absf(r.position.y - (vs.y - r.end.y)) <= 1.0, "painel centralizado")
     check(hub.side_opponent.text == "Adversário: BOT BRONZE", "adversário dinâmico: " + hub.side_opponent.text)
+    var mob = hub.get("mobile_ui")
+    if is_instance_valid(mob):   # R52f · celular: a tela antiga (título, VOLTAR, botões) não aparece atrás do painel
+        check(not mob.scroll.visible and not mob.heading.visible and not mob.back_button.visible, "celular: tela antiga escondida atrás do painel")
     await _open(ids[2])
     _click_node("SideBack")
     for i in range(6): await process_frame
     check(hub.page == "bot" and not hub.side_art.visible, "VOLTAR AOS NÍVEIS volta para os níveis")
+    if is_instance_valid(mob):
+        check(mob.scroll.visible and mob.heading.visible and mob.back_button.visible, "celular: lista dos níveis volta inteira")
     await _open(ids[2])
     var e := InputEventKey.new()
     e.keycode = KEY_ESCAPE
@@ -86,4 +91,4 @@ func run():
         check(got.size() == 1 and got[0][0] == ids[2] and got[0][1] == spec[1], "%s inicia a partida (%s)" % [spec[0], str(got)])
         check(not hub.side_art.is_visible_in_tree(), "%s: a tela some ao começar a partida" % spec[0])
     print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
-    quit(0)
+    quit(0 if failures == 0 else 1)   # R52f · gate: qualquer FAIL sai com código diferente de 0

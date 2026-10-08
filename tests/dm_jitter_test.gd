@@ -85,4 +85,4 @@ func run():
         root.get_texture().get_image().save_png(p)
         print("SHOT ", p)
     print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
-    quit(0)
+    quit(0 if failures == 0 else 1)   # R52f · gate: qualquer FAIL sai com código diferente de 0
