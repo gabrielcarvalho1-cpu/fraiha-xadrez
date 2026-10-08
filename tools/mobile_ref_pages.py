@@ -194,7 +194,23 @@ def build_bots():
     c = fill_smooth(c, (101, 751, 801, 1067), ring=6, thr=60, green=True, sigma=40)   # miolo inteiro: degradê liso
     save(c, al, 'bots_card', *BOT_CARD)
 
+# ---------------------------------------------------------------- JOGAR RANQUEADO (ref8)
+# topo (cavalos, título e aviso fixos) · cartão do ritmo (o do Relâmpago, sem brasão e sem os textos vivos;
+# a moldura da barra de PL e o BUSCAR PARTIDA ficam) repetido para os ritmos abertos · fim (VOLTAR).
+RK_TOP = (0, 545)
+RK_CARD = (545, 959)
+RK_END = (1354, 1594)
+def build_ranqueado():
+    from ref_pages_v2 import fill_smooth
+    a = load('mob_ranqueado')
+    al = key_alpha(a)
+    save(a, al, 'rk_top', *RK_TOP)
+    save(a, al, 'rk_end', *RK_END)
+    c = fill_smooth(a, (136, 560, 774, 725), ring=6, thr=60, green=True, sigma=30)   # brasão, nome, minutos, liga
+    c = fill_smooth(c, (150, 768, 772, 816), ring=6, thr=60, green=True, sigma=20)   # V · D · E · partidas
+    save(c, al, 'rk_card', *RK_CARD)
+
 if __name__ == '__main__':
     only = sys.argv[1:]
-    for name, fn in [('mais', build_mais), ('conheca', build_conheca), ('historico', build_historico), ('ligas', build_ligas), ('bots', build_bots)]:
+    for name, fn in [('mais', build_mais), ('conheca', build_conheca), ('historico', build_historico), ('ligas', build_ligas), ('bots', build_bots), ('ranqueado', build_ranqueado)]:
         if not only or name in only: fn()

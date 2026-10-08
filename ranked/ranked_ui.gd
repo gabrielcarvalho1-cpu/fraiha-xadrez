@@ -52,6 +52,9 @@ const SEARCH_REF := Vector2(1448, 1086)
 var search_art: Control
 var search_mode_label: Label
 var search_time_label: Label
+## R53 · JOGAR RANQUEADO no celular: painel da referência do celular (ranked/mobile_ranked_art.gd); a lista
+## antiga continua montada por baixo, oculta, como fonte das ações (Queue_<ritmo>, BackButton).
+var mobile_art = null
 
 func rated() -> bool:
     return kind == "ranked"
@@ -87,6 +90,9 @@ func setup(service, ranked_controller):
     add_child(art_panel)
     art_panel.setup(self)
     _build_search_art()
+    mobile_art = preload("res://ranked/mobile_ranked_art.gd").new()
+    add_child(mobile_art)
+    mobile_art.setup(self)
     panel = PanelContainer.new()
     var style = StyleBoxEmpty.new()
     style.content_margin_left = 34
@@ -332,15 +338,17 @@ func _layout_search_art():
 func close_panel():
     screen = ""
     dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide(); search_art.hide()
+    if mobile_art != null: mobile_art.close()
     if promo != null: promo.hide()
 
 func panel_open() -> bool:
-    return panel.visible or art_panel.visible or search_art.visible or (promo != null and promo.visible)
+    return panel.visible or art_panel.visible or search_art.visible or (promo != null and promo.visible) or (mobile_art != null and mobile_art.visible)
 
 ## R49 · VOCÊ SUBIU DE LIGA! (ranked/promotion_modal.gd): os botões fazem o mesmo que no painel de resultado.
 func _promotion(r: Dictionary):
     if account.ranked is Dictionary and r.has("stats"): account.ranked[String(r.mode)] = r.stats
     dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide(); search_art.hide()
+    if mobile_art != null: mobile_art.close()
     var st = get_parent()
     var can: bool = st != null and st.has_method("analysis_available") and st.analysis_available()
     promo.set_meta("mode", String(r.get("mode", "")))
@@ -515,6 +523,16 @@ func _show(which: String):
     else:
         dim.modulate.a = 1.0
     art_panel.visible = which == "modes" and not Mobile.active(get_viewport())
+    # R53 · celular + Ranqueado: a tela de ritmos é o painel da referência do celular (o JOGAR ONLINE casual segue a lista)
+    var mob_art: bool = which == "modes" and rated() and Mobile.active(get_viewport())
+    if mob_art:
+        panel.hide()
+        art_frame.hide()
+        dim.hide()
+        if mobile_art.visible: mobile_art.rebuild()
+        else: mobile_art.open()
+    elif mobile_art.visible:
+        mobile_art.close()
     if art_panel.visible:
         panel.hide()
         art_frame.hide()
@@ -691,6 +709,7 @@ func _refresh_modes_keep_notice():
     var keep: String = notice.text if is_instance_valid(notice) else ""
     _show("modes")
     if not keep.is_empty() and is_instance_valid(notice): notice.text = keep
+    if not keep.is_empty() and mobile_art != null and mobile_art.visible: mobile_art.set_notice(keep)
 
 func _on_problem(text: String):
     if text.is_empty(): return
@@ -698,6 +717,7 @@ func _on_problem(text: String):
     elif screen in ["modes", "searching"]:
         if screen == "searching": _show("modes")
         if notice != null: notice.text = text
+        if mobile_art != null and mobile_art.visible: mobile_art.set_notice(text)
 
 func _confirm_resign():
     if src().in_match(): _show("confirm_resign")
