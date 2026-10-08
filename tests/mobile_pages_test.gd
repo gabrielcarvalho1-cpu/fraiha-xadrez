@@ -109,29 +109,32 @@ func run():
 	check(hub.page == "main", "VOLTAR sai das Configurações")
 
 	# ---------------- CONHEÇA O FRAIHA
+	# R53 · painel da referência do celular (mobile_ref_page.gd): os 6 tópicos empilhados no cartão (título +
+	# texto de cada um, rolando com o dedo), VOLTAR desenhado na arte.
 	hub.show_page("about")
 	await frames(6)
-	var grid: GridContainer = mob.find_child("AboutTopicsMobile", true, false)
-	var text: Label = mob.find_child("AboutTextMobile", true, false)
-	var topics: Array = []
-	if grid != null:
-		for c in grid.get_children():
-			if c is BaseButton: topics.append(c)
-	check(topics.size() == 6, "Conheça o FRAIHA: 6 tópicos no celular (achou %d)" % topics.size())
-	await shot("conheca.png")
+	var rp = mob.ref_page
+	check(rp != null and rp.visible and rp.page_id == "about", "Conheça o FRAIHA abre o painel da referência")
 	var expected := ["O PROJETO", "COMO JOGAR", "SISTEMA DE LIGAS", "MODOS DE JOGO", "PERSONALIZAÇÃO", "COMUNIDADE E SUPORTE"]
-	for k in topics.size():
-		await reveal(topics[k])
-		await tap(topics[k])
-		await frames(2)
-		check(text != null and text.text.begins_with(expected[k]) and text.text.length() > expected[k].length() + 40, "toque em %s mostra o texto do tópico" % expected[k])
-	if topics.size() > 0:
-		await reveal(text)
-		check(text.is_visible_in_tree(), "texto do tópico visível (rolagem)")
+	await shot("conheca.png")
+	for k in expected.size():
+		var title: Label = mob.find_child("AboutTitleMobile%d" % k, true, false)
+		var body: RichTextLabel = mob.find_child("AboutTextMobile%d" % k, true, false)
+		check(title != null and title.text == expected[k], "tópico %d: título %s" % [k, expected[k]])
+		check(body != null and body.get_parsed_text().length() > 40, "tópico %s com o texto do PC" % expected[k])
+		if body != null:
+			rp.scroll.ensure_control_visible(body)
+			await frames(3)
+			check(on_screen(body) or body.size.y > root.get_visible_rect().size.y * 0.8, "texto de %s alcançável rolando" % expected[k])
+	check(not mob.heading.is_visible_in_tree() and not mob.scroll.is_visible_in_tree(), "página antiga do celular não aparece por trás")
 	await shot("conheca_ultimo.png")
-	await tap(mob.back_button)
+	rp.scroll.scroll_vertical = 0
+	await frames(3)
+	var back: Button = rp.find_child("Ref_VOLTAR", true, false)
+	check(back != null and on_screen(back), "VOLTAR da arte visível")
+	if back != null: await tap(back)
 	await frames(4)
-	check(hub.page == "main", "VOLTAR sai do Conheça o FRAIHA")
+	check(hub.page == "main" and not rp.visible, "VOLTAR sai do Conheça o FRAIHA")
 	print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
 	quit(0 if failures == 0 else 1)
 

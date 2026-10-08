@@ -44,8 +44,9 @@ func run():
                 check(t in buttons, "mobile em pé tem " + t)
             hub.mobile_ui.ref_home.buttons["MAIS"].pressed.emit()
             await process_frame
-            var more = hub.mobile_ui.scroll.find_children("*","Button",true,false).map(func(b): return b.text)
-            check("CONFIGURAÇÕES" in more and "CONHEÇA O FRAIHA" in more and "SAIR" in more, "MAIS: " + str(more))
+            # R53 · MAIS = painel da referência do celular (VOLTAR / CONFIGURAÇÕES / CONHEÇA O FRAIHA / SAIR)
+            var more = hub.mobile_ui.ref_page.find_children("*","Button",true,false).map(func(b): return b.text)
+            check(hub.mobile_ui.ref_page.visible and "CONFIGURAÇÕES" in more and "CONHEÇA O FRAIHA" in more and "SAIR" in more and "VOLTAR" in more, "MAIS: " + str(more))
             var fired = [false]
             hub.ranked_requested.connect(func(): fired[0] = true)
             hub.show_page("main")

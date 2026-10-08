@@ -116,6 +116,15 @@ func layout():
         var bottom_in := maxf(0.0, full.y - area.end.y - 8.0)
         ref_home.layout(Rect2(-area.position + Vector2(0, top_in), Vector2(full.x, full.y - top_in - bottom_in)), Rect2(-area.position, full))
         return
+    # R53 · páginas no visual das referências do celular: o painel (com o cenário) ocupa a tela inteira
+    if ref_page_on():
+        backdrop.visible = false
+        heading.visible = false
+        profile.hide()
+        back_button.hide()
+        scroll.visible = false
+        ref_page.layout(Rect2(-area.position, get_viewport().get_visible_rect().size))
+        return
     backdrop.visible = true
     scroll.visible = not side_modal_on
     # Home do celular sem faixa de título: o cartão do jogador e o menu ocupam a tela.
@@ -272,16 +281,8 @@ func _show_ref_home():
     fullscreen_button = null
     refresh_sound()
 
-## R47 · MAIS (barra de baixo da Home em pé): o que não cabe na Home da referência.
-func _more(content: VBoxContainer):
-    for title in ["CONFIGURAÇÕES", "CONHEÇA O FRAIHA"]:
-        var src = _source_button(title)
-        if src != null: _button(content, title, func(): src.pressed.emit())
-    if hub.screen_mode != null and hub.screen_mode.supported():
-        _button(content, "TELA CHEIA", func(): hub.screen_mode.toggle())
-    var quit = _source_button("SAIR")
-    if quit != null: _button(content, "SAIR", func(): quit.pressed.emit())
-
+## R47 · MAIS (barra de baixo da Home em pé) · R53: painel da referência em mobile_ref_page.gd; os botões
+## de lá disparam os mesmos botões da Home do PC (achados aqui pelo título).
 func _source_button(title: String):
     for b in hub.menu_buttons:
         if hub.title_of(b) == title: return b
@@ -289,6 +290,11 @@ func _source_button(title: String):
 
 var ref_home = null
 var side_modal_on := false   # R52f · ESCOLHA SEU LADO aberto no painel da arte
+const RefPageScript = preload("res://ui_v022/mobile_ref_page.gd")
+var ref_page = null          # R53 · MAIS / CONHEÇA / HISTÓRICO no visual das referências do celular
+
+func ref_page_on() -> bool:
+    return is_instance_valid(ref_page) and ref_page.visible
 
 func show_page(id: String):
     current_page = id
@@ -310,8 +316,24 @@ func show_page(id: String):
     heading.visible = not side_modal
     scroll.visible = not side_modal
     if side_modal: back_button.visible = false
+    var use_ref_page: bool = RefPageScript.handles(id)
+    if use_ref_page:
+        if not is_instance_valid(ref_page):
+            ref_page = RefPageScript.new()
+            add_child(ref_page)
+            ref_page.setup(hub, self)
+        move_child(ref_page, get_child_count() - 1)
+        heading.visible = false
+        scroll.visible = false
+        back_button.visible = false
+        profile.visible = false
+        ref_page.open(id)
+    elif is_instance_valid(ref_page) and ref_page.visible:
+        ref_page.close()
     if side_modal:
         pass   # nada a montar: o painel da arte é a tela inteira
+    elif use_ref_page:
+        pass   # montado pelo painel da referência (mobile_ref_page.gd)
     elif hub.page_scrolls.has(id):
         borrowed = hub.page_scrolls[id].get_child(0)
         borrowed_parent = borrowed.get_parent()
@@ -339,7 +361,6 @@ func show_page(id: String):
                 ladder.challenge.connect(func(bid): hub._choose_difficulty(bid))
             "main" when use_ref_home():
                 _show_ref_home()
-            "mais": _more(content)
             "main":
                 # HUD do topo: CLUB FRAIHA no canto superior esquerdo + botão SOM à direita.
                 var head_gap = Control.new()
@@ -424,16 +445,7 @@ func show_page(id: String):
                 content.add_child(tail)
             "profile": _profile(content)
             "ranking": _ranking(content)
-            "about": _about(content)
             "settings": _settings(content)
-            "history":
-                var hl = VBoxContainer.new()
-                hl.name = "HistoryListMobile"
-                hl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-                hl.add_theme_constant_override("separation", 8)
-                content.add_child(hl)
-                hub.history_filter = "all"
-                hub.build_history_list(hl, true)
     scroll.scroll_vertical = 0
     _fit_width.call_deferred(size.x < 560.0)
     layout()
@@ -645,6 +657,11 @@ func _settings(content: VBoxContainer):
         hub._toggle_premove()
         paint_premove.call())
     paint_premove.call()
+    # R53 · TELA CHEIA saiu do MAIS (o painel da referência tem só VOLTAR / CONFIGURAÇÕES / CONHEÇA / SAIR)
+    if hub.screen_mode != null and hub.screen_mode.supported():
+        hub._settings_section(content, "TELA")
+        var fs := _button(content, "TELA CHEIA", func(): hub.screen_mode.toggle())
+        fs.name = "FullscreenToggleMobile"
     var note := _text(content, "Preferências salvas automaticamente. O botão de som da tela inicial silencia tudo.", 14)
     note.name = "SettingsNoteMobile"
     note.add_theme_color_override("font_color", Color("b9b29c"))
@@ -652,41 +669,6 @@ func _settings(content: VBoxContainer):
     ver.name = "SettingsVersionMobile"
     ver.add_theme_color_override("font_color", Color("b9b29c"))
     _touch_content(content)
-
-## R52f · CONHEÇA O FRAIHA no celular. Desde o R51 os tópicos do PC são hotspots (Button "AboutTopic%d") sobre a
-## arte de referência, não mais TextureButton: o celular procurava só TextureButton e ficava sem os tópicos.
-## Os nomes vêm dos rótulos da página do PC; o texto inclui a frase de abertura (about_lead) + o corpo.
-func _about(content: VBoxContainer):
-    var grid = _grid(content,2)
-    grid.name = "AboutTopicsMobile"
-    var text = _text(content,_about_text(),18)
-    text.name = "AboutTextMobile"
-    var labels: Array = hub.get("about_nav_labels") if hub.get("about_nav_labels") is Array else []
-    var found := 0
-    for i in labels.size():
-        var hs = hub.pages.about.find_child("AboutTopic%d" % i, true, false)
-        if not (hs is BaseButton): continue
-        found += 1
-        var source: BaseButton = hs
-        var b = _button(grid,String(labels[i].text),func():
-            source.pressed.emit()
-            text.text = _about_text()
-        )
-        b.name = "AboutTopicMobile%d" % i
-    if found > 0: return
-    # contrato antigo (páginas de TextureButton), mantido para builds sem a arte de referência
-    for original in hub.pages.about.find_children("*","TextureButton",true,false):
-        if hub.title_of(original).begins_with("VOLTAR"): continue
-        var source = original
-        _button(grid,hub.title_of(source),func():
-            source.pressed.emit()
-            text.text = _about_text()
-        )
-
-func _about_text() -> String:
-    var lead = hub.get("about_lead")
-    var lead_text: String = lead.text if lead is Label else ""
-    return hub.about_title.text + "\n\n" + (lead_text + "\n\n" if not lead_text.is_empty() else "") + hub.about_body.text
 
 ## Nada da página pode ser mais largo que a tela: botões cortam o texto (…) em vez de
 ## esticar a grade; em retrato, grades de botões viram 1 coluna e a de avatares 2.
