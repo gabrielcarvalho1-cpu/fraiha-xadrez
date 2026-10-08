@@ -649,6 +649,14 @@ func _casual_card(grid: Container, item: Array):
     b.disabled = not account.online_ready()
 
 func _result(r: Dictionary):
+    if bool(r.get("unknown", false)):
+        # R53 · a partida terminou no servidor sem o resultado chegar (expirou enquanto o jogador estava fora)
+        _label("PARTIDA ENCERRADA", 26, GOLD, true)
+        _label(String(r.get("reason_text", "")), 16, Color("efe3c4"), true)
+        _button(box, "VOLTAR", func():
+            play_requested.emit()
+            _show("modes"), true)
+        return
     var outcome = String(r.get("outcome", "draw"))
     var title = {"win": "VITÓRIA", "loss": "DERROTA", "draw": "EMPATE"}[outcome]
     var color = {"win": GOLD, "loss": Color("ff9d86"), "draw": Color("dfe6d6")}[outcome]

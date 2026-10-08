@@ -1450,6 +1450,7 @@ func _refresh_analysis_buttons():
 
 func _on_online_result(msg: Dictionary):
     if voice != null: voice.exit_match("match_end")   # R45 · fim oficial da partida: sai da voz
+    if bool(msg.get("unknown", false)): return   # R53 · servidor não tinha mais o resultado: nada a gravar
     # Resultado do Ranked traz a liga/PL novos: a Home (cartão do jogador) e os temas liberados atualizam na hora.
     if msg.get("stats") is Dictionary and String(msg.get("mode", "")).begins_with("ranked_") and account.ranked is Dictionary:
         account.ranked[String(msg.mode)] = msg.stats

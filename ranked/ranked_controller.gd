@@ -35,6 +35,9 @@ var kind := "ranked"
 # da fila (onClose); ao reconectar, o cliente volta a entrar sozinho na mesma fila.
 var queue_mode := ""
 var requeue_pending := false
+# R53 · a conexão caiu no meio da partida: ao voltar, pede ao servidor o estado desta partida (que pode ter
+# terminado enquanto o jogador estava fora — o adversário desistiu, o tempo acabou).
+var resync_pending := false
 
 func setup(service, world):
     account = service
@@ -55,6 +58,8 @@ func _ready_for_queue() -> bool:
     return account.server_ready if kind == "ranked" else account.online_ready()
 
 func _maybe_requeue():
+    if resync_pending and in_match() and _ready_for_queue():
+        if account.send_server({"type": kind + "_sync", "match_id": match_id}): resync_pending = false
     if not requeue_pending or queue_mode.is_empty() or in_match(): return
     if not _ready_for_queue(): return
     if account.send_server({"type": kind + "_queue", "mode": queue_mode}):
@@ -151,6 +156,7 @@ func _on_message(msg: Dictionary):
             searching = false
         "match_found":
             searching = false
+            resync_pending = false
             queue_mode = ""
             requeue_pending = false
             match_id = String(msg.match_id)
@@ -162,6 +168,18 @@ func _on_message(msg: Dictionary):
             found.emit(msg)
         "match_state":
             if String(msg.get("match_id", "")) == match_id: _apply_state(msg)
+        "match_idle":
+            # Sincronia pedida e o servidor não conhece mais esta partida (expirou / servidor reiniciou): o
+            # cliente não pode ficar preso numa partida "em andamento" que não existe mais.
+            var idle_id := String(msg.get("match_id", ""))
+            if in_match() and (idle_id == match_id or idle_id.is_empty()):
+                status = "finished"
+                game.game_over = true
+                game.status = "PARTIDA ENCERRADA"
+                game.queue_redraw()
+                last_result = {"match_id": match_id, "mode": mode, "mode_name": mode_name, "outcome": "", "unknown": true,
+                    "reason_text": "A partida foi encerrada enquanto você estava sem conexão."}
+                finished.emit(last_result)
         "match_result":
             if String(msg.get("match_id", "")) == match_id:
                 status = "finished"
@@ -185,6 +203,7 @@ func _on_message(msg: Dictionary):
             if code != "move_rejected": problem.emit(String(msg.get("message", "")))
         "link_lost":
             pending = false
+            resync_pending = in_match()
             if in_match(): problem.emit("Conexão perdida. Reconectando — o relógio oficial continua no servidor.")
             # Buscando: continua na tela de busca e volta para a fila ao reconectar.
             requeue_pending = not queue_mode.is_empty() and not in_match()

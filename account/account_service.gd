@@ -45,6 +45,11 @@ var socket_open := false
 var retry_in := 0.0
 var retry_step := 0      # R35.1: reconexão rápida no 1º tropeço (celular troca de rede/antena), depois espaça
 var ping_in := 10.0 # heartbeat: o servidor usa o ping para presença (silêncio de 45 s encerra a conexão)
+## R53 · link morto do lado do cliente (celular: troca de rede, tela bloqueada): o navegador pode levar minutos
+## para perceber e o jogador ficava preso numa partida que já tinha acabado. O servidor responde todo ping
+## (a cada 10 s); sem NENHUMA mensagem por LINK_DEAD_MS, a conexão é dada como morta e o cliente reconecta.
+const LINK_DEAD_MS := 25000
+var rx_at := 0
 var refresh_in := -1.0
 # Convidado (Online Casual sem conta): identidade só no servidor, recuperável pelo token.
 var guest_wanted := false
@@ -463,6 +468,7 @@ func avatar_url() -> String:
 func _notification(what):
     if what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED:
         ping_in = 0.0
+        rx_at = Time.get_ticks_msec()   # voltou do segundo plano: o silêncio foi nosso, não da conexão
         if socket == null and (signed_in() or guest_wanted): retry_in = 0.05   # reconecta já, sem esperar os 3 s
 
 func _process(delta):
@@ -480,26 +486,39 @@ func _process(delta):
         if not socket_open:
             socket_open = true
             retry_step = 0
+            rx_at = Time.get_ticks_msec()
             if signed_in():
                 _log("acct_auth enviado")
                 _send({"type": "acct_auth", "access_token": access_token})
             elif guest_wanted: _send_guest_auth()
         while socket.get_available_packet_count() > 0:
+            rx_at = Time.get_ticks_msec()
             var msg = JSON.parse_string(socket.get_packet().get_string_from_utf8())
             if msg is Dictionary: _receive(msg)
+            if socket == null: return
         ping_in -= delta
         if ping_in <= 0.0:
             ping_in = 10.0
             _send({"type": "ping"})
+        if Time.get_ticks_msec() - rx_at > LINK_DEAD_MS:
+            _log("conexão sem resposta há %d s: reconectando" % (LINK_DEAD_MS / 1000))
+            socket.close()
+            _link_lost()
     elif state == WebSocketPeer.STATE_CLOSED:
-        socket = null
-        socket_open = false
-        server_ready = false
-        guest_ready = false
-        retry_in = [0.6, 1.5, 3.0, 5.0][mini(retry_step, 3)]
-        retry_step += 1
-        server_message.emit({"type": "link_lost"})
-        changed.emit()
+        _link_lost()
+
+## Conexão perdida (fechada ou dada como morta): limpa o estado e agenda a reconexão.
+## O socket dado como morto é abandonado (close() já pedido; o handshake de fechamento num link morto não
+## termina e não pode segurar a reconexão).
+func _link_lost():
+    socket = null
+    socket_open = false
+    server_ready = false
+    guest_ready = false
+    retry_in = [0.6, 1.5, 3.0, 5.0][mini(retry_step, 3)]
+    retry_step += 1
+    server_message.emit({"type": "link_lost"})
+    changed.emit()
 
 func _receive(msg: Dictionary):
     var type = String(msg.get("type", ""))

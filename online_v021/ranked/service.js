@@ -6,6 +6,7 @@ const { look: publicLook } = require('../accounts/cosmetics');
 const { MODES, CASUAL_MODES, ALL_MODES, CONFIG } = require('./config');
 const { Matchmaker } = require('./matchmaker');
 const { RankedMatch } = require('./match');
+const RESULT_KEEP_MS = Number(process.env.FRAIHA_RESULT_KEEP_MS || 10 * 60 * 1000);
 
 class Ranked {
   constructor({ send, cfg = CONFIG, now = () => Date.now(), kind = 'ranked' }) {
@@ -109,7 +110,7 @@ class Ranked {
         });
     }
     if (a === this.p + 'cancel') { this.invalidateQueue(uid); const e = this.mm.cancel(uid); return this.send(ws, { type: this.p + 'cancelled', was_queued: !!e }); }
-    if (a === this.p + 'sync') { if (match) return this.pushState(match, now); return this.send(ws, { type: this.p + 'idle' }); }
+    if (a === this.p + 'sync') return this.sync(ws, uid, match, m, now);
     if (!match || match.id !== String(m.match_id || match.id)) return this.fail(ws, `Nenhuma partida ${this.label} ativa.`, 'no_match');
     const color = match.colorOf(uid);
     if (a === this.p + 'move') {
@@ -119,6 +120,21 @@ class Ranked {
     }
     if (a === this.p + 'resign') { match.resign(color, now); return this.after(match, now); }
     return this.fail(ws, `Ação ${this.label} desconhecida.`);
+  }
+  // R53 · sincronia pedida pelo cliente (ao reconectar no meio de uma partida). A partida pedida pode já ter
+  // terminado enquanto ele estava fora (o adversário desistiu, o tempo acabou): o servidor guarda a partida
+  // encerrada por RESULT_KEEP_MS e devolve o estado FINAL + o resultado só para quem jogou nela. Partida
+  // desconhecida (expirou / servidor reiniciou): *_idle com o match_id pedido, para o cliente sair do estado preso.
+  sync(ws, uid, match, m, now) {
+    const askedId = m.match_id ? String(m.match_id) : '';
+    const asked = askedId ? this.matches.get(askedId) : match;
+    const c = asked ? asked.colorOf(uid) : null;
+    if (!asked || !c) return this.send(ws, { type: this.p + 'idle', match_id: askedId });
+    asked.players[c].connected = true; asked.players[c].leftAt = 0;
+    if (asked.status !== 'finished') return this.pushState(asked, now, c);
+    this.send(ws, asked.state(c, now));
+    // resultado já gravado: manda agora; gravação em andamento: persist() manda quando terminar (conectado de novo)
+    if (asked.saved !== undefined) this.send(ws, asked.resultFor(c, asked.saved));
   }
   // FRAIHA Admin: modo desativado → quem estava esperando sai da fila com aviso (o cliente já trata *_error na busca).
   purgeQueue(message, onlyMode = null) {
@@ -153,7 +169,8 @@ class Ranked {
       if (this.byUser.get(uid) === match.id) this.byUser.delete(uid);
       this.presence(uid);
     }
-    setTimeout(() => this.matches.delete(match.id), 60000).unref();
+    // R53 · a partida encerrada fica guardada um tempo: quem caiu bem na hora do fim recebe o resultado ao voltar
+    setTimeout(() => this.matches.delete(match.id), RESULT_KEEP_MS).unref();
   }
   // R37 · placar do Casual por conta (cartão de perfil). Convidados não têm placar. Falha não atrapalha a partida.
   recordCasual(match) {
