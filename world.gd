@@ -916,8 +916,9 @@ func _draw_check_glow(r: Rect2):
 ## Cor do jogador humano quando o pré-move pode ser usado nesta partida; "" se não.
 func _premove_color() -> String:
     if not premove_enabled or bot == null or not game_started or game_over or settings_open: return ""
-    if bool(bot.get("local_mode")): return ""
-    if not bool(bot.get("active")): return ""
+    # R53 · o controlador do Ranked/Casual não tem local_mode: bool(null) abortava a função a cada clique
+    if bot.get("local_mode") == true: return ""
+    if bot.get("active") != true: return ""
     var st = bot.get("status")
     if st != null and String(st) not in ["playing","starting"]: return ""
     return String(bot.human_color)
