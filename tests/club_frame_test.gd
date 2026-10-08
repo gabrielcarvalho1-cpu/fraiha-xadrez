@@ -53,7 +53,15 @@ func run():
     stage._start_bot("easy", "w")
     for i in 3: await process_frame
     if mobile:
-        check(frames_on(stage) >= 1, "cartão do jogador na partida (celular) tem a moldura")
+        # R53 · desde o R51 a partida contra o bot usa a pele do Ranked Madeira: o retrato fica no círculo da arte e
+        # a moldura é escondida de propósito (board_skin._keep); o Club aparece pelo SELO ao lado do nome do jogador.
+        var sk = stage.board_skin
+        var seal_ok := false
+        for key in ["top", "bottom"]:
+            var st = stage.ranked_ui.strips[key]
+            if st.name.text == "Você" and st.seal.is_visible_in_tree() and st.seal.texture != null and st.seal_id == hub.current_badge() and not hub.current_badge().is_empty():
+                seal_ok = true
+        check(frames_on(stage) >= 1 or (sk != null and sk.on and seal_ok), "cartão do jogador na partida (celular) mostra o Club (moldura; na pele do R51, selo ao lado do nome)")
     stage.return_to_home()
     for i in 3: await process_frame
     if not hub.is_home_visible(): stage.open_home()

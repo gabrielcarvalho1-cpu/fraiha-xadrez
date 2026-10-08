@@ -71,8 +71,15 @@ func run():
         b.pressed.connect(func(): pressed[id] = int(pressed.get(id, 0)) + 1)
     var first: Button = ui.box.find_child("Queue_casual_3min", true, false)
     var last: Button = ui.box.find_child("Queue_casual_20min", true, false)
-    # Arrasto começando em cima do botão do primeiro cartão.
-    var start = center(first)
+    # Arrasto começando em cima do primeiro cartão. R53 · no celular deitado o cartão é mais alto que a lista
+    # visível: o botão dele começa ABAIXO da área de rolagem (embaixo do VOLTAR fixo). O dedo começa então na parte
+    # do cartão que está na tela (centro do botão quando ele aparece; senão, centro da parte visível do cartão).
+    var view0 = ui.scroll.get_global_rect()
+    var card: Control = first
+    while card.get_parent() != null and not (card.get_parent() is HBoxContainer): card = card.get_parent()
+    var vis_btn: Rect2 = first.get_global_rect().intersection(view0)
+    var vis_card: Rect2 = card.get_global_rect().intersection(view0)
+    var start = vis_btn.get_center() if vis_btn.size.y >= 20.0 else vis_card.get_center()
     touch(start, true)
     await frames()
     var pos = start

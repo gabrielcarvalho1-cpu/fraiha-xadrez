@@ -145,7 +145,11 @@ func run():
         escape()
         stage.navigation_dialog.confirmed.emit()
         hub.play_local_requested.emit()
-        verify(stage.mode == "local" and world.bot == null and not bot.active, "confirmed exit detaches Bot before Local starts")
+        # R53 · contrato atual: a partida LOCAL roda pelo mesmo BotController em local_mode (dois humanos, sem IA),
+        # então world.bot continua sendo o controlador. "Bot desligado" = local_mode, sem IA pensando e
+        # nenhum lance pendente do Medium aplicado depois da confirmação (o worker em voo é invalidado pelo epoch e
+        # recolhido depois — bot.stop() nunca espera a thread na navegação).
+        verify(stage.mode == "local" and bot.local_mode and not bot.thinking and bot.completed.is_empty() and world.move_count == 0, "confirmed exit detaches Bot before Local starts")
         await until(func(): return bot.worker == null, "discarded worker collected after navigation")
         verify(world.move_count == 0 and world.pieces.get(square("e2")) == "wP" and stage.mode == "local", "stale worker never mutates Local board")
 

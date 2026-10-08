@@ -24,7 +24,10 @@ func run():
     await process_frame
     var osd = hub.volume_osd
     check(is_instance_valid(osd) and osd.panel.visible and osd.title.text.begins_with("MÚSICA") and osd.value_label.text == "40%", "mudar Música mostra 'MÚSICA 40%'")
-    for i in 20: await process_frame
+    # R53 · espera por TEMPO, não por quadros: o fade-in dura 0,12 s e o OSD fica 1,1 s antes de sumir.
+    # Com 20 quadros fixos, numa máquina lenta (headless ~13 qps = 1,5 s) o OSD já tinha sumido.
+    var t_fade := Time.get_ticks_msec()
+    while Time.get_ticks_msec() - t_fade < 300: await process_frame
     check(osd.panel.modulate.a > 0.9, "OSD aparece com fade-in")
     hub._set_volume(0.0)
     await process_frame

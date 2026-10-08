@@ -40,10 +40,18 @@ func run():
     # ---------- Home ----------
     var titles: Array = hub.menu_buttons.map(func(b): return hub.title_of(b))
     check(titles.size() == 11 and titles[4] == "MARCHA REAL" and titles[5] == "XEQUE" and titles[9] == "HISTÓRICO DE PARTIDAS" and titles[8] == "CONHEÇA O FRAIHA", "Home: MARCHA REAL, XEQUE e HISTÓRICO DE PARTIDAS (abaixo de CONHEÇA O FRAIHA)")
+    # R53 · desde a Home v8 (R47) o menu não é mais uma coluna de 11 linhas: são 3 linhas largas + grade 2×3 +
+    # CONFIGURAÇÕES/SAIR lado a lado. O contrato que vale é: nenhum botão sobrepõe outro e todos ficam dentro
+    # da arte (1672 × 941).
     var ok_rows := true
-    for i in range(1, hub.menu_buttons.size()):
-        if hub.menu_buttons[i].position.y < hub.menu_buttons[i - 1].position.y + hub.menu_buttons[i - 1].size.y: ok_rows = false
-    check(ok_rows and hub.menu_buttons[10].position.y + hub.menu_buttons[10].size.y < 941, "11 linhas sem sobreposição, dentro da arte")
+    var inside := true
+    for i in range(hub.menu_buttons.size()):
+        var ri := Rect2(hub.menu_buttons[i].position, hub.menu_buttons[i].size)
+        if not Rect2(0, 0, 1672, 941).encloses(ri): inside = false
+        for j in range(i + 1, hub.menu_buttons.size()):
+            var rj := Rect2(hub.menu_buttons[j].position, hub.menu_buttons[j].size)
+            if ri.intersects(rj): ok_rows = false
+    check(ok_rows and inside, "11 botões sem sobreposição, dentro da arte")
     # ---------- Marcha: tutorial e acesso ----------
     hub.menu_buttons[4].pressed.emit()
     await frames(6)

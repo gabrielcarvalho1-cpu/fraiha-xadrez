@@ -61,7 +61,12 @@ func run():
     if not mobile:
         var panel = stage.desk_panel
         check(panel.visible and panel.position.x + panel.size.x <= vs.x - 8.0 and panel.position.x >= 0.0, "cartão com ANALISAR PARTIDA cabe na tela (direita = %.0f de %.0f)" % [panel.position.x + panel.size.x, vs.x])
-        check(stage.desk_analyze.visible, "ANALISAR PARTIDA visível após o fim")
+        # R53 · desde o R51 a partida contra o bot usa a pele do Ranked Madeira: o ANALISAR fica no lugar do
+        # DESISTIR (board_skin.bot_after) e o botão antigo da barra de cima é escondido de propósito.
+        var skin = stage.board_skin
+        var an: Control = skin.bot_after.get("analyze") if (skin != null and skin.on) else stage.desk_analyze
+        for i in range(3): await process_frame
+        check(an != null and an.is_visible_in_tree() and Rect2(Vector2.ZERO, vs).grow(1).encloses(an.get_global_rect()), "ANALISAR PARTIDA visível após o fim (dentro da tela)")
     # dismiss por clique
     var ev := InputEventMouseButton.new()
     ev.button_index = MOUSE_BUTTON_LEFT
@@ -102,4 +107,4 @@ func run():
     await wait(0.6)
     print("GAME_RESULT_CHECKS=%d FAILURES=%d" % [checks, failures])
     print("RESULT " + ("OK" if failures == 0 else "FAIL"))
-    quit()
+    quit(0 if failures == 0 else 1)   # R53 · gate: FAIL sai com código diferente de 0
