@@ -1315,6 +1315,18 @@ func _input(event):
 func _notification(what):
     if what == NOTIFICATION_WM_CLOSE_REQUEST and is_instance_valid(navigation_dialog):
         request_quit()
+    elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
+        # Voltar do Android (quit_on_go_back=false): mesmo caminho do Esc — fecha modal/página,
+        # volta à Home e, em partida, pede confirmação. Nunca sai nem desiste em silêncio.
+        android_back()
+
+func android_back():
+    for pressed in [true, false]:
+        var ev := InputEventKey.new()
+        ev.keycode = KEY_ESCAPE
+        ev.physical_keycode = KEY_ESCAPE
+        ev.pressed = pressed
+        Input.parse_input_event(ev)
 
 func _layout():
     if board_skin != null: board_skin.before_layout()

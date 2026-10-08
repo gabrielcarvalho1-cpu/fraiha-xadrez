@@ -14,6 +14,7 @@ config/name="FRAIHA Xadrez V0.30 - En Passant Temas e Perfil"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="FRAIHA Xadrez Musicas V026 Teste"
 run/main_scene="res://presentation_v019/stage.tscn"
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.5", "GL Compatibility")
 boot_splash/bg_color=Color(0.03, 0.02, 0.015, 1)
 boot_splash/image="res://branding/fraiha_loading_splash_r63.png"
@@ -29,9 +30,11 @@ window/size/mode=4
 window/size/mode.web=0
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=6
 
 [rendering]
 
+textures/vram_compression/import_etc2_astc=true
 textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

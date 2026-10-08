@@ -83,6 +83,8 @@ func start() -> String:
     return engine_name
 
 func _find_native() -> String:
+    # Android: Stockfish ainda não decidido (missão própria). Nada de executar binário: FALLBACK explícito.
+    if OS.has_feature("android"): return ""
     var names := ["stockfish.exe", "stockfish"] if OS.get_name() == "Windows" else ["stockfish"]
     for dir in [ENGINE_DIR, "user://"]:
         for n in names:

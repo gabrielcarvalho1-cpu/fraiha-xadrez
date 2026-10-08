@@ -25,7 +25,29 @@ static func _css_size(window: Window) -> Vector2i:
         var data = JSON.parse_string(str(JavaScriptBridge.eval("JSON.stringify(document.hidden ? [0, 0] : [window.innerWidth, window.innerHeight])")))
         if data is Array and data.size() == 2:
             return Vector2i(int(data[0]), int(data[1]))
+    if _native_mobile():
+        # Android/iOS nativo: window.size vem em pixels físicos; a UI mobile foi feita em
+        # pixels CSS (dp). Converte para manter fontes e alvos de toque do mesmo tamanho da Web.
+        return dp_size(window.size, DisplayServer.screen_get_dpi(window.current_screen))
     return window.size
+
+## Android/iOS nativo (não navegador mobile).
+static func _native_mobile() -> bool:
+    return OS.has_feature("mobile") and not OS.has_feature("web")
+
+## Pixels físicos → dp (densidade Android: 160 dpi = 1x). DPI inválido/baixo → sem escala.
+static func dp_size(physical: Vector2i, dpi: int) -> Vector2i:
+    var scale := maxf(1.0, float(dpi) / 160.0) if dpi > 0 else 1.0
+    return Vector2i(maxi(1, int(round(physical.x / scale))), maxi(1, int(round(physical.y / scale))))
+
+## Safe area nativa (pixels físicos da janela) → margens no espaço da viewport [esq, topo, dir, baixo].
+static func native_insets(window_size: Vector2i, safe: Rect2i, viewport_size: Vector2) -> Array:
+    if window_size.x <= 0 or window_size.y <= 0 or safe.size.x <= 0 or safe.size.y <= 0:
+        return [0.0, 0.0, 0.0, 0.0]
+    var sx := viewport_size.x / float(window_size.x)
+    var sy := viewport_size.y / float(window_size.y)
+    return [maxf(0.0, safe.position.x * sx), maxf(0.0, safe.position.y * sy),
+        maxf(0.0, (window_size.x - safe.end.x) * sx), maxf(0.0, (window_size.y - safe.end.y) * sy)]
 
 static func safe_rect(viewport: Viewport) -> Rect2:
     var bounds = viewport.get_visible_rect()
@@ -49,6 +71,16 @@ static func safe_rect(viewport: Viewport) -> Rect2:
             })()
         """)))
         if data is Array and data.size() == 4:
+            _safe_insets = [12.0, 8.0, 12.0, 8.0]
+            for i in range(4):
+                _safe_insets[i] = maxf(_safe_insets[i], float(data[i]))
+            _insets_size = bounds.size
+            _insets_dirty = false
+    elif _native_mobile() and (_insets_dirty or _insets_size != bounds.size):
+        # Notch/cutout e barras do sistema no Android/iOS nativo.
+        var w := viewport.get_window()
+        if w != null:
+            var data := native_insets(w.size, DisplayServer.get_display_safe_area(), bounds.size)
             _safe_insets = [12.0, 8.0, 12.0, 8.0]
             for i in range(4):
                 _safe_insets[i] = maxf(_safe_insets[i], float(data[i]))

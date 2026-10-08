@@ -843,6 +843,10 @@ func close_modal():
 
 ## Pagamento: real (Mercado Pago pelo servidor) na build publicada; simulado no editor/testes.
 func open_payment(product_id: String):
+    if OS.has_feature("android"):
+        # Android DEV: nenhuma compra (PIX/cartão/Play Billing) até a missão de pagamentos Android.
+        open_confirm("INDISPONÍVEL NO ANDROID", "Compras ainda não estão disponíveis no app Android.\n\nSeus benefícios continuam valendo na sua conta FRAIHA.", "", "ENTENDI", Callable())
+        return
     var host := _modal_host()
     var ui = PaymentUI.new() if Catalog.is_mock() else PaymentRealUI.new()
     host.add_child(ui)
