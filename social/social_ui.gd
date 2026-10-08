@@ -883,8 +883,7 @@ func _layout():
     if screen == "dm" and is_instance_valid(dm_scroll):
         # A conversa ocupa o espaço que sobra na tela (sem passar do painel).
         var avail = (area.size.y - 16.0) / ui_scale - 28.0
-        var rest = box.get_combined_minimum_size().y - dm_scroll.custom_minimum_size.y
-        dm_scroll.custom_minimum_size.y = clampf(avail - rest - 4.0, 120.0, 560.0)
+        _set_dm_height(avail - _dm_rest() - 4.0)
     var wanted = box.get_combined_minimum_size().y + 28.0
     var pad_x := 48.0
     var pad_y := 50.0
@@ -897,6 +896,23 @@ func _layout():
     panel.position = area.position + (area.size - panel.size * ui_scale) / 2.0
     _layout_toast()
 
+## R52d · Altura da conversa (DM) = espaço que sobra no painel. Antes era calculada a partir do tamanho mínimo
+## da coluna inteira, que INCLUI a própria conversa e só é recalculado no quadro seguinte (valor atrasado):
+## como _layout roda todo quadro, a altura nunca parava (alternava entre dois valores, ±1 px arredondado) e a
+## caixa de mensagem + ENVIAR tremiam. Agora a soma usa só os outros elementos e o valor é inteiro e estável.
+func _dm_rest() -> float:
+    var total := 0.0
+    var n := 0
+    for c in box.get_children():
+        if c == dm_scroll or not (c is Control) or not c.visible: continue
+        total += c.get_combined_minimum_size().y
+        n += 1
+    return total + float(box.get_theme_constant("separation")) * n
+
+func _set_dm_height(h: float):
+    var want := floorf(clampf(h, 120.0, 560.0))
+    if dm_scroll.custom_minimum_size.y != want: dm_scroll.custom_minimum_size.y = want
+
 ## R52b · tamanho fixo (proporção da arte), centralizado; a lista rola dentro do painel.
 func _layout_wide():
     var vs := get_viewport().get_visible_rect().size
@@ -908,8 +924,7 @@ func _layout_wide():
     var ch := WIDE_CONTENT.size.y / WIDE_LS
     box.custom_minimum_size.x = cw - 14.0
     if screen == "dm" and is_instance_valid(dm_scroll):
-        var rest = box.get_combined_minimum_size().y - dm_scroll.custom_minimum_size.y
-        dm_scroll.custom_minimum_size.y = clampf(ch - rest - 6.0, 120.0, 560.0)
+        _set_dm_height(ch - _dm_rest() - 6.0)
     scroll.custom_minimum_size = Vector2(cw, ch)
     panel.custom_minimum_size = Vector2.ZERO
     panel.reset_size()

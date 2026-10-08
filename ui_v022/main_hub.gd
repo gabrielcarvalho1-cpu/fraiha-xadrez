@@ -602,6 +602,7 @@ func _build_pages():
     side_buttons.w = _page_button(sides, 0, "BRANCAS", "Você faz a primeira jogada", func(): play_bot_requested.emit(selected_difficulty, "w"))
     side_buttons.b = _page_button(sides, 0, "PRETAS", "O bot começa a partida", func(): play_bot_requested.emit(selected_difficulty, "b"))
     side_buttons.random = _page_button(sides, 2, "ALEATÓRIO", "Deixe a escolha para o sorteio", func(): play_bot_requested.emit(selected_difficulty, "random"))
+    _build_side_art()
     _build_ranked()
     _build_ranking()
     _build_about_page()
@@ -2149,6 +2150,7 @@ func show_page(id: String):
     if id == "profile": _refresh_avatars()
     if id == "history": refresh_history()
     if is_instance_valid(mobile_ui): mobile_ui.show_page(id)
+    _sync_side_art(id)
 
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
     if texture == FOREST_LEGACY: texture = FOREST   # temas que usavam a Home da floresta passam a usar a arte oficial
@@ -2182,6 +2184,71 @@ func apply_theme(texture: Texture2D, theme_id: String = "wood"):
 
 func back():
     show_page("bot" if page == "bot_side" else "main")
+
+## R52d · ESCOLHA SEU LADO na arte da referência (ui_kit/pages/lado_bg.png, 1122 x 1402): painel/modal
+## centralizado por cima do jogo escurecido, com fade, no PC e no celular (fica por cima da tela do celular
+## também). Títulos e botões são da arte; o adversário é do jogo. Os botões fazem o mesmo que os da página
+## antiga (que continua montada por baixo, oculta, para o celular e os testes).
+const SIDE_REF := Vector2(1122, 1402)
+var side_art: Control
+var side_panel: Control
+var side_opponent: Label
+
+func _build_side_art():
+    side_art = Control.new()
+    side_art.name = "SideChoiceArt"
+    side_art.mouse_filter = Control.MOUSE_FILTER_STOP
+    side_art.visible = false
+    root.add_child(side_art)
+    var dim := ColorRect.new()
+    dim.name = "SideDim"
+    dim.color = Color(0.02, 0.03, 0.02, 0.72)
+    dim.mouse_filter = Control.MOUSE_FILTER_STOP
+    side_art.add_child(dim)
+    side_panel = Control.new()
+    side_panel.name = "SidePanel"
+    side_panel.size = SIDE_REF
+    side_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    side_art.add_child(side_panel)
+    RefPage.image(side_panel, RefPage.tex("lado_bg"), Rect2(Vector2.ZERO, SIDE_REF)).stretch_mode = TextureRect.STRETCH_SCALE
+    side_opponent = RefPage.text(side_panel, "", Rect2(250, 432, 622, 56), 38, Color("f1e6c8"), true)
+    side_opponent.name = "SideOpponent"
+    side_opponent.add_theme_font_override("font", Kit.SERIF_BOLD)
+    for spec in [["SideWhite", Rect2(204, 522, 714, 166), "w"], ["SideBlack", Rect2(204, 714, 714, 166), "b"], ["SideRandom", Rect2(204, 904, 714, 166), "random"]]:
+        var col: String = spec[2]
+        var hb := RefPage.hotspot(side_panel, spec[1], func(): play_bot_requested.emit(selected_difficulty, col), spec[0])
+        hb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    var bb := RefPage.hotspot(side_panel, Rect2(172, 1140, 778, 144), back, "SideBack")
+    bb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    get_viewport().size_changed.connect(_layout_side_art)
+
+func _layout_side_art():
+    if not is_instance_valid(side_art) or not side_art.visible: return
+    var vs := get_viewport().get_visible_rect().size
+    side_art.position = Vector2.ZERO
+    side_art.size = vs
+    side_art.get_node("SideDim").size = vs
+    var k := minf(vs.x * 0.92 / SIDE_REF.x, vs.y * 0.94 / SIDE_REF.y)
+    side_panel.scale = Vector2.ONE * k
+    side_panel.position = ((vs - SIDE_REF * k) / 2.0).round()
+
+func _sync_side_art(id: String):
+    if not is_instance_valid(side_art): return
+    var on := id == "bot_side"
+    var was := side_art.visible
+    side_art.visible = on
+    if not on: return
+    root.move_child(side_art, root.get_child_count() - 1)
+    var t := difficulty_label.text if is_instance_valid(difficulty_label) else ""
+    side_opponent.text = t
+    for px in [38, 34, 30, 27]:   # nome longo (BOT GRANDE MESTRE) encolhe para caber
+        side_opponent.add_theme_font_size_override("font_size", px)
+        if Kit.SERIF_BOLD.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x <= side_opponent.size.x - 12.0: break
+    if is_instance_valid(pages.get("bot_side")): pages["bot_side"].visible = false
+    _layout_side_art()
+    if not was:
+        side_art.modulate.a = 0.0
+        create_tween().tween_property(side_art, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
 
 func open_home():
     root.show()

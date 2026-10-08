@@ -378,6 +378,15 @@ def build_buscando():
     save_rgba(out, al, 'buscando_bg')
     print('buscando v2 ok')
 
+# ======================================================================= ESCOLHA SEU LADO
+def build_lado():
+    a, al = load_rgba('lado_v2')
+    out = a.copy()
+    # "Adversário: BOT BRONZE" sai (o jogo escreve o bot escolhido); o resto é a arte
+    out = fill_smooth(out, (300, 436, 822, 484), ring=6, thr=70, sigma=18, lo=8, green=True)
+    save_rgba(out, al, 'lado_bg')
+    print('lado v2 ok')
+
 if __name__ == '__main__':
     which = sys.argv[1:] or ['historico']
     for w in which: globals()['build_' + w]()
