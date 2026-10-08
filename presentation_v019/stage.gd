@@ -44,6 +44,10 @@ var mobile_music: Button
 var mobile_fx: Button
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
 var board_skin = null   # R49 · ranked/board_skin.gd
+var mobile_hud = null   # R53 · ranked/mobile_match_hud.gd
+
+func mobile_hud_on() -> bool:
+    return mobile_hud != null and mobile_hud.on
 var bot_view = null     # R51 · dados dos cartões do Ranked na partida contra o computador (bot/bot_view.gd)
 var _bot_forced_wood := ""   # R51 · tema salvo do jogador enquanto a partida contra o bot usa a Madeira
 var desk_restart: Button
@@ -136,6 +140,10 @@ func _ready():
     board_skin = preload("res://ranked/board_skin.gd").new()
     add_child(board_skin)
     board_skin.setup(self)
+    # R53 · HUD da partida no celular (em pé e deitado) no visual das referências aprovadas
+    mobile_hud = preload("res://ranked/mobile_match_hud.gd").new()
+    add_child(mobile_hud)
+    mobile_hud.setup(self)
     _layout()
     open_home()
 
@@ -713,7 +721,7 @@ func _build_mobile_controls(overlay: CanvasLayer):
                 if mode == "casual":
                     casual_ui._confirm_resign()
                     return
-                if mode == "bot" and board_skin != null and board_skin.on and bot_controller.in_match():
+                if mode == "bot" and ((board_skin != null and board_skin.on) or mobile_hud_on()) and bot_controller.in_match():
                     ranked_ui._confirm_resign()
                     return
                 game._new_game()
@@ -778,7 +786,7 @@ func _process(delta):
     if not is_instance_valid(mobile_status): return
     var mobile = MobileLayout.active(get_viewport())
     var playing = mode in ["local", "online", "bot", "ranked", "casual"]
-    mobile_actions.visible = mobile and playing
+    mobile_actions.visible = mobile and playing and not mobile_hud_on()   # R53: com o HUD novo, as ações vão para AÇÕES
     if is_instance_valid(mobile_music):
         mobile_music.text = "Música: " + ("NÃO" if ModeSound.music_muted(hub) else "SIM")
         mobile_fx.text = "Efeitos: " + ("NÃO" if ModeSound.effects_muted(hub) else "SIM")
@@ -799,7 +807,7 @@ func _process(delta):
         if match_chat.toggle_button.visible != want_chat:
             match_chat.toggle_button.visible = want_chat
             _layout.call_deferred()
-    mobile_status.visible = mobile and mode in ["local", "bot"] and not (board_skin != null and board_skin.on)   # R51: com a pele, o relógio aceso mostra a vez
+    mobile_status.visible = mobile and mode in ["local", "bot"] and not (board_skin != null and board_skin.on) and not mobile_hud_on()   # R51: com a pele, o relógio aceso mostra a vez
     var short_status = _mobile_status_text()
     if mobile_status.text != short_status: mobile_status.text = short_status
     mobile_promotion.visible = mobile and playing and game.promotion_pending and (game.online == null or game.promotion_color == game.online.color)
@@ -871,16 +879,16 @@ func _refresh_input():
     bot_controller.set_paused(not pending_navigation.is_empty())
     if ranked != null:
         ranked.set_paused(not pending_navigation.is_empty())
-        ranked_ui.hud.visible = mode == "ranked" or (mode == "bot" and board_skin != null and board_skin.wanted())
+        ranked_ui.hud.visible = mode == "ranked" or (mode == "bot" and ((board_skin != null and board_skin.wanted()) or (mobile_hud != null and mobile_hud.wanted())))
     if casual != null:
         casual.set_paused(not pending_navigation.is_empty())
         casual_ui.hud.visible = mode == "casual"
-    bot_info.visible = MobileLayout.active(get_viewport()) and mode in ["bot", "local"]
+    bot_info.visible = MobileLayout.active(get_viewport()) and mode in ["bot", "local"] and not (mobile_hud != null and mobile_hud.wanted())
     _bot_theme_guard()
     _refresh_bot_caption()
     game.set_process_unhandled_input(playing and pending_navigation.is_empty())
     # On mobile the online menu has its own full-width back button.
-    home_button.visible = mode != "home" and not (mode == "online_menu" and MobileLayout.active(get_viewport()))
+    home_button.visible = mode != "home" and not (mode == "online_menu" and MobileLayout.active(get_viewport())) and not (mobile_hud != null and mobile_hud.wanted())
     _refresh_account_chip()
     home_button.disabled = not pending_navigation.is_empty()
     refresh_player_card()
@@ -888,7 +896,7 @@ func _refresh_input():
 
 func refresh_player_card():
     if not is_instance_valid(player_card): return
-    player_card.visible = mode in ["local","online","bot"] and MobileLayout.active(get_viewport())
+    player_card.visible = mode in ["local","online","bot"] and MobileLayout.active(get_viewport()) and not (mobile_hud != null and mobile_hud.wanted())
     player_portrait.texture = hub.avatar_texture()
     hub.attach_league_frame(player_portrait)
     var side = "Pretas" if game.board_flipped() else "Brancas"
@@ -1134,6 +1142,7 @@ func _notification(what):
 
 func _layout():
     if board_skin != null: board_skin.before_layout()
+    if mobile_hud != null: mobile_hud.before_layout()
     var size = get_viewport_rect().size
     var mobile = MobileLayout.active(get_viewport())
     game.mobile_presentation = mobile
@@ -1189,6 +1198,7 @@ func _layout():
     if not mobile: _layout_material_desktop()
     _refresh_desk_hud()
     if board_skin != null: board_skin.after_layout()
+    if mobile_hud != null: mobile_hud.after_layout()
 
 ## R38.3 · faixas de pontos/capturas no desktop: à direita do tabuleiro (adversário em cima, você embaixo);
 ## na ranqueada/online ficam coladas nas faixas de nome e relógio. Tela estreita: lado esquerdo.

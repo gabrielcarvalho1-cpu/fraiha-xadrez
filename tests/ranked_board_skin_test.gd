@@ -32,6 +32,80 @@ func cell_screen(skin, col: int, row: int) -> Vector2:
     var b: Rect2 = (skin.MOB if skin.kind == "mob" else skin.PC).board
     return skin.P(b.position + Vector2((col + 0.5) * b.size.x / 8.0, (row + 0.5) * b.size.y / 8.0))
 
+func tap(c: Control):
+    var at := c.get_global_rect().get_center()
+    for pressed in [true, false]:
+        var ev := InputEventScreenTouch.new()
+        ev.index = 0
+        ev.position = at
+        ev.pressed = pressed
+        Input.parse_input_event(ev)
+        await frames(2)
+
+## R53 · celular: HUD novo com partida REAL (servidor local + adversário automático).
+func mobile_hud_flow(skin, acc):
+    var hud = stage.mobile_hud
+    var g = stage.game
+    check(not skin.on and hud.on and hud.orient == "p", "celular: pele do PC desligada, HUD da partida ligado")
+    check(hud.bg.visible and not stage.forest.visible, "arte da referência no fundo (Madeira)")
+    var board := Rect2(g.position + g.ORIGIN * g.scale, Vector2.ONE * g.BOARD * g.scale.x)
+    var at := func(cell: Vector2i) -> Vector2: return board.position + (Vector2(g.display_cell(cell)) + Vector2(0.5, 0.5)) * board.size.x / 8.0
+    var me: String = stage.ranked.human_color
+    check(await wait_until(func(): return stage.ranked.can_interact() or g.turn != me, 6.0), "tabuleiro pronto")
+    if me == "w":
+        await click(at.call(Vector2i(4, 6)))
+        await click(at.call(Vector2i(4, 4)))
+        check(await wait_until(func(): return g.move_count >= 1 and g.pieces.get(Vector2i(4, 4), "") == "wP", 6.0), "lance e2-e4 por toque no tabuleiro do HUD, aceito pelo servidor")
+    else:
+        print("SKIP lance (o servidor sorteou PRETAS para o cliente)")
+    var top: Dictionary = stage.ranked_ui.strips.top
+    var bot: Dictionary = stage.ranked_ui.strips.bottom
+    check(String(bot.name.text) == "Você" and String(top.name.text).begins_with("Peer"), "nomes vivos (%s / %s)" % [top.name.text, bot.name.text])
+    check("MADEIRA" in String(bot.sub.text) and "PL" in String(bot.sub.text), "liga/PL vivos: " + String(bot.sub.text))
+    check(String(top.clock.label.text).contains(":") and top.clock.bare, "relógio vivo, só os dígitos (" + String(top.clock.label.text) + ")")
+    # chat pelo botão CHAT da barra
+    var chat = stage.match_chat
+    await tap(hud.nav_buttons.chat)
+    check(chat.open_mobile and chat.panel.visible, "CHAT da barra abre o chat")
+    chat.input.text = "boa partida"
+    chat.send_button.pressed.emit()
+    check(await wait_until(func(): return chat.list.get_child_count() > 0, 6.0), "chat: mensagem enviada e listada")
+    await tap(hud.nav_buttons.chat)
+    check(not chat.open_mobile, "CHAT fecha o chat")
+    # AÇÕES → MÚSICA (preferência real)
+    var ms = preload("res://ui_v022/mode_sound.gd")
+    var was: bool = ms.music_muted(stage.hub)
+    await tap(hud.nav_buttons.actions)
+    check(hud.is_open(), "AÇÕES abre")
+    await tap(hud.panel.find_child("Action_music", true, false))
+    check(ms.music_muted(stage.hub) != was, "AÇÕES: Música liga/desliga")
+    ms.toggle_music(stage.hub)
+    hud.close_actions()
+    # outro tema: o HUD continua (cenário do tema); Madeira de novo: arte de volta
+    g.set_visual_theme("iron")
+    stage._layout()
+    await frames(3)
+    check(hud.on and not hud.wood, "tema Ferro: HUD continua")
+    check(g.piece_override.is_empty(), "tema Ferro: peças do tema (sem os sprites da Madeira)")
+    g.set_visual_theme("wood")
+    stage._layout()
+    await frames(3)
+    check(hud.on and hud.wood and g.piece_override.size() == 12, "Madeira de novo: arte e peças da Madeira")
+    # DESISTIR pelo painel AÇÕES (a partida termina de verdade no servidor)
+    await tap(hud.nav_buttons.actions)
+    await tap(hud.panel.find_child("Action_resign", true, false))
+    var confirm = null
+    for b in stage.ranked_ui.box.find_children("*", "Button", true, false):
+        if String(b.text).strip_edges() == "DESISTIR": confirm = b
+    check(confirm != null and not hud.is_open(), "Desistir: confirmação de sempre (AÇÕES fechou)")
+    if confirm: confirm.pressed.emit()
+    check(await wait_until(func(): return not stage.ranked.last_result.is_empty() and String(stage.ranked.last_result.get("match_id", "")) == String(stage.ranked.match_id), 15.0), "resultado oficial chegou (desistência)")
+    stage.ranked_ui.close_panel()
+    stage.open_home()
+    await frames(6)
+    check(not hud.on and not hud.bg.visible and not hud.layer.visible, "Home: HUD desligado")
+    check(g.piece_override.is_empty() and not top.name.top_level and not top.clock.bare and not stage.material_hud.skin and not stage.game.hide_status, "controles devolvidos ao layout normal")
+
 func run():
     var mobile := "--mobile-test" in OS.get_cmdline_user_args()
     if mobile:
@@ -55,6 +129,13 @@ func run():
     stage.ranked_ui.box.find_child("Queue_ranked_3min", true, false).pressed.emit()
     check(await wait_until(func(): return stage.mode == "ranked" and stage.ranked.status == "playing", 40.0), "partida Ranked começou")
     await frames(4)
+    if mobile:
+        # R53 · contrato novo: no celular a partida Ranked usa o HUD da partida (ranked/mobile_match_hud.gd),
+        # não mais a pele do R49 (que continua no PC). Mesmo roteiro com servidor real, pelo HUD novo.
+        await mobile_hud_flow(skin, acc)
+        print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
+        quit(failures)
+        return
     check(skin.on and skin.kind == ("mob" if mobile else "pc"), "pele ligada na partida Ranked Madeira (%s)" % skin.kind)
     check(skin.bg.visible and not stage.forest.visible and not stage.game.get_node("ForestEnvironment").visible, "arte da referência no fundo; cenário pintado do tema escondido")
     # 1) grid alinhado: o centro de cada casa da arte cai na casa certa do tabuleiro

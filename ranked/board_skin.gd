@@ -116,7 +116,8 @@ func wanted() -> bool:
     # R51 · contra o computador usa o mesmo layout do Ranked Madeira (a partida força o tema Madeira)
     if not (stage.mode == "ranked" or stage.mode == "bot") or not stage.game.visible: return false
     if String(stage.game.visual_theme) != "wood": return false
-    if MobileLayout.active(stage.get_viewport()): return MobileLayout.is_portrait(stage.get_viewport())
+    # R53 · no celular (em pé e deitado) a partida usa o HUD novo (ranked/mobile_match_hud.gd)
+    if MobileLayout.active(stage.get_viewport()): return false
     return true
 
 ## Chamado no INÍCIO do stage._layout(): se a pele não vale mais, desfaz tudo antes do layout normal.

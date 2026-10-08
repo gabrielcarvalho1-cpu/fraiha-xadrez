@@ -46,9 +46,6 @@ func finish_checks(n: int, mid: String, label: String):
 	for i in 40: await process_frame
 	var b := int(ctrl.clock.remaining_ms(ctrl.human_color)) if ctrl.clock.has_method("remaining_ms") else -1
 	check(a == b, "%d · relógio parado (%d → %d)" % [n, a, b])
-	var hud = stage.get("match_actions")
-	if hud != null and hud.has_method("is_open"):
-		check(not hud.is_open() or stage.result_overlay.get_index() >= 0, "%d · resultado por cima do painel AÇÕES" % n)
 
 func run():
 	var args := OS.get_cmdline_user_args()
@@ -77,12 +74,14 @@ func run():
 	await queue()
 	check(await wait_until(func(): return stage.mode == "ranked" and stage.ranked.status == "playing", 40.0), "1 · partida começou")
 	var mid := String(stage.ranked.match_id)
-	if "--actions-open" in args and stage.get("match_actions") != null and stage.match_actions.has_method("open"):
-		stage.match_actions.open()
+	var hud = stage.get("mobile_hud")
+	if "--actions-open" in args and hud != null and hud.on:
+		hud.open()
 		await process_frame
+		check(hud.is_open(), "1 · painel AÇÕES aberto quando o adversário desiste")
 	await finish_checks(1, mid, "conectado")
-	if stage.get("match_actions") != null and stage.match_actions.has_method("is_open"):
-		check(not stage.match_actions.is_open(), "1 · painel AÇÕES fechado quando o resultado aparece (resultado tem prioridade)")
+	if "--actions-open" in args and hud != null:
+		check(not hud.is_open(), "1 · painel AÇÕES fechou: o resultado tem prioridade")
 	stage.result_overlay.hide_result()
 	await wait_until(func(): return not stage.result_overlay.visible, 3.0)
 	var back: Button = null
