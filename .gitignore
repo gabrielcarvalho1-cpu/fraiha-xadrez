@@ -12,3 +12,11 @@
 online.local.cfg
 
 node_modules/
+
+# Android (Godot): build template gerado, artefatos e assinatura nunca entram no Git.
+/android/
+*.apk
+*.aab
+*.idsig
+*.keystore
+*.jks
