@@ -345,20 +345,6 @@ func show_page(id: String):
         content.add_theme_constant_override("separation",12)
         scroll.add_child(content)
         match id:
-            "bot":
-                var note = Label.new()
-                note.text = "Comece pelo BOT MADEIRA. Cada vitória libera o próximo adversário e uma recompensa."
-                note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-                note.add_theme_font_size_override("font_size", 15)
-                note.add_theme_color_override("font_color", Color("b9b29c"))
-                content.add_child(note)
-                var ladder = load("res://bot/bot_ladder_ui.gd").new()
-                ladder.name = "BotLadderMobile"
-                ladder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-                content.add_child(ladder)
-                var cols := 2 if size.x > size.y else 1
-                ladder.setup(hub.bot_progress, cols, Vector2(0, 150), true)
-                ladder.challenge.connect(func(bid): hub._choose_difficulty(bid))
             "main" when use_ref_home():
                 _show_ref_home()
             "main":

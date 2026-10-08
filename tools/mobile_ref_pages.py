@@ -154,7 +154,47 @@ def build_ligas():
     save_rgba(np.dstack([np.clip(sub, 0, 255), alm]).astype(np.uint8), 'ligas_laurel')
     save(a, al, 'ligas_end', *LIGA_END)
 
+# ---------------------------------------------------------------- JOGAR CONTRA O COMPUTADOR (ref6)
+# topo (cabeçalho, VOLTAR, aviso fixo) · cartão de bot (o do Ferro, sem brasão, textos, selo e botão) repetido
+# para os 11 bots · fim (com o 2º VOLTAR). O botão sai como peça com transparência
+# (o jogo escurece o bloqueado) e os textos, o selo de estado e os brasões são do jogo.
+BOT_TOP = (0, 400)
+BOT_CARD = (735, 1081)
+BOT_END = (1424, 1598)
+def shape_alpha(c, thr=36):
+    """Alpha de uma peça (botão/selo) recortada sobre o fundo escuro: em cada linha, do 1º ao último pixel
+    mais claro que o fundo (contorno) fica opaco — o miolo escuro da peça entra junto."""
+    m = (c.mean(axis=2) > thr).astype(np.uint8)
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+    n, lab, st, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+    if n > 2: m = (lab == 1 + int(np.argmax(st[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)   # só a peça
+    out = np.zeros_like(m)
+    for y in range(m.shape[0]):
+        xs = np.where(m[y])[0]
+        if xs.size: out[y, xs[0]:xs[-1] + 1] = 1
+    return cv2.GaussianBlur(out.astype(np.float64) * 255.0, (3, 3), 0.8)
+def build_bots():
+    from ref_pages_v2 import fill_smooth
+    a = load('mob_bots')
+    al = key_alpha(a)
+    save(a, al, 'bots_top', *BOT_TOP)
+    save(a, al, 'bots_end', *BOT_END)
+    # peças do cartão do Ferro (antes de apagar)
+    btn = a[978:1064, 276:794].copy()
+    btn = colcopy(np.pad(btn, ((0, 0), (0, 0), (0, 0))), (152, 8, 452, 78), 460)    # texto fora (ícone fica)
+    save_rgba(np.dstack([np.clip(btn, 0, 255), shape_alpha(btn, 40)]).astype(np.uint8), 'bots_button')
+    crown = a[934:972, 326:368].copy()
+    save_rgba(np.dstack([np.clip(crown, 0, 255), shape_alpha(crown, 70)]).astype(np.uint8), 'bots_crown')
+    sub = a[840:965, 108:312]
+    r, g, bl = sub[..., 0], sub[..., 1], sub[..., 2]
+    m = ((g > r + 12) & (g > bl + 8) & (g > 45)).astype(np.uint8)
+    alm = cv2.GaussianBlur(m.astype(np.float64) * 255.0, (3, 3), 0.7)
+    save_rgba(np.dstack([np.clip(sub, 0, 255), alm]).astype(np.uint8), 'bots_laurel')
+    c = a.copy()
+    c = fill_smooth(c, (101, 751, 801, 1067), ring=6, thr=60, green=True, sigma=40)   # miolo inteiro: degradê liso
+    save(c, al, 'bots_card', *BOT_CARD)
+
 if __name__ == '__main__':
     only = sys.argv[1:]
-    for name, fn in [('mais', build_mais), ('conheca', build_conheca), ('historico', build_historico), ('ligas', build_ligas)]:
+    for name, fn in [('mais', build_mais), ('conheca', build_conheca), ('historico', build_historico), ('ligas', build_ligas), ('bots', build_bots)]:
         if not only or name in only: fn()

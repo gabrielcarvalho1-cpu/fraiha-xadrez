@@ -192,5 +192,34 @@ func run():
 	rp.scroll.scroll_vertical = 0
 	await frames(3)
 	check(await tap_hot("VOLTAR") and hub.page == "main" and not rp.visible, "VOLTAR das Ligas volta à Home")
+
+	# ---------------- JOGAR CONTRA O COMPUTADOR
+	hub.show_page("bot")
+	await frames(6)
+	check(rp.visible and rp.page_id == "bot", "BOTS abre o painel da referência")
+	var Ladder = load("res://bot/bot_ladder.gd")
+	var all_ok := true
+	var first_open := ""
+	for b in Ladder.bots():
+		var bid := String(b.id)
+		var st: String = hub.bot_progress.status(bid)
+		var card = rp.find_child("BotCard_" + bid, true, false)
+		var stl: Label = rp.find_child("BotStatus_" + bid, true, false)
+		var btl: Label = rp.find_child("BotButton_" + bid, true, false)
+		var want: String = {"defeated": "DERROTADO", "available": "DISPONÍVEL", "locked": "BLOQUEADO"}[st]
+		var want_b: String = {"defeated": "JOGAR DE NOVO", "available": "DESAFIAR", "locked": "BLOQUEADO"}[st]
+		if card == null or stl == null or stl.text != want or btl == null or btl.text != want_b: all_ok = false
+		if (hot("DESAFIAR " + bid) != null) == (st == "locked"): all_ok = false   # bloqueado não tem toque
+		if first_open.is_empty() and st != "locked": first_open = bid
+	check(all_ok, "11 bots com estado, botão e toque conforme o progresso real")
+	if not first_open.is_empty():
+		check(await tap_hot("DESAFIAR " + first_open) and hub.page == "bot_side" and not rp.visible, "DESAFIAR abre ESCOLHA SEU LADO (%s)" % first_open)
+		hub.back()
+		await frames(6)
+		check(hub.page == "bot" and rp.visible and rp.page_id == "bot", "voltar do lado retorna à escada")
+	var bar_b: VScrollBar = rp.scroll.get_v_scroll_bar()
+	rp.scroll.scroll_vertical = int(bar_b.max_value)
+	await frames(3)
+	check(await tap_hot("VOLTAR_FIM") and hub.page == "main" and not rp.visible, "VOLTAR do fim da escada volta à Home")
 	print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
 	quit(0 if failures == 0 else 1)

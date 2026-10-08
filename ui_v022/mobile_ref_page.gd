@@ -14,7 +14,7 @@ const SCENE_REGION := Rect2(1100, 250, 572, 691)
 const GLOW = preload("res://ui_v022/home_button_glow.gdshader")
 const REF_W := 900.0
 const MAX_W := 460.0
-const PAGES := ["mais", "about", "history", "ranking"]
+const PAGES := ["mais", "about", "history", "ranking", "bot"]
 const CREAM := Color("efe6cf")
 const GOLD := Color("f5cf6a")
 const INK := Color("2b1d0e")
@@ -70,6 +70,9 @@ func setup(owner_hub, owner_mobile):
 	body.name = "RefBody"
 	body.mouse_filter = Control.MOUSE_FILTER_PASS
 	scroll.add_child(body)
+	# progresso dos bots mudou (vitória, sincronia da conta) com a escada aberta: remonta uma vez
+	if hub.get("bot_progress") != null and hub.bot_progress.has_signal("changed"):
+		hub.bot_progress.changed.connect(func(): if page_id == "bot": refresh())
 
 static func handles(id: String) -> bool:
 	return id in PAGES
@@ -122,6 +125,7 @@ func _build():
 		"about": _build_about()
 		"history": _build_history()
 		"ranking": _build_ranking()
+		"bot": _build_bots()
 	scroll.scroll_vertical = 0
 
 ## Remonta a página atual mantendo a rolagem (ex.: tocou numa liga) — uma vez por toque, não por quadro.
@@ -171,6 +175,7 @@ func _band(parent: Control, n: String, y: float) -> TextureRect:
 func _label(parent: Control, text: String, rect: Rect2, px: float, color: Color, font: Font, align := HORIZONTAL_ALIGNMENT_CENTER, outline := 0.0) -> Label:
 	var l := Label.new()
 	l.text = text
+	l.clip_text = true          # sem isso o rótulo cresce até a largura do texto e passa da moldura
 	l.position = rect.position
 	l.size = rect.size
 	l.horizontal_alignment = align
@@ -520,3 +525,115 @@ func _build_ranking():
 				refresh())
 	_band(panel, "ligas_end", LIGA_TOP_H + rows * LIGA_ROW_H)
 	panel.size.y = (LIGA_TOP_H + rows * LIGA_ROW_H + LIGA_END_H) * s
+
+# ------------------------------------------------------------------ JOGAR CONTRA O COMPUTADOR (ref6)
+const Ladder = preload("res://bot/bot_ladder.gd")
+const LadderUI = preload("res://bot/bot_ladder_ui.gd")
+const BOT_TOP_H := 400.0
+const BOT_CARD_H := 346.0
+const BOT_END_H := 174.0
+const OK_GREEN := Color("8fe0a0")
+func _build_bots():
+	var bots: Array = Ladder.bots()
+	var top := _band(panel, "bots_top", 0)
+	_hot(panel, top, Rect2(112, 214, 676, 84), 0.0, "VOLTAR", func(): hub.back())
+	for i in bots.size():
+		var b: Dictionary = bots[i]
+		var id := String(b.id)
+		var st: String = hub.bot_progress.status(id) if hub.get("bot_progress") != null else ("available" if i == 0 else "locked")
+		var y := BOT_TOP_H + i * BOT_CARD_H
+		var card := _band(panel, "bots_card", y)
+		card.name = "BotCard_" + id
+		var locked := st == "locked"
+		var dim := Color(0.42, 0.44, 0.43) if locked else Color.WHITE
+		var laurel := _piece(panel, "bots_laurel", Rect2(108, y + 105, 204, 125))
+		laurel.modulate = dim
+		var badge := TextureRect.new()
+		badge.name = "BotBadge_" + id
+		badge.texture = ThemeCatalog.badge_texture(String(b.get("league", id)))
+		badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		badge.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.position = Vector2(70, y + 16) * s      # a célula do brasão tem margem própria
+		badge.size = Vector2(280, 250) * s
+		badge.modulate = Color(0.32, 0.34, 0.33) if locked else Color.WHITE
+		panel.add_child(badge)
+		var name_l := _label(panel, String(b.name), R(325, y + 10, 470, 54), 48, Color("f2cf72") if not locked else Color("a9a594"), Kit.SERIF_BOLD, HORIZONTAL_ALIGNMENT_LEFT, 6)
+		name_l.name = "BotName_" + id
+		_label(panel, String(b.get("title", "")), R(325, y + 58, 470, 34), 32, CREAM if not locked else Color("a9a594"), Kit.SERIF, HORIZONTAL_ALIGNMENT_LEFT, 3)
+		# selo do estado: o contorno da arte (pílula verde) na cor do estado
+		var chip := Panel.new()
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var cs := StyleBoxFlat.new()
+		cs.bg_color = Color(0.03, 0.16, 0.11, 0.95)
+		cs.border_color = {"defeated": Color("3fae6a"), "available": Color("d9a441"), "locked": Color("5d665f")}[st]
+		cs.set_border_width_all(maxi(1, int(round(4 * s))))
+		cs.set_corner_radius_all(int(round(16 * s)))
+		chip.add_theme_stylebox_override("panel", cs)
+		chip.position = Vector2(324, y + 100) * s
+		chip.size = Vector2(234, 38) * s
+		panel.add_child(chip)
+		var chip_x := 340.0
+		if st == "defeated":
+			_piece(panel, "../pages/ico_check", Rect2(336, y + 105, 30, 28)).modulate = OK_GREEN
+			chip_x = 372.0
+		var chip_l := _label(panel, {"defeated": "DERROTADO", "available": "DISPONÍVEL", "locked": "BLOQUEADO"}[st], R(chip_x, y + 99, 552 - chip_x, 40), 30, {"defeated": OK_GREEN, "available": Color("ffd98a"), "locked": Color("b4b8b0")}[st], Kit.SERIF_BOLD, HORIZONTAL_ALIGNMENT_CENTER if st != "defeated" else HORIZONTAL_ALIGNMENT_LEFT, 4)
+		chip_l.name = "BotStatus_" + id
+		var desc := String(b.get("description", ""))
+		if locked and i > 0: desc = "Vença o " + String(bots[i - 1].name)   # mesmo aviso da escada do PC
+		var d_l := _label(panel, desc, R(325, y + 136, 468, 66), 30, CREAM if not locked else Color("a9a594"), Kit.SERIF, HORIZONTAL_ALIGNMENT_LEFT, 3)
+		d_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		d_l.size = Vector2(468, 66) * s
+		d_l.clip_text = false
+		d_l.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		d_l.add_theme_constant_override("line_spacing", int(round(-9 * s)))
+		var fs := 30.0
+		while fs > 22.0 and d_l.get_line_count() > 2:   # descrição longa encolhe para caber em 2 linhas
+			fs -= 1.0
+			d_l.add_theme_font_size_override("font_size", maxi(8, int(round(fs * s))))
+		_piece(panel, "bots_crown", Rect2(326, y + 200, 42, 38)).modulate = dim
+		var rw := RichTextLabel.new()
+		rw.name = "BotReward_" + id
+		rw.bbcode_enabled = true
+		rw.scroll_active = false
+		rw.autowrap_mode = TextServer.AUTOWRAP_OFF
+		rw.clip_contents = true
+		rw.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rw.position = Vector2(374, y + 202) * s
+		rw.size = Vector2(424, 40) * s
+		rw.add_theme_font_override("normal_font", Kit.SERIF)
+		rw.add_theme_font_override("bold_font", Kit.SERIF_BOLD)
+		var rtxt: String = LadderUI.reward_text(b.get("reward", {})) + (" (obtido)" if st == "defeated" else "")
+		var rpx := 27
+		while rpx > 18 and Kit.SERIF_BOLD.get_string_size("Recompensa:  " + rtxt, HORIZONTAL_ALIGNMENT_LEFT, -1, rpx).x > 418: rpx -= 1
+		rw.add_theme_font_size_override("normal_font_size", maxi(8, int(round(rpx * s))))
+		rw.add_theme_font_size_override("bold_font_size", maxi(8, int(round(rpx * s))))
+		rw.add_theme_color_override("default_color", CREAM if not locked else Color("a9a594"))
+		rw.text = "[color=#f3c55a][b]Recompensa:[/b][/color]  " + rtxt
+		panel.add_child(rw)
+		var btn_art := _piece(panel, "bots_button", Rect2(276, y + 243, 518, 86))
+		btn_art.modulate = Color(0.45, 0.47, 0.45) if locked else Color.WHITE
+		var caption: String = {"defeated": "JOGAR DE NOVO", "available": "DESAFIAR", "locked": "BLOQUEADO"}[st]
+		var bl := _label(panel, caption, R(424, y + 243, 330, 86), 46, Color("f6e0a0") if not locked else Color("9da29a"), Kit.SERIF_BOLD, HORIZONTAL_ALIGNMENT_CENTER, 7)
+		bl.name = "BotButton_" + id
+		if not locked:
+			var bid := id
+			_hot(panel, btn_art, Rect2(276, y + 243, 518, 86), 0.0, "DESAFIAR " + id, func(): hub._choose_difficulty(bid))
+	var end_y := BOT_TOP_H + bots.size() * BOT_CARD_H
+	var end := _band(panel, "bots_end", end_y)
+	_hot(panel, end, Rect2(214, end_y + 6, 476, 78), 0.0, "VOLTAR_FIM", func(): hub.back())
+	panel.size.y = (end_y + BOT_END_H) * s
+
+## Peça avulsa (ícone, selo, botão) num retângulo da referência.
+func _piece(parent: Control, n: String, rect_ref: Rect2) -> TextureRect:
+	var r := TextureRect.new()
+	r.texture = tex(n) if not n.begins_with("../") else load("res://ui_kit/" + n.substr(3) + ".png")
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_SCALE
+	r.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.position = rect_ref.position * s
+	r.size = rect_ref.size * s
+	parent.add_child(r)
+	return r
