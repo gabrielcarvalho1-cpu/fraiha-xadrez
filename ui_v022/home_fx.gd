@@ -87,6 +87,12 @@ var _puffs: Array = []
 var _next_puff := 4.0
 var _add := CanvasItemMaterial.new()
 var _glow_tex: GradientTexture2D
+## R52e · fumacinha: discos desenhados uma vez e animados (escala/posição/opacidade) em vez de draw_circle
+## por quadro, que na Web criava buffers novos de GPU a cada quadro.
+const Disc := preload("res://ui_v022/static_disc.gd")
+const PUFF_POOL := 20
+var _puff_discs: Array = []
+var _drew_birds := false
 
 func _init():
     name = "HomeFx"
@@ -130,6 +136,11 @@ func _ready():
     _cat_mat = _piece(BELLY_RECT, CAT_SHADER)
     _cat_mat.set_shader_parameter("c", (BELLY_C - BELLY_RECT.position) / BELLY_RECT.size)
     _cat_mat.set_shader_parameter("r", BELLY_R / BELLY_RECT.size)
+    for i in PUFF_POOL:
+        var d = Disc.new(1.0, Color(0.93, 0.93, 0.95, 1.0))
+        d.visible = false
+        add_child(d)
+        _puff_discs.append(d)
 
 func _piece(r: Rect2, code: String) -> ShaderMaterial:
     var rr := Rect2i(r)
@@ -189,14 +200,32 @@ func _process(delta):
     for b in _birds:
         b.x += b.dir * b.v * delta
     _birds = _birds.filter(func(b): return b.x > SKY.position.x - 120.0 and b.x < SKY.end.x + 120.0)
-    queue_redraw()
+    _update_puffs()
+    # passarinhos: linhas (sem buffers), e só redesenha enquanto há bando no céu
+    if not _birds.is_empty() or _drew_birds:
+        _drew_birds = not _birds.is_empty()
+        queue_redraw()
+
+func _update_puffs():
+    var shown := 0
+    for pf in _puffs:
+        if pf.age <= 0.0 or shown >= PUFF_POOL: continue
+        var k: float = pf.age / pf.life
+        var d = _puff_discs[shown]
+        shown += 1
+        if not is_equal_approx(d.radius, pf.r0):
+            d.radius = pf.r0
+            d.queue_redraw()
+        d.visible = true
+        d.position = pf.p
+        # raio r0 + 10k: escala do disco de raio r0
+        d.scale = Vector2.ONE * ((pf.r0 + 10.0 * k) / pf.r0)
+        d.modulate.a = 0.26 * sin(PI * minf(1.0, k * 1.15)) * (1.0 - k)
+    for i in range(shown, PUFF_POOL):
+        _puff_discs[i].visible = false
 
 func _draw():
-    for pf in _puffs:
-        if pf.age <= 0.0: continue
-        var k: float = pf.age / pf.life
-        var a := 0.26 * sin(PI * minf(1.0, k * 1.15)) * (1.0 - k)
-        draw_circle(pf.p, pf.r0 + 10.0 * k, Color(0.93, 0.93, 0.95, a))
+    # (fumacinha: discos em _puff_discs, animados em _update_puffs)
     for b in _birds:
         if b.x < SKY.position.x or b.x > SKY.end.x: continue
         var flap := sin(t * 7.0 + b.ph)
@@ -204,4 +233,6 @@ func _draw():
         var w: float = 7.0 * b.s
         var tip := Vector2(w, -3.5 * flap * b.s - 0.5)
         var col := Color(0.09, 0.06, 0.12, 0.7)
-        draw_polyline(PackedVector2Array([c + Vector2(-tip.x, tip.y), c + Vector2(-w * 0.35, -0.6), c, c + Vector2(w * 0.35, -0.6), c + tip]), col, 1.8)
+        # mesmo traço de antes, em segmentos (draw_polyline vira polígono com buffers novos a cada quadro)
+        var pts := [c + Vector2(-tip.x, tip.y), c + Vector2(-w * 0.35, -0.6), c, c + Vector2(w * 0.35, -0.6), c + tip]
+        for j in 4: draw_line(pts[j], pts[j + 1], col, 1.8)

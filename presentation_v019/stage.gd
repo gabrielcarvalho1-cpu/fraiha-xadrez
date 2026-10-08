@@ -36,6 +36,7 @@ var desk_name: Label
 var desk_side: Label
 var desk_gear: Button
 var desk_music: Button       # R37.3
+var _desk_snd := []           # R52e · último estado (música, efeitos) desenhado nos botões da mesa
 var desk_fx: Button
 var desk_fullscreen: Button   # R43 · tela cheia também na partida
 var mobile_fullscreen: Button
@@ -782,8 +783,12 @@ func _process(delta):
         mobile_music.text = "Música: " + ("NÃO" if ModeSound.music_muted(hub) else "SIM")
         mobile_fx.text = "Efeitos: " + ("NÃO" if ModeSound.effects_muted(hub) else "SIM")
     if is_instance_valid(desk_music) and desk_panel.visible:
-        desk_music.queue_redraw()
-        desk_fx.queue_redraw()
+        # R52e · só redesenha quando o estado de som muda (antes: todo quadro, recriando os ícones na GPU)
+        var snd := [ModeSound.music_muted(hub), ModeSound.effects_muted(hub)]
+        if snd != _desk_snd:
+            _desk_snd = snd
+            desk_music.queue_redraw()
+            desk_fx.queue_redraw()
     _sync_fullscreen_buttons()
     # Online has its own server-side rematch; a local reset would desync the room.
     mobile_restart.visible = mode != "online" and not (mode == "ranked" and not ranked.in_match()) and not (mode == "casual" and not casual.in_match())

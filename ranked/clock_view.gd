@@ -61,11 +61,13 @@ func _draw():
     var col := Color("ff7a5c") if (low and is_active) else (Color("f6d27a") if is_active else Color("9a906f"))
     var ang := sin(pulse * 2.0) * 0.12 if is_active else 0.0
     draw_set_transform(c, ang, Vector2.ONE)
+    # R52e · triângulos em draw_primitive (mesmo desenho): o relógio ativo redesenha todo quadro e, na Web,
+    # draw_colored_polygon criaria buffers de GPU novos a cada quadro.
     var w := h * 0.55
     draw_line(Vector2(-w, -h / 2), Vector2(w, -h / 2), col, 2.0)
     draw_line(Vector2(-w, h / 2), Vector2(w, h / 2), col, 2.0)
-    draw_colored_polygon(PackedVector2Array([Vector2(-w * 0.8, -h / 2 + 2), Vector2(w * 0.8, -h / 2 + 2), Vector2(0, 0)]), Color(col, 0.85))
-    draw_colored_polygon(PackedVector2Array([Vector2(0, 1), Vector2(w * 0.8, h / 2 - 2), Vector2(-w * 0.8, h / 2 - 2)]), Color(col, 0.55))
+    draw_primitive(PackedVector2Array([Vector2(-w * 0.8, -h / 2 + 2), Vector2(w * 0.8, -h / 2 + 2), Vector2(0, 0)]), PackedColorArray([Color(col, 0.85), Color(col, 0.85), Color(col, 0.85)]), PackedVector2Array())
+    draw_primitive(PackedVector2Array([Vector2(0, 1), Vector2(w * 0.8, h / 2 - 2), Vector2(-w * 0.8, h / 2 - 2)]), PackedColorArray([Color(col, 0.55), Color(col, 0.55), Color(col, 0.55)]), PackedVector2Array())
     draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
     if is_active:
         var glow := 0.5 + 0.5 * sin(pulse * (8.0 if low else 3.0))

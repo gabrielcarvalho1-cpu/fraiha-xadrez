@@ -46,7 +46,9 @@ func set_active(value: bool):
 func _process(delta):
     if is_visible_in_tree():
         t += delta
-        queue_redraw()
+        # R52e · sobre a arte e inativo nada anima (texto + seta fixos): não redesenha todo quadro
+        # (as setas são polylines = buffers novos de GPU por quadro na Web). Hover/clique já redesenham.
+        if active or not over_art: queue_redraw()
 
 func _notification(what):
     if what in [NOTIFICATION_MOUSE_ENTER, NOTIFICATION_MOUSE_EXIT, NOTIFICATION_FOCUS_ENTER, NOTIFICATION_FOCUS_EXIT]: queue_redraw()

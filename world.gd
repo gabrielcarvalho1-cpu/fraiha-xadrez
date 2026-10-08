@@ -390,7 +390,23 @@ func draw_ellipse_shadow(c:Vector2,r:Vector2,col:Color):
     for i in range(20):
         var a=TAU*float(i)/20.0
         pts.append(c+Vector2(cos(a)*r.x,sin(a)*r.y))
-    draw_colored_polygon(pts,col)
+    _fill_convex(pts,col)
+
+## R52e · Mesmo preenchimento do draw_colored_polygon (polígono convexo), mas em leque de draw_primitive.
+## Motivo: o tabuleiro redesenha todo quadro; na Web cada draw_colored_polygon cria buffers de GPU novos
+## por quadro (32 sombras de peça = dezenas de buffers/quadro). draw_primitive vai no lote comum, sem buffer próprio.
+func _fill_convex(pts:PackedVector2Array,col:Color):
+    var n := pts.size()
+    var c4 := PackedColorArray([col,col,col,col])
+    var c3 := PackedColorArray([col,col,col])
+    var i := 1
+    while i + 1 < n:
+        if i + 2 < n:
+            draw_primitive(PackedVector2Array([pts[0],pts[i],pts[i+1],pts[i+2]]),c4,PackedVector2Array())
+            i += 2
+        else:
+            draw_primitive(PackedVector2Array([pts[0],pts[i],pts[i+1]]),c3,PackedVector2Array())
+            i += 1
 
 func _draw_pixel_ellipse(c:Vector2,r:Vector2,col:Color):
     var pts=PackedVector2Array()

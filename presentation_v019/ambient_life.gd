@@ -17,6 +17,12 @@ var birds: Array = []
 var next_flock := 6.0
 var glow_layer: Node2D
 var bird_layer: Node2D
+## R52e · círculos (halo das tochas e brilho dos vaga-lumes) viram nós desenhados uma vez e animados por
+## escala/posição/opacidade; o _draw por quadro fica só com retângulos (brasas, reflexos, miolo dos vaga-lumes).
+## Antes cada draw_circle por quadro criava buffers novos de GPU na Web (memória crescendo com a cena parada).
+const Disc := preload("res://ui_v022/static_disc.gd")
+var _halos: Array = []      # por tocha: [disco 30 px, disco 14 px]
+var _fly_discs: Array = []
 
 func _ready():
     rng.randomize()
@@ -30,12 +36,26 @@ func _ready():
     glow_layer.material = add
     glow_layer.draw.connect(_draw_glow)
     add_child(glow_layer)
+    for i in TORCHES.size():
+        var big = Disc.new(30.0, Color(1.0, 0.42, 0.06, 1.0))
+        var small = Disc.new(14.0, Color(1.0, 0.62, 0.18, 1.0))
+        for d in [big, small]:
+            d.material = add            # mesma luz somada da camada
+            d.show_behind_parent = true # halo por baixo das brasas, como antes
+            d.position = _uv(TORCHES[i]) + Vector2(0, -4)
+            glow_layer.add_child(d)
+        _halos.append([big, small])
     bird_layer = Node2D.new()
     bird_layer.name = "Birds"
     bird_layer.draw.connect(_draw_birds)
     add_child(bird_layer)
     _sample_water()
-    for i in 12: flies.append(_new_fly())
+    for i in 12:
+        flies.append(_new_fly())
+        var fd = Disc.new(5.0, Color(0.85, 1.0, 0.45, 1.0))
+        fd.material = add
+        glow_layer.add_child(fd)
+        _fly_discs.append(fd)
 
 func _uv(p: Vector2) -> Vector2:
     return p * tex_size - tex_size / 2.0
@@ -106,19 +126,33 @@ func _process(delta):
         b.pos += b.vel * delta
         if absf(b.pos.x) < tex_size.x / 2.0 + 140.0: b_alive.append(b)
     birds = b_alive
-    glow_layer.queue_redraw()
-    bird_layer.queue_redraw()
+    _update_discs()
+    glow_layer.queue_redraw()   # só retângulos: não cria buffers
+    if not birds.is_empty() or bird_layer.get_meta("drawn_birds", false):
+        bird_layer.set_meta("drawn_birds", not birds.is_empty())
+        bird_layer.queue_redraw()   # linhas (sem buffers) e só enquanto há bando passando
+
+func _update_discs():
+    for i in _halos.size():
+        var f := _flicker(i)
+        _halos[i][0].scale = Vector2.ONE * ((30.0 + 6.0 * f) / 30.0)
+        _halos[i][0].modulate.a = 0.07 + 0.06 * f
+        _halos[i][1].scale = Vector2.ONE * ((14.0 + 3.0 * f) / 14.0)
+        _halos[i][1].modulate.a = 0.10 + 0.08 * f
+    for i in flies.size():
+        var fly: Dictionary = flies[i]
+        var t: float = time * fly.speed + fly.phase
+        var p: Vector2 = fly.home + Vector2(sin(t) * 18.0 + sin(t * 2.3) * 6.0, cos(t * 0.8) * 12.0)
+        var fade: float = clampf(minf(fly.age, fly.life - fly.age), 0.0, 1.0)
+        var pulse: float = 0.45 + 0.55 * maxf(0.0, sin(time * 2.2 + fly.phase * 3.0))
+        _fly_discs[i].position = p
+        _fly_discs[i].modulate.a = 0.10 * pulse * fade
 
 func _flicker(i: int) -> float:
     return 0.5 + 0.3 * sin(time * 9.0 + i * 1.7) + 0.2 * sin(time * 23.0 + i * 3.1)
 
 func _draw_glow():
-    # Halo tremulante das tochas.
-    for i in TORCHES.size():
-        var c: Vector2 = _uv(TORCHES[i]) + Vector2(0, -4)
-        var f := _flicker(i)
-        glow_layer.draw_circle(c, 30.0 + 6.0 * f, Color(1.0, 0.42, 0.06, 0.07 + 0.06 * f))
-        glow_layer.draw_circle(c, 14.0 + 3.0 * f, Color(1.0, 0.62, 0.18, 0.10 + 0.08 * f))
+    # Halo tremulante das tochas: discos em _halos (atrás), animados em _update_discs.
     for e in embers:
         var k: float = clampf(e.life / 1.4, 0.0, 1.0)
         glow_layer.draw_rect(Rect2(e.pos.round(), Vector2(3, 3)), Color(1.0, 0.45 + 0.45 * k, 0.15 + 0.3 * k, 1.0 * k))
@@ -130,7 +164,7 @@ func _draw_glow():
         var p: Vector2 = fly.home + Vector2(sin(t) * 18.0 + sin(t * 2.3) * 6.0, cos(t * 0.8) * 12.0)
         var fade: float = clampf(minf(fly.age, fly.life - fly.age), 0.0, 1.0)
         var pulse: float = 0.45 + 0.55 * maxf(0.0, sin(time * 2.2 + fly.phase * 3.0))
-        glow_layer.draw_circle(p, 5.0, Color(0.85, 1.0, 0.45, 0.10 * pulse * fade))
+        # brilho em volta: disco em _fly_discs (animado em _update_discs)
         glow_layer.draw_rect(Rect2(p.round() - Vector2(1, 1), Vector2(2, 2)), Color(0.95, 1.0, 0.6, 0.8 * pulse * fade))
 
 func _draw_birds():
