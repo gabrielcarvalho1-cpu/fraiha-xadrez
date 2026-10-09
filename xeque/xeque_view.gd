@@ -12,12 +12,13 @@ const LAYOUTS := {
     "desktop": {
         "scene": [1.1832, Vector2(-29.2, -112.6)], "board": Rect2(650, 208, 620, 536),
         "title": [Vector2(20, 92), 96], "sub": [Vector2(20, 127), 23],
-        "mesa": Rect2(42, 173, 356, 190), "como": Rect2(42, 393, 356, 333),
-        "plates": {0: ["h", Rect2(48, 895, 344, 130)], 1: ["v", Vector2(506, 476), 190], 2: ["hc", Rect2(816, 10, 288, 112)], 3: ["v", Vector2(1414, 476), 190]},
-        "turn": Rect2(1525, 36, 350, 68), "meter": Rect2(1522, 158, 356, 142),
-        "xeque": [Vector2(1700, 640), 0.92], "play": Rect2(1525, 757, 350, 80),
-        "hint": [Vector2(1700, 912), 24], "help": Rect2(1752, 993, 54, 54), "menu": Rect2(1813, 993, 54, 54),
-        "music": Rect2(1630, 993, 54, 54), "fx": Rect2(1691, 993, 54, 54), "full": Rect2(1569, 993, 54, 54), "voice": Rect2(1508, 993, 54, 54), "voice_ear": Rect2(1447, 993, 54, 54),
+        # R55 · referência nova (tools/ui_ref/xeque/xeque_ref_r55.png): tela = ref × 1,156 + (−5,8; −20,8)
+        "mesa": Rect2(29, 166, 387, 218), "como": Rect2(29, 399, 387, 357),
+        "plates": {0: ["h", Rect2(35, 887, 368, 133)], 1: ["v", Vector2(515, 475), 180], 2: ["hc", Rect2(817, 6, 293, 104)], 3: ["v", Vector2(1406, 475), 180]},
+        "turn": Rect2(1535, 22, 355, 69), "meter": Rect2(1522, 155, 370, 146),
+        "xeque": [Vector2(1718, 636), 0.92], "xeque_rect": Rect2(1541, 573, 355, 127), "play": Rect2(1536, 721, 362, 90),
+        "hint": [Vector2(1718, 875), 24], "help": Rect2(1763, 975, 58, 58), "menu": Rect2(1834, 975, 58, 58),
+        "music": Rect2(1621, 975, 58, 58), "fx": Rect2(1692, 975, 58, 58), "full": Rect2(1550, 975, 58, 58), "voice": Rect2(1479, 975, 58, 58), "voice_ear": Rect2(1408, 975, 58, 58),
         "hand": [Vector2(960, 930), 0.212], "pile": [Vector2(960, 478), 0.128], "clock": [Vector2(960, 333), 0.22],
         "reveal": [Vector2(960, 476), 0.19], "mate_clock": [Vector2(960, 262), 0.36], "mate_title": [Vector2(960, 862), 196],
         "mate_line": [Vector2(960, 958), 33],
@@ -223,14 +224,16 @@ func sound_button(r: Rect2, kind: String):
     var id := "mute_music" if kind == "music" else "mute_fx"
     var off: bool = ui.Sound.music_muted(ui.hub) if kind == "music" else ui.Sound.effects_muted(ui.hub)
     var hov: bool = ui.hover_id == id
-    panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+    if desk(): desk_square(r, hov)
+    else: panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
     ui.Sound.glyph(self, r.grow(-6), kind, off, Color("f6ecd2") if not off else Color("8d9092"))
     hit(r, id)
 
 ## R43 · TELA CHEIA (o mesmo botão da Home), ao lado da música.
 func fullscreen_button(r: Rect2, on: bool):
     var hov: bool = ui.hover_id == "fullscreen"
-    panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+    if desk(): desk_square(r, hov)
+    else: panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
     preload("res://ui_v022/fullscreen_control.gd").draw_glyph(self, r.grow(-6), on, Color("f6ecd2"), 2.5)
     hit(r, "fullscreen")
 
@@ -256,7 +259,8 @@ func _draw_voice(lay: Dictionary):
 
 func square_button(r: Rect2, glyph: String, id: String):
     var hov: bool = ui.hover_id == id
-    panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+    if desk(): desk_square(r, hov)
+    else: panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
     if glyph == "menu":
         for i in 3: draw_rect(Rect2(r.position.x + r.size.x * 0.3, r.position.y + r.size.y * (0.36 + i * 0.13), r.size.x * 0.4, 3), Color("f6ecd2"))
     else:
@@ -386,6 +390,7 @@ func _draw_mesa_anim():
         text("RODADA %d" % g.round_no, Vector2(0, pos.y + sz.y / 2.0 + 44), "ui_sp4", 26, Color(0.96, 0.92, 0.82, ta), d.x, HORIZONTAL_ALIGNMENT_CENTER, 5, Color(0.07, 0.04, 0.02, ta))
 
 func _draw_title():
+    if desk(): return _desk_title()
     var lay := L()
     var tp: Array = lay.title
     text("Xeque", tp[0], "title", tp[1], Color("f2c050"), -1, HORIZONTAL_ALIGNMENT_LEFT, 8, Color("2a1206"))
@@ -395,6 +400,7 @@ func _draw_title():
     text(sub, sp[0], "ui_sp4", sp[1], Color("caa14a"), -1, HORIZONTAL_ALIGNMENT_LEFT, 2, Color(0.07, 0.04, 0.02, 0.85))
 
 func _draw_mesa_pede():
+    if desk(): return _desk_mesa_pede()
     var r: Rect2 = L().mesa
     var g = ui.g
     # destaque permanente: brilho dourado pulsando em volta do painel
@@ -428,6 +434,7 @@ func _draw_mesa_pede():
         text("são %s" % plural.to_lower(), Vector2(x, r.position.y + 164), "ui_sp", fit("são %s" % plural.to_lower(), "ui_sp", 21, r.end.x - x - 8), Color("e8dcc0"))
 
 func _draw_como_jogar(r: Rect2):
+    if desk(): return _desk_como_jogar(r)
     panel(r)
     text("COMO JOGAR", r.position + Vector2(20, 36), "ui_sp4", 21, Color("e8b242"))
     var steps := [["A mesa pede uma peça."], ["Baixe de 1 a 3 cartas", "viradas e diga que são", "essa peça."], ["Duvidou de alguém? *XEQUE!*"], ["Quem errou aciona o seu", "Relógio. Se disparar, é", "xeque-mate: está fora."]]
@@ -599,6 +606,7 @@ func _status_chip(r: Rect2, st: Dictionary, fs := 18):
         _: chip(r, st.text, Color("0a1d15"), Color("3d5a4b"), Color("c9d6cf"), fs)
 
 func _draw_plate(s: int):
+    if desk(): return _desk_plate(s)
     var g = ui.g
     var spec: Array = L().plates[s]
     var st: Dictionary = ui.seat_status(s)
@@ -708,6 +716,9 @@ func _draw_bubble():
         "hc": c = Vector2(Rect2(spec[1]).end.x + w / 2.0 + 10, Rect2(spec[1]).get_center().y)
         "h": c = Vector2(Rect2(spec[1]).end.x + w / 2.0 + 14, Rect2(spec[1]).position.y + h / 2.0 + 6)   # à direita: acima fica a faixa de turno
         _: c = Vector2(Rect2(spec[1]).get_center().x, Rect2(spec[1]).position.y - h / 2.0 - 6)
+    if desk():
+        w = tw(label_n, "o7", fs) + tw(label_t, "o7_sp", fs) + 32
+        return _desk_bubble_style(Rect2(c - Vector2(w, h) / 2.0, Vector2(w, h)), c, label_n, label_t, fs)
     var r := Rect2(c - Vector2(w, h) / 2.0, Vector2(w, h))
     stair(r.grow(3), 3, Color("120a06"))
     stair(r, 3, Color("f6ecd2"))
@@ -717,6 +728,7 @@ func _draw_bubble():
     text(label_t, Vector2(x + tw(label_n, "ui", fs), c.y + fs * 0.36), "ui_sp", fs, Color("2a1505"))
 
 func _draw_turn_banner():
+    if desk(): return _desk_turn_banner()
     var r: Rect2 = L().turn
     var g = ui.g
     var col_a: Color
@@ -758,6 +770,7 @@ func _draw_turn_banner():
         text(timer, Vector2(r.position.x, r.get_center().y + fs * 0.36), "ui_sp", fs, tcol, r.size.x - 20, HORIZONTAL_ALIGNMENT_RIGHT)
 
 func _draw_meter():
+    if desk(): return _desk_meter()
     var r: Rect2 = L().meter
     var who: int = ui.clock_focus()
     var vis: String = ui.clock_visual(who)
@@ -797,6 +810,7 @@ func _draw_meter():
     text(ct, Vector2(r.position.x, r.position.y + (33 if not compact else 31)), "ui_sp", 22 if not compact else 19, ccol, r.size.x - 18, HORIZONTAL_ALIGNMENT_RIGHT)
 
 func _draw_xeque_button(active: bool):
+    if desk(): return _desk_xeque_button(active)
     var x: Array = L().xeque
     var enabled: bool = ui.can_human_challenge()
     var state := "desabilitado"
@@ -813,6 +827,7 @@ func _draw_xeque_button(active: bool):
     if enabled and ui.phase == "": hit(Rect2(x[0] - Vector2(432, 202) * sc * 0.45, Vector2(432, 202) * sc * 0.9), "xeque")
 
 func _draw_play_button():
+    if desk(): return _desk_play_button()
     var r: Rect2 = L().play
     var g = ui.g
     var my_turn: bool = ui.phase == "" and g.state == Rules.TURN_WAITING and g.turn == 0 and not ui.input_locked
@@ -826,6 +841,7 @@ func _draw_play_button():
 func _draw_hint():
     var h = L().hint
     if h == null: return
+    if desk(): return _desk_hint()
     var lines: Array = ui.help_text()
     if String(lines[0]).is_empty(): return
     var fs: int = h[1]
@@ -834,6 +850,7 @@ func _draw_hint():
 
 # ---------------------------------------------------------------- mão
 func hand_layout() -> Array:
+    if desk(): return _desk_hand_layout()
     var g = ui.g
     var hd: Array = L().hand
     var sc: float = hd[1]
@@ -851,6 +868,7 @@ func hand_layout() -> Array:
     return out
 
 func _draw_hand():
+    if desk(): return _desk_hand()
     var g = ui.g
     var hand: Array = g.hands[0]
     var lay := hand_layout()
@@ -904,7 +922,8 @@ func _draw_reveal(big: bool):
     var cw := 360.0 * sc
     var base: Vector2 = rv[0]
     if big: base.y += 0.0
-    for i in n:
+    if desk(): _desk_reveal_cards()
+    for i in (0 if desk() else n):
         # R37.2 · as cartas viram devagar, uma de cada vez (tempos em xeque_ui.gd: FLIP_*)
         var flip: float = ui.flip_progress(i) if ui.phase == "reveal" else 1.0
         var off := i - (n - 1) / 2.0
@@ -933,14 +952,16 @@ func _draw_reveal(big: bool):
         for c in counts: parts.append("%d %s" % [counts[c], String(Rules.NAMES[c] if counts[c] == 1 else Rules.PLURAL[c]).to_upper()])
         tail = "TINHA " + " E ".join(parts)
     var fs := 30 if ui.layout != "landscape" else 26
-    var w := tw(said + " · ", "ui_sp", fs) + tw(tail, "ui_sp", fs) + 40
-    var by := base.y + 360.0 * sc * 1.4 * 0.5 + 26
+    var fk := "o7_sp" if desk() else "ui_sp"      # R55 · PC: a fonte da referência
+    var w := tw(said + " · ", fk, fs) + tw(tail, fk, fs) + 40
+    var by := base.y + (105.0 + 30.0 if desk() else 360.0 * sc * 1.4 * 0.5 + 26)
     var br := Rect2(base.x - w / 2.0, by, w, fs * 1.6)
     stair(br.grow(3), 3, Color("120a06"))
     stair(br, 3, Color("f6ecd2"))
     var x := br.position.x + 20
-    text(said + " · ", Vector2(x, br.get_center().y + fs * 0.36), "ui_sp", fs, Color("2a1505"))
-    text(tail, Vector2(x + tw(said + " · ", "ui_sp", fs), br.get_center().y + fs * 0.36), "ui_sp", fs, tail_col)
+    var yy: float = br.get_center().y + fs * (0.405 if desk() else 0.36)
+    text(said + " · ", Vector2(x, yy), fk, fs, Color("2a1505"))
+    text(tail, Vector2(x + tw(said + " · ", fk, fs), yy), fk, fs, tail_col)
 
 func _declared(n: int, target: String) -> String:
     return "%d %s" % [n, String(Rules.NAMES[target] if n == 1 else Rules.PLURAL[target]).to_upper()]
@@ -1385,3 +1406,511 @@ func _draw_intro():
         text("O PEÃO VALE COMO QUALQUER PEÇA", Vector2(0, d.y * 0.68 + 46), "ui_sp4", 32, Color(0.49, 0.94, 0.63, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))
     else:
         text(foot + "  ·  O PEÃO VALE COMO QUALQUER PEÇA", Vector2(0, d.y * 0.9), "ui_sp4", 38, Color(0.95, 0.92, 0.82, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))
+
+# ================================================================ R55 · PC: visual da referência nova
+# (tools/ui_ref/xeque/xeque_ref_r55.png). Painéis azul-marinho com moldura dourada e cantos, faixa vinho
+# nos títulos, chips de borda azul-aço, faixa da vez azul, botão XEQUE de aço e JOGAR CARTAS vinho, e
+# cartas com o texto desenhado AO VIVO no tamanho exato da tela (nítido). Só o PC; celular sem mudança.
+const NAVY_T := Color("13264d")
+const NAVY_B := Color("0a1631")
+const FRAME_GOLD := Color("d6a23c")
+const FRAME_HI := Color("ffe39a")
+const WINE_T := Color("7c1322")
+const WINE_B := Color("4a0911")
+const STEEL := Color("3d5a88")
+const CHIP_FILL := Color("0b1832")
+const CREAM_TXT := Color("f4efe4")
+const CARD_TEXT := {"rei": ["PEÇA", "Pode ser a peça pedida", Color("ff6a5c")], "rainha": ["PEÇA", "Pode ser a peça pedida", Color("ffd257")],
+    "cavalo": ["PEÇA", "Pode ser a peça pedida", Color("5d8eff")], "peao": ["CORINGA", "Vale como qualquer peça", Color("38c483")]}
+
+func desk() -> bool:
+    return ui.layout == "desktop"
+
+func grad(r: Rect2, top: Color, bot: Color):
+    draw_polygon(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), PackedColorArray([top, top, bot, bot]))
+
+## Painel da referência: borda escura, moldura dourada fina com brilho, miolo azul-marinho (ou vinho→azul)
+## e, se header > 0, faixa vinho no alto (títulos A MESA PEDE / COMO JOGAR). Cantos com ornamento dourado.
+func npanel(r: Rect2, header := 0.0, border: Color = FRAME_GOLD, glow := false, wine_full := false, fill_t: Color = NAVY_T, fill_b: Color = NAVY_B):
+    if glow:
+        for i in 5: draw_rect(r.grow(4 + i * 3), Color(border.r, border.g, border.b, 0.16 - i * 0.03), false, 3.0)
+    draw_rect(r.grow(3), Color("0b0703"))
+    draw_rect(r, border.darkened(0.25))
+    draw_rect(Rect2(r.position, Vector2(r.size.x, 1.5)), border.lightened(0.45))
+    draw_rect(r.grow(-1.5), border)
+    var inner := r.grow(-3.5)
+    draw_rect(inner, Color("0d0904"))
+    var f := inner.grow(-1.0)
+    if wine_full:
+        grad(Rect2(f.position, Vector2(f.size.x, f.size.y * 0.45)), WINE_T, WINE_B.lerp(fill_t, 0.4))
+        grad(Rect2(f.position + Vector2(0, f.size.y * 0.45), Vector2(f.size.x, f.size.y * 0.55)), WINE_B.lerp(fill_t, 0.4), fill_b)
+    else:
+        grad(f, fill_t, fill_b)
+    if header > 0.0:
+        var hb := Rect2(f.position, Vector2(f.size.x, header))
+        grad(hb, WINE_T, WINE_B)
+        draw_rect(Rect2(hb.position.x, hb.end.y - 2, hb.size.x, 2), Color(0.02, 0.01, 0.01, 0.8))
+        draw_rect(Rect2(hb.position.x, hb.position.y, hb.size.x, 1), Color(1, 0.6, 0.5, 0.18))
+    corners(r, border)
+
+## Cantoneiras douradas (L com ponto) nos quatro cantos da moldura.
+func corners(r: Rect2, col: Color = FRAME_GOLD, s := 11.0):
+    for c in [[r.position, 1, 1], [Vector2(r.end.x, r.position.y), -1, 1], [Vector2(r.position.x, r.end.y), 1, -1], [r.end, -1, -1]]:
+        var p: Vector2 = c[0]
+        var dx: float = c[1]
+        var dy: float = c[2]
+        var a := PackedVector2Array([p + Vector2(-2 * dx, -2 * dy), p + Vector2((s + 1) * dx, -2 * dy), p + Vector2((s + 1) * dx, 2 * dy), p + Vector2(2 * dx, 2 * dy), p + Vector2(2 * dx, (s + 1) * dy), p + Vector2(-2 * dx, (s + 1) * dy)])
+        draw_colored_polygon(a, Color("0b0703"))
+        var b := PackedVector2Array([p + Vector2(-0.5 * dx, -0.5 * dy), p + Vector2(s * dx, -0.5 * dy), p + Vector2(s * dx, 1.2 * dy), p + Vector2(1.2 * dx, 1.2 * dy), p + Vector2(1.2 * dx, s * dy), p + Vector2(-0.5 * dx, s * dy)])
+        draw_colored_polygon(b, col.lightened(0.15))
+        var q := p + Vector2(4.5 * dx, 4.5 * dy)
+        draw_colored_polygon(PackedVector2Array([q + Vector2(0, -2.2), q + Vector2(2.2, 0), q + Vector2(0, 2.2), q + Vector2(-2.2, 0)]), FRAME_HI)
+
+## Chip da referência: miolo azul-escuro, borda azul-aço, texto claro (Oswald).
+func nchip(r: Rect2, label: String, fill: Color = CHIP_FILL, border: Color = STEEL, col: Color = CREAM_TXT, fs := 18, glow := false):
+    if glow:
+        for i in 3: draw_rect(r.grow(2 + i * 2), Color(border.r, border.g, border.b, 0.22 - i * 0.07), false, 2.0)
+    draw_rect(r.grow(1), Color("05080f"))
+    draw_rect(r, border)
+    draw_rect(r.grow(-2), fill)
+    var f := fit(label, "o7_sp", fs, r.size.x - 12)
+    text(label, Vector2(r.position.x, r.get_center().y + f * 0.405), "o7_sp", f, col, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+
+## Texto com contorno (títulos grandes da referência).
+func otext(s: String, pos: Vector2, key: String, fs: int, col: Color, width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT, outline := 4):
+    text(s, pos, key, fs, col, width, align, outline, Color(0.03, 0.02, 0.01, 0.92))
+
+# ---------------------------------------------------------------- cartas nítidas
+## Carta (frente) na posição c (centro, px de referência), largura w; o texto (nome, PEÇA/CORINGA e a linha
+## pequena) é desenhado em pixels de TELA no tamanho exato: sempre nítido. squash < 1 = carta virando.
+func card_face(kind: String, c: Vector2, w: float, rot := 0.0, mod: Color = Color.WHITE, squash := 1.0):
+    var tex: Texture2D = ui.cards_clean.get(kind, ui.cards.get(kind))
+    var want: Vector2 = Vector2(w, w * 1.4) * ui.k
+    var t := Crisp.at(tex, want)
+    var px: Vector2 = t.get_size() if t != tex else want         # 1:1 com a textura reduzida (sem reamostrar)
+    var center: Vector2 = ui.origin + c * ui.k
+    draw_set_transform(center, rot, Vector2(maxf(0.04, squash), 1.0))
+    draw_rect(Rect2(-px / 2.0 + Vector2(3, 4), px), Color(0, 0, 0, 0.35))
+    draw_texture_rect(t, Rect2((-px / 2.0).round(), px), false, mod)
+    if squash >= 0.97 and ui.cards_clean.has(kind):
+        var u := px.x / 720.0
+        var tl := -px / 2.0
+        var info: Array = CARD_TEXT.get(kind, ["", "", Color.WHITE])
+        var name := String(Rules.NAMES.get(kind, kind)).to_upper()
+        var nf := maxi(9, int(round(94.0 * u)))
+        var room := 600.0 * u
+        while nf > 8 and tw(name, "o7", nf) > room: nf -= 1
+        var ny := tl.y + 790.0 * u + nf * 0.405
+        var ol := maxi(2, int(round(nf * 0.16)))
+        draw_string_outline(font("o7"), Vector2(tl.x, ny).round(), name, HORIZONTAL_ALIGNMENT_CENTER, px.x, nf, ol, Color(0.03, 0.02, 0.01, 0.95))
+        draw_string(font("o7"), Vector2(tl.x, ny).round(), name, HORIZONTAL_ALIGNMENT_CENTER, px.x, nf, Color("fbf3dc"))
+        var wf := maxi(8, int(round(52.0 * u)))
+        draw_string(font("o7_sp3"), Vector2(tl.x, tl.y + 905.0 * u).round(), String(info[0]), HORIZONTAL_ALIGNMENT_CENTER, px.x, wf, info[2])
+        var lf := maxi(8, int(round(48.0 * u)))
+        while lf > 7 and font("o6").get_string_size(String(info[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, lf).x > 640.0 * u: lf -= 1
+        draw_string(font("o6"), Vector2(tl.x, tl.y + 958.0 * u).round(), String(info[1]), HORIZONTAL_ALIGNMENT_CENTER, px.x, lf, Color("ece2c8"))
+    draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+
+# ---------------------------------------------------------------- R55 · partes da tela (PC)
+func _desk_title():
+    draw_texture_rect(ui.LOGO_R55, Rect2(36, 0, 340, 130), false)
+    var sub := "RODADA %d · BLEFE DE CARTAS" % ui.g.round_no
+    otext(sub, Vector2(46, 141), "o7_sp3", fit(sub, "o7_sp3", 18, 316), Color("ecc35e"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
+
+func _desk_mesa_pede():
+    var r: Rect2 = L().mesa
+    var g = ui.g
+    var landing: float = clampf((ui.mesa_anim - 1.45) / 0.45, 0.0, 1.0) if ui.mesa_anim >= 0.0 else 0.0
+    var pulse := 0.5 + 0.5 * sin(ui.t * 3.2)
+    for i in 4: draw_rect(r.grow(5 + i * 3), Color(1.0, 0.82, 0.3, (0.07 - i * 0.015) * (0.6 + 0.4 * pulse)), false, 3.0)
+    npanel(r, 47.0, FRAME_GOLD.lerp(Color("fff3c0"), landing))
+    otext("A MESA PEDE", Vector2(r.position.x + 23, r.position.y + 36), "o7_sp3", 18, Color("f7cf5c"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
+    var name: String = String(Rules.NAMES[g.target]).to_upper()
+    var plural: String = Rules.PLURAL[g.target]
+    # a carta da rodada, levemente inclinada, com moldura dourada fina
+    var cc := Vector2(r.position.x + 81, r.position.y + 126)
+    card_face(String(g.target), cc, 104.0, -0.05)
+    var x := r.position.x + 148
+    var big := fit(name, "o7", 60, r.end.x - x - 14)
+    otext(name, Vector2(x, r.position.y + 122), "o7", big, Color("f8ecd0"), -1, HORIZONTAL_ALIGNMENT_LEFT, 5)
+    var l2 := "são %s" % plural.to_lower()
+    text("Diga que suas cartas", Vector2(x, r.position.y + 156), "o6_sp", 19, Color("ece7dc"))
+    text(l2, Vector2(x, r.position.y + 182), "o6_sp", fit(l2, "o6_sp", 19, r.end.x - x - 10), Color("ece7dc"))
+
+func _desk_como_jogar(r: Rect2):
+    npanel(r, 46.0)
+    otext("COMO JOGAR", Vector2(r.position.x + 23, r.position.y + 37), "o7_sp3", 18, Color("f7cf5c"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
+    var steps := [["A mesa pede uma peça."], ["Baixe de 1 a 3 cartas", "viradas e diga que são", "essa peça."], ["Duvidou de alguém? *XEQUE!*"], ["Quem errou aciona o seu", "Relógio. Se disparar, é", "xeque-mate: está fora."]]
+    var base := [83.0, 127.0, 225.0, 268.0]
+    for i in steps.size():
+        var y: float = r.position.y + base[i]
+        var nb := Rect2(r.position.x + 26, y - 26, 35, 34)
+        draw_rect(nb.grow(1.5), Color("0b0703"))
+        grad(nb, Color("ffd76a"), Color("e09a2c"))
+        draw_rect(Rect2(nb.position, Vector2(nb.size.x, 2)), Color(1, 1, 0.85, 0.7))
+        text(str(i + 1), Vector2(nb.position.x, nb.position.y + 26), "o7", 23, Color("2a1505"), nb.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+        for line in steps[i]:
+            var parts := String(line).split("*")
+            var x := r.position.x + 77
+            for j in parts.size():
+                var red: bool = j % 2 == 1
+                text(parts[j], Vector2(x, y), "o7_sp" if red else "o6_sp", 19, Color("ff4b44") if red else Color("f1ede4"), -1, HORIZONTAL_ALIGNMENT_LEFT, 2 if red else 0)
+                x += tw(parts[j], "o7_sp" if red else "o6_sp", 19)
+            y += 29.0
+
+func _desk_status_chip(r: Rect2, st: Dictionary, fs := 17):
+    match String(st.id):
+        "sua_vez": nchip(r, st.text, Color("ffd257"), Color("fff0b0"), Color("2a1505"), fs)
+        "pensando": nchip(r, st.text, Color("0f2d5e"), Color("86bdf5"), Color("d8ecff"), fs, true)
+        "em_risco": nchip(r, st.text, Color("8f0f1c"), Color("ff5a52"), Color("fff1ec"), fs, true)
+        "xeque_mate": nchip(r, st.text, Color("c11a28"), Color("ff7a70"), Color("fff6ee"), fs, true)
+        "com_o_relogio": nchip(r, st.text, Color("2a1544"), Color("b880ff"), Color("eedcff"), fs, true)
+        "eliminado": nchip(r, st.text, Color("1a1c1f"), Color("4a4d52"), Color("8d9092"), fs)
+        _: nchip(r, st.text, CHIP_FILL, STEEL, CREAM_TXT, fs)
+
+func _desk_bot_tag(r: Rect2, tag: String, elim: bool):
+    var f := Color("a9d4f5") if not elim else Color("55595e")
+    draw_rect(r.grow(1), Color("05080f"))
+    draw_rect(r, f)
+    var fs := fit(tag, "o7_sp", int(r.size.y * 0.72), r.size.x - 8)
+    text(tag, Vector2(r.position.x, r.get_center().y + fs * 0.405), "o7_sp", fs, Color("0c2340"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+
+func _desk_clock_row(pos: Vector2, w: float, h: float, s: int, fs: int):
+    var vis: String = ui.clock_visual(s)
+    var used: int = ui.clock_used(s)
+    var segs := Rules.CLOCK_SLOTS - 1
+    var lit := segs if vis == "disparado" else used
+    var col: Color = {"neutro": Color("f2bd3c"), "pulsando": Color("b068ff"), "perigo": Color("e02a36"), "quase": Color("e02a36"), "disparado": Color("e02a36")}[vis]
+    var ch: float = 1.0 if vis == "disparado" else ui.clock_next_chance(s)
+    var pct := "%d%%" % roundi(ch * 100.0)
+    var tw_ := tw(pct, "o7", fs) + 8
+    var gap := maxf(2.0, h * 0.28)
+    var sw := (w - tw_ - (segs - 1) * gap) / float(segs)
+    for i in segs:
+        var sr := Rect2(pos + Vector2(i * (sw + gap), 0), Vector2(sw, h))
+        draw_rect(sr, Color("0a1530"))
+        draw_rect(sr, STEEL, false, 1.5)
+        var blink: bool = ui.phase == "clock" and int(ui.result.get("loser", -1)) == s and i == used and int(ui.t * 5) % 2 == 0
+        if i < lit or blink: draw_rect(sr.grow(-1.5), col)
+    var pcol := Color("f2c14e").lerp(Color("ff4a42"), clampf((ch - 0.12) / 0.6, 0.0, 1.0))
+    text(pct, Vector2(pos.x + w - tw_ + 6, pos.y + h * 0.5 + fs * 0.405), "o7", fs, pcol)
+
+func _desk_cards_count(pos: Vector2, s: int, fs: int):
+    var n: int = ui.g.hands[s].size()
+    var h := fs * 1.15
+    var w := h * 0.71
+    var r := Rect2(pos - Vector2(0, h * 0.85), Vector2(w, h))
+    draw_rect(r.grow(1.5), Color("d6a23c"))
+    draw_texture_rect(ui.CARD_BACK, r, false)
+    text("×%d" % n, pos + Vector2(w + 5, 0), "o7", fs, CREAM_TXT)
+
+## Retrato com moldura dourada fina e cantos (placas dos jogadores).
+func _desk_portrait(ar: Rect2, s: int, elim: bool):
+    draw_rect(ar.grow(5), Color("0b0703"))
+    draw_rect(ar.grow(4), FRAME_GOLD if not elim else Color("55595e"))
+    draw_rect(ar.grow(2.5), Color("0b0703"))
+    draw_rect(ar.grow(1.5), Color("f0d48a") if not elim else Color("6a6d70"))
+    draw_texture_rect(_avatar(s, elim), ar, false)
+    for p in [ar.position, Vector2(ar.end.x, ar.position.y), Vector2(ar.position.x, ar.end.y), ar.end]:
+        draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), FRAME_HI)
+
+func _desk_plate(s: int):
+    var g = ui.g
+    var spec: Array = L().plates[s]
+    var st: Dictionary = ui.seat_status(s)
+    var elim: bool = st.id == "eliminado"
+    var border: Color = {"em_risco": Color("ff5a52"), "xeque_mate": Color("ff5a52"), "com_o_relogio": Color("b880ff"), "sua_vez": Color("ffe08a"), "eliminado": Color("55595e")}.get(st.id, FRAME_GOLD)
+    var glow: bool = st.id in ["xeque_mate", "com_o_relogio", "em_risco", "sua_vez"]
+    var ft := Color("1d2024") if elim else NAVY_T
+    var fb := Color("121417") if elim else NAVY_B
+    var name: String = g.names[s]
+    var bot := s != 0
+    var tag: String = ui.seat_tag(s)
+    var namecol := Color("8d9092") if elim else Color("f6f3ec")
+    match spec[0]:
+        "h", "hc":
+            var r: Rect2 = spec[1]
+            var compact: bool = spec[0] == "hc"
+            ui.hits.append({"rect": r, "id": "seat_%d" % s})
+            npanel(r, 0.0, border, glow, false, ft, fb)
+            var av := r.size.y - (24.0 if compact else 28.0)
+            var ar := Rect2(r.position + Vector2(14, (r.size.y - av) / 2.0), Vector2(av, av))
+            _desk_portrait(ar, s, elim)
+            _look(ar, ui.seat_look(s))
+            if ui.online: VoiceGlyph.draw_seat_voice(self, ar, ui.voice(), s)
+            var x := ar.end.x + 14
+            var nfs := 22 if compact else 25
+            var top := r.position.y + (32 if compact else 42)
+            nfs = fit(name, "o6", nfs, r.end.x - x - (54 if bot else 10))
+            otext(name, Vector2(x, top), "o6", nfs, namecol, -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
+            if bot:
+                var bw := 44.0 * (1.45 if tag != "BOT" else 1.0)
+                _desk_bot_tag(Rect2(x + tw(name, "o6", nfs) + 10, top - nfs * 0.82, bw, nfs * 0.9), tag, elim)
+            # linha da referência: coroa(s), 5 casas do relógio e a chance (%)
+            var cw := 28.0 if compact else 32.0
+            var row_y := top + (12 if compact else 16)
+            var crown_left := x + (44.0 if compact else 50.0)
+            _crowns(Vector2(crown_left - (3 - Rules.LIVES) * (cw + cw * 0.27) / 2.0, row_y), s, cw, cw * 0.27, elim)
+            var rx := crown_left + Rules.LIVES * (cw + cw * 0.27) + 8
+            var rw := r.end.x - rx - 12.0
+            if rw > 36: _desk_clock_row(Vector2(rx, row_y + 2), rw, cw * 0.52, s, 16 if compact else 18)
+            var chh := 26.0 if compact else 30.0
+            var cy := r.end.y - chh - (12 if compact else 14)
+            var label: String = st.text
+            var chw := maxf(tw(label, "o7_sp", 17) + 26, 112)
+            _desk_status_chip(Rect2(x, cy, chw, chh), st)
+            if s != 0: _desk_cards_count(Vector2(r.end.x - 50, r.end.y - 16), s, 20 if compact else 22)
+        "v":
+            var c: Vector2 = spec[1]
+            var w: float = spec[2]
+            var u := w / 180.0
+            var nfs := fit(name, "o6", int(round(24 * u)), w - 16)
+            var h := 302.0 * u
+            var r := Rect2(c.x - w / 2.0, c.y - h / 2.0, w, h)
+            ui.set_meta("plate_top_%d" % s, r.position.y)
+            ui.hits.append({"rect": r, "id": "seat_%d" % s})
+            npanel(r, 0.0, border, glow, false, ft, fb)
+            var avs := 86.0 * u
+            var ar := Rect2(c.x - avs / 2.0, r.position.y + 14 * u, avs, avs)
+            _desk_portrait(ar, s, elim)
+            _look(ar, ui.seat_look(s))
+            if ui.online: VoiceGlyph.draw_seat_voice(self, ar, ui.voice(), s)
+            var y := ar.end.y + 30 * u
+            otext(name, Vector2(r.position.x, y), "o6", nfs, namecol, w, HORIZONTAL_ALIGNMENT_CENTER, 3)
+            if bot:
+                var bw := 46.0 * u * (1.45 if tag != "BOT" else 1.0)
+                _desk_bot_tag(Rect2(c.x - bw / 2.0, y + 9 * u, bw, 22 * u), tag, elim)
+            y += 38 * u
+            var cw := 34.0 * u
+            _crowns(Vector2(c.x - (cw * 3 + cw * 0.36 * 2) / 2.0, y), s, cw, cw * 0.36, elim)
+            y += 36 * u
+            _desk_clock_row(Vector2(r.position.x + 14 * u, y), w - 26 * u, 13 * u, s, int(round(17 * u)))
+            y += 26 * u
+            var label: String = st.text
+            var chh := 30.0 * u
+            var chw := minf(w - 24, maxf(tw(label, "o7_sp", 17) + 30, 132 * u))
+            _desk_status_chip(Rect2(c.x - chw / 2.0, y, chw, chh), st, int(round(17 * u)))
+            y += chh + 30 * u
+            _desk_cards_count(Vector2(c.x - 18 * u, y), s, int(round(21 * u)))
+
+func _desk_bubble_style(r: Rect2, c: Vector2, label_n: String, label_t: String, fs: int):
+    draw_rect(r.grow(3), Color("120a06"))
+    grad(r, Color("fff8e6"), Color("f1e2bd"))
+    draw_rect(Rect2(r.position.x + 3, r.end.y - 3, r.size.x - 6, 2), Color("d6c7a1"))
+    var x := r.position.x + 16
+    text(label_n, Vector2(x, c.y + fs * 0.405), "o7", fs, Color("d0121f"))
+    text(label_t, Vector2(x + tw(label_n, "o7", fs), c.y + fs * 0.405), "o7_sp", fs, Color("1f1209"))
+
+func _desk_turn_banner():
+    var r: Rect2 = L().turn
+    var g = ui.g
+    var label := ""
+    var timer := ""
+    var top := Color("2153b4")
+    var bot := Color("0d2a6e")
+    var col := Color("f3f5f9")
+    if ui.phase != "":
+        top = Color("a3152a"); bot = Color("5e0a15"); label = "XEQUE!"
+    elif g.state == Rules.TURN_WAITING and g.turn == 0:
+        label = "SUA VEZ"; col = Color("ffd257")
+        var secs := int(ceil(ui.turn_left_ms / 1000.0))
+        timer = "%d:%02d" % [secs / 60, secs % 60]
+    elif g.state == Rules.TURN_WAITING:
+        label = "VEZ DE " + String(g.names[g.turn]).to_upper()
+    else:
+        label = "RODADA %d" % g.round_no
+    npanel(r, 0.0, FRAME_GOLD, false, false, top, bot)
+    draw_rect(Rect2(r.position.x + 5, r.position.y + 5, r.size.x - 10, 3), Color(1, 1, 1, 0.12))
+    var fs := 30
+    var low: bool = timer != "" and ui.turn_left_ms <= ui.LOW_TIME_MS
+    if timer == "":
+        var f := fit(label, "o7_sp", fs, r.size.x - 36)
+        otext(label, Vector2(r.position.x, r.get_center().y + f * 0.405), "o7_sp", f, col, r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+    else:
+        otext(label, Vector2(r.position.x + 24, r.get_center().y + fs * 0.405), "o7_sp", fs, col, -1, HORIZONTAL_ALIGNMENT_LEFT, 4)
+        var tcol := col
+        if low:
+            tcol = Color("ff5a52") if int(ui.t * 4.0) % 2 == 0 else col
+            draw_rect(r.grow(3), Color(0.88, 0.16, 0.2, 0.25 + 0.2 * sin(ui.t * 12.0)), false, 3.0)
+        otext(timer, Vector2(r.position.x, r.get_center().y + fs * 0.405), "o7", fs, tcol, r.size.x - 24, HORIZONTAL_ALIGNMENT_RIGHT, 4)
+
+func _desk_meter():
+    var r: Rect2 = L().meter
+    var who: int = ui.clock_focus()
+    var vis: String = ui.clock_visual(who)
+    npanel(r, 0.0, FRAME_GOLD, false, true)
+    otext("RELÓGIO DE XEQUE", Vector2(r.position.x + 22, r.position.y + 37), "o7_sp3", 21, Color("f7cf5c"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
+    var used: int = ui.clock_used(who)
+    var segs := Rules.CLOCK_SLOTS - 1
+    var lit := segs if vis == "disparado" else used
+    var seg_col: Color = {"neutro": Color("f2bd3c"), "pulsando": Color("b068ff"), "perigo": Color("e02a36"), "quase": Color("e02a36"), "disparado": Color("e02a36")}[vis]
+    var gap := 7.0
+    var sx := r.position.x + 20
+    var sw := (r.size.x - 40 - (segs - 1) * gap) / float(segs)
+    var sy := r.position.y + 54
+    var shh := 29.0
+    for i in segs:
+        var sr := Rect2(sx + i * (sw + gap), sy, sw, shh)
+        draw_rect(sr, Color("0a1530"))
+        draw_rect(sr, STEEL.lightened(0.1), false, 2.0)
+        if i < lit or (ui.phase == "clock" and int(ui.result.loser) == who and i == used and int(ui.t * 5) % 2 == 0):
+            draw_rect(sr.grow(-2), seg_col)
+            draw_rect(Rect2(sr.position.x + 2, sr.position.y + 2, sr.size.x - 4, 4), seg_col.lightened(0.35))
+    var words: String = {"neutro": "NEUTRO", "pulsando": "PULSANDO", "perigo": "EM PERIGO", "quase": "QUASE DISPARANDO", "disparado": "DISPAROU!"}[vis]
+    var wcol: Color = {"neutro": Color("f7cf5c"), "pulsando": Color("c58bff"), "perigo": Color("ff5a52"), "quase": Color("ff5a52"), "disparado": Color("ff5a52")}[vis]
+    var ty := r.end.y - 24
+    otext(words, Vector2(r.position.x + 22, ty), "o7_sp3", fit(words, "o7_sp3", 27, r.size.x * 0.6), wcol, -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
+    var owner: String = "Seu relógio" if who == 0 else String(ui.g.names[who])
+    otext(owner, Vector2(r.position.x, ty), "o6", fit(owner, "o6", 20, r.size.x * 0.36), Color("eef0f4"), r.size.x - 22, HORIZONTAL_ALIGNMENT_RIGHT, 2)
+    var ch: float = ui.clock_next_chance(who) if vis != "disparado" else 1.0
+    var ccol := Color("f7e7c0").lerp(Color("ff4a42"), clampf((ch - 0.12) / 0.6, 0.0, 1.0))
+    otext("%d%%" % roundi(ch * 100.0), Vector2(r.position.x, r.position.y + 37), "o7", 22, ccol, r.size.x - 22, HORIZONTAL_ALIGNMENT_RIGHT, 3)
+
+## Botão XEQUE de aço com rebites (referência). Estados: normal, hover, pressionado, desabilitado, ativado.
+func _desk_xeque_button(active: bool):
+    var r: Rect2 = L().xeque_rect
+    var enabled: bool = ui.can_human_challenge()
+    var state := "desabilitado"
+    if active or ui.phase != "": state = "ativado"
+    elif enabled:
+        state = "normal"
+        if ui.pressed_id == "xeque": state = "pressionado"
+        elif ui.hover_id == "xeque": state = "hover"
+    var rr := r
+    if state == "pressionado": rr = Rect2(r.position + Vector2(0, 3), r.size)
+    if state == "ativado":
+        var p := 0.5 + 0.5 * sin(ui.t * 10.0)
+        for i in 5: draw_rect(rr.grow(4 + i * 4), Color(1.0, 0.25, 0.2, (0.22 - i * 0.04) * (0.6 + 0.4 * p)), false, 4.0)
+    var lt: Color = {"normal": Color("9aa1aa"), "hover": Color("b4bbc4"), "pressionado": Color("80868f"), "desabilitado": Color("5d6268"), "ativado": Color("b8a0a0")}[state]
+    var dk: Color = {"normal": Color("50565e"), "hover": Color("5f666f"), "pressionado": Color("3f444b"), "desabilitado": Color("33363b"), "ativado": Color("6e3a3a")}[state]
+    draw_rect(rr.grow(4), Color("0b0703"))
+    draw_rect(rr.grow(2), Color("2b2f35"))
+    grad(rr, lt, dk)
+    draw_rect(Rect2(rr.position.x, rr.position.y, rr.size.x, 3), Color(1, 1, 1, 0.35))
+    draw_rect(Rect2(rr.position.x, rr.end.y - 3, rr.size.x, 3), Color(0, 0, 0, 0.35))
+    # filete pontilhado e rebites (losangos azuis com borda dourada)
+    var inner := rr.grow(-12)
+    for x in range(int(inner.position.x) + 4, int(inner.end.x) - 4, 9):
+        draw_rect(Rect2(x, inner.position.y, 3, 1.5), Color(0, 0, 0, 0.3))
+        draw_rect(Rect2(x, inner.end.y, 3, 1.5), Color(0, 0, 0, 0.3))
+    for p in [Vector2(rr.position.x + 22, rr.position.y + 22), Vector2(rr.end.x - 22, rr.position.y + 22), Vector2(rr.position.x + 22, rr.end.y - 22), Vector2(rr.end.x - 22, rr.end.y - 22)]:
+        draw_colored_polygon(PackedVector2Array([p + Vector2(0, -10), p + Vector2(10, 0), p + Vector2(0, 10), p + Vector2(-10, 0)]), Color("c99a3a"))
+        draw_colored_polygon(PackedVector2Array([p + Vector2(0, -7), p + Vector2(7, 0), p + Vector2(0, 7), p + Vector2(-7, 0)]), Color("27354d"))
+    for p in [Vector2(rr.position.x + 22, rr.get_center().y), Vector2(rr.end.x - 22, rr.get_center().y)]:
+        draw_colored_polygon(PackedVector2Array([p + Vector2(0, -7), p + Vector2(4, 0), p + Vector2(0, 7), p + Vector2(-4, 0)]), Color("e7b64c"))
+    var fs := 92
+    var tcol := Color("f4f6f9") if state != "desabilitado" else Color("9ca0a6")
+    var by := rr.get_center().y + fs * 0.405
+    text("XEQUE", Vector2(rr.position.x + 3, by + 5), "o7_sp3", fs, Color(0, 0, 0, 0.45), rr.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+    otext("XEQUE", Vector2(rr.position.x, by), "o7_sp3", fs, tcol, rr.size.x, HORIZONTAL_ALIGNMENT_CENTER, 7)
+    if enabled and ui.phase == "": hit(r, "xeque")
+
+func _desk_play_button():
+    var r: Rect2 = L().play
+    var g = ui.g
+    var my_turn: bool = ui.phase == "" and g.state == Rules.TURN_WAITING and g.turn == 0 and not ui.input_locked
+    var id := "play"
+    var enabled: bool = ui.can_human_play()
+    if my_turn and not enabled:
+        id = "play_empty"
+        enabled = true
+    var hov: bool = ui.hover_id == id and enabled
+    var down: bool = ui.pressed_id == id and enabled
+    var rr := Rect2(r.position + Vector2(0, 2 if down else 0), r.size)
+    var top := Color("b1182e") if enabled else Color("4e1d24")
+    var bot := Color("6c0915") if enabled else Color("2c1014")
+    if hov: top = top.lightened(0.12)
+    npanel(rr, 0.0, FRAME_GOLD if enabled else Color("7a6440"), false, false, top, bot)
+    draw_rect(Rect2(rr.position.x + 5, rr.position.y + 5, rr.size.x - 10, 3), Color(1, 1, 1, 0.12))
+    var label := "JOGAR CARTAS"
+    var f := fit(label, "o7_sp", 42, rr.size.x - 50)
+    otext(label, Vector2(rr.position.x, rr.get_center().y + f * 0.405), "o7_sp", f, Color("f8dc8e") if enabled else Color(0.9, 0.82, 0.7, 0.5), rr.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
+    if enabled: hit(r, id)
+
+func _desk_hint():
+    var h = L().hint
+    var lines: Array = ui.help_text()
+    if String(lines[0]).is_empty(): return
+    for i in 2:
+        var parts := String(lines[i]).split("*")
+        var total := 0.0
+        for p in parts: total += tw(p, "o6_sp", 21)
+        var x: float = h[0].x - total / 2.0
+        var y: float = h[0].y + i * 27.0
+        for j in parts.size():
+            otext(parts[j], Vector2(x, y), "o6_sp", 21, Color("ffd257") if j % 2 == 1 else Color("f3ead6"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
+            x += tw(parts[j], "o6_sp", 21)
+
+## Botões quadrados de baixo (tela cheia, música, efeitos, ajuda, menu): azul-marinho com moldura dourada.
+func desk_square(r: Rect2, hov: bool):
+    npanel(r, 0.0, FRAME_GOLD if not hov else FRAME_HI, false, false, Color("162a52"), Color("0b1733"))
+
+# ---------------------------------------------------------------- R55 · mão e revelação (PC)
+const DESK_CARD_W := 170.0
+func _desk_hand_layout() -> Array:
+    var n: int = ui.g.hands[0].size()
+    var step := minf(DESK_CARD_W * 0.97, (820.0 - DESK_CARD_W) / maxf(1.0, n - 1.0))
+    var mid := (n - 1) / 2.0
+    var out := []
+    for i in n:
+        var off := i - mid
+        var c := Vector2(960.0 + off * step, 922.0 + off * off * 2.5)
+        if i in ui.selected: c.y -= 30.0
+        out.append({"c": c, "rot": 0.0, "sc": DESK_CARD_W / 360.0})
+    return out
+
+func _desk_hand():
+    var g = ui.g
+    var hand: Array = g.hands[0]
+    var lay := _desk_hand_layout()
+    var my_turn: bool = ui.phase == "" and g.turn == 0 and g.state == Rules.TURN_WAITING and not ui.input_locked
+    var landed: int = ui.deal_landed(0)
+    var sz := Vector2(DESK_CARD_W, DESK_CARD_W * 1.4)
+    for i in hand.size():
+        if i >= landed: continue
+        var c: Vector2 = lay[i].c
+        if my_turn and not (i in ui.selected):
+            c.y -= 5.0 * (0.5 + 0.5 * sin(ui.t * 4.0 - i * 0.7))     # SUA VEZ: as cartas "respiram"
+        var rect := Rect2(c - sz / 2.0, sz)
+        if i in ui.selected:
+            var a := 0.55 + 0.25 * sin(ui.t * 6.0)
+            for gi in 4: draw_rect(rect.grow(3 + gi * 3), Color(1, 0.85, 0.35, a * (0.5 - gi * 0.11)), false, 3.0)
+            draw_rect(rect.grow(2), Color("ffd257"), false, 3.0)
+        elif my_turn:
+            for gk in 3: draw_rect(rect.grow(3 + gk * 4), Color(1.0, 0.82, 0.32, 0.12 - gk * 0.035), false, 4.0)
+        if hand[i] == Rules.JOKER:
+            var pj := 0.5 + 0.5 * sin(ui.t * 5.0 + i)
+            for gj in 3: draw_rect(rect.grow(4 + gj * 4 + pj * 3), Color(0.35, 1.0, 0.55, 0.26 - gj * 0.07), false, 4.0)
+        var mod := Color.WHITE if my_turn or g.turn != 0 else Color(0.92, 0.92, 0.92)
+        card_face(String(hand[i]), c, DESK_CARD_W, 0.0, mod)
+        if hand[i] == Rules.JOKER:
+            nchip(Rect2(c + Vector2(-58, -sz.y / 2.0 - 30), Vector2(116, 26)), "CORINGA", Color("1d7a4a"), Color("ffd257"), Color("fff1c2"), 17)
+        if my_turn: hit(rect, "card_%d" % i)
+        if ui.hover_id == "card_%d" % i and my_turn and not (i in ui.selected):
+            draw_rect(rect.grow(1), Color(1, 0.93, 0.6, 0.8), false, 2.0)
+
+func _desk_reveal_cards():
+    var r: Dictionary = ui.result
+    var rv: Array = L().reveal
+    var cards: Array = r.cards
+    var n := cards.size()
+    var w := 150.0
+    var base: Vector2 = rv[0]
+    for i in n:
+        var flip: float = ui.flip_progress(i) if ui.phase == "reveal" else 1.0
+        var off := i - (n - 1) / 2.0
+        var c := base + Vector2(off * w * 1.06, absf(off) * w * 0.12)
+        var rot := deg_to_rad(4.0 * off)
+        var wscale := absf(flip * 2.0 - 1.0)
+        var lie: bool = not Rules.is_true_card(cards[i], String(r.target))
+        if flip >= 0.5:
+            if flip >= 1.0 and lie:
+                draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k, ui.k))
+                draw_rect(Rect2(-Vector2(w, w * 1.4) / 2.0, Vector2(w, w * 1.4)).grow(5), Color("e02a36"), false, 5.0)
+                draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+            card_face(String(cards[i]), c, w, rot, Color.WHITE, wscale)
+        else:
+            var sz := Vector2(w, w * 1.4)
+            draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k * maxf(0.05, wscale), ui.k))
+            draw_texture_rect(Crisp.at(ui.CARD_BACK, sz * ui.k), Rect2(-sz / 2.0, sz), false)
+            draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))

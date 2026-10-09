@@ -1,0 +1,18 @@
+{
+ "rei": {
+  "word": "#ff5a52",
+  "legend_bg": "#120a06"
+ },
+ "rainha": {
+  "word": "#ffd257",
+  "legend_bg": "#120a06"
+ },
+ "cavalo": {
+  "word": "#4a7be0",
+  "legend_bg": "#120a06"
+ },
+ "peao": {
+  "word": "#2fae76",
+  "legend_bg": "#120a06"
+ }
+}

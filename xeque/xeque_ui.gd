@@ -36,6 +36,9 @@ const SFX := {
 const SFX_DB := {"xeque_hit": -2.0, "mate_boom": 0.0, "clock_tension": -4.0, "relief": -5.0, "victory_final": -4.0, "defeat_final": -4.0, "deck_intro": -6.0, "flip": -6.0, "voice_xeque": -1.0, "voice_mate": 0.0, "your_turn": -9.0, "xeque": -6.0, "mate": -3.0, "victory": -7.0, "defeat": -7.0, "elim": -6.0}
 const FONT_UI := preload("res://xeque/art/fontes/Jersey20-Regular.woff2")
 const FONT_TITLE := preload("res://xeque/art/fontes/Jacquard24-Regular.woff2")
+const FONT_OS7 := preload("res://marcha/art/fonts/oswald-latin-700-normal.woff")   # R55
+const FONT_OS6 := preload("res://marcha/art/fonts/oswald-latin-600-normal.woff")
+const LOGO_R55 := preload("res://xeque/art/interface/logo_r55.png")
 const TUTORIAL_BG := preload("res://xeque/art/telas/tutorial_fundo.png")
 const RESULT_BG := preload("res://xeque/art/telas/resultado_fundo.png")
 ## peças douradas do conjunto Ouro do jogo (as mesmas desenhadas nas cartas)
@@ -87,6 +90,7 @@ var k := 1.0
 var origin := Vector2.ZERO
 var fonts := {}
 var cards := {}
+var cards_clean := {}            # R55 · PC: cartas limpas (tools/xeque_card_blank_r55.py)
 var avatars := []
 var pieces := {}
 var clock_tex := {}
@@ -173,6 +177,8 @@ func setup(p_hub, p_stage):
 
 func _ready():
     for n in ["rei", "rainha", "cavalo", "peao"]: cards[n] = load("res://xeque/art/cartas/carta_%s.png" % n)
+    # R55 · PC: cartas sem o texto impresso (o nome, PEÇA/CORINGA e a linha pequena são desenhados ao vivo, nítidos)
+    for n in ["rei", "rainha", "cavalo", "peao"]: cards_clean[n] = load("res://xeque/art/cartas/carta_%s_limpa.png" % n)
     for s in ["neutro", "pulsando", "perigo", "quase", "disparado"]: clock_tex[s] = load("res://xeque/art/relogio/relogio_%s.png" % s)
     for s in ["normal", "hover", "pressionado", "desabilitado", "ativado"]: xeque_tex[s] = load("res://xeque/art/interface/botao_xeque_%s.png" % s)
     for n in PIECE_REGION:
@@ -180,7 +186,9 @@ func _ready():
         a.atlas = GOLD_PIECES
         a.region = PIECE_REGION[n]
         pieces[n] = a
-    for pair in [["ui", FONT_UI, 0], ["ui_sp", FONT_UI, 2], ["ui_sp4", FONT_UI, 4], ["title", FONT_TITLE, 0]]:
+    # R55 · PC (referência nova): Oswald 700/600, a fonte das placas e cartas da referência
+    for pair in [["ui", FONT_UI, 0], ["ui_sp", FONT_UI, 2], ["ui_sp4", FONT_UI, 4], ["title", FONT_TITLE, 0],
+            ["o7", FONT_OS7, 0], ["o7_sp", FONT_OS7, 1], ["o7_sp3", FONT_OS7, 3], ["o6", FONT_OS6, 0], ["o6_sp", FONT_OS6, 1]]:
         var fv := FontVariation.new()
         fv.base_font = pair[1]
         fv.spacing_glyph = pair[2]
