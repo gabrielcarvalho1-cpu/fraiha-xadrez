@@ -1146,7 +1146,10 @@ func avatar_texture(id: String = "") -> Texture2D:
     var atlas = ThemeCatalog.texture("res://cosmetics/v025/avatars.png")
     if atlas == null: return AVATAR
     var half = atlas.get_width()/2.0
-    return _slice(atlas,Rect2(0 if id == "archer" else half,0,half,atlas.get_height()))
+    # R55 · a arte da Arqueira/Mago traz moldura quadrada própria (filete e flores douradas): recortada fora,
+    # senão os cantos aparecem dentro do círculo do Perfil e ficam duas molduras nos cartões.
+    var inset: float = half * 0.065
+    return _slice(atlas,Rect2((0.0 if id == "archer" else half) + inset,inset,half - 2.0 * inset,atlas.get_height() - 2.0 * inset))
 
 ## Avatar liberado? Iniciais sempre; recompensas da escada pelo progresso dos bots; o do Fundador pelo
 ## Pacote Fundador (entitlements: servidor is_founder ou simulação de dev).

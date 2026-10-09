@@ -33,6 +33,9 @@ const FONT_BOLD := preload("res://account/fonts/Cinzel-Bold.woff")
 const FONT_SEMI := preload("res://account/fonts/Cinzel-SemiBold.woff")
 const MobileLayout := preload("res://ui_v022/mobile_layout.gd")
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
+## R55 · painel CONFIGURAÇÕES da partida no PC (arte do dono: tools/ui_ref/config/configuracoes_ref.png)
+const SETTINGS_FRAME := preload("res://ranked/art/desk_settings_frame.png")
+const SETTINGS_PANEL := Rect2(1359, 86, 309, 282)     # px da arte do PC (logo abaixo da engrenagem)
 const CREAM := Color("f3ede0")
 const GOLD := Color("f4ce7f")
 
@@ -80,6 +83,7 @@ var off := Vector2.ZERO      # canto da arte na tela
 var bg: Node2D               # arte por baixo do tabuleiro (z -15)
 var layer: CanvasLayer       # marcas de estado/hover e botões próprios do celular (por cima do HUD)
 var marks: Control
+var settings: Control          # R55 · painel CONFIGURAÇÕES (por cima de cartões e textos)
 var hits := []               # [Button, Rect2 de tela, id] → brilho de hover + estado (som desligado etc.)
 var _orig := {}              # registro do que foi alterado (desfeito em restore)
 var _circle: ShaderMaterial
@@ -109,6 +113,11 @@ func setup(owner_stage) -> void:
     _circle.shader = Shader.new()
     _circle.shader.code = "shader_type canvas_item;\nvoid fragment(){ vec4 c = texture(TEXTURE, UV); float d = distance(UV, vec2(0.5)); COLOR = vec4(c.rgb, c.a * (1.0 - smoothstep(0.47, 0.5, d))); }"
     _build_mobile_controls()
+    settings = SettingsPanel.new()
+    settings.skin = self
+    settings.name = "MatchSettings"
+    layer.add_child(settings)
+    settings.hide()
     layer.hide()
 
 # ------------------------------------------------------------------ quando vale
@@ -204,6 +213,7 @@ func restore() -> void:
     on = false
     kind = ""
     bg.visible = false
+    if settings != null: settings.hide()
     layer.hide()
     if menu != null: menu.hide()
     if stage.material_hud != null: stage.material_hud.queue_redraw()
@@ -361,6 +371,7 @@ func _apply_pc(M: Dictionary) -> void:
         _rec(dv.label, "visible", false)
     if stage.desk_mark != null: _rec(stage.desk_mark, "visible", false)   # R54 · MARCAR saiu da partida no PC (a arte não tem mais o ícone)
     _ghost(stage.desk_gear, M.gear, "gear")
+    _rec(stage.game, "external_settings", true)   # R55 · o painel é o CONFIGURAÇÕES da pele
     _ghost(stage.desk_music, M.music, "music")
     _ghost(stage.desk_fx, M.fx, "fx")
     _ghost(stage.desk_fullscreen, M.full, "full")
@@ -551,6 +562,7 @@ func _make_bot_after() -> void:
 
 ## A cada quadro: o que o jogo atualiza sozinho e precisa continuar no lugar da arte.
 func _keep() -> void:
+    _keep_settings()
     if stage.mode == "bot": _keep_bot()
     # R51 · o botão antigo ANALISAR PARTIDA (barra de cima) cobria os ícones da arte: com a pele ele não aparece
     # (contra o bot: ANALISAR no lugar do DESISTIR; no Ranked: no painel de resultado; no celular: menu ⋮)
@@ -883,3 +895,195 @@ class Marks extends Control:
             else: cur = t
         if not cur.is_empty(): out.append(cur)
         return out
+
+# ------------------------------------------------------------------ R55 · CONFIGURAÇÕES (PC)
+func _keep_settings() -> void:
+    if settings == null: return
+    var want: bool = kind == "pc" and stage.game != null and bool(stage.game.settings_open)
+    if want:
+        var r := R(SETTINGS_PANEL)
+        settings.position = r.position
+        settings.size = r.size
+        settings.pointer_x = R(PC.gear).get_center().x - r.position.x
+        settings.gear_rect = R(PC.gear)
+        if not settings.visible: settings.show()
+        settings.queue_redraw()
+    elif settings.visible:
+        settings.hide()
+
+func close_settings() -> void:
+    if stage.game != null and stage.game.settings_open: stage.game.toggle_settings()
+    if settings != null: settings.hide()
+
+## Estado de cada linha: [ligado, disponível].
+func setting_state(id: String) -> Array:
+    match id:
+        "music": return [not ModeSound.music_muted(stage.hub), true]
+        "fx": return [not ModeSound.effects_muted(stage.hub), true]
+        "mic":
+            var vo = stage.get("voice")
+            var ok: bool = vo != null and stage.mode != "bot" and vo.available() and vo.in_match()
+            return [ok and String(vo.state) == "CONNECTED", ok]
+        "full":
+            var sm = stage.get("screen_mode")
+            return [sm != null and sm.on_cached(), sm != null and sm.supported()]
+    return [false, false]
+
+func toggle_setting(id: String) -> void:
+    if not bool(setting_state(id)[1]): return
+    match id:
+        "music": ModeSound.toggle_music(stage.hub)
+        "fx": ModeSound.toggle_effects(stage.hub)
+        "mic":
+            var vo = stage.get("voice")
+            if vo != null: vo.press()
+        "full":
+            var sm = stage.get("screen_mode")
+            if sm != null: sm.toggle()
+    for b in [stage.desk_music, stage.desk_fx, stage.desk_fullscreen]:
+        if b != null: b.queue_redraw()
+    marks.queue_redraw()
+    if settings != null: settings.queue_redraw()
+
+## Painel na arte enviada: moldura de madeira (PNG) + cabeçalho, ícones, textos e chaves desenhados ao vivo.
+## Medidas em px da arte enviada (266 x 243); u = px de tela por px da arte.
+class SettingsPanel extends Control:
+    const ROWS := [["music", "Música", 73.0], ["fx", "Efeitos sonoros", 117.0], ["mic", "Microfone", 161.5], ["full", "Tela cheia", 206.0]]
+    const TITLE := "CONFIGURAÇÕES"
+    var skin
+    var pointer_x := 0.0
+    var gear_rect := Rect2()
+    var hover := ""
+
+    func _init():
+        mouse_filter = Control.MOUSE_FILTER_STOP
+
+    func u() -> float:
+        return size.x / 266.0
+
+    func row_rect(i: int) -> Rect2:
+        var k := u()
+        return Rect2(Vector2(14, ROWS[i][2] - 21) * k, Vector2(238, 42) * k)
+
+    func _gui_input(e):
+        if e is InputEventMouseMotion:
+            var h := ""
+            for i in ROWS.size():
+                if row_rect(i).has_point(e.position): h = ROWS[i][0]
+            if h != hover:
+                hover = h
+                queue_redraw()
+        elif e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT and e.pressed:
+            for i in ROWS.size():
+                if row_rect(i).has_point(e.position): skin.toggle_setting(ROWS[i][0])
+            accept_event()
+
+    ## Clique fora do painel (e fora da engrenagem, que já alterna) fecha.
+    func _input(e):
+        if not visible: return
+        if e is InputEventMouseButton and e.pressed:
+            var p: Vector2 = e.position
+            if not get_global_rect().has_point(p) and not gear_rect.has_point(p): skin.close_settings()
+        elif e is InputEventKey and e.pressed and e.keycode == KEY_ESCAPE:
+            skin.close_settings()
+            get_viewport().set_input_as_handled()
+
+    func _notification(what):
+        if what == NOTIFICATION_MOUSE_EXIT and hover != "":
+            hover = ""
+            queue_redraw()
+
+    func _draw():
+        var k := u()
+        # ponteiro laranja saindo da engrenagem
+        var px := pointer_x
+        var top := -2.0 * k
+        draw_colored_polygon(PackedVector2Array([Vector2(px, top - 14 * k), Vector2(px + 9 * k, top), Vector2(px - 9 * k, top)]), Color("e8901f"))
+        draw_texture_rect(skin.SETTINGS_FRAME, Rect2(Vector2.ZERO, size), false)
+        # cabeçalho: engrenagem + CONFIGURAÇÕES
+        var cream := Color("f3e3bd")
+        _gear(Vector2(37, 28) * k, 11.0 * k, cream)
+        var tf: Font = skin.FONT_BOLD
+        var tfs := int(round(15.5 * k))
+        while tfs > 8 and tf.get_string_size(TITLE, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs).x > 178 * k: tfs -= 1
+        var tb := Vector2(68 * k, 33.5 * k)
+        draw_string_outline(tf, tb, TITLE, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, maxi(2, int(round(2.5 * k))), Color(0, 0, 0, 0.75))
+        draw_string(tf, tb, TITLE, HORIZONTAL_ALIGNMENT_LEFT, -1, tfs, Color("f2d58a"))
+        var lf: Font = ThemeDB.fallback_font
+        var lfs := int(round(12.5 * k))
+        for i in ROWS.size():
+            var id: String = ROWS[i][0]
+            var cy: float = ROWS[i][2] * k
+            var st: Array = skin.setting_state(id)
+            var on: bool = st[0]
+            var ok: bool = st[1]
+            if hover == id and ok: draw_rect(row_rect(i), Color(1, 0.9, 0.6, 0.06))
+            if i > 0: draw_rect(Rect2(15 * k, cy - 22 * k, 236 * k, maxf(1.0, k)), Color(0.55, 0.6, 0.55, 0.22))
+            # quadradinho do ícone
+            var ib := Rect2(Vector2(21 * k, cy - 16.5 * k), Vector2(33, 33) * k)
+            draw_rect(ib, Color(0.13, 0.13, 0.1, 0.55))
+            var ic := cream if ok else Color(0.6, 0.6, 0.55)
+            _icon(id, ib.grow(-6 * k), ic, on)
+            var lc := Color("e8e3d6") if ok else Color(0.6, 0.62, 0.6)
+            draw_string(lf, Vector2(69 * k, cy + lfs * 0.36), ROWS[i][1], HORIZONTAL_ALIGNMENT_LEFT, -1, lfs, lc)
+            _switch(Rect2(Vector2(196 * k, cy - 13 * k), Vector2(45, 26) * k), on, ok)
+
+    func _switch(r: Rect2, on: bool, ok: bool):
+        var rad := r.size.y / 2.0
+        var track := Color("3c9a3a") if on else Color("4a4a4a")
+        if not ok: track = Color("343634")
+        draw_circle(r.position + Vector2(rad, rad), rad, track)
+        draw_circle(Vector2(r.end.x - rad, r.position.y + rad), rad, track)
+        draw_rect(Rect2(r.position.x + rad, r.position.y, r.size.x - 2 * rad, r.size.y), track)
+        var kx: float = (r.end.x - rad) if on else (r.position.x + rad)
+        var kc := Vector2(kx, r.position.y + rad)
+        draw_circle(kc + Vector2(0, 1), rad * 0.8, Color(0, 0, 0, 0.25))
+        draw_circle(kc, rad * 0.78, Color.WHITE if ok else Color(0.7, 0.7, 0.7))
+
+    func _gear(c: Vector2, r: float, col: Color):
+        var pts := PackedVector2Array()
+        for i in 16:
+            var a0 := TAU * (i / 2) / 8.0 + (0.0 if i % 2 == 0 else TAU / 16.0)
+            var a1 := a0 + TAU / 16.0
+            var rr := r if i % 2 == 0 else r * 0.74
+            pts.append(c + Vector2(cos(a0), sin(a0)) * rr)
+            pts.append(c + Vector2(cos(a1), sin(a1)) * rr)
+        draw_colored_polygon(pts, col)
+        draw_circle(c, r * 0.36, Color("15120d"))
+
+    ## Ícones da arte enviada (nota dupla, alto-falante com ondas, microfone, cantos da tela cheia).
+    func _icon(id: String, r: Rect2, col: Color, _on: bool):
+        var c := r.get_center()
+        var h := r.size.y
+        var w := maxf(1.5, h / 9.0)
+        match id:
+            "music":
+                var l := c + Vector2(-h * 0.22, h * 0.28)
+                var rr := c + Vector2(h * 0.26, h * 0.20)
+                draw_circle(l, h * 0.15, col)
+                draw_circle(rr, h * 0.15, col)
+                draw_line(l + Vector2(h * 0.13, 0), l + Vector2(h * 0.13, -h * 0.62), col, w)
+                draw_line(rr + Vector2(h * 0.13, 0), rr + Vector2(h * 0.13, -h * 0.62), col, w)
+                draw_colored_polygon(PackedVector2Array([l + Vector2(h * 0.13 - w / 2, -h * 0.62), rr + Vector2(h * 0.13 + w / 2, -h * 0.70), rr + Vector2(h * 0.13 + w / 2, -h * 0.52), l + Vector2(h * 0.13 - w / 2, -h * 0.44)]), col)
+            "fx":
+                var o := c + Vector2(-h * 0.18, 0)
+                draw_rect(Rect2(o + Vector2(-h * 0.30, -h * 0.15), Vector2(h * 0.2, h * 0.3)), col)
+                draw_colored_polygon(PackedVector2Array([o + Vector2(-h * 0.11, -h * 0.15), o + Vector2(h * 0.18, -h * 0.40), o + Vector2(h * 0.18, h * 0.40), o + Vector2(-h * 0.11, h * 0.15)]), col)
+                for k in [0.20, 0.36]:
+                    draw_arc(o + Vector2(h * 0.20, 0), h * k, deg_to_rad(-50), deg_to_rad(50), 12, col, w * 0.9)
+            "mic":
+                var cap := Rect2(c + Vector2(-h * 0.15, -h * 0.48), Vector2(h * 0.3, h * 0.56))
+                draw_circle(Vector2(c.x, cap.position.y + h * 0.15), h * 0.15, col)
+                draw_circle(Vector2(c.x, cap.end.y - h * 0.15), h * 0.15, col)
+                draw_rect(Rect2(cap.position.x, cap.position.y + h * 0.15, cap.size.x, cap.size.y - h * 0.3), col)
+                draw_arc(c + Vector2(0, -h * 0.02), h * 0.27, 0.15, PI - 0.15, 14, col, w * 0.9)
+                draw_line(c + Vector2(0, h * 0.25), c + Vector2(0, h * 0.40), col, w)
+                draw_line(c + Vector2(-h * 0.17, h * 0.42), c + Vector2(h * 0.17, h * 0.42), col, w)
+            "full":
+                var a := h * 0.42
+                var arm := h * 0.22
+                for dx in [-1, 1]:
+                    for dy in [-1, 1]:
+                        var p := c + Vector2(dx, dy) * a
+                        draw_line(p, p - Vector2(dx * arm, 0), col, w)
+                        draw_line(p - Vector2(0, w / 2.0 * dy), p - Vector2(0, dy * arm), col, w)

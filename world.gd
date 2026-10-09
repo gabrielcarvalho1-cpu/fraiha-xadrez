@@ -102,6 +102,7 @@ var _drag_submit := []           # [from, to] do lance que o jogador acabou de s
 const PREMOVE_TINT := Color(0.22,0.52,0.95,0.50)
 # Desktop: engrenagem e reiniciar viram botões do HUD (stage); o tabuleiro só desenha o painel de opções.
 var external_hud := false
+var external_settings := false   # R55 · com a pele do PC o painel é o CONFIGURAÇÕES dela (por cima do HUD)
 var hide_status := false        # R49 · pele do tabuleiro Ranked: sem a plaquinha de status embaixo (o relógio da vez acende)
 var presentation_rect := Rect2(0, 0, 1024, 1024)
 var settings_panel := Rect2(776, 60, 232, 136)
@@ -449,7 +450,7 @@ func _draw_status_and_settings(font):
         draw_style_box(_panel_style(), Rect2(512-label_width/2-18, 851, label_width+36, 38))
         draw_string(font,Vector2(512-label_width/2,877),status,HORIZONTAL_ALIGNMENT_LEFT,-1,18,Color("#eee0bc"))
 
-    if settings_open:
+    if settings_open and not external_settings:
         var panel=settings_panel
         var frame := StyleBoxFlat.new()
         frame.bg_color = Color(0.06,0.13,0.09,0.95)
@@ -589,7 +590,7 @@ func _unhandled_input(event):
         online.send_action("restart")
         return
     var local_event = make_input_local(event)
-    if local_event is InputEventMouseButton and local_event.button_index == MOUSE_BUTTON_LEFT and local_event.pressed and settings_open:
+    if local_event is InputEventMouseButton and local_event.button_index == MOUSE_BUTTON_LEFT and local_event.pressed and settings_open and not external_settings:
         if fullscreen_button.has_point(local_event.position):
             get_parent().toggle_fullscreen()
             get_viewport().set_input_as_handled()
