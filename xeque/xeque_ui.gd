@@ -68,6 +68,7 @@ const SEAT_PROFILE := ["", "cauteloso", "equilibrado", "blefador"]
 const SEAT_AVATAR := ["", "res://profile/avatars/ferro_reward.png", "res://profile/avatars/ouro_reward.png", "res://profile/avatars/bronze_reward.png"]
 const DEFAULT_YOU := "res://profile/avatars/prata_reward.png"
 const PlayerPortrait := preload("res://profile/player_portrait.gd")
+const MobileLayout := preload("res://ui_v022/mobile_layout.gd")
 
 var hub = null
 var stage = null
@@ -271,7 +272,9 @@ func _relayout():
     if root == null: return
     var vs := root.get_viewport_rect().size
     if vs.y > vs.x * 1.15: layout = "portrait"
-    elif vs.x / maxf(1.0, vs.y) >= 1.95: layout = "landscape"
+    # R55 · o layout "celular deitado" é só de celular: no PC uma janela larga (ex.: 1920x950 do navegador,
+    # sem as abas) continua no layout do PC (centralizado; a cena desfocada cobre as laterais).
+    elif vs.x / maxf(1.0, vs.y) >= 1.95 and MobileLayout.active(get_viewport()): layout = "landscape"
     else: layout = "desktop"
     design = {"desktop": Vector2(1920, 1080), "portrait": Vector2(1080, 1920), "landscape": Vector2(1950, 900)}[layout]
     k = minf(vs.x / design.x, vs.y / design.y)

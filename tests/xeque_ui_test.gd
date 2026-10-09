@@ -222,11 +222,23 @@ func run():
     check(audio.music_override == "" and audio.music_path != "res://xeque/audio/musica_xeque.mp3", "saindo do modo a música da Home volta")
     # ---------- formatos ----------
     hub.open_xeque()
+    var ML := preload("res://ui_v022/mobile_layout.gd")
     for sz in [Vector2i(1080, 1920), Vector2i(1950, 900), Vector2i(1920, 1080)]:
         root.size = sz
         await frames(3)
         ui._relayout()
-        check(ui.layout == {Vector2i(1080, 1920): "portrait", Vector2i(1950, 900): "landscape", Vector2i(1920, 1080): "desktop"}[sz], "formato %dx%d → %s" % [sz.x, sz.y, ui.layout])
+        check(ui.layout == {Vector2i(1080, 1920): "portrait", Vector2i(1950, 900): "desktop", Vector2i(1920, 1080): "desktop"}[sz], "PC: formato %dx%d → %s" % [sz.x, sz.y, ui.layout])
+    # R55 · PC com janela larga do navegador (ex.: 1920x950): layout novo do PC, não o de celular deitado
+    root.size = Vector2i(1920, 950)
+    await frames(3)
+    ui._relayout()
+    check(ui.layout == "desktop", "PC janela larga 1920x950 → desktop (antes caía no layout de celular)")
+    ML._active_cache = 1        # simula celular
+    root.size = Vector2i(1950, 900)
+    await frames(3)
+    ui._relayout()
+    check(ui.layout == "landscape", "celular deitado 1950x900 → landscape")
+    ML._active_cache = -1
     ui.close()
     for p in BACKUP:
         var gp := ProjectSettings.globalize_path(p)
