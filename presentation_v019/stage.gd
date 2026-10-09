@@ -1306,7 +1306,9 @@ func _input(event):
         toggle_fullscreen()   # atalho de desktop (sem botão e sem preferência salva)
         get_viewport().set_input_as_handled()
     elif event.keycode == KEY_ESCAPE:
-        if navigation_dialog.visible:
+        if is_instance_valid(account_ui) and account_ui.is_open():
+            account_ui.close()
+        elif navigation_dialog.visible:
             _cancel_navigation()
         else:
             return_to_home()

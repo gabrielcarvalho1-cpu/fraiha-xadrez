@@ -84,10 +84,12 @@ func _back_button():
     var world = stage.get_node("World")
     var hub = stage.get_node("MainHub")
     verify(stage.mode == "home", "começa na Home")
+    verify(stage.account_ui.is_open(), "modal de login começa aberto sem sessão salva")
 
     stage._notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
     await process_frame
     await process_frame
+    verify(not stage.account_ui.is_open(), "Voltar fecha primeiro o modal de login")
     verify(stage.mode == "home" and is_instance_valid(stage) and stage.is_inside_tree(), "Voltar na Home não encerra o app")
 
     hub.play_local_requested.emit()
