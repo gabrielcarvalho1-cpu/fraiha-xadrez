@@ -18,6 +18,8 @@ signal bot_progress_failed(code: String, message: String, bot_id: String)
 signal cosmetics_state(data: Dictionary)      # R31: {avatar_id, badge, title, frame} vindos do acct_state
 signal cosmetics_saved(data: Dictionary)
 signal cosmetics_failed(code: String, message: String, field: String)
+signal status_saved(status: String)            # R55: status do perfil (frase do cartão da Home)
+signal status_failed(code: String, message: String)
 
 const SESSION_FILE = "user://account_session.cfg"
 const GUEST_FILE = "user://guest_session.cfg"
@@ -430,6 +432,30 @@ func set_cosmetics(data: Dictionary) -> bool:
         if data.has(k): msg[k] = String(data[k])
     return _send(msg)
 
+## R55 · STATUS do perfil: até 80 caracteres, limpo igual ao servidor (online_v021/accounts/status.js).
+const STATUS_MAX := 80
+static func clean_status(text: String) -> String:
+    var out := ""
+    for ch in text:
+        var c: int = ch.unicode_at(0)
+        var bad := c < 0x20 or (c >= 0x7F and c <= 0x9F) or c == 0xAD or c == 0x61C or c == 0x180E \
+            or (c >= 0x200B and c <= 0x200F) or (c >= 0x202A and c <= 0x202E) or (c >= 0x2060 and c <= 0x206F) \
+            or c == 0xFEFF or (c >= 0xE000 and c <= 0xF8FF) or (c >= 0xFFF9 and c <= 0xFFFB)
+        out += " " if bad else ch
+    while out.contains("  "): out = out.replace("  ", " ")
+    return out.strip_edges()
+
+func profile_status() -> String:
+    return String(profile.get("status", "")) if has_profile() else ""
+
+func set_status(text: String) -> bool:
+    if not has_profile(): return false
+    var t := clean_status(text)
+    if t.length() > STATUS_MAX:
+        status_failed.emit("status_too_long", "Status muito longo (máximo %d caracteres)." % STATUS_MAX)
+        return false
+    return _send({"type": "acct_set_status", "status": t})
+
 func check_nickname(nick: String) -> bool:
     return _send({"type": "acct_check_nickname", "nickname": clean_nickname(nick)})
 
@@ -565,6 +591,11 @@ func _receive(msg: Dictionary):
     elif type == "acct_avatar_saved":
         var url = msg.get("avatar_url")
         avatar_saved.emit(String(url) if url != null else "")
+    elif type == "acct_status_saved":
+        profile["status"] = String(msg.get("status", ""))
+        status_saved.emit(String(profile.status))
+    elif type == "acct_status_error":
+        status_failed.emit(String(msg.get("code", "")), String(msg.get("message", "")))
     elif type == "acct_cosmetics_saved":
         cosmetics_saved.emit(msg)
     elif type == "acct_cosmetics_error":

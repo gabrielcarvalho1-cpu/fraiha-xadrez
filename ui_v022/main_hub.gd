@@ -2154,6 +2154,7 @@ func _backdrop_for(tex: Texture2D) -> Texture2D:
     return blurred
 
 func show_page(id: String):
+    close_status_editor()   # R55 · o editor do status é só da Home
     if pages_pending and id != "main":
         pages_pending = false
         _build_pages()
@@ -2411,6 +2412,7 @@ func open_marcha():
 ## Club ativo (real OU simulação) → atualiza a fita da Home e o cartão do jogador.
 ## Selo Fundador: cartão da Home (ao lado do nome), Perfil e cartão do celular.
 func refresh_founder():
+    if ref_mode: _fit_ref_name()   # R55 · o nome muda (conta, edição): reajusta o tamanho
     var badge := current_badge()
     var title := current_title()
     var on := not badge.is_empty() or not title.is_empty()
@@ -2613,6 +2615,34 @@ func public_cosmetics() -> Dictionary:
 # ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
 # Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo
 # (retrato, nickname, liga/PL, barra, insígnia, texto da conta) e as áreas de clique.
+# R55 · PAINEL DE PERFIL da Home (PC): moldura nova do dono (tools/home_profile_art.py) sobre o painel antigo.
+# Medidas em px da arte da Home (1672x941): referência 1774x887 escalada para PROFILE_FRAME_RECT.
+const PROFILE_FRAME_TEX := preload("res://ui_v022/art/home_profile_frame.png")
+const PROFILE_UNDER_TEX := preload("res://ui_v022/art/home_profile_under.png")   # a Home sem o painel antigo
+const PROFILE_UNDER_POS := Vector2(1196, 6)
+const PROFILE_FRAME_RECT := Rect2(1198, 19.5, 470, 235)
+const PROFILE_BODY := Rect2(1214, 36.5, 438, 200)     # área clicável (corpo da moldura, sem os ornamentos de fora)
+const PROFILE_PORTRAIT := Rect2(1255, 78, 85, 74)
+const PROFILE_NAME := Rect2(1410, 64, 150, 40)
+const PROFILE_LEAGUE := Rect2(1360, 102, 196, 30)
+const PROFILE_BAR := Rect2(1366, 137, 176, 10)
+const PROFILE_BADGE := Rect2(1561, 82, 60, 76)
+const PROFILE_STATUS := Rect2(1290, 172, 284, 46)
+const PROFILE_STATUS_EDIT := Rect2(1580, 178, 22, 22)
+const PROFILE_NAME_FONT := preload("res://ui_kit/fonts/Alegreya-Bold.woff")
+const PROFILE_LEAGUE_FONT := preload("res://ui_kit/fonts/Alegreya-Bold.woff")
+const PROFILE_STATUS_FONT := preload("res://ui_kit/fonts/Alegreya-Medium.woff")
+const STATUS_DEFAULT := "“O xadrez é a ginástica da inteligência.”"
+const STATUS_DEFAULT_AUTHOR := "— Blaise Pascal"
+var ref_status_label: Label
+var ref_status_author: Label
+var ref_status_edit: Button
+var status_editor: PanelContainer
+var status_input: LineEdit
+var status_count: Label
+var status_note: Label
+var status_save: Button
+
 const REF_MENU_RECT = Rect2(616.56,319.6,430.56,529.0)   # R36/R43: miolo do menu da arte v7 (entre os pilares, menu 92%)
 var ref_nodes: Array = []
 var ref_mode := false
@@ -2666,13 +2696,264 @@ func _refresh_league_widgets():
     var txt := "%s · %d / 100 PL" % [cur.display_name, int(d.lp)]
     var k := clampf(float(d.lp) / 100.0, 0.0, 1.0)
     if is_instance_valid(ref_league_label): ref_league_label.text = txt
-    if is_instance_valid(ref_league_fill): ref_league_fill.size.x = 177.0 * k
+    if is_instance_valid(ref_league_fill): ref_league_fill.size.x = PROFILE_BAR.size.x * k
     if is_instance_valid(desk_league_label): desk_league_label.text = txt
     if is_instance_valid(desk_league_bar) and desk_league_bar.has_method("set_value"): desk_league_bar.set_value(float(d.lp))
     elif is_instance_valid(desk_league_bar) and "value" in desk_league_bar: desk_league_bar.value = float(d.lp)
     if not desk_profile.is_empty() and is_instance_valid(desk_profile.portrait): attach_league_frame(desk_profile.portrait)
     _use_profile(ref_mode)
     if is_instance_valid(mobile_ui) and mobile_ui.has_method("queue_redraw_cards"): mobile_ui.queue_redraw_cards()
+
+## R55 · moldura nova + remendo (a Home sem o painel antigo) + STATUS do jogador com lápis para editar.
+func _build_profile_frame(pbtn: Control):
+    var under := TextureRect.new()
+    under.name = "RefProfileUnder"
+    under.texture = PROFILE_UNDER_TEX
+    under.position = PROFILE_UNDER_POS - pbtn.position
+    under.size = PROFILE_UNDER_TEX.get_size()
+    under.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pbtn.add_child(under)
+    var frame := TextureRect.new()
+    frame.name = "RefProfileFrame"
+    frame.texture = PROFILE_FRAME_TEX
+    frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    frame.stretch_mode = TextureRect.STRETCH_SCALE
+    frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+    frame.position = PROFILE_FRAME_RECT.position - pbtn.position
+    frame.size = PROFILE_FRAME_RECT.size
+    frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pbtn.add_child(frame)
+    ref_status_label = Label.new()
+    ref_status_label.name = "RefProfileStatus"
+    ref_status_label.add_theme_font_override("font", PROFILE_STATUS_FONT)
+    ref_status_label.add_theme_font_size_override("font_size", 16)
+    ref_status_label.add_theme_color_override("font_color", Color("f1e6cc"))
+    ref_status_label.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    ref_status_label.add_theme_constant_override("outline_size", 3)
+    ref_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    ref_status_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+    ref_status_label.position = PROFILE_STATUS.position - pbtn.position
+    ref_status_label.size = PROFILE_STATUS.size
+    ref_status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pbtn.add_child(ref_status_label)
+    ref_status_author = Label.new()
+    ref_status_author.name = "RefProfileStatusAuthor"
+    ref_status_author.text = STATUS_DEFAULT_AUTHOR
+    ref_status_author.add_theme_font_override("font", PROFILE_STATUS_FONT)
+    ref_status_author.add_theme_font_size_override("font_size", 16)
+    ref_status_author.add_theme_color_override("font_color", Color("f1e6cc"))
+    ref_status_author.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    ref_status_author.add_theme_constant_override("outline_size", 3)
+    ref_status_author.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    ref_status_author.position = Vector2(PROFILE_STATUS.position.x, PROFILE_STATUS.position.y + 22) - pbtn.position
+    ref_status_author.size = Vector2(PROFILE_STATUS.size.x - 6, 22)
+    ref_status_author.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    pbtn.add_child(ref_status_author)
+    # lápis: editar o status (não abre o Perfil)
+    ref_status_edit = Button.new()
+    ref_status_edit.name = "RefStatusEdit"
+    ref_status_edit.tooltip_text = "Editar status"
+    ref_status_edit.focus_mode = Control.FOCUS_NONE
+    ref_status_edit.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    ref_status_edit.position = PROFILE_STATUS_EDIT.position - pbtn.position
+    ref_status_edit.size = PROFILE_STATUS_EDIT.size
+    for st in ["normal", "hover", "pressed", "focus", "disabled"]:
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = Color(0.05, 0.12, 0.08, 0.0 if st == "normal" else 0.75)
+        sb.set_corner_radius_all(4)
+        ref_status_edit.add_theme_stylebox_override(st, sb)
+    ref_status_edit.draw.connect(func(): _draw_pencil(ref_status_edit))
+    ref_status_edit.mouse_entered.connect(ref_status_edit.queue_redraw)
+    ref_status_edit.mouse_exited.connect(ref_status_edit.queue_redraw)
+    ref_status_edit.pressed.connect(open_status_editor)
+    pbtn.add_child(ref_status_edit)
+    refresh_profile_status()
+
+## Lápis dourado desenhado (sem fonte de ícones).
+func _draw_pencil(b: Control):
+    var col := Color("ffe39a") if b.is_hovered() else Color("e7c46e")
+    var r := Rect2(Vector2.ZERO, b.size).grow(-3)
+    var a := r.position + Vector2(r.size.x * 0.18, r.size.y * 0.82)
+    var z := r.position + Vector2(r.size.x * 0.84, r.size.y * 0.16)
+    var d := (z - a).normalized()
+    var n := Vector2(-d.y, d.x) * r.size.x * 0.13
+    var tip := a - d * r.size.x * 0.12
+    b.draw_colored_polygon(PackedVector2Array([a + n, z + n, z - n, a - n]), col)
+    b.draw_colored_polygon(PackedVector2Array([a + n, a - n, tip]), Color("f6e9c8"))
+    b.draw_line(z + n * 1.1 - d * r.size.x * 0.16, z - n * 1.1 - d * r.size.x * 0.16, Color(0.12, 0.08, 0.03), 1.5)
+
+## Quebra o status em no máximo 2 linhas na largura do painel. Devolve [texto com \\n, tamanho da letra].
+func _wrap_status(text: String) -> Array:
+    var f: Font = PROFILE_STATUS_FONT
+    var room: float = PROFILE_STATUS.size.x - 8.0
+    for fs in [16, 15, 14, 13]:
+        var lines := _wrap_words(text, f, fs, room)
+        if lines.size() <= 2: return ["\n".join(lines), fs]
+    var l2 := _wrap_words(text, f, 13, room)
+    var second := String(l2[1])
+    while second.length() > 1 and f.get_string_size(second + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x > room: second = second.left(-1)
+    return [String(l2[0]) + "\n" + second.strip_edges() + "…", 13]
+
+static func _wrap_words(text: String, f: Font, fs: int, room: float) -> Array:
+    var lines: Array = []
+    var cur := ""
+    for w in text.split(" ", false):
+        var tryline := w if cur.is_empty() else cur + " " + w
+        if f.get_string_size(tryline, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= room or cur.is_empty():
+            cur = tryline
+            # palavra sozinha maior que a linha (sem espaços): corta em pedaços
+            while f.get_string_size(cur, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > room and cur.length() > 1:
+                var cut := cur.length() - 1
+                while cut > 1 and f.get_string_size(cur.left(cut), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > room: cut -= 1
+                lines.append(cur.left(cut))
+                cur = cur.substr(cut)
+        else:
+            lines.append(cur)
+            cur = w
+    if not cur.is_empty(): lines.append(cur)
+    return lines
+
+## R55 · nome do painel: grande como na referência; nomes compridos diminuem até caber (sem "…").
+func _fit_ref_name():
+    if ref_profile.is_empty(): return
+    var nl: Label = ref_profile.name
+    var f: Font = PROFILE_NAME_FONT
+    var fs := 30
+    while fs > 16 and f.get_string_size(nl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > PROFILE_NAME.size.x - 4: fs -= 1
+    nl.add_theme_font_size_override("font_size", fs)
+    var h := ceilf(f.get_height(fs)) + 2.0          # a linha inteira precisa caber na caixa (senão o Label a esconde)
+    nl.custom_minimum_size.y = h
+    nl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    nl.position = Vector2(PROFILE_NAME.position.x, PROFILE_NAME.get_center().y - h / 2.0) - PROFILE_BODY.position
+    nl.size = Vector2(PROFILE_NAME.size.x, h)
+
+func profile_status_text() -> String:
+    if account != null and account.has_method("profile_status"): return String(account.profile_status())
+    return ""
+
+func refresh_profile_status():
+    if not is_instance_valid(ref_status_label): return
+    var st := profile_status_text()
+    if st.is_empty():
+        ref_status_label.text = STATUS_DEFAULT
+        ref_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        ref_status_author.visible = true
+        ref_status_label.add_theme_font_size_override("font_size", 16)
+    else:
+        ref_status_author.visible = false
+        # até 2 linhas, quebrando nas palavras; a letra diminui um pouco e, se ainda não couber, "…" no fim
+        var fit := _wrap_status("“%s”" % st)
+        ref_status_label.text = fit[0]
+        ref_status_label.add_theme_font_size_override("font_size", fit[1])
+    ref_status_edit.visible = ref_mode
+
+# ---------- R55 · editor do STATUS (janela pequena, logo abaixo do painel) ----------
+func open_status_editor():
+    if status_editor == null: _build_status_editor()
+    var logged: bool = account != null and account.has_profile()
+    status_input.text = profile_status_text()
+    status_input.editable = logged
+    status_save.disabled = not logged
+    status_note.text = "" if logged else "Entre na sua conta para salvar um status."
+    status_note.add_theme_color_override("font_color", MUTED)
+    _status_count()
+    status_editor.show()
+    if logged:
+        status_input.grab_focus()
+        status_input.caret_column = status_input.text.length()
+
+func close_status_editor():
+    if status_editor != null: status_editor.hide()
+
+func _status_count():
+    if status_count == null: return
+    var n: int = status_input.text.length()
+    status_count.text = "%d / %d" % [n, account.STATUS_MAX if account != null else 80]
+
+func save_status():
+    if account == null or not account.has_profile(): return
+    var t: String = account.clean_status(status_input.text)
+    if account.set_status(t):
+        status_save.disabled = true
+        status_note.text = "Salvando…"
+        status_note.add_theme_color_override("font_color", MUTED)
+    else:
+        status_note.text = "Sem conexão com o servidor. Tente de novo em instantes."
+        status_note.add_theme_color_override("font_color", Color("ff9d86"))
+
+func _on_status_saved(_st: String):
+    refresh_profile_status()
+    if status_editor != null and status_editor.visible:
+        status_save.disabled = false
+        close_status_editor()
+
+func _on_status_failed(_code: String, message: String):
+    if status_editor == null: return
+    status_save.disabled = not (account != null and account.has_profile())
+    status_note.text = message if not message.is_empty() else "Não foi possível salvar o status."
+    status_note.add_theme_color_override("font_color", Color("ff9d86"))
+
+func _build_status_editor():
+    status_editor = PanelContainer.new()
+    status_editor.name = "StatusEditor"
+    var sb := StyleBoxFlat.new()
+    sb.bg_color = Color(0.04, 0.11, 0.07, 0.97)
+    sb.border_color = Color("d9a93f")
+    sb.set_border_width_all(2)
+    sb.set_corner_radius_all(8)
+    sb.shadow_color = Color(0, 0, 0, 0.5)
+    sb.shadow_size = 8
+    sb.content_margin_left = 16; sb.content_margin_right = 16; sb.content_margin_top = 12; sb.content_margin_bottom = 12
+    status_editor.add_theme_stylebox_override("panel", sb)
+    status_editor.position = Vector2(PROFILE_FRAME_RECT.position.x + 30, PROFILE_FRAME_RECT.end.y - 6)
+    status_editor.size = Vector2(PROFILE_FRAME_RECT.size.x - 60, 0)
+    status_editor.custom_minimum_size = Vector2(PROFILE_FRAME_RECT.size.x - 60, 0)
+    status_editor.mouse_filter = Control.MOUSE_FILTER_STOP
+    canvas.add_child(status_editor)
+    var col := VBoxContainer.new()
+    col.add_theme_constant_override("separation", 8)
+    status_editor.add_child(col)
+    var title := Label.new()
+    title.text = "SEU STATUS"
+    title.add_theme_font_override("font", PROFILE_NAME_FONT)
+    title.add_theme_font_size_override("font_size", 18)
+    title.add_theme_color_override("font_color", GOLD)
+    col.add_child(title)
+    status_input = LineEdit.new()
+    status_input.name = "StatusInput"
+    status_input.max_length = 80
+    status_input.placeholder_text = "Escreva uma frase curta (deixe vazio para a frase padrão)"
+    status_input.add_theme_font_size_override("font_size", 16)
+    status_input.custom_minimum_size = Vector2(0, 38)
+    status_input.text_changed.connect(func(_t): _status_count())
+    status_input.text_submitted.connect(func(_t): save_status())
+    col.add_child(status_input)
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation", 10)
+    col.add_child(row)
+    status_count = Label.new()
+    status_count.add_theme_font_size_override("font_size", 13)
+    status_count.add_theme_color_override("font_color", MUTED)
+    row.add_child(status_count)
+    status_note = Label.new()
+    status_note.add_theme_font_size_override("font_size", 13)
+    status_note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    status_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    row.add_child(status_note)
+    var cancel := _hud_text_button("CANCELAR", Vector2(110, 36))
+    cancel.name = "StatusCancel"
+    cancel.pressed.connect(close_status_editor)
+    row.add_child(cancel)
+    status_save = _hud_text_button("SALVAR", Vector2(100, 36))
+    status_save.name = "StatusSave"
+    status_save.pressed.connect(save_status)
+    row.add_child(status_save)
+    status_editor.hide()
+
+func _unhandled_key_input(e):
+    if status_editor != null and status_editor.visible and e is InputEventKey and e.pressed and e.keycode == KEY_ESCAPE:
+        close_status_editor()
+        get_viewport().set_input_as_handled()
 
 func _is_ref_art(texture: Texture2D) -> bool:
     return texture == FOREST_V2
@@ -2682,13 +2963,14 @@ func _build_reference_chrome():
     var pbtn = TextureButton.new()
     pbtn.name = "RefProfileButton"
     pbtn.ignore_texture_size = true
-    pbtn.position = Vector2(1240,40)
-    pbtn.size = Vector2(390,130)
+    pbtn.position = PROFILE_BODY.position   # R55: painel novo (moldura do dono) por cima do antigo
+    pbtn.size = PROFILE_BODY.size
     pbtn.focus_mode = Control.FOCUS_ALL
     pbtn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     pbtn.tooltip_text = "Perfil"
     canvas.add_child(pbtn)
     ref_nodes.append(pbtn)
+    _build_profile_frame(pbtn)
     # CLUB FRAIHA: fita pendurada no cartão de perfil (entrada própria, fora de Configurações).
     # Canto superior esquerdo do HUD (antes ficava pendurado no cartão de perfil e invadia as páginas).
     club_entry = preload("res://monetization/club_home_entry.gd").new()
@@ -2709,8 +2991,8 @@ func _build_reference_chrome():
     var clip = Control.new()
     clip.name = "RefPortraitClip"
     clip.clip_contents = true
-    clip.position = Vector2(1256,66) - pbtn.position   # R47: dentro da moldura dourada da arte v8
-    clip.size = Vector2(86,84)
+    clip.position = PROFILE_PORTRAIT.position - pbtn.position   # R55: miolo da moldura do retrato (arte nova)
+    clip.size = PROFILE_PORTRAIT.size
     clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(clip)
     var portrait = TextureRect.new()
@@ -2730,21 +3012,34 @@ func _build_reference_chrome():
     pbtn.add_child(club_host)
     ref_profile_club_host = club_host
     attach_club_frame(club_host)
-    var name_label = _label(pbtn, player_name, 24)
+    var name_label = _label(pbtn, player_name, 30, Color("f8ebc8"))
     name_label.name = "RefProfileName"
+    name_label.add_theme_font_override("font", PROFILE_NAME_FONT)
+    name_label.add_theme_color_override("font_outline_color", Color(0.04, 0.03, 0.01, 0.9))
+    name_label.add_theme_constant_override("outline_size", 4)
     _single_line(name_label)
-    name_label.position = Vector2(1392,52) - pbtn.position
-    name_label.size = Vector2(150,36)
+    name_label.position = PROFILE_NAME.position - pbtn.position
+    name_label.size = PROFILE_NAME.size
     var current = LeagueCatalog.entry(league_profile.data.current_league,league_profile.data)
-    var league = _label(pbtn, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 18, GOLD)
+    var league = _label(pbtn, "%s · %d / 100 PL" % [current.display_name,league_profile.data.lp], 21, Color("f3dba0"))
+    league.add_theme_font_override("font", PROFILE_LEAGUE_FONT)
+    league.add_theme_color_override("font_outline_color", Color(0.04, 0.03, 0.01, 0.85))
+    league.add_theme_constant_override("outline_size", 3)
     ref_league_label = league
     _single_line(league)
-    league.position = Vector2(1360,87) - pbtn.position
-    league.size = Vector2(196,28)
+    league.position = PROFILE_LEAGUE.position - pbtn.position
+    league.size = PROFILE_LEAGUE.size
     var fill = ColorRect.new()
-    fill.color = GOLD
-    fill.position = Vector2(1365,121) - pbtn.position   # R36: dentro da barra dourada da arte v7
-    fill.size = Vector2(177.0 * clampf(league_profile.data.lp / 100.0, 0.0, 1.0), 5)
+    fill.color = Color("f2bd3c")
+    fill.position = PROFILE_BAR.position - pbtn.position   # R55: dentro do trilho da barra da arte nova
+    fill.size = Vector2(PROFILE_BAR.size.x * clampf(league_profile.data.lp / 100.0, 0.0, 1.0), PROFILE_BAR.size.y)
+    var shine = ColorRect.new()                              # brilho de cima do ouro (como na referência)
+    shine.color = Color(1.0, 0.93, 0.62, 0.75)
+    shine.position = Vector2.ZERO
+    shine.size = Vector2(0, PROFILE_BAR.size.y * 0.32)
+    shine.set_anchors_preset(Control.PRESET_TOP_WIDE)
+    shine.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    fill.add_child(shine)
     ref_league_fill = fill
     fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(fill)
@@ -2754,15 +3049,16 @@ func _build_reference_chrome():
     plate.bg_color = Color(0.0,0.13,0.07)
     plate.set_corner_radius_all(6)
     ref_badge_plate.add_theme_stylebox_override("panel", plate)
-    ref_badge_plate.position = Vector2(1558,56) - pbtn.position
-    ref_badge_plate.size = Vector2(68,96)
+    ref_badge_plate.position = PROFILE_BADGE.position - pbtn.position
+    ref_badge_plate.size = PROFILE_BADGE.size
+    ref_badge_plate.visible = false   # R55: a arte nova não traz insígnia pintada (a viva vale para todas as ligas)
     ref_badge_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(ref_badge_plate)
     ref_badge = TextureRect.new()
     ref_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     ref_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    ref_badge.position = Vector2(1560,60) - pbtn.position
-    ref_badge.size = Vector2(64,86)
+    ref_badge.position = PROFILE_BADGE.position - pbtn.position
+    ref_badge.size = PROFILE_BADGE.size
     ref_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(ref_badge)
     pbtn.pressed.connect(func(): show_page("profile"))
@@ -2884,6 +3180,8 @@ func _sync_chrome():
         if is_instance_valid(b): b.set_over_art(ref)
     if is_instance_valid(presentation_frame): presentation_frame.queue_redraw()
     for n in ref_nodes: n.visible = ref
+    close_status_editor()   # R55
+    if is_instance_valid(ref_status_edit): ref_status_edit.visible = ref
     for name in ["ProfilePanel","AccountPanel"]:
         var n = canvas.get_node_or_null(name)
         if n != null: n.visible = not ref
@@ -2939,6 +3237,7 @@ func _use_profile(ref: bool):
     profile_portrait = src.portrait
     profile_name.text = text
     profile_portrait.texture = avatar_texture()
+    if ref: _fit_ref_name()
     refresh_founder.call_deferred()
     if ref:
         if is_instance_valid(ref_profile_club_host): attach_club_frame(ref_profile_club_host)
@@ -2946,9 +3245,9 @@ func _use_profile(ref: bool):
         profile_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if avatar_id == "warrior" else TextureRect.STRETCH_KEEP_ASPECT_COVERED
         var league_id = String(league_profile.data.current_league)
         var madeira = league_id in ["madeira", "wood"]
-        ref_badge.texture = null if madeira else ThemeCatalog.badge_texture(league_id)
-        ref_badge.visible = not madeira
-        ref_badge_plate.visible = not madeira
+        ref_badge.texture = ThemeCatalog.badge_texture("madeira" if madeira else league_id)   # R55: todas as ligas, ao vivo
+        ref_badge.visible = true
+        ref_badge_plate.visible = false
     else:
         attach_league_frame(profile_portrait)
 
@@ -2986,6 +3285,9 @@ func bind_account(acc):
     if bot_progress != null: bot_progress.setup(acc)
     if nickname_editor != null and nickname_editor.account == null: nickname_editor.setup(acc, 18)
     acc.changed.connect(_on_account_changed)
+    if acc.has_signal("status_saved"):   # R55 · status do perfil
+        acc.status_saved.connect(_on_status_saved)
+        acc.status_failed.connect(_on_status_failed)
     acc.avatar_saved.connect(func(url):
         _server_avatar_url = String(url)
         # A cópia local é exatamente a foto que acabou de ser enviada: marca a URL para não baixar de novo.
@@ -3068,6 +3370,7 @@ var _server_avatar_url := ""   # última URL informada pelo servidor nesta sess�
 var _avatar_resent := {}       # contas para as quais a foto local já foi reenviada nesta sessão
 
 func _on_account_changed():
+    refresh_profile_status()
     _refresh_name_boxes()
     refresh_online_button()
     # Foto da conta ainda não está no cache local → baixa da URL pública.

@@ -186,6 +186,14 @@ class MemoryStore {
     p.updated_at = new Date().toISOString();
     return { profile: p };
   }
+  // ---------- R55: status do perfil (profiles.settings.status, jsonb da 0001) ----------
+  async setStatus(userId, status) {
+    const p = this.profiles.get(userId);
+    if (!p) return { error: 'Perfil não encontrado.', code: 'profile_missing' };
+    p.settings = { ...(p.settings || {}), status };
+    p.updated_at = new Date().toISOString();
+    return { profile: p };
+  }
   // ---------- Cota de análise (0005): N por dia UTC; Club = ilimitado ----------
   async analysisUsage(userId, day) {
     this.analysis = this.analysis || new Map();
@@ -432,6 +440,15 @@ class SupabaseStore {
       const rows = await this.req(path, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
       return { profile: rows[0], partial: true };
     }
+  }
+  // ---------- R55: status do perfil. settings é jsonb: lê, junta e grava (outras chaves ficam como estão) ----------
+  async setStatus(userId, status) {
+    const path = '/profiles?user_id=eq.' + encodeURIComponent(userId);
+    const cur = await this.req(path + '&select=settings');
+    if (!cur[0]) return { error: 'Perfil não encontrado.', code: 'profile_missing' };
+    const settings = { ...((cur[0] && cur[0].settings) || {}), status };
+    const rows = await this.req(path + '&select=*', { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ settings }) });
+    return { profile: rows[0] };
   }
   // ---------- Escada de bots (0006). Sem a tabela → erro PGRST205/42P01 (tratado como "não configurado"). ----------
   async getBotProgress(userId) {

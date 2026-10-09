@@ -17,6 +17,7 @@ const { Party } = require('./modes/party');
 const { VoiceService } = require('./voice/service');
 const { ModeControls, CLOSED_MESSAGE } = require('./admin/controls');   // FRAIHA Admin: ativar/desativar modos (autoridade no servidor)
 const Cosmetics = require('./accounts/cosmetics');
+const Status = require('./accounts/status');   // R55 · status do perfil
 
 const GUEST_TTL_MS = 24 * 3600e3;
 const SESSION_REVALIDATE_MS = 60e3;
@@ -317,7 +318,7 @@ class Backend {
     if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame, founder: look.founder, club: look.club, guest: false }); }
     else this.setIdentity(ws, null);
     // nickname_next_change_at: calculado pelo SERVIDOR (cooldown de 30 dias); o cliente só exibe.
-    const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile) } : null;
+    const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile), status: Status.of(profile) } : null;
     this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,
       needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind,
       ranked_modes: this.rankedModesOpen(), casual_modes: this.casualModesOpen(),
@@ -553,6 +554,19 @@ class Backend {
         this.presenceChanged(accountId);
         const look = Cosmetics.effective(r.profile, ent);
         return this.send(ws, { type: 'acct_cosmetics_saved', avatar_id: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame, partial: !!r.partial });
+      }
+      // ---------- R55: status do perfil (frase do cartão da Home) ----------
+      if (a === 'acct_set_status') {
+        if (!ws.profile) return this.fail(ws, 'Crie seu perfil primeiro.', { code: 'profile_missing' });
+        const now = Date.now();
+        if (ws.statusAt && now - ws.statusAt < 1500) return this.send(ws, { type: 'acct_status_error', code: 'rate_limited', message: 'Aguarde um instante.' });
+        ws.statusAt = now;
+        const v = Status.sanitize(m.status);
+        if (v.error) return this.send(ws, { type: 'acct_status_error', code: v.code, message: v.error });
+        const r = await op.wait(() => this.store.setStatus(accountId, v.status));
+        if (r.error) return this.send(ws, { type: 'acct_status_error', code: r.code || 'profile_error', message: r.error });
+        if (!(await this.checked(ws, revision, this.state(ws)))) return;
+        return this.send(ws, { type: 'acct_status_saved', status: Status.of(r.profile) });
       }
       // ---------- Nome público (0004) ----------
       if (a === 'acct_check_nickname') {
