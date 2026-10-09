@@ -2,6 +2,8 @@ extends SceneTree
 ## R55.2 · XEQUE no PC: painéis/molduras/cantoneiras e a placa do XEQUE pré-compostos (xeque/desk_paint.gd).
 ## Confere que as imagens NÃO são refeitas a cada quadro (só quando muda estado/tamanho), que redimensionar
 ## refaz na escala nova sem acumular cache, e que os draw calls/frame ficam na meta (≤ 430; R55.1 ≈ 590).
+## R55.3: a entrada da partida monta no máximo DeskPaint.BUDGET imagens por quadro e o resto (vinheta e cartas)
+## já vem preparado da tela "Como jogar".
 ## Uso: xvfb-run godot --rendering-driver opengl3 --path . -s tests/xeque_desk_cache_test.gd
 const DeskPaint := preload("res://xeque/desk_paint.gd")
 var failures := 0
@@ -34,8 +36,19 @@ func run():
 	stage.hub.menu_buttons[5].pressed.emit()
 	await frames(10)
 	var ui = stage.hub.xeque
+	# R55.3 · preparo na tela "Como jogar": vinheta e cartas nos tamanhos da mesa, um item por quadro
+	await frames(40)
+	var Crisp := preload("res://ui_v022/crisp_tex.gd")
+	check(ui._prewarm.is_empty() and ui.view.vignette != null and Crisp._cache.size() >= 12, "Como jogar: vinheta e cartas preparadas antes da partida (%d cartas)" % Crisp._cache.size())
 	ui.seed_override = 77
 	ui.start_game()
+	var pior := 0
+	var c_ini: int = Crisp._cache.size()
+	for i in 12:
+		var bb: int = DeskPaint.builds
+		await process_frame
+		pior = maxi(pior, DeskPaint.builds - bb)
+	check(pior <= DeskPaint.BUDGET and Crisp._cache.size() == c_ini, "entrada da partida: no máximo %d painéis por quadro (pior %d) e nenhuma carta reduzida na hora" % [DeskPaint.BUDGET, pior])
 	for k in 900:
 		await process_frame
 		if ui.mode == "game" and ui.g != null and ui.g.turn == 0 and ui.can_human_play(): break

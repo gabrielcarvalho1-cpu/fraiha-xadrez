@@ -220,6 +220,18 @@ func open():
     g = null
     _load_avatars()
     _relayout()
+    _prewarm = view.prewarm_jobs() if layout == "desktop" else []   # R55.3
+
+## R55.3 · PC: enquanto a tela "Como jogar" está aberta, o que a partida monta na hora é preparado antes —
+## vinheta da mesa e cartas reduzidas para os tamanhos exatos (mão, revelação, A MESA PEDE, verso na
+## distribuição) — UM item por quadro. Antes tudo isso caía nos primeiros quadros da partida (travadinha).
+var _prewarm: Array = []
+const Crisp := preload("res://ui_v022/crisp_tex.gd")
+func _prewarm_step():
+    if _prewarm.is_empty() or mode != "tutorial": return
+    var j: Array = _prewarm.pop_front()
+    if j[0] is String: view._vignette()
+    else: Crisp.at(j[0], j[1])
 
 func close():
     _popup_close()
@@ -357,6 +369,7 @@ var last_tick_s := -1
 func _process(delta):
     if not visible: return
     t += delta
+    _prewarm_step()
     if flash_t > 0.0:
         flash_t -= delta
         if flash_t <= 0.0: flash = ""

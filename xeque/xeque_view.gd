@@ -1435,6 +1435,9 @@ func grad(r: Rect2, top: Color, bot: Color):
 func npanel(r: Rect2, header := 0.0, border: Color = FRAME_GOLD, glow := false, wine_full := false, fill_t: Color = NAVY_T, fill_b: Color = NAVY_B):
     # R55.2 · pré-composto (xeque/desk_paint.gd): o mesmo desenho, 1 textura por quadro em vez de ~15–25 operações
     var c: Dictionary = DeskPaint.panel(r, ui.k, header, border, glow, wine_full, fill_t, fill_b, WINE_T, WINE_B, FRAME_HI)
+    if c.is_empty():      # R55.3 · imagem ainda na fila (limite por quadro): mesmo desenho, pelo caminho imediato
+        npanel_immediate(r, header, border, glow, wine_full, fill_t, fill_b)
+        return
     draw_texture_rect(c.tex, c.rect, false)
 
 ## R55 · desenho imediato original (referência do pré-composto; usado só nos testes de equivalência)
@@ -1793,7 +1796,8 @@ func _desk_xeque_button(active: bool):
     var dk: Color = {"normal": Color("50565e"), "hover": Color("5f666f"), "pressionado": Color("3f444b"), "desabilitado": Color("33363b"), "ativado": Color("6e3a3a")}[state]
     # R55.2 · placa de aço (borda, degradê, filete pontilhado e rebites) pré-composta por estado (desk_paint.gd)
     var plate: Dictionary = DeskPaint.steel(rr, ui.k, lt, dk)
-    draw_texture_rect(plate.tex, plate.rect, false)
+    if plate.is_empty(): _steel_immediate(rr, lt, dk)      # R55.3 · ainda na fila: desenho original
+    else: draw_texture_rect(plate.tex, plate.rect, false)
     var fs := 92
     var tcol := Color("f4f6f9") if state != "desabilitado" else Color("9ca0a6")
     var by := rr.get_center().y + fs * 0.405
@@ -1910,3 +1914,43 @@ func _desk_reveal_cards():
             draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k * maxf(0.05, wscale), ui.k))
             draw_texture_rect(Crisp.at(ui.CARD_BACK, sz * ui.k), Rect2(-sz / 2.0, sz), false)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+
+## R55 · placa de aço do XEQUE desenhada na hora (a mesma da imagem pré-composta; usada só enquanto a
+## imagem ainda está na fila de montagem — R55.3).
+func _steel_immediate(rr: Rect2, lt: Color, dk: Color):
+    draw_rect(rr.grow(4), Color("0b0703"))
+    draw_rect(rr.grow(2), Color("2b2f35"))
+    grad(rr, lt, dk)
+    draw_rect(Rect2(rr.position.x, rr.position.y, rr.size.x, 3), Color(1, 1, 1, 0.35))
+    draw_rect(Rect2(rr.position.x, rr.end.y - 3, rr.size.x, 3), Color(0, 0, 0, 0.35))
+    var inner := rr.grow(-12)
+    for x in range(int(inner.position.x) + 4, int(inner.end.x) - 4, 9):
+        draw_rect(Rect2(x, inner.position.y, 3, 1.5), Color(0, 0, 0, 0.3))
+        draw_rect(Rect2(x, inner.end.y, 3, 1.5), Color(0, 0, 0, 0.3))
+    for p in [Vector2(rr.position.x + 22, rr.position.y + 22), Vector2(rr.end.x - 22, rr.position.y + 22), Vector2(rr.position.x + 22, rr.end.y - 22), Vector2(rr.end.x - 22, rr.end.y - 22)]:
+        draw_colored_polygon(PackedVector2Array([p + Vector2(0, -10), p + Vector2(10, 0), p + Vector2(0, 10), p + Vector2(-10, 0)]), Color("c99a3a"))
+        draw_colored_polygon(PackedVector2Array([p + Vector2(0, -7), p + Vector2(7, 0), p + Vector2(0, 7), p + Vector2(-7, 0)]), Color("27354d"))
+    for p in [Vector2(rr.position.x + 22, rr.get_center().y), Vector2(rr.end.x - 22, rr.get_center().y)]:
+        draw_colored_polygon(PackedVector2Array([p + Vector2(0, -7), p + Vector2(4, 0), p + Vector2(0, 7), p + Vector2(-4, 0)]), Color("e7b64c"))
+
+## R55.3 · tamanhos das cartas da partida no PC (largura em px de referência): mão, revelação, A MESA PEDE.
+const PREWARM_CARD_W := [DESK_CARD_W, 150.0, 104.0]
+## Lista de reduções de carta que a partida no PC vai pedir (mesmos argumentos de card_face/Crisp.at).
+func prewarm_jobs() -> Array:
+    var out := []
+    out.append(["vinheta"])                       # vinheta da mesa (montada pixel a pixel no 1º desenho)
+    for w in PREWARM_CARD_W:
+        for kind in ["rei", "rainha", "cavalo", "peao"]:
+            var tex: Texture2D = ui.cards_clean.get(kind, ui.cards.get(kind))
+            out.append([tex, Vector2(w, w * 1.4) * ui.k])
+    # verso da carta na pilha, no voo e na distribuição (a escala varia de 2,0 a 2,6 × a da pilha)
+    var pl: Array = LAYOUTS["desktop"].pile
+    var seen := {}
+    for i in 31:
+        var sc: float = pl[1] * (2.0 + 0.6 * i / 30.0)
+        var px: Vector2 = ui.CARD_BACK.get_size() * sc * ui.k
+        var key := int(round(px.x / 4.0))
+        if seen.has(key): continue
+        seen[key] = true
+        out.append([ui.CARD_BACK, px])
+    return out

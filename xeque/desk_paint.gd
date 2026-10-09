@@ -11,6 +11,12 @@ const MARGIN := 4.0           # px de referência fora do painel (borda escura +
 const MARGIN_GLOW := 19.0     # com o halo (5 contornos de 3 px até grow 16)
 static var _cache := {}
 static var _k := -1.0            # escala atual: mudou (janela redimensionada) → as imagens antigas saem
+## R55.3 · no máximo BUDGET imagens novas por quadro: a entrada da partida não monta tudo de uma vez.
+## Quem pede e não tem orçamento recebe {} e desenha pelo caminho imediato original (o mesmo desenho)
+## nesse quadro; nos quadros seguintes a imagem fica pronta e passa a valer.
+const BUDGET := 2
+static var _frame := -1
+static var _left := 0
 static var builds := 0        # quantas imagens foram montadas (testes: não pode crescer a cada quadro)
 
 static func _key(parts: Array) -> String:
@@ -28,6 +34,15 @@ static func _store(key: String, img: Image, origin: Vector2, k: float) -> Dictio
 	var d := {"tex": ImageTexture.create_from_image(img), "offset": origin, "size": Vector2(img.get_width(), img.get_height()) / k}
 	_cache[key] = d
 	return d
+
+static func _may_build() -> bool:
+	var f := Engine.get_process_frames()
+	if f != _frame:
+		_frame = f
+		_left = BUDGET
+	if _left <= 0: return false
+	_left -= 1
+	return true
 
 static func _rescale(k: float):
 	if absf(k - _k) > 0.0005:
@@ -95,6 +110,7 @@ static func panel(r: Rect2, k: float, header: float, border: Color, glow: bool, 
 	if _cache.has(key):
 		var c: Dictionary = _cache[key]
 		return {"tex": c.tex, "rect": Rect2(r.position - Vector2(m, m), c.size)}
+	if not _may_build(): return {}
 	var lr := Rect2(Vector2(m, m), r.size)          # o painel na imagem (px de referência)
 	var p := Painter.new(Vector2.ZERO, r.size + Vector2(2 * m, 2 * m), k)
 	if glow:
@@ -151,6 +167,7 @@ static func steel(r: Rect2, k: float, lt: Color, dk: Color) -> Dictionary:
 	if _cache.has(key):
 		var c: Dictionary = _cache[key]
 		return {"tex": c.tex, "rect": Rect2(r.position - Vector2(m, m), c.size)}
+	if not _may_build(): return {}
 	var rr := Rect2(Vector2(m, m), r.size)
 	var p := Painter.new(Vector2.ZERO, r.size + Vector2(2 * m, 2 * m), k)
 	p.fill(rr.grow(4), Color("0b0703"))
