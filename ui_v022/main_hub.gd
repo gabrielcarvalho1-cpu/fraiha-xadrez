@@ -156,7 +156,9 @@ func _ready():
     avatar_store = load("res://profile/avatar_store.gd").new()
     avatar_store.name = "AvatarStore"
     add_child(avatar_store)
-    avatar_store.texture_ready.connect(func(_k): _refresh_avatars())
+    avatar_store.texture_ready.connect(func(_k):
+        _focus_current_look()   # R54 · foto chegou da conta: o detalhe do Perfil mostra a foto
+        _refresh_avatars())
     monetization_state = load("res://monetization/monetization_state.gd").new()
     entitlements = load("res://monetization/entitlements.gd").new(monetization_state)
     entitlements.changed.connect(refresh_club)
@@ -1254,6 +1256,12 @@ func _build_avatar_detail(parent: Control, r: Rect2) -> Dictionary:
     box.add_child(apply)
     return {"box": box, "pic": pic, "title": title, "origin": origin, "status": status, "brief": brief, "apply": apply}
 
+## R54 · o detalhe do Perfil volta para o visual EM USO (avatar aplicado ou a foto do jogador): ao abrir o Perfil e
+## sempre que o visual muda (foto enviada/removida, avatar vindo da conta). Tocar num cartão continua só inspecionando.
+func _focus_current_look():
+    inspected_avatar = ""
+    if avatar_gallery != null: avatar_gallery.focus_id = ""
+
 func _inspect_avatar(id: String):
     inspected_avatar = id
     _refresh_avatar_detail()
@@ -1303,6 +1311,19 @@ func _refresh_avatar_detail():
     if avatar_detail.is_empty() or avatar_gallery == null: return
     if profile_tab == "icons" and badge_gallery != null:
         _refresh_badge_detail()
+        return
+    var photo := custom_avatar() if inspected_avatar.is_empty() else null
+    if photo != null:
+        avatar_detail.pic.texture = photo
+        _detail_material(false)
+        avatar_detail.title.text = "SUA FOTO"
+        avatar_detail.origin.text = "Foto enviada por você"
+        avatar_detail.status.text = "EM USO no seu perfil"
+        avatar_detail.status.add_theme_color_override("font_color", Color("49d17a"))
+        avatar_detail.brief.text = ""
+        if avatar_detail.has("apply"):
+            avatar_detail.apply.text = "EM USO"
+            avatar_detail.apply.disabled = true
         return
     var id: String = inspected_avatar if not inspected_avatar.is_empty() else avatar_id
     var e: Dictionary = AvatarCatalog.entry(id)
@@ -2149,7 +2170,9 @@ func show_page(id: String):
         var rp: Control = pages[id]
         rp.modulate.a = 0.0
         create_tween().tween_property(rp, "modulate:a", 1.0, 0.18).set_ease(Tween.EASE_OUT)
-    if id == "profile": _refresh_avatars()
+    if id == "profile":
+        _focus_current_look()
+        _refresh_avatars()
     if id == "history": refresh_history()
     if is_instance_valid(mobile_ui): mobile_ui.show_page(id)
     _sync_side_art(id)
@@ -3029,7 +3052,9 @@ func _on_server_cosmetics(data: Dictionary):
         if is_instance_valid(_cosmetics_timer): _cosmetics_timer.start()
         return
     var av := String(data.get("avatar_id", ""))
-    if av in AvatarCatalog.ids() and AvatarCatalog.has_art(av): avatar_id = av
+    if av in AvatarCatalog.ids() and AvatarCatalog.has_art(av):
+        avatar_id = av
+        _focus_current_look()
     if not String(data.get("badge", "")).is_empty(): badge_pref = String(data.badge)
     if not String(data.get("title", "")).is_empty(): title_pref = String(data.title)
     if String(data.get("frame", "liga")) != "liga": frame_pref = String(data.frame)
@@ -3103,6 +3128,7 @@ func _on_photo_picked(bytes: PackedByteArray, _filename: String):
 
 func _on_photo_saved(image: Image, bytes: PackedByteArray):
     avatar_store.save_local(avatar_key(), image)
+    _focus_current_look()
     _refresh_avatars()
     if account != null and account.has_profile():
         if account.upload_avatar(bytes): _avatar_message("Foto salva. Enviando para a sua conta…", false)
@@ -3113,6 +3139,7 @@ func _on_photo_saved(image: Image, bytes: PackedByteArray):
 func remove_custom_avatar():
     avatar_store.clear_local(avatar_key())
     if account != null and account.has_profile(): account.clear_avatar()
+    _focus_current_look()
     _refresh_avatars()
     _avatar_message("Foto removida. Avatar padrão de volta.", false)
 

@@ -115,11 +115,15 @@ func setup(owner_stage) -> void:
 func wanted() -> bool:
     if stage == null or stage.game == null: return false
     # R51 · contra o computador usa o mesmo layout do Ranked Madeira (a partida força o tema Madeira)
-    if not (stage.mode == "ranked" or stage.mode == "bot") or not stage.game.visible: return false
+    if not stage.mode in ["ranked", "casual", "bot"] or not stage.game.visible: return false   # R54 · Casual = mesma arte do Ranked
     if String(stage.game.visual_theme) != "wood": return false
     # R53 · no celular (em pé e deitado) a partida usa o HUD novo (ranked/mobile_match_hud.gd)
     if MobileLayout.active(stage.get_viewport()): return false
     return true
+
+## R54 · faixas (cartões) e DESISTIR da partida atual: o Casual tem as suas; Ranked e bot usam as do Ranked.
+func match_ui():
+    return stage.casual_ui if stage.mode == "casual" else stage.ranked_ui
 
 ## Chamado no INÍCIO do stage._layout(): se a pele não vale mais, desfaz tudo antes do layout normal.
 func before_layout() -> void:
@@ -303,7 +307,7 @@ func apply() -> void:
     if stage.mode == "bot": _apply_bot(M)
 
 func _skin_strips(M: Dictionary) -> void:
-    var ui = stage.ranked_ui
+    var ui = match_ui()
     if ui == null: return
     for key in ["top", "bottom"]:
         var s: Dictionary = ui.strips[key]
@@ -366,7 +370,7 @@ func _apply_pc(M: Dictionary) -> void:
     var anchor := Vector2(R(M.bar).end.x, R(M.bar).end.y + 8.0)
     g.place_settings_panel((anchor - g.position) / g.scale.x)
     # DESISTIR fica logo abaixo do cartão VOCÊ (a referência não tem; a ação continua no jogo)
-    var ui = stage.ranked_ui
+    var ui = match_ui()
     if ui != null:
         ui.resign_button.position = R(M.resign).position
         ui.resign_button.size = R(M.resign).size
@@ -422,7 +426,7 @@ func _apply_mobile(M: Dictionary) -> void:
     cb.position = R(M.chatbar).position
     cb.size = R(M.chatbar).size
     hits.append([cb, M.chatbar, "chatbar"])
-    var ui = stage.ranked_ui
+    var ui = match_ui()
     if ui != null:
         ui.link_label.position = R(M.link).position
         ui.link_label.size = R(M.link).size
@@ -551,7 +555,7 @@ func _keep() -> void:
     # R51 · o botão antigo ANALISAR PARTIDA (barra de cima) cobria os ícones da arte: com a pele ele não aparece
     # (contra o bot: ANALISAR no lugar do DESISTIR; no Ranked: no painel de resultado; no celular: menu ⋮)
     if kind == "pc" and stage.desk_analyze != null and stage.desk_analyze.visible: stage.desk_analyze.visible = false
-    var ui = stage.ranked_ui
+    var ui = match_ui()
     if ui != null:
         var M: Dictionary = MOB if kind == "mob" else PC
         for key in ["top", "bottom"]:
@@ -785,7 +789,8 @@ class Marks extends Control:
     func _draw():
         if skin == null or not skin.on: return
         var st = skin.stage
-        if st.ranked_ui != null and st.ranked_ui.panel_open(): return
+        var mu = skin.match_ui()
+        if mu != null and mu.panel_open(): return
         var k: float = skin.k
         for h in skin.hits:
             var b = h[0]
