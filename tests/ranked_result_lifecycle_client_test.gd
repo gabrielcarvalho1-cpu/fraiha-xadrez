@@ -26,6 +26,12 @@ func _watch():
         if now and not was: shown.append({"result": String(stage.result_overlay.result), "at": Time.get_ticks_msec(), "match": String(stage.ranked.match_id)})
         was = now
 func button(text: String) -> Button:
+    # R54 · PC: resultado na arte de referência — os botões são áreas sobre a arte (sem texto próprio)
+    var da = stage.ranked_ui.desk_art
+    var desk := {"VOLTAR AO RANKED": "DeskBack", "JOGAR NOVAMENTE": "DeskPlayAgain", "ANALISAR PARTIDA": "DeskAnalyze"}
+    if da != null and da.is_open() and desk.has(text):
+        var d = da.find_child(desk[text], true, false)
+        if d != null: return d
     for b in stage.ranked_ui.box.find_children("*", "Button", true, false):
         if String(b.text).strip_edges() == text and b.is_visible_in_tree(): return b
     return null

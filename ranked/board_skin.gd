@@ -41,7 +41,7 @@ const PC := {
     "board": Rect2(382.0, 145.5, 693.5, 694.0),
     "home": Rect2(18, 17, 225, 60),
     "mic": Rect2(1099, 22, 45, 42), "ear": Rect2(1151, 22, 45, 42), "off": Rect2(1203, 25, 37, 35),
-    "status": Rect2(1248, 27, 162, 37),
+    "status": Rect2(1248, 27, 210, 37),
     "mark": Rect2(1416, 22, 43, 42), "gear": Rect2(1465, 22, 43, 42), "music": Rect2(1515, 22, 42, 42),
     "fx": Rect2(1563, 22, 43, 42), "full": Rect2(1611, 22, 44, 42), "bar": Rect2(1085, 10, 580, 68),
     # cartão do adversário (o do jogador = +566 px)
@@ -54,7 +54,8 @@ const PC := {
     "chat": Rect2(1158, 305, 488, 370), "title": [1195.0, 351.0, 110.0, 25.0],
     "mute": Rect2(1314, 321, 115, 38), "report": Rect2(1442, 321, 126, 38), "min": Rect2(1581, 321, 41, 38),
     "list": Rect2(1184, 374, 424, 214), "input": Rect2(1182, 607, 309, 50), "send": Rect2(1504, 605, 119, 53),
-    "resign": Rect2(1486, 868, 144, 42), "link": Rect2(1186, 548, 420, 40),
+    "resign": Rect2(1416, 867, 230, 67), "link": Rect2(1186, 548, 420, 40),
+    "after": Rect2(1486, 868, 144, 42),   # JOGAR DE NOVO / ANALISAR (bot, fim da partida): base do layout R51
 }
 ## ---- medidas na arte do celular (px da referência 888 x 1772) ----
 const MOB := {
@@ -354,7 +355,7 @@ func _apply_pc(M: Dictionary) -> void:
         _ghost(dv.ear, M.ear, "ear")
         _ghost(dv.off, M.off, "off")
         _rec(dv.label, "visible", false)
-    _ghost(stage.desk_mark, M.mark, "mark")
+    if stage.desk_mark != null: _rec(stage.desk_mark, "visible", false)   # R54 · MARCAR saiu da partida no PC (a arte não tem mais o ícone)
     _ghost(stage.desk_gear, M.gear, "gear")
     _ghost(stage.desk_music, M.music, "music")
     _ghost(stage.desk_fx, M.fx, "fx")
@@ -521,7 +522,7 @@ func _keep_bot() -> void:
         var b: Button = bot_after[id]
         b.visible = over
     if over:
-        var r := R(PC.resign)
+        var r := R(PC.after)
         var w := r.size.x * 1.45
         bot_after.again.position = Vector2(r.end.x - w, r.position.y)
         bot_after.again.size = Vector2(w, r.size.y)

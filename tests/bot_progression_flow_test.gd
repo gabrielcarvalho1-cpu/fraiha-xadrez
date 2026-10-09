@@ -53,7 +53,12 @@ func dismiss_overlay():
 func panel_text() -> String:
     var t := ""
     if not stage.reward_modal.is_open(): return t
-    for n in stage.reward_modal.root.find_children("*", "", true, false):
+    var r = stage.reward_modal.root
+    # R54 · PC: tela na arte de referência — VITÓRIA!/DERROTA e VOLTAR PARA O INÍCIO vêm desenhados na arte
+    if r.get("kind") != null and String(r.kind) == "bot":
+        var tex := String(r.art.texture.resource_path)
+        t += ("VITÓRIA!" if tex.ends_with("desk_bot_win.png") else "DERROTA") + "\nVOLTAR PARA O INÍCIO\n"
+    for n in r.find_children("*", "", true, false):
         if n is Label or n is Button: t += String(n.text) + "\n"
     return t
 
@@ -83,7 +88,7 @@ func run():
     check(txt.contains("BOT FERRO") and txt.contains("AVANÇAR PARA O BOT FERRO"), "painel: próximo bot e botão AVANÇAR PARA O BOT FERRO")
     check(txt.contains("VOLTAR PARA O INÍCIO"), "painel: botão VOLTAR PARA O INÍCIO")
     check(txt.contains("Recompensa") and txt.contains("Rei de Madeira"), "painel: recompensa (avatar Rei de Madeira)")
-    check(modal.buttons.advance.custom_minimum_size.y >= 48 and modal.buttons.home.custom_minimum_size.y >= 48, "botões grandes para toque (>= 48 px)")
+    check(maxf(modal.buttons.advance.size.y, modal.buttons.advance.custom_minimum_size.y) >= 48 and maxf(modal.buttons.home.size.y, modal.buttons.home.custom_minimum_size.y) >= 48, "botões grandes para toque (>= 48 px)")
     # AVANÇAR
     modal.buttons.advance.pressed.emit()
     await frames(3)
@@ -104,7 +109,9 @@ func run():
     # ---------- derrota e empate: sem painel ----------
     await finish("bronze", "loss", "MATE")
     await dismiss_overlay()
-    check(not modal.is_open() and not bp.is_defeated("bronze"), "derrota: sem painel e sem progresso")
+    # R54 · PC: derrota agora abre a tela de resultado (revanche / analisar / início) — sem progresso
+    check(modal.is_open() and panel_text().contains("ENFRENTAR O BOT NOVAMENTE") and not bp.is_defeated("bronze"), "derrota: tela de resultado, sem progresso")
+    modal.close()
     await finish("bronze", "draw", "AFOGAMENTO")
     await frames(5)
     check(not modal.is_open() and not bp.is_defeated("bronze"), "empate: sem painel e sem progresso")

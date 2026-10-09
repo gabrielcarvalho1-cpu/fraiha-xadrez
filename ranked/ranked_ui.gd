@@ -17,6 +17,12 @@ const GOLD = Color("f4ce7f")
 const Cosmetics = preload("res://profile/premium_cosmetics.gd")
 const PlayerPortrait = preload("res://profile/player_portrait.gd")
 const Plaque = preload("res://ranked/player_plaque.gd")   # R46 · placa do jogador (proposta A aprovada)
+const DeskArt = preload("res://ranked/desk_art_modal.gd")   # R54 · telas do PC na arte de referência
+const ART_RESIGN := preload("res://ranked/art/desk_resign_modal.png")
+const ART_FOUND := preload("res://ranked/art/desk_found.png")
+const ART_RESULT := {"win_ranked": preload("res://ranked/art/desk_win_ranked.png"), "win_casual": preload("res://ranked/art/desk_win_casual.png"),
+	"loss_ranked": preload("res://ranked/art/desk_loss_ranked.png"), "loss_casual": preload("res://ranked/art/desk_loss_casual.png")}
+const ART_RESIGN_BTN := preload("res://ranked/art/desk_resign_btn.png")
 const LEAGUE_ACCENT := [Color("b07a44"), Color("a9b1b6"), Color("c98a4a"), Color("d3dbe0"), Color("f4ce7f"), Color("86dccf"), Color("68d48a"), Color("94c9ff"), Color("c99bff"), Color("ff9b8f"), Color("ffd76a")]
 var hub = null   # main_hub (meu selo na faixa "Você")
 var account
@@ -33,6 +39,7 @@ var screen := ""
 var search_started := 0
 var search_label: Label
 var found_label: Label
+var desk_art                     # R54 · ranked/desk_art_modal.gd (PC)
 var notice: Label
 var hud: Control
 var strips := {}
@@ -132,6 +139,12 @@ func setup(service, ranked_controller):
     promo.back_to_ranked.connect(func():
         play_requested.emit()
         _show("modes"))
+    desk_art = DeskArt.new()
+    var desk_layer := CanvasLayer.new()   # acima do chat (46) e das marcas da pele (47), junto da promoção
+    desk_layer.name = "DeskArtLayer"
+    desk_layer.layer = 48
+    add_child(desk_layer)
+    desk_layer.add_child(desk_art)
     promo.analyze.connect(func():
         close_panel()
         var st = get_parent()
@@ -339,10 +352,11 @@ func close_panel():
     screen = ""
     dim.hide(); panel.hide(); art_frame.hide(); art_panel.hide(); search_art.hide()
     if mobile_art != null: mobile_art.close()
+    if desk_art != null: desk_art.close()
     if promo != null: promo.hide()
 
 func panel_open() -> bool:
-    return panel.visible or art_panel.visible or search_art.visible or (promo != null and promo.visible) or (mobile_art != null and mobile_art.visible)
+    return panel.visible or art_panel.visible or search_art.visible or (promo != null and promo.visible) or (mobile_art != null and mobile_art.visible) or (desk_art != null and desk_art.is_open())
 
 ## R49 · VOCÊ SUBIU DE LIGA! (ranked/promotion_modal.gd): os botões fazem o mesmo que no painel de resultado.
 func _promotion(r: Dictionary):
@@ -504,6 +518,13 @@ func _show(which: String):
                 close_panel()
                 src().resign())
     dim.show(); panel.show()
+    if desk_art != null: desk_art.close()
+    if _desk_art(which):
+        # R54 · PC: a tela é a arte de referência (as ações são as mesmas do painel acima, que fica escondido)
+        panel.hide(); art_frame.hide(); art_panel.hide(); search_art.hide()
+        if mobile_art != null and mobile_art.visible: mobile_art.close()
+        dim.size = get_viewport().get_visible_rect().size
+        return
     # Desktop: escolha de ritmo com a arte da referência (a lista acima continua sendo a fonte das ações).
     var was_search := search_art.visible
     search_art.visible = which == "searching"
@@ -540,6 +561,85 @@ func _show(which: String):
         art_panel.layout(get_viewport().get_visible_rect().size)
     _layout_panel()
     _layout_panel.call_deferred()
+
+## R54 · PC (Web desktop): DESISTIR?, ADVERSÁRIO ENCONTRADO e VITÓRIA/DERROTA na arte de referência
+## (ranked/desk_art_modal.gd). Mesmo padrão em bot, Casual e Ranqueada; Casual não mostra PL.
+## Empate, partida encerrada sem resultado e subida de liga continuam nas telas próprias.
+func _desk_art(which: String) -> bool:
+    if desk_art == null or Mobile.active(get_viewport()): return false
+    var d = desk_art
+    match which:
+        "confirm_resign":
+            d.begin(ART_RESIGN, Vector2(1254, 1254), "resign")
+            var txt := "A desistência conta como DERROTA contra o computador. O relógio continua correndo enquanto você decide." if src() != controller \
+                else ("A desistência conta como DERROTA nesta modalidade e o relógio continua correndo enquanto você decide." if rated() \
+                else "A desistência encerra a partida como DERROTA (Casual: não altera PL). O relógio continua correndo enquanto você decide.")
+            d.label(txt, Rect2(170, 543, 914, 170), 44, DeskArt.CREAM, DeskArt.FONT_MED, HORIZONTAL_ALIGNMENT_CENTER, true).name = "DeskResignText"
+            d.button(Rect2(140, 742, 975, 152), close_panel, "DeskContinue", 30)
+            d.button(Rect2(190, 926, 865, 128), func():
+                close_panel()
+                src().resign(), "DeskResign", 30)
+        "found":
+            var opp: Dictionary = controller.opponent
+            d.begin(ART_FOUND, Vector2(1122, 1402), "found")
+            var av := String(opp.get("avatar_id", opp.get("avatar", "")))
+            var tex: Texture2D = null
+            if hub != null and hub.has_method("avatar_texture"):
+                tex = hub.avatar_texture(av) if not av.is_empty() else null
+                if tex == null: tex = hub.avatar_texture("warrior")
+            if tex != null: d.image(tex, Rect2(456, 723, 213, 213), true, 0.64).name = "DeskFoundAvatar"
+            d.label(String(opp.get("nickname", "")), Rect2(250, 962, 622, 86), 76, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskFoundName"
+            var line := league_line(int(opp.get("league", 0)), int(opp.get("pl", 0))).to_upper() if rated() else "PARTIDA CASUAL · SEM PL"
+            d.label(line, Rect2(250, 1076, 622, 52), 38, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskFoundLeague"
+            d.label("%s · Você joga de %s" % [controller.mode_name, "BRANCAS" if controller.human_color == "w" else "PRETAS"], Rect2(170, 1146, 782, 58), 42, DeskArt.CREAM, DeskArt.FONT_MED).name = "DeskFoundMode"
+            found_label = d.label("", Rect2(300, 1222, 522, 58), 40, DeskArt.GOLD, DeskArt.FONT_BODY)
+            found_label.name = "DeskFoundCountdown"
+        "result":
+            var r: Dictionary = controller.last_result
+            var outcome := String(r.get("outcome", ""))
+            if bool(r.get("unknown", false)) or not outcome in ["win", "loss"]: return false
+            if rated() and bool(r.get("promoted", false)): return false
+            var win := outcome == "win"
+            d.begin(ART_RESULT["%s_%s" % ["win" if win else "loss", "ranked" if rated() else "casual"]], Vector2(1122, 1402), "result_" + outcome)
+            var sub_y := 540.0 if win else 532.0
+            d.label("%s · %s" % [String(r.get("mode_name", "")).to_upper(), String(r.get("reason_text", ""))], Rect2(230, sub_y, 662, 56), 46, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskResultSub"
+            if rated():
+                var change := int(r.get("pl_change", 0))
+                d.label(("%+d PL" % change) if change != 0 else "0 PL", Rect2(360, 598 if win else 594, 402, 104), 104, DeskArt.GOLD if win else DeskArt.RED, DeskArt.FONT_TITLE).name = "DeskResultPl"
+                var after_league := int(r.get("league_after", 0))
+                var after_pl := int(r.get("pl_after", 0))
+                var league_txt: String = LEAGUES[after_league].to_upper()
+                if bool(r.get("demoted", false)): league_txt = "REBAIXADO · " + league_txt
+                d.label(league_txt, Rect2(300, 702, 522, 58), 46, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskResultLeague"
+                d.label("%d / 100 PL" % after_pl, Rect2(380, 784 if win else 780, 362, 48), 38, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskResultCount"
+                var start_value := 100.0 if bool(r.get("demoted", false)) else float(r.get("pl_before", after_pl))
+                d.bar(Rect2(234, 840, 652, 37) if win else Rect2(234, 845, 654, 36), start_value, after_pl)
+                if account.ranked is Dictionary and r.has("stats"): account.ranked[String(r.mode)] = r.stats
+            else:
+                d.label("PARTIDA CASUAL", Rect2(250, 640, 622, 70), 56, DeskArt.GOLD if win else DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskResultCasual"
+                var nick := String(controller.opponent.get("nickname", ""))
+                if not nick.is_empty(): d.label("contra " + nick, Rect2(250, 730, 622, 56), 40, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskResultOpponent"
+            var play := Rect2(160, 912, 805, 118) if win else Rect2(165, 918, 790, 117)
+            var analyze := Rect2(165, 1050, 790, 92) if win else Rect2(170, 1056, 780, 92)
+            var back := Rect2(165, 1158, 790, 92) if win else Rect2(170, 1164, 780, 92)
+            d.button(play, func():
+                close_panel()
+                play_requested.emit()
+                controller.queue(String(r.mode)), "DeskPlayAgain", 26)
+            var stage = get_parent()
+            var ab: Button = d.button(analyze, func():
+                close_panel()
+                if stage != null and stage.has_method("open_analysis"): stage.open_analysis(), "DeskAnalyze", 22)
+            ab.disabled = stage == null or not stage.has_method("analysis_available") or not stage.analysis_available()
+            if stage != null and stage.get("analysis_access") != null: ab.tooltip_text = "Analisar partida · " + stage.analysis_access.status_line()
+            d.label("VOLTAR AO RANKED" if rated() else "VOLTAR AO CASUAL", Rect2(back.position.x + 250, back.position.y + 18, back.size.x - 330, back.size.y - 36), 44, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBackText"
+            d.button(back, func():
+                play_requested.emit()
+                _show("modes"), "DeskBack", 22)
+        _:
+            return false
+    d.show_modal()
+    return true
 
 func _spacer(ratio: float) -> Control:
     var c := Control.new()
@@ -858,15 +958,7 @@ func layout_hud(board: Rect2, mobile: bool, portrait: bool, safe: Rect2, top_slo
         strips[key].clock.custom_minimum_size.x = (58 if two_line else 84) if mobile else 150
         if two_line: strips[key].clock.set_font_size(14)
     resign_button.add_theme_font_size_override("font_size", 22)
-    if not resign_button.has_meta("styled"):
-        resign_button.set_meta("styled", true)
-        var st = StyleBoxFlat.new()
-        st.bg_color = Color(0.06, 0.11, 0.09, 0.9)
-        st.border_color = Color("84754b")
-        st.set_border_width_all(1)
-        st.set_corner_radius_all(6)
-        resign_button.add_theme_stylebox_override("normal", st)
-        resign_button.add_theme_color_override("font_color", Color("efe3c4"))
+    _style_resign(not mobile)
     if mobile:
         for key in strips:
             var side := 30.0 if two_line else 38.0
@@ -894,10 +986,38 @@ func layout_hud(board: Rect2, mobile: bool, portrait: bool, safe: Rect2, top_slo
         strips[key].name.add_theme_font_size_override("font_size", 24)
         strips[key].style.content_margin_left = 12
         strips[key].style.content_margin_right = 10
-    resign_button.position = Vector2(x, board.end.y - PLAQUE_H - 60 - 126)     # R38.3: acima da faixa de capturas (stage.MATERIAL_H)
-    resign_button.size = Vector2(220, 56)
+    resign_button.size = Vector2(240, 240.0 / RESIGN_ASPECT)   # R54 · botão da arte aprovada (proporção da arte)
+    resign_button.position = Vector2(x + width - resign_button.size.x, board.end.y - PLAQUE_H - 60 - 126 - (resign_button.size.y - 56.0))     # R38.3: acima da faixa de capturas (stage.MATERIAL_H)
     link_label.position = Vector2(x, board.get_center().y - 30)
     link_label.size = Vector2(width, 60)
+
+## R54 · DESISTIR: no PC é o botão da arte aprovada (vermelho e ouro, mesmo em bot, Casual e Ranqueada);
+## no celular continua o botão simples (o HUD do celular tem o próprio DESISTIR no painel AÇÕES).
+const RESIGN_ASPECT := 632.0 / 185.0
+var _resign_style := ""
+func _style_resign(art: bool):
+    var want := "art" if art else "flat"
+    if _resign_style == want: return
+    _resign_style = want
+    if art:
+        resign_button.text = ""
+        resign_button.tooltip_text = "Desistir da partida"
+        resign_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        for st in ["normal", "hover", "pressed", "focus"]:
+            var t := StyleBoxTexture.new()
+            t.texture = ART_RESIGN_BTN
+            t.modulate_color = {"hover": Color(1.12, 1.1, 1.06), "pressed": Color(0.82, 0.8, 0.78)}.get(st, Color.WHITE)
+            resign_button.add_theme_stylebox_override(st, t)
+        return
+    resign_button.text = "DESISTIR"
+    var flat = StyleBoxFlat.new()
+    flat.bg_color = Color(0.06, 0.11, 0.09, 0.9)
+    flat.border_color = Color("84754b")
+    flat.set_border_width_all(1)
+    flat.set_corner_radius_all(6)
+    for st in ["normal", "hover", "pressed", "focus"]: resign_button.remove_theme_stylebox_override(st)
+    resign_button.add_theme_stylebox_override("normal", flat)
+    resign_button.add_theme_color_override("font_color", Color("efe3c4"))
 
 func _layout_panel():
     if not panel.visible: return

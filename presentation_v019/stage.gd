@@ -1413,6 +1413,8 @@ func _setup_analysis():
     reward_modal.advance_requested.connect(func(next_id): _start_bot(next_id, last_bot_side))
     reward_modal.replay_requested.connect(func(bid): _start_bot(bid, last_bot_side))
     reward_modal.home_requested.connect(open_home)
+    reward_modal.analyze_requested.connect(open_analysis)
+    reward_modal.can_analyze = analysis_available
     if hub.bot_progress != null:
         # Painel pós-partida em TODA vitória confirmada (1ª vitória com recompensa; revanche sem recompensa).
         # Conta: só depois da resposta do servidor (R28). Sempre espera a animação de VITÓRIA terminar.
@@ -1448,9 +1450,11 @@ func _refresh_analysis_buttons():
     var human_mode = mode in ["ranked", "casual", "online", "local"]
     var can_mark = playing and recorder != null and recorder.current() != null and not recorder.current().finished
     var can_analyze = analysis_available()
-    if is_instance_valid(desk_mark): desk_mark.visible = can_mark and not mobile
+    # R54 · PC: MARCAR PARA REVISAR saiu da partida; no Casual/Ranked ANALISAR PARTIDA fica só na tela de resultado
+    # (contra o bot: tela de resultado e, na pele do PC, o botão ANALISAR no lugar do DESISTIR depois do fim)
+    if is_instance_valid(desk_mark): desk_mark.visible = false
     if is_instance_valid(desk_analyze):
-        desk_analyze.visible = can_analyze and not mobile
+        desk_analyze.visible = can_analyze and not mobile and not mode in ["ranked", "casual"]
         if can_analyze and analysis_access != null:
             desk_analyze.tooltip_text = "Analisar partida · " + analysis_access.status_line()
     if is_instance_valid(mobile_mark): mobile_mark.visible = can_mark and mobile
@@ -1477,6 +1481,11 @@ func _on_match_finished(record):
     var res := String(record.result)
     if res == "win": result_overlay.show_result("victory")
     elif res == "loss": result_overlay.show_result("defeat")
+    # R54 · PC: derrota contra o bot abre a tela de resultado (revanche / analisar / início) depois da animação
+    if res == "loss" and String(record.mode) == "bot" and reward_modal != null and not MobileLayout.active(get_viewport()):
+        var bid := String(bot_controller.bot_id) if not String(bot_controller.bot_id).is_empty() else String(bot_controller.difficulty)
+        var shown_name := bot_level_name
+        _after_result_overlay(func(): if mode == "bot": reward_modal.show_defeat(bid, shown_name))
     # Desafio das Ligas: 1ª vitória (xeque-mate no bot) → progresso + recompensa (servidor valida na conta).
     if res == "win" and String(record.mode) == "bot" and not String(bot_controller.bot_id).is_empty() and "MATE" in String(record.result_reason) and String(record.start_fen).is_empty():
         if hub.bot_progress != null: hub.bot_progress.report_victory(String(bot_controller.bot_id), String(record.human_color), PackedStringArray(record.moves))

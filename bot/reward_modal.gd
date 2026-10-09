@@ -8,6 +8,13 @@ extends CanvasLayer
 signal advance_requested(bot_id: String)
 signal home_requested
 signal replay_requested(bot_id: String)
+signal analyze_requested
+
+const DeskArt = preload("res://ranked/desk_art_modal.gd")   # R54 · PC: telas na arte de referência
+const ART_WIN := preload("res://ranked/art/desk_bot_win.png")
+const ART_LOSS := preload("res://ranked/art/desk_bot_loss.png")
+const ART_CROWN := preload("res://ranked/art/desk_icon_crown.png")
+const MobileLayout = preload("res://ui_v022/mobile_layout.gd")
 
 const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
 const Ladder = preload("res://bot/bot_ladder.gd")
@@ -23,6 +30,7 @@ var shown_bot := ""
 var shown_fresh := true
 var next_bot := ""
 var buttons := {}
+var can_analyze: Callable          # stage.analysis_available (ANALISAR PARTIDA só quando há o que analisar)
 
 func _ready():
     layer = 60
@@ -45,6 +53,9 @@ func show_progress(bot_id: String, reward: Dictionary, fresh := true):
     shown_bot = bot_id
     next_bot = next_of(bot_id)
     var bot := Ladder.bot(bot_id)
+    if _desktop():
+        _desk_victory(bot_id, bot, reward, fresh)
+        return
     var vp := get_viewport().get_visible_rect().size if get_viewport() != null else Vector2(1600, 900)
     var narrow := vp.x < 700.0
     var short := vp.y < 520.0
@@ -157,6 +168,95 @@ func show_progress(bot_id: String, reward: Dictionary, fresh := true):
     var tw := create_tween().set_parallel(true)
     tw.tween_property(panel, "scale", Vector2.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     tw.tween_property(panel, "modulate:a", 1.0, 0.22)
+
+func _desktop() -> bool:
+    return get_viewport() != null and not MobileLayout.active(get_viewport())
+
+func _desk(tex: Texture2D) -> Control:
+    var d = DeskArt.new()
+    d.name = "DeskBotResult"
+    add_child(d)
+    d.begin(tex, Vector2(1254, 1254), "bot", true)
+    root = d
+    return d
+
+func _desk_buttons(d, main_text: String, main_action: Callable, key: String):
+    buttons.clear()
+    d.image(ART_CROWN, Rect2(278, 874, 60, 58)).name = "DeskBotCrown"
+    d.label(main_text, Rect2(350, 869, 620, 60), 40, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskBotMainText"
+    buttons[key] = d.button(Rect2(150, 853, 960, 94), main_action, "DeskBotMain", 16)   # advance / replay (mesmas chaves do painel antigo)
+    buttons["analyze"] = d.button(Rect2(165, 963, 925, 84), func():
+        close()
+        analyze_requested.emit(), "DeskBotAnalyze", 14)
+    buttons["analyze"].disabled = can_analyze.is_valid() and not bool(can_analyze.call())
+    buttons["home"] = d.button(Rect2(165, 1063, 925, 84), func():
+        close()
+        home_requested.emit(), "DeskBotHome", 14)
+
+## R54 · PC: VITÓRIA contra o bot na arte de referência (brasões, próximo adversário, recompensa e 3 ações).
+func _desk_victory(bot_id: String, bot: Dictionary, reward: Dictionary, fresh: bool):
+    var d = _desk(ART_WIN)
+    var final := next_bot.is_empty()
+    var bname := String(bot.get("name", "BOT"))
+    d.label(bname + (" DERROTADO" if fresh else " DERROTADO NOVAMENTE"), Rect2(250, 322, 755, 52), 42, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBotSub"
+    var left: Texture2D = ThemeCatalog.badge_texture(String(bot.get("league", bot_id)))
+    if final:
+        d.image(left, Rect2(522, 358, 210, 206)).name = "DeskBotShield"
+        d.label("DESAFIO DAS LIGAS CONCLUÍDO" if fresh else "Você venceu todos os bots", Rect2(250, 556, 755, 42), 36, Color("efd9a6"), DeskArt.FONT_BODY).name = "DeskBotNextLead"
+        d.label("DO MADEIRA AO CHALLENGER", Rect2(250, 596, 755, 56), 46, DeskArt.EMERALD, DeskArt.FONT_TITLE).name = "DeskBotNext"
+    else:
+        var nb := Ladder.bot(next_bot)
+        d.image(left, Rect2(382, 360, 204, 200)).name = "DeskBotShield"
+        d.image(ThemeCatalog.badge_texture(String(nb.get("league", next_bot))), Rect2(666, 360, 204, 200)).name = "DeskBotNextShield"
+        d.label("Próximo adversário desbloqueado:" if fresh else "Próximo adversário:", Rect2(250, 556, 755, 42), 36, Color("efd9a6"), DeskArt.FONT_BODY).name = "DeskBotNextLead"
+        d.label(String(nb.get("name", "")), Rect2(250, 596, 755, 56), 58, DeskArt.EMERALD, DeskArt.FONT_TITLE).name = "DeskBotNext"
+    # recompensa (avatar da liga do bot)
+    var aid := String(reward.get("id", ""))
+    if String(reward.get("type", "")) == "avatar" and not aid.is_empty():
+        var tex: Texture2D = avatar_for.call(aid) if avatar_for.is_valid() and Catalog.has_art(aid) else null
+        if tex != null: d.image(tex, Rect2(215, 679, 145, 132)).name = "DeskBotRewardArt"
+        d.label("Recompensa desbloqueada!" if fresh else "Recompensa já conquistada", Rect2(388, 694, 650, 42), 32, Color("e8c37a"), DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardTitle"
+        var what := "Avatar " + Catalog.display_name(aid)
+        what += (" desbloqueado" + ("" if Catalog.has_art(aid) else " (arte em breve)")) if fresh else " · sem recompensa nova"
+        d.label(what, Rect2(388, 734, 650, 52), 36, DeskArt.CREAM, DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardText"
+    else:
+        d.label("Sem recompensa nesta partida", Rect2(388, 714, 650, 52), 34, DeskArt.MUTED, DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardText"
+    if final:
+        _desk_buttons(d, "JOGAR NOVAMENTE", func():
+            var target := shown_bot
+            close()
+            replay_requested.emit(target), "replay")
+    else:
+        var nb_name := String(Ladder.bot(next_bot).get("name", ""))
+        _desk_buttons(d, ("AVANÇAR PARA O " + nb_name) if fresh else ("JOGAR PRÓXIMO BOT · " + nb_name), func():
+            var target := next_bot
+            close()
+            advance_requested.emit(target), "advance")
+    d.show_modal()
+
+## R54 · DERROTA contra o bot (PC): tela de resultado útil — revanche, analisar ou voltar ao início.
+## O bot que venceu aparece com o brasão da liga; nada é desbloqueado.
+func show_defeat(bot_id: String, display_name := ""):
+    close()
+    if not _desktop(): return
+    shown_bot = bot_id
+    next_bot = next_of(bot_id)
+    var bot := Ladder.bot(bot_id)
+    var bname := String(bot.get("name", display_name if not display_name.is_empty() else "COMPUTADOR"))
+    var d = _desk(ART_LOSS)
+    d.label(bname + " VENCEU A PARTIDA", Rect2(250, 322, 755, 52), 42, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBotSub"
+    if not bot.is_empty():
+        d.image(ThemeCatalog.badge_texture(String(bot.get("league", bot_id))), Rect2(522, 358, 210, 206)).name = "DeskBotShield"
+    var info := "Não desanime: cada partida é treino."
+    if not next_bot.is_empty():
+        info = "Vença o %s para liberar o %s." % [bname, String(Ladder.bot(next_bot).get("name", ""))]
+    d.label(info, Rect2(200, 590, 855, 110), 38, Color("efd9a6"), DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_CENTER, true).name = "DeskBotInfo"
+    d.label("Analise a partida para ver onde o jogo virou.", Rect2(230, 712, 795, 60), 34, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskBotTip"
+    _desk_buttons(d, "ENFRENTAR O BOT NOVAMENTE", func():
+        var target := shown_bot
+        close()
+        replay_requested.emit(target), "replay")
+    d.show_modal()
 
 ## Vitória NÃO confirmada (sem conexão, servidor recusou…): só o aviso, sem desbloqueio nem "avançar".
 func show_error(message: String):
