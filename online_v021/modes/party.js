@@ -18,7 +18,9 @@ const X = require('./xeque_rules');
 const env = process.env;
 const num = (v, d) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : d);
 const T = {
-  turnMs: num(env.FRAIHA_PARTY_TURN_MS, 30000),          // vez do jogador (igual ao jogo local)
+  turnMs: num(env.FRAIHA_PARTY_TURN_MS, 30000),          // vez do jogador no XEQUE (igual ao jogo local)
+  // R54 · MARCHA REAL: 15 s por vez (marcha_ui.gd TURN_MS). FRAIHA_PARTY_MARCHA_TURN_MS > FRAIHA_PARTY_TURN_MS (testes) > 15 s
+  marchaTurnMs: num(env.FRAIHA_PARTY_MARCHA_TURN_MS, num(env.FRAIHA_PARTY_TURN_MS, 15000)),
   marchaBotMs: num(env.FRAIHA_PARTY_MARCHA_BOT_MS, 950),
   xequeBotMin: num(env.FRAIHA_PARTY_XEQUE_BOT_MIN_MS, 1600), xequeBotMax: num(env.FRAIHA_PARTY_XEQUE_BOT_MAX_MS, 3000),   // R36: ritmo mais calmo
   awayMs: num(env.FRAIHA_PARTY_AWAY_MS, 1500),           // jogador desconectado: o bot joga por ele depois disso
@@ -82,7 +84,7 @@ class Party {
   startMsg(room, v) {
     return { type: 'party_start', room_id: room.id, game: room.game, game_name: GAMES[room.game].name, seat: 0,
       players: rotArr(room.seats, v).map(s => ({ user_id: s.kind === 'human' ? s.uid : '', name: s.nickname, avatar: s.avatar || '', badge: s.badge || '', title: s.title || '', frame: s.frame || 'liga', founder: !!s.founder, club: !!s.club, bot: s.kind !== 'human', connected: s.kind !== 'human' || s.connected, left: !!s.left })),
-      ruleset: room.game === 'marcha' ? M.RULESET_VERSION : X.RULESET_VERSION, turn_ms: T.turnMs, snapshot: this.snapshot(room, v) };
+      ruleset: room.game === 'marcha' ? M.RULESET_VERSION : X.RULESET_VERSION, turn_ms: room.game === 'marcha' ? T.marchaTurnMs : T.turnMs, snapshot: this.snapshot(room, v) };
   }
   later(room, ms, fn) { clearTimeout(room.timer); room.timer = setTimeout(() => { room.timer = null; if (!room.ended) fn(); }, Math.max(0, ms)); room.timer.unref && room.timer.unref(); }
 
@@ -164,9 +166,10 @@ class Party {
     room.turn_seat = g.turn;
     const seat = g.turn;
     if (this.humanActive(room, seat)) {
-      room.deadline = this.now() + T.turnMs;
+      // prazo é do SERVIDOR: o turno vence aqui mesmo com a aba do jogador em segundo plano
+      room.deadline = this.now() + T.marchaTurnMs;
       this.broadcast(room, { ev: 'turn' });
-      this.later(room, T.turnMs, () => this.marchaAuto(room, seat, 'timeout'));
+      this.later(room, T.marchaTurnMs, () => this.marchaAuto(room, seat, 'timeout'));
     } else {
       this.broadcast(room, { ev: 'turn' });
       this.later(room, room.seats[seat].kind === 'bot' ? T.marchaBotMs : T.awayMs, () => this.marchaAuto(room, seat, room.seats[seat].kind === 'bot' ? 'bot' : 'away'));

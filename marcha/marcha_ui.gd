@@ -54,7 +54,7 @@ const GOLD_LINE := Color("b8892f")
 const CREAM := Color("f3ead2")
 const PANEL := Color("0f2b20")
 const PANEL_DARK := Color("0a1d16")
-const TURN_MS := 30000
+const TURN_MS := 15000   # R54 · 15 s por vez (servidor: online_v021/modes/party.js marchaTurnMs)
 const BOT_DELAY := 0.95
 const SWAP_MIN := 1.0             # R35.1: troca do J leva de 1,0 a 2,4 s (+0,7 s de brilho)
 const SWAP_MAX := 2.4
@@ -113,6 +113,9 @@ var split_first := 0              # 7: casas do 1º peão (0 = ainda não escolh
 var sel_second := []              # 7: 2º peão
 var pending := {}                 # jogada completa pronta para JOGAR CARTA
 var turn_left_ms := TURN_MS
+## R54 · prazo do turno em relógio real (Time.get_ticks_msec, que continua correndo com a aba em segundo plano).
+## Online: vem do servidor (turn_left_ms do snapshot); o navegador só mostra. Local: o jogo marca o prazo.
+var turn_deadline := 0
 var busy := false                 # animando ou bot pensando
 var anim := {}                    # [seat,i] -> posição desenhada (coordenadas do tabuleiro) durante animação
 var anim_alpha := {}
@@ -272,6 +275,7 @@ func start_game():
 func _begin_turn():
     if g == null or mode != "game" or online: return
     turn_left_ms = TURN_MS
+    turn_deadline = Time.get_ticks_msec() + TURN_MS
     _clear_selection()
     _redraw()
     if g.winner >= 0:
@@ -425,11 +429,16 @@ func _process(delta):
     if flash_t > 0.0:
         flash_t -= delta
         if flash_t <= 0.0: flash = ""
-    if mode == "game" and g != null and g.turn == 0 and not busy and not menu_open and tut_page < 0:
-        turn_left_ms -= int(delta * 1000.0)
-        if turn_left_ms <= 0:
-            turn_left_ms = 0
-            if not online: _auto_play()    # online: o servidor joga por você quando o tempo acaba
+    if mode == "game" and g != null and g.turn == 0:
+        # R54 · tempo restante = prazo − agora (relógio real): trocar de aba/minimizar não congela o turno.
+        # Online o prazo é do servidor, que resolve a vez mesmo sem a aba voltar; aqui só se mostra.
+        if online:
+            turn_left_ms = maxi(0, turn_deadline - Time.get_ticks_msec())
+        else:
+            # jogo local: animação, menu e tutorial seguram o relógio (como antes)
+            if busy or menu_open or tut_page >= 0: turn_deadline += int(delta * 1000.0)
+            turn_left_ms = maxi(0, turn_deadline - Time.get_ticks_msec())
+            if turn_left_ms <= 0 and not busy and not menu_open and tut_page < 0: _auto_play()
     _redraw()
 
 ## Tempo esgotado: a jogada sugerida (a mesma do bot) é feita no lugar do jogador.
@@ -2054,7 +2063,9 @@ func _apply_snapshot(snap: Dictionary):
     var me := String(players[0].get("name", "")) if not players.is_empty() else ""
     g.log = (snap.get("log", []) as Array).map(func(x): return ("Você" + String(x).substr(me.length())) if not me.is_empty() and String(x).begins_with(me + " ") else String(x))
     for s in 4: g.names[s] = "Você" if s == 0 else names[s]
-    if snap.has("turn_left_ms"): turn_left_ms = int(snap.turn_left_ms) if bool(snap.get("my_turn", false)) else TURN_MS
+    if snap.has("turn_left_ms"):
+        turn_left_ms = int(snap.turn_left_ms) if bool(snap.get("my_turn", false)) else TURN_MS
+        turn_deadline = Time.get_ticks_msec() + turn_left_ms   # prazo do servidor convertido para o relógio local
     var conn: Array = snap.get("players_connected", [])
     for i in mini(conn.size(), players.size()): players[i]["connected"] = bool(conn[i])
 
