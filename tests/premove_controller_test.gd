@@ -11,7 +11,7 @@ func check(ok: bool, label: String):
 	if not ok: failures += 1
 
 func run():
-	OS.set_environment("FRAIHA_SERVER_URL", "")
+	OS.set_environment("FRAIHA_SERVER_URL", "ws://127.0.0.1:9")
 	var stage = load("res://presentation_v019/stage.tscn").instantiate()
 	root.add_child(stage)
 	for i in 8: await process_frame

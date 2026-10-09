@@ -140,5 +140,5 @@ func _process(_delta: float) -> void:
     _sync_window(_window)
 
 func _notification(what: int) -> void:
-    if what == NOTIFICATION_APPLICATION_FOCUS_IN and is_instance_valid(_window):
+    if (what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED) and is_instance_valid(_window):
         _on_size_changed()

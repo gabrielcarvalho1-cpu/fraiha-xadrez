@@ -28,6 +28,7 @@ signal status_failed(code: String, message: String)
 
 const SESSION_FILE = "user://account_session.cfg"
 const GUEST_FILE = "user://guest_session.cfg"
+const TOKEN_REFRESH_SKEW_S := 120.0
 var supabase_url := ""
 var public_key := ""
 var site_url := ""
@@ -60,6 +61,7 @@ var ping_in := 10.0 # heartbeat: o servidor usa o ping para presença (silêncio
 const LINK_DEAD_MS := 25000
 var rx_at := 0
 var refresh_in := -1.0
+var refresh_busy := false
 # Convidado (Online Casual sem conta): identidade só no servidor, recuperável pelo token.
 var guest_wanted := false
 var guest_ready := false
@@ -416,11 +418,16 @@ func sign_out():
     notice.emit("Você saiu da conta.", false)
 
 func _refresh_session():
-    if refresh_token.is_empty(): return
+    if refresh_token.is_empty() or refresh_busy: return
+    refresh_busy = true
     _auth_request(HTTPClient.METHOD_POST, "/auth/v1/token?grant_type=refresh_token", {"refresh_token": refresh_token}, func(code, body):
+        refresh_busy = false
         if code == 200 and body.has("access_token"): _adopt_session(body)
         elif code == 0: refresh_in = 15.0 # sem rede: tenta de novo, mantém a sessão salva
         else: _clear_session())
+
+static func session_refresh_due(now_s: float, token_expires_at: float) -> bool:
+    return token_expires_at > 0.0 and now_s >= token_expires_at - TOKEN_REFRESH_SKEW_S
 
 func _adopt_session(body: Dictionary):
     access_token = String(body.get("access_token", ""))
@@ -450,7 +457,7 @@ func _adopt_session(body: Dictionary):
 
 func _clear_session():
     access_token = ""; refresh_token = ""; user_id = ""; email = ""; provider = ""
-    profile = {}; ranked = {}; needs_nickname = false; server_ready = false; refresh_in = -1.0
+    profile = {}; ranked = {}; needs_nickname = false; server_ready = false; refresh_in = -1.0; refresh_busy = false
     var saved = ConfigFile.new()
     saved.set_value("session", "refresh_token", "")
     saved.save(SESSION_FILE)
@@ -659,6 +666,11 @@ func _notification(what):
     if what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED:
         ping_in = 0.0
         rx_at = Time.get_ticks_msec()   # voltou do segundo plano: o silêncio foi nosso, não da conexão
+        # _process não avança durante uma suspensão nativa. Use o relógio real para não reutilizar um access
+        # token expirado ao voltar; o guard refresh_busy absorve FOCUS_IN + RESUMED consecutivos.
+        if signed_in() and session_refresh_due(Time.get_unix_time_from_system(), expires_at):
+            refresh_in = 0.0
+            _refresh_session()
         if socket == null and (signed_in() or guest_wanted): retry_in = 0.05   # reconecta já, sem esperar os 3 s
 
 func _process(delta):
