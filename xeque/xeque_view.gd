@@ -1411,6 +1411,7 @@ func _draw_intro():
 # (tools/ui_ref/xeque/xeque_ref_r55.png). Painéis azul-marinho com moldura dourada e cantos, faixa vinho
 # nos títulos, chips de borda azul-aço, faixa da vez azul, botão XEQUE de aço e JOGAR CARTAS vinho, e
 # cartas com o texto desenhado AO VIVO no tamanho exato da tela (nítido). Só o PC; celular sem mudança.
+const DeskPaint := preload("res://xeque/desk_paint.gd")   # R55.2
 const NAVY_T := Color("13264d")
 const NAVY_B := Color("0a1631")
 const FRAME_GOLD := Color("d6a23c")
@@ -1432,6 +1433,12 @@ func grad(r: Rect2, top: Color, bot: Color):
 ## Painel da referência: borda escura, moldura dourada fina com brilho, miolo azul-marinho (ou vinho→azul)
 ## e, se header > 0, faixa vinho no alto (títulos A MESA PEDE / COMO JOGAR). Cantos com ornamento dourado.
 func npanel(r: Rect2, header := 0.0, border: Color = FRAME_GOLD, glow := false, wine_full := false, fill_t: Color = NAVY_T, fill_b: Color = NAVY_B):
+    # R55.2 · pré-composto (xeque/desk_paint.gd): o mesmo desenho, 1 textura por quadro em vez de ~15–25 operações
+    var c: Dictionary = DeskPaint.panel(r, ui.k, header, border, glow, wine_full, fill_t, fill_b, WINE_T, WINE_B, FRAME_HI)
+    draw_texture_rect(c.tex, c.rect, false)
+
+## R55 · desenho imediato original (referência do pré-composto; usado só nos testes de equivalência)
+func npanel_immediate(r: Rect2, header := 0.0, border: Color = FRAME_GOLD, glow := false, wine_full := false, fill_t: Color = NAVY_T, fill_b: Color = NAVY_B):
     if glow:
         for i in 5: draw_rect(r.grow(4 + i * 3), Color(border.r, border.g, border.b, 0.16 - i * 0.03), false, 3.0)
     draw_rect(r.grow(3), Color("0b0703"))
@@ -1521,6 +1528,7 @@ func _desk_mesa_pede():
     var r: Rect2 = L().mesa
     var g = ui.g
     var landing: float = clampf((ui.mesa_anim - 1.45) / 0.45, 0.0, 1.0) if ui.mesa_anim >= 0.0 else 0.0
+    landing = snappedf(landing, 0.1)      # R55.2 · 11 tons no máximo (o painel é pré-composto por cor de borda)
     var pulse := 0.5 + 0.5 * sin(ui.t * 3.2)
     for i in 4: draw_rect(r.grow(5 + i * 3), Color(1.0, 0.82, 0.3, (0.07 - i * 0.015) * (0.6 + 0.4 * pulse)), false, 3.0)
     npanel(r, 47.0, FRAME_GOLD.lerp(Color("fff3c0"), landing))
@@ -1783,21 +1791,9 @@ func _desk_xeque_button(active: bool):
         for i in 5: draw_rect(rr.grow(4 + i * 4), Color(1.0, 0.25, 0.2, (0.22 - i * 0.04) * (0.6 + 0.4 * p)), false, 4.0)
     var lt: Color = {"normal": Color("9aa1aa"), "hover": Color("b4bbc4"), "pressionado": Color("80868f"), "desabilitado": Color("5d6268"), "ativado": Color("b8a0a0")}[state]
     var dk: Color = {"normal": Color("50565e"), "hover": Color("5f666f"), "pressionado": Color("3f444b"), "desabilitado": Color("33363b"), "ativado": Color("6e3a3a")}[state]
-    draw_rect(rr.grow(4), Color("0b0703"))
-    draw_rect(rr.grow(2), Color("2b2f35"))
-    grad(rr, lt, dk)
-    draw_rect(Rect2(rr.position.x, rr.position.y, rr.size.x, 3), Color(1, 1, 1, 0.35))
-    draw_rect(Rect2(rr.position.x, rr.end.y - 3, rr.size.x, 3), Color(0, 0, 0, 0.35))
-    # filete pontilhado e rebites (losangos azuis com borda dourada)
-    var inner := rr.grow(-12)
-    for x in range(int(inner.position.x) + 4, int(inner.end.x) - 4, 9):
-        draw_rect(Rect2(x, inner.position.y, 3, 1.5), Color(0, 0, 0, 0.3))
-        draw_rect(Rect2(x, inner.end.y, 3, 1.5), Color(0, 0, 0, 0.3))
-    for p in [Vector2(rr.position.x + 22, rr.position.y + 22), Vector2(rr.end.x - 22, rr.position.y + 22), Vector2(rr.position.x + 22, rr.end.y - 22), Vector2(rr.end.x - 22, rr.end.y - 22)]:
-        draw_colored_polygon(PackedVector2Array([p + Vector2(0, -10), p + Vector2(10, 0), p + Vector2(0, 10), p + Vector2(-10, 0)]), Color("c99a3a"))
-        draw_colored_polygon(PackedVector2Array([p + Vector2(0, -7), p + Vector2(7, 0), p + Vector2(0, 7), p + Vector2(-7, 0)]), Color("27354d"))
-    for p in [Vector2(rr.position.x + 22, rr.get_center().y), Vector2(rr.end.x - 22, rr.get_center().y)]:
-        draw_colored_polygon(PackedVector2Array([p + Vector2(0, -7), p + Vector2(4, 0), p + Vector2(0, 7), p + Vector2(-4, 0)]), Color("e7b64c"))
+    # R55.2 · placa de aço (borda, degradê, filete pontilhado e rebites) pré-composta por estado (desk_paint.gd)
+    var plate: Dictionary = DeskPaint.steel(rr, ui.k, lt, dk)
+    draw_texture_rect(plate.tex, plate.rect, false)
     var fs := 92
     var tcol := Color("f4f6f9") if state != "desabilitado" else Color("9ca0a6")
     var by := rr.get_center().y + fs * 0.405
