@@ -5,7 +5,11 @@
 // Presença != disponibilidade: convites/filas continuam com as próprias validações.
 //
 // Por socket (interno): ativo -> suspeito (silêncio >= SUSPECT: servidor manda ping de protocolo)
-//                       -> morto (silêncio >= DEAD: servidor encerra o socket; fora de partida).
+//                       -> morto (silêncio >= DEAD e sem pong: servidor encerra o socket, DENTRO OU FORA de partida).
+// H04: morte do socket (transporte) ≠ abandono (regra do jogo). Encerrar o socket morto só dispara o onClose
+// normal: a partida marca o jogador como desconectado e conta a tolerância de reconexão
+// (FRAIHA_RANKED_RECONNECT_MS no Ranked/Casual; bot assume a vez no XEQUE/Marcha). Quem volta dentro da
+// tolerância continua na partida. Aba em segundo plano viva NÃO morre: o navegador responde o ping de protocolo.
 // Por conta: sem sessão utilizável -> tolerância (GRACE) -> offline. Reconectar dentro da tolerância
 // não publica nada (sem "piscar" offline/online para os amigos).
 // Estado em memória, uma instância. A interface (sessionsOf/stateOf/publish) foi mantida pequena para
@@ -86,8 +90,9 @@ class Presence {
       for (const ws of set) {
         if (ws.readyState !== 1 || ws.lastSeen === undefined) continue;
         const quiet = now - ws.lastSeen;
-        // Em partida, o socket não é encerrado por silêncio: a reconexão/abandono da partida seguem como antes.
-        if (quiet >= this.cfg.deadMs && !this.backend.inMatch(uid)) {
+        // H04: vale também em partida (antes ficava "conectado" para sempre e a tolerância de reconexão nunca
+        // começava). Só morre quem já recebeu o ping de protocolo (suspeito) e não respondeu.
+        if (quiet >= this.cfg.deadMs && ws.suspect) {
           ws.dead = true;
           try { ws.terminate ? ws.terminate() : ws.close(); } catch (_) { /* já fechado */ }
           continue;
