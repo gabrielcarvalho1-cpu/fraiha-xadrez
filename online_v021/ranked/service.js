@@ -6,6 +6,7 @@ const { look: publicLook } = require('../accounts/cosmetics');
 const { MODES, CASUAL_MODES, ALL_MODES, CONFIG } = require('./config');
 const { Matchmaker } = require('./matchmaker');
 const { RankedMatch } = require('./match');
+const { persistRanked } = require('./persist');
 const RESULT_KEEP_MS = Number(process.env.FRAIHA_RESULT_KEEP_MS || 10 * 60 * 1000);
 
 class Ranked {
@@ -22,6 +23,9 @@ class Ranked {
   uidOf(ws) { return ws.identity ? ws.identity.id : ws.user ? ws.user.id : null; }
   // Partida ainda não encerrada deste usuário (para impedir duas partidas ao mesmo tempo).
   activeMatchOf(uid) { const m = this.matches.get(this.byUser.get(uid)); return m && m.status !== 'finished' ? m : null; }
+  // H03 · resultado Ranked ainda sendo gravado (com novas tentativas). Enquanto isso o jogador não entra em outra
+  // partida Ranked: o PL "antes" da próxima seria lido do banco ainda sem esta partida e a gravação dela falharia.
+  persistPending(uid) { const m = this.matches.get(this.byUser.get(uid)); return !!(this.rated && m && m.status === 'finished' && m.persisting && m.saved === undefined); }
   matchOf(uid) { return this.matches.get(this.byUser.get(uid)) || null; }
   busyElsewhere(uid) { return this.backend && this.backend.busyElsewhere ? this.backend.busyElsewhere(uid, this) : false; }
   presence(uid) { if (this.backend && this.backend.presenceChanged) this.backend.presenceChanged(uid); }
@@ -42,13 +46,13 @@ class Ranked {
       (!(this.backend && this.backend.ready) || this.backend.ready(ws, revision === undefined ? this.sessionRevision(ws) : revision));
   }
   queueEligible(uid) {
-    return this.sessionLive(this.sockets.get(uid), uid) && !this.activeMatchOf(uid) && !this.busyElsewhere(uid);
+    return this.sessionLive(this.sockets.get(uid), uid) && !this.activeMatchOf(uid) && !this.persistPending(uid) && !this.busyElsewhere(uid);
   }
   canStartMatch(a, b) {
     if (a.userId === b.userId) return false;
     return [a, b].every(e => {
       const uid = e.userId;
-      if (!this.sessionReady(this.sockets.get(uid), uid) || this.activeMatchOf(uid) || this.mm.has(uid)) return false;
+      if (!this.sessionReady(this.sockets.get(uid), uid) || this.activeMatchOf(uid) || this.persistPending(uid) || this.mm.has(uid)) return false;
       // Convites já reservam os dois usuários antes de chamar startMatch. A reserva
       // não é outra partida; filas, partidas e mesas continuam sendo exclusivas.
       if (this.backend && this.backend.inMatch && this.backend.inMatch(uid)) return false;
@@ -65,6 +69,7 @@ class Ranked {
       if (!this.modes[mode]) return this.fail(ws, 'Modalidade inválida.');
       if (this.backend && this.backend.modeOpen && !this.backend.modeOpen(this.kind, mode)) return this.fail(ws, require('../admin/controls').CLOSED_MESSAGE, 'mode_disabled');   // Admin: ritmo/fila desativado
       if (match && match.status !== 'finished') return this.pushState(match, now);
+      if (this.persistPending(uid)) return this.fail(ws, 'Gravando o resultado da partida anterior. Tente de novo em instantes.', 'result_pending');
       if (this.busyElsewhere(uid)) return this.fail(ws, 'Você já está em outra partida ou fila.', 'busy');
       let revision, operation;
       const live = () => this.sessionReady(ws, uid, revision && revision.sessionRevision) && (!this.rated ||
@@ -82,6 +87,7 @@ class Ranked {
         // Última revalidação e mutação são síncronas, sem await entre elas.
         const active = this.activeMatchOf(uid);
         if (active) return this.pushState(active, this.now());
+        if (this.persistPending(uid)) return this.fail(ws, 'Gravando o resultado da partida anterior. Tente de novo em instantes.', 'result_pending');
         if (this.busyElsewhere(uid)) return this.fail(ws, 'Você já está em outra partida ou fila.', 'busy');
         if (this.backend && this.backend.modeOpen && !this.backend.modeOpen(this.kind, mode)) return this.fail(ws, require('../admin/controls').CLOSED_MESSAGE, 'mode_disabled');   // Admin: modo/ritmo desativado durante a leitura do PL
         if (!this.mm.enqueue(mode, entry)) return this.fail(ws, 'Você já está na fila.', 'already_queued');
@@ -158,8 +164,10 @@ class Ranked {
     { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('finished', this.kind, match.mode, match.result && match.result.reason); }
     let saved = false;
     if (this.rated) {
-      try { await this.backend.store.recordRankedMatch(match.record()); saved = true; }
-      catch (e) { console.error('ranked persist failed', match.id, e && e.message); }
+      // H03: novas tentativas seguras; nunca aplica PL duas vezes (ver ranked/persist.js)
+      const r = await persistRanked(this.backend.store, match.record());
+      saved = r.saved;
+      if (r.attempts > 1 || r.already) console.log('ranked persist', match.id, JSON.stringify({ saved: r.saved, attempts: r.attempts, already: r.already }));
     }
     match.saved = saved;
     if (!this.rated && match.result) this.recordCasual(match);

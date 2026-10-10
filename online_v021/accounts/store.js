@@ -251,6 +251,8 @@ class MemoryStore {
     this.matches.push({ ...r });
     return r.match_id;
   }
+  // H03 · a partida já está gravada? (nova tentativa idempotente: nunca aplica PL duas vezes)
+  async hasRankedMatch(matchId) { return this.matches.some(m => m.match_id === matchId); }
 
   // ---------- Amigos (0002_fraiha_social) ----------
   async searchProfiles(query, limit = 20) {
@@ -371,6 +373,12 @@ class SupabaseStore {
   }
   async recordRankedMatch(r) {
     return this.req('/rpc/fraiha_record_ranked_match', { method: 'POST', body: JSON.stringify({ p: r }) });
+  }
+  // H03 · leitura com service role da tabela matches (0001): confirma gravação cuja resposta se perdeu.
+  async hasRankedMatch(matchId) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(matchId || ''))) return false;
+    const rows = await this.req('/matches?match_id=eq.' + encodeURIComponent(matchId) + '&select=match_id');
+    return Array.isArray(rows) && rows.length > 0;
   }
   // ---------- Direitos (0005): tabela entitlements, escrita só pelo webhook/backend ----------
   async getEntitlements(userId) {
