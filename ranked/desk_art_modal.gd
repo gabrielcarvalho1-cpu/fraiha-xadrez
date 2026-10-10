@@ -8,7 +8,7 @@ extends Control
 const FONT_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")
 const FONT_BODY := preload("res://ui_kit/fonts/Alegreya-Bold.woff")
 const FONT_MED := preload("res://ui_kit/fonts/Alegreya-Medium.woff")
-const BAR_FILL := preload("res://ranked/art/desk_bar_fill.png")
+const BAR_FILL_PATH := "res://ranked/art/desk_bar_fill.png"   # R55.4 · só no PC (carregada no 1º uso)
 const CREAM := Color("f4ead2")
 const GOLD := Color("f7d27a")
 const MUTED := Color("c3c9bb")
@@ -143,7 +143,7 @@ func bar(r: Rect2, from: float, to: float):
 	_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_bar)
 	_bar_fill = NinePatchRect.new()   # pedaço dourado da referência repetido na horizontal, esticado na vertical
-	_bar_fill.texture = BAR_FILL
+	_bar_fill.texture = load(BAR_FILL_PATH)
 	_bar_fill.axis_stretch_horizontal = NinePatchRect.AXIS_STRETCH_MODE_TILE_FIT
 	_bar_fill.axis_stretch_vertical = NinePatchRect.AXIS_STRETCH_MODE_STRETCH
 	_bar_fill.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR

@@ -38,7 +38,8 @@ const FONT_UI := preload("res://xeque/art/fontes/Jersey20-Regular.woff2")
 const FONT_TITLE := preload("res://xeque/art/fontes/Jacquard24-Regular.woff2")
 const FONT_OS7 := preload("res://marcha/art/fonts/oswald-latin-700-normal.woff")   # R55
 const FONT_OS6 := preload("res://marcha/art/fonts/oswald-latin-600-normal.woff")
-const LOGO_R55 := preload("res://xeque/art/interface/logo_r55.png")
+const LOGO_R55_PATH := "res://xeque/art/interface/logo_r55.png"   # R55.4 · só no layout do PC
+var LOGO_R55: Texture2D = null
 const TUTORIAL_BG := preload("res://xeque/art/telas/tutorial_fundo.png")
 const RESULT_BG := preload("res://xeque/art/telas/resultado_fundo.png")
 ## peças douradas do conjunto Ouro do jogo (as mesmas desenhadas nas cartas)
@@ -92,6 +93,13 @@ var origin := Vector2.ZERO
 var fonts := {}
 var cards := {}
 var cards_clean := {}            # R55 · PC: cartas limpas (tools/xeque_card_blank_r55.py)
+## R55.4 · artes SÓ do layout do PC (cartas limpas 720x1008 e logo): carregadas quando o layout do PC entra em
+## uso (antes: no _ready, também no celular — ~13 MB RGBA a mais). Celular em pé/deitado nunca carrega.
+func _load_desk_art():
+    if LOGO_R55 == null: LOGO_R55 = load(LOGO_R55_PATH)
+    # cartas sem o texto impresso (o nome, PEÇA/CORINGA e a linha pequena são desenhados ao vivo, nítidos)
+    if cards_clean.is_empty():
+        for n in ["rei", "rainha", "cavalo", "peao"]: cards_clean[n] = load("res://xeque/art/cartas/carta_%s_limpa.png" % n)
 var avatars := []
 var pieces := {}
 var clock_tex := {}
@@ -178,8 +186,6 @@ func setup(p_hub, p_stage):
 
 func _ready():
     for n in ["rei", "rainha", "cavalo", "peao"]: cards[n] = load("res://xeque/art/cartas/carta_%s.png" % n)
-    # R55 · PC: cartas sem o texto impresso (o nome, PEÇA/CORINGA e a linha pequena são desenhados ao vivo, nítidos)
-    for n in ["rei", "rainha", "cavalo", "peao"]: cards_clean[n] = load("res://xeque/art/cartas/carta_%s_limpa.png" % n)
     for s in ["neutro", "pulsando", "perigo", "quase", "disparado"]: clock_tex[s] = load("res://xeque/art/relogio/relogio_%s.png" % s)
     for s in ["normal", "hover", "pressionado", "desabilitado", "ativado"]: xeque_tex[s] = load("res://xeque/art/interface/botao_xeque_%s.png" % s)
     for n in PIECE_REGION:
@@ -289,6 +295,7 @@ func _relayout():
     elif vs.x / maxf(1.0, vs.y) >= 1.95 and MobileLayout.active(get_viewport()): layout = "landscape"
     else: layout = "desktop"
     design = {"desktop": Vector2(1920, 1080), "portrait": Vector2(1080, 1920), "landscape": Vector2(1950, 900)}[layout]
+    if layout == "desktop": _load_desk_art()
     k = minf(vs.x / design.x, vs.y / design.y)
     origin = (vs - design * k) / 2.0
     _redraw()

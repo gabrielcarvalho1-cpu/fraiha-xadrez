@@ -18,11 +18,16 @@ const Cosmetics = preload("res://profile/premium_cosmetics.gd")
 const PlayerPortrait = preload("res://profile/player_portrait.gd")
 const Plaque = preload("res://ranked/player_plaque.gd")   # R46 · placa do jogador (proposta A aprovada)
 const DeskArt = preload("res://ranked/desk_art_modal.gd")   # R54 · telas do PC na arte de referência
-const ART_RESIGN := preload("res://ranked/art/desk_resign_modal.png")
-const ART_FOUND := preload("res://ranked/art/desk_found.png")
-const ART_RESULT := {"win_ranked": preload("res://ranked/art/desk_win_ranked.png"), "win_casual": preload("res://ranked/art/desk_win_casual.png"),
-	"loss_ranked": preload("res://ranked/art/desk_loss_ranked.png"), "loss_casual": preload("res://ranked/art/desk_loss_casual.png")}
-const ART_RESIGN_BTN := preload("res://ranked/art/desk_resign_btn.png")
+## R55.4 · artes SÓ do PC (R54): caminhos, não preload — no celular não são carregadas (eram ~22 MB RGBA
+## residentes à toa). No PC são carregadas no setup (mesmo momento de antes) e desk_tex() garante em qualquer uso.
+const DESK_ART := {"resign": "res://ranked/art/desk_resign_modal.png", "found": "res://ranked/art/desk_found.png",
+	"win_ranked": "res://ranked/art/desk_win_ranked.png", "win_casual": "res://ranked/art/desk_win_casual.png",
+	"loss_ranked": "res://ranked/art/desk_loss_ranked.png", "loss_casual": "res://ranked/art/desk_loss_casual.png",
+	"resign_btn": "res://ranked/art/desk_resign_btn.png"}
+var _desk_tex := {}
+func desk_tex(key: String) -> Texture2D:
+    if not _desk_tex.has(key): _desk_tex[key] = load(DESK_ART[key])
+    return _desk_tex[key]
 const LEAGUE_ACCENT := [Color("b07a44"), Color("a9b1b6"), Color("c98a4a"), Color("d3dbe0"), Color("f4ce7f"), Color("86dccf"), Color("68d48a"), Color("94c9ff"), Color("c99bff"), Color("ff9b8f"), Color("ffd76a")]
 var hub = null   # main_hub (meu selo na faixa "Você")
 var account
@@ -79,6 +84,8 @@ func all_modes() -> Array:
     return MODES if rated() else CASUAL_MODES
 
 func setup(service, ranked_controller):
+    if not preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):   # R55.4 · PC: carrega as artes do PC já no setup
+        for k in DESK_ART: desk_tex(k)
     account = service
     controller = ranked_controller
     layer = 45
@@ -570,7 +577,7 @@ func _desk_art(which: String) -> bool:
     var d = desk_art
     match which:
         "confirm_resign":
-            d.begin(ART_RESIGN, Vector2(1254, 1254), "resign")
+            d.begin(desk_tex("resign"), Vector2(1254, 1254), "resign")
             var txt := "A desistência conta como DERROTA contra o computador. O relógio continua correndo enquanto você decide." if src() != controller \
                 else ("A desistência conta como DERROTA nesta modalidade e o relógio continua correndo enquanto você decide." if rated() \
                 else "A desistência encerra a partida como DERROTA (Casual: não altera PL). O relógio continua correndo enquanto você decide.")
@@ -581,7 +588,7 @@ func _desk_art(which: String) -> bool:
                 src().resign(), "DeskResign", 30)
         "found":
             var opp: Dictionary = controller.opponent
-            d.begin(ART_FOUND, Vector2(1122, 1402), "found")
+            d.begin(desk_tex("found"), Vector2(1122, 1402), "found")
             var av := String(opp.get("avatar_id", opp.get("avatar", "")))
             var tex: Texture2D = null
             if hub != null and hub.has_method("avatar_texture"):
@@ -600,7 +607,7 @@ func _desk_art(which: String) -> bool:
             if bool(r.get("unknown", false)) or not outcome in ["win", "loss"]: return false
             if rated() and bool(r.get("promoted", false)): return false
             var win := outcome == "win"
-            d.begin(ART_RESULT["%s_%s" % ["win" if win else "loss", "ranked" if rated() else "casual"]], Vector2(1122, 1402), "result_" + outcome)
+            d.begin(desk_tex("%s_%s" % ["win" if win else "loss", "ranked" if rated() else "casual"]), Vector2(1122, 1402), "result_" + outcome)
             var sub_y := 540.0 if win else 532.0
             d.label("%s · %s" % [String(r.get("mode_name", "")).to_upper(), String(r.get("reason_text", ""))], Rect2(230, sub_y, 662, 56), 46, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskResultSub"
             if rated():
@@ -1005,7 +1012,7 @@ func _style_resign(art: bool):
         resign_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
         for st in ["normal", "hover", "pressed", "focus"]:
             var t := StyleBoxTexture.new()
-            t.texture = ART_RESIGN_BTN
+            t.texture = desk_tex("resign_btn")
             t.modulate_color = {"hover": Color(1.12, 1.1, 1.06), "pressed": Color(0.82, 0.8, 0.78)}.get(st, Color.WHITE)
             resign_button.add_theme_stylebox_override(st, t)
         return

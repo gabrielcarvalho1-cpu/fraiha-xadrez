@@ -34,7 +34,7 @@ const FONT_SEMI := preload("res://account/fonts/Cinzel-SemiBold.woff")
 const MobileLayout := preload("res://ui_v022/mobile_layout.gd")
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
 ## R55 · painel CONFIGURAÇÕES da partida no PC (arte do dono: tools/ui_ref/config/configuracoes_ref.png)
-const SETTINGS_FRAME := preload("res://ranked/art/desk_settings_frame.png")
+const SETTINGS_FRAME_PATH := "res://ranked/art/desk_settings_frame.png"   # R55.4 · só no PC (1º uso)
 const SETTINGS_PANEL := Rect2(1359, 86, 309, 282)     # px da arte do PC (logo abaixo da engrenagem)
 const CREAM := Color("f3ede0")
 const GOLD := Color("f4ce7f")
@@ -906,6 +906,7 @@ func _keep_settings() -> void:
         settings.size = r.size
         settings.pointer_x = R(PC.gear).get_center().x - r.position.x
         settings.gear_rect = R(PC.gear)
+        if settings.frame_tex == null: settings.frame_tex = load(SETTINGS_FRAME_PATH)
         if not settings.visible: settings.show()
         settings.queue_redraw()
     elif settings.visible:
@@ -951,6 +952,7 @@ class SettingsPanel extends Control:
     const ROWS := [["music", "Música", 73.0], ["fx", "Efeitos sonoros", 117.0], ["mic", "Microfone", 161.5], ["full", "Tela cheia", 206.0]]
     const TITLE := "CONFIGURAÇÕES"
     var skin
+    var frame_tex: Texture2D = null     # R55.4 · moldura carregada no 1º uso (só no PC)
     var pointer_x := 0.0
     var gear_rect := Rect2()
     var hover := ""
@@ -999,7 +1001,7 @@ class SettingsPanel extends Control:
         var px := pointer_x
         var top := -2.0 * k
         draw_colored_polygon(PackedVector2Array([Vector2(px, top - 14 * k), Vector2(px + 9 * k, top), Vector2(px - 9 * k, top)]), Color("e8901f"))
-        draw_texture_rect(skin.SETTINGS_FRAME, Rect2(Vector2.ZERO, size), false)
+        if frame_tex != null: draw_texture_rect(frame_tex, Rect2(Vector2.ZERO, size), false)
         # cabeçalho: engrenagem + CONFIGURAÇÕES
         var cream := Color("f3e3bd")
         _gear(Vector2(37, 28) * k, 11.0 * k, cream)

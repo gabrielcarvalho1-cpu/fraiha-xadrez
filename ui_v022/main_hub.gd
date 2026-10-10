@@ -2617,8 +2617,10 @@ func public_cosmetics() -> Dictionary:
 # (retrato, nickname, liga/PL, barra, insígnia, texto da conta) e as áreas de clique.
 # R55 · PAINEL DE PERFIL da Home (PC): moldura nova do dono (tools/home_profile_art.py) sobre o painel antigo.
 # Medidas em px da arte da Home (1672x941): referência 1774x887 escalada para PROFILE_FRAME_RECT.
-const PROFILE_FRAME_TEX := preload("res://ui_v022/art/home_profile_frame.png")
-const PROFILE_UNDER_TEX := preload("res://ui_v022/art/home_profile_under.png")   # a Home sem o painel antigo
+## R55.4 · só a Home do PC usa estas artes: carregadas ao montar o painel no PC, nunca no celular.
+const PROFILE_FRAME_PATH := "res://ui_v022/art/home_profile_frame.png"
+const PROFILE_UNDER_PATH := "res://ui_v022/art/home_profile_under.png"   # a Home sem o painel antigo
+const PROFILE_UNDER_SIZE := Vector2(476, 252)
 const PROFILE_UNDER_POS := Vector2(1196, 6)
 const PROFILE_FRAME_RECT := Rect2(1198, 19.5, 470, 235)
 const PROFILE_BODY := Rect2(1214, 36.5, 438, 200)     # área clicável (corpo da moldura, sem os ornamentos de fora)
@@ -2706,16 +2708,17 @@ func _refresh_league_widgets():
 
 ## R55 · moldura nova + remendo (a Home sem o painel antigo) + STATUS do jogador com lápis para editar.
 func _build_profile_frame(pbtn: Control):
+    var desk: bool = not preload("res://ui_v022/mobile_layout.gd").active(get_viewport())   # R55.4
     var under := TextureRect.new()
     under.name = "RefProfileUnder"
-    under.texture = PROFILE_UNDER_TEX
+    if desk: under.texture = load(PROFILE_UNDER_PATH)
     under.position = PROFILE_UNDER_POS - pbtn.position
-    under.size = PROFILE_UNDER_TEX.get_size()
+    under.size = PROFILE_UNDER_SIZE
     under.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(under)
     var frame := TextureRect.new()
     frame.name = "RefProfileFrame"
-    frame.texture = PROFILE_FRAME_TEX
+    if desk: frame.texture = load(PROFILE_FRAME_PATH)
     frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     frame.stretch_mode = TextureRect.STRETCH_SCALE
     frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR

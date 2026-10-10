@@ -11,9 +11,10 @@ signal replay_requested(bot_id: String)
 signal analyze_requested
 
 const DeskArt = preload("res://ranked/desk_art_modal.gd")   # R54 · PC: telas na arte de referência
-const ART_WIN := preload("res://ranked/art/desk_bot_win.png")
-const ART_LOSS := preload("res://ranked/art/desk_bot_loss.png")
-const ART_CROWN := preload("res://ranked/art/desk_icon_crown.png")
+## R55.4 · artes SÓ do PC (R54): carregadas no primeiro uso (telas do PC), nunca no celular.
+const ART_WIN_PATH := "res://ranked/art/desk_bot_win.png"
+const ART_LOSS_PATH := "res://ranked/art/desk_bot_loss.png"
+const ART_CROWN_PATH := "res://ranked/art/desk_icon_crown.png"
 const MobileLayout = preload("res://ui_v022/mobile_layout.gd")
 
 const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
@@ -33,6 +34,8 @@ var buttons := {}
 var can_analyze: Callable          # stage.analysis_available (ANALISAR PARTIDA só quando há o que analisar)
 
 func _ready():
+    if not preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):   # R55.4 · PC: mesmas artes já carregadas
+        for p in [ART_WIN_PATH, ART_LOSS_PATH, ART_CROWN_PATH]: load(p)
     layer = 60
 
 ## Próximo bot da escada (ordem oficial do bot_ladder.json); "" depois do Challenger.
@@ -182,7 +185,7 @@ func _desk(tex: Texture2D) -> Control:
 
 func _desk_buttons(d, main_text: String, main_action: Callable, key: String):
     buttons.clear()
-    d.image(ART_CROWN, Rect2(278, 874, 60, 58)).name = "DeskBotCrown"
+    d.image(load(ART_CROWN_PATH), Rect2(278, 874, 60, 58)).name = "DeskBotCrown"
     d.label(main_text, Rect2(350, 869, 620, 60), 40, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskBotMainText"
     buttons[key] = d.button(Rect2(150, 853, 960, 94), main_action, "DeskBotMain", 16)   # advance / replay (mesmas chaves do painel antigo)
     buttons["analyze"] = d.button(Rect2(165, 963, 925, 84), func():
@@ -195,7 +198,7 @@ func _desk_buttons(d, main_text: String, main_action: Callable, key: String):
 
 ## R54 · PC: VITÓRIA contra o bot na arte de referência (brasões, próximo adversário, recompensa e 3 ações).
 func _desk_victory(bot_id: String, bot: Dictionary, reward: Dictionary, fresh: bool):
-    var d = _desk(ART_WIN)
+    var d = _desk(load(ART_WIN_PATH))
     var final := next_bot.is_empty()
     var bname := String(bot.get("name", "BOT"))
     d.label(bname + (" DERROTADO" if fresh else " DERROTADO NOVAMENTE"), Rect2(250, 322, 755, 52), 42, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBotSub"
@@ -243,7 +246,7 @@ func show_defeat(bot_id: String, display_name := ""):
     next_bot = next_of(bot_id)
     var bot := Ladder.bot(bot_id)
     var bname := String(bot.get("name", display_name if not display_name.is_empty() else "COMPUTADOR"))
-    var d = _desk(ART_LOSS)
+    var d = _desk(load(ART_LOSS_PATH))
     d.label(bname + " VENCEU A PARTIDA", Rect2(250, 322, 755, 52), 42, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBotSub"
     if not bot.is_empty():
         d.image(ThemeCatalog.badge_texture(String(bot.get("league", bot_id))), Rect2(522, 358, 210, 206)).name = "DeskBotShield"
