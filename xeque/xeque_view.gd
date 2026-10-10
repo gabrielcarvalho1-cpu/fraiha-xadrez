@@ -128,9 +128,23 @@ func arrow(pos: Vector2, col: Color):
 func tw(s: String, key: String, fs: int) -> float:
     return font(key).get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 
+## Maior tamanho (até fs, mínimo 9) em que o texto cabe em room.
+## Atlas (auditoria de fontes): medir também rasteriza os glifos, e cada tamanho medido vira um atlas novo.
+## O laço antigo media tamanho por tamanho (fs, fs-1, fs-2...); agora mede no tamanho pedido, calcula o
+## tamanho pela proporção da largura e só confere esse (raramente mais um). O resultado fica em cache,
+## então o mesmo texto não é medido de novo a cada quadro.
+var _fit_cache := {}
 func fit(s: String, key: String, fs: int, room: float) -> int:
+    var ck := "%s|%d|%.2f|%s" % [key, fs, room, s]
+    if _fit_cache.has(ck): return _fit_cache[ck]
     var f := fs
-    while f > 9 and tw(s, key, f) > room: f -= 1
+    if f > 9:
+        var w := tw(s, key, fs)
+        if w > room:
+            f = clampi(int(floor(fs * room / maxf(w, 0.001))), 9, fs - 1)
+            while f > 9 and tw(s, key, f) > room: f -= 1
+    if _fit_cache.size() > 512: _fit_cache.clear()
+    _fit_cache[ck] = f
     return f
 
 ## Texto com trechos destacados entre *asteriscos* (cor de destaque).
@@ -1405,8 +1419,13 @@ func _draw_intro():
         if tn > 0.0:
             var bump := 1.0 + 0.6 * (1.0 - tn)
             var label := ("%d ×" % counts[kinds[i]]) if kinds[i] != Rules.JOKER else ("%d × CORINGA" % counts[kinds[i]])
-            var fs := int((64 if not portrait else 48) * bump)
-            text(label, Vector2(x - cw, y + sz.y / 2.0 + 70), "ui_sp4", fs, Color("7cf0a0") if kinds[i] == Rules.JOKER else Color("ffd257"), cw * 2.0, HORIZONTAL_ALIGNMENT_CENTER, 8, Color(0.1, 0.05, 0, al))
+            # Atlas: o tamanho da fonte é FIXO e o pulo é escala do desenho. Antes era int(48 * bump), e cada
+            # tamanho intermediário da animação criava um atlas novo (com e sem contorno, ~19,5 MiB no celular).
+            var fs := 64 if not portrait else 48
+            var org := Vector2(x, y + sz.y / 2.0 + 70)
+            draw_set_transform(ui.origin + org * ui.k, 0.0, Vector2(ui.k * bump, ui.k * bump))
+            text(label, Vector2(-cw, 0), "ui_sp4", fs, Color("7cf0a0") if kinds[i] == Rules.JOKER else Color("ffd257"), cw * 2.0, HORIZONTAL_ALIGNMENT_CENTER, 8, Color(0.1, 0.05, 0, al))
+            draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
     var foot_al := al * clampf((t - 1.4) / 0.4, 0.0, 1.0)
     var foot := "%d CARTAS  ·  %d PARA CADA JOGADOR" % [Rules.deck_size(), Rules.HAND]
     if portrait:
