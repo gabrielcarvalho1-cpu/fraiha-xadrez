@@ -1,12 +1,17 @@
-FROM debian:bookworm-slim
-ARG GODOT_VERSION=4.5.1
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip libasound2 libx11-6 libxcursor1 libxinerama1 libxrandr2 libxi6 libgl1 libfontconfig1 && rm -rf /var/lib/apt/lists/*
-RUN curl -fL "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o /tmp/godot.zip && unzip /tmp/godot.zip -d /tmp/godot && mv /tmp/godot/Godot* /usr/local/bin/godot && chmod +x /usr/local/bin/godot && rm -rf /tmp/godot /tmp/godot.zip
-RUN useradd --create-home godot
+# FRAIHA · backend MODERNO (Node, online_v021): contas, Casual, Ranked, Amigos, DM, convites, XEQUE/Marcha
+# online (party_*/xeque_*/marcha_*), voz, pagamentos e Admin. É o MESMO servidor do staging (npm start).
+# Antes este arquivo subia o servidor LEGADO em Godot (online_v020/server.gd, só salas create/join): qualquer
+# serviço Render em runtime Docker apontado para esta branch rodaria o protocolo antigo.
+# Variáveis (Render > Environment, NUNCA no Git): ver docs/backend/BACKEND_PRODUCAO.md.
+FROM node:22-bookworm-slim
 WORKDIR /app
-COPY --chown=godot:godot . /app
-USER godot
-RUN godot --headless --editor --path /app --import --quit
+ENV NODE_ENV=production
+COPY package.json ./
+RUN npm install --omit=dev --no-audit --no-fund
+COPY online_v021 ./online_v021
+COPY admin ./admin
+COPY bot/bot_ladder.json ./bot/bot_ladder.json
 ENV PORT=10000
 EXPOSE 10000
-CMD ["godot", "--headless", "--path", "/app", "--script", "res://online_v020/server.gd"]
+USER node
+CMD ["node", "online_v021/server.js"]

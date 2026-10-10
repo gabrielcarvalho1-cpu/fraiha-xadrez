@@ -1,3 +1,6 @@
+# FRAIHA · Blueprint em runtime Docker: o Dockerfile desta branch sobe o backend MODERNO (Node, online_v021/server.js),
+# o mesmo do staging. Nome/plano/porta mantidos como estavam (não renomeia nem recria serviço).
+# Segredos ficam só em Render > Environment. Ver docs/backend/BACKEND_PRODUCAO.md.
 services:
   - type: web
     name: fraiha-xadrez-salas
