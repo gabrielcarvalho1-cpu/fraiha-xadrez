@@ -65,6 +65,8 @@
     save();
   }
   log("boot");
+  // R55.6: a recuperação de perda de contexto WebGL (web/gl_recovery) registra os passos aqui
+  window.fraihaDiagLog = function (k, extra) { log(redact(k, 40), extra); };
   ["pagehide", "pageshow", "beforeunload", "freeze", "resume"].forEach(function (n) {
     window.addEventListener(n, function (ev) { log(n, ev && ev.persisted !== undefined ? { persisted: !!ev.persisted } : null); }, true);
   });
@@ -94,6 +96,8 @@
     var clean = ev.some(function (e) { return e && (e.k === "pagehide" || e.k === "beforeunload"); });
     var notes = [];
     if (ev.some(function (e) { return e && e.k === "webgl_lost"; })) notes.push("houve perda de contexto WebGL");
+    if (ev.some(function (e) { return e && e.k === "gl_reload_go"; })) notes.push("reload AUTOMÁTICO da recuperação de gráficos (R55.6)");
+    if (ev.some(function (e) { return e && e.k === "gl_loop_blocked"; })) notes.push("perdas repetidas: reload automático bloqueado (anti-loop)");
     if (ev.some(function (e) { return e && (e.k === "error" || e.k === "rejection"); })) notes.push("houve erro JS");
     return {
       verdict: clean ? "SAÍDA REGISTRADA (pagehide/beforeunload: reload, navegação ou fechamento normais)"

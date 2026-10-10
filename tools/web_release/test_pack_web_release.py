@@ -22,6 +22,9 @@ def fake_tree(base, with_voice=True, big=False, pck_bytes=None):
             f.write(pck if n == "index.pck" else (HTML % (len(pck), len(b"index.wasm"))).encode() if n == "index.html" else n.encode())
     for n in ["stockfish-19-lite-single.js", "stockfish-19-lite-single.wasm", "COPYING-GPLv3.txt"]:
         open(os.path.join(web, "engines", n), "w").write(n)
+    os.makedirs(os.path.join(web, "gl_recovery"))
+    with open(os.path.join(HERE, "../../web/gl_recovery/fraiha-gl-recovery.js"), encoding="utf-8") as f:
+        open(os.path.join(web, "gl_recovery", "fraiha-gl-recovery.js"), "w", encoding="utf-8").write(f.read())
     if with_voice:
         os.makedirs(os.path.join(web, "voice"))
         for n in ["AgoraRTC_N-4.24.8.js", "fraiha-voice-bridge-v1.js", "LEIA-ME-VOZ.txt"]:
@@ -107,6 +110,26 @@ class PackTest(unittest.TestCase):
         pacote = lambda ns: [n for n in ns if n.startswith("index-p")]
         self.assertEqual(motor(names[0]), motor(names[1]))       # mesmo Godot: WASM continua em cache
         self.assertNotEqual(pacote(names[0]), pacote(names[1]))  # jogo novo: PCK com nome novo
+
+    def test_recuperacao_webgl_nos_dois_modos(self):
+        for extra in ([], ["--legado"]):
+            with tempfile.TemporaryDirectory() as t:
+                out, r = self.run_pack(t, *fake_tree(t), *extra)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                html = open(os.path.join(out, "index.html"), encoding="utf-8").read()
+                self.assertEqual(html.count('<script id="fraiha-gl-recovery">'), 1, extra)
+                # vem antes de qualquer outro script (o ouvinte em captura precisa existir antes do Godot)
+                self.assertLess(html.index('id="fraiha-gl-recovery"'), html.index("<script src="), extra)
+                self.assertIn("webglcontextlost", html)
+
+    def test_sem_recuperacao_webgl_nao_gera(self):
+        with tempfile.TemporaryDirectory() as t:
+            exp, web = fake_tree(t)
+            os.remove(os.path.join(web, "gl_recovery", "fraiha-gl-recovery.js"))
+            out, r = self.run_pack(t, exp, web)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("fraiha-gl-recovery.js", r.stdout + r.stderr)
+            self.assertFalse(os.path.exists(out))
 
     def test_html_inesperado_falha_fechado(self):
         with tempfile.TemporaryDirectory() as t:

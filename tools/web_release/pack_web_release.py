@@ -14,6 +14,9 @@ R55.5 (cache Web): por padrão os arquivos do motor, o PCK e o splash saem com o
 segunda pasta de upload (UPLOAD-2-POR-ULTIMO): ele só entra no bucket depois que todos os arquivos que
 ele cita já estão lá. --legado gera os nomes antigos (index.pck/index.wasm/index.js).
 
+R55.6: o index.html (nos dois modos) recebe INLINE a recuperação de perda de contexto WebGL
+(web/gl_recovery/fraiha-gl-recovery.js). Sem esse arquivo, nada é gerado.
+
 Uso: pack_web_release.py <export_dir> <web_dir_do_repo> <saida> <TAG> <commit> [--legado]
 """
 import base64, hashlib, os, shutil, sys
@@ -42,11 +45,31 @@ def sha(path):
 OPTIONAL = ["reload_diag.js"]
 
 
+GL_RECOVERY = os.path.join("gl_recovery", "fraiha-gl-recovery.js")
+GL_TAG_ID = "fraiha-gl-recovery"
+
+
+def inject_gl_recovery(html, web_dir):
+    """Coloca o script de recuperação de contexto WebGL logo no começo do <head> (fail-closed)."""
+    src = os.path.join(web_dir, GL_RECOVERY)
+    if not os.path.isfile(src) or os.path.getsize(src) == 0:
+        raise SystemExit("ERRO: %s ausente (recuperação de WebGL obrigatória)" % src)
+    if 'id="%s"' % GL_TAG_ID in html:
+        raise SystemExit("ERRO: index.html já tem a recuperação de WebGL")
+    if html.count("<head>") != 1:
+        raise SystemExit("ERRO: <head> não encontrado exatamente 1 vez no index.html")
+    with open(src, encoding="utf-8") as f:
+        js = f.read()
+    if "</script" in js:
+        raise SystemExit("ERRO: o script de recuperação não pode conter </script")
+    return html.replace("<head>", '<head>\n<script id="%s">\n%s</script>' % (GL_TAG_ID, js), 1)
+
+
 def files_needed(export_dir, web_dir, fp=None):
     out = []
     if fp is None:
         for n in INDEX:
-            out.append((n, os.path.join(export_dir, n)))
+            out.append((n, None if n == "index.html" else os.path.join(export_dir, n)))
     else:
         files, _html, _info = fp
         out.append(("index.html", None))                 # gerado (o conteúdo vem do fingerprint)
@@ -72,8 +95,16 @@ def main(argv):
     if len(args) != 5:
         raise SystemExit(__doc__)
     export_dir, web_dir, out, tag, commit = args
+    if not os.path.isfile(os.path.join(export_dir, "index.html")):
+        raise SystemExit("ERRO: arquivos obrigatórios ausentes (nada foi gerado): index.html")
     fp = None if legacy else fingerprint_web.plan(export_dir)
     files = files_needed(export_dir, web_dir, fp)
+    if fp is not None:
+        html = fp[1]
+    else:
+        with open(os.path.join(export_dir, "index.html"), encoding="utf-8") as f:
+            html = f.read()
+    html = inject_gl_recovery(html, web_dir)          # valida ANTES de criar qualquer coisa
     if os.path.exists(out) and os.listdir(out):
         raise SystemExit("ERRO: pasta de saída já existe e não está vazia: " + out)
     os.makedirs(out, exist_ok=True)
@@ -81,8 +112,8 @@ def main(argv):
              "# caminho  tamanho  SHA256 — TODOS obrigatórios no bucket (o MONTAR-UPLOAD confere cada um)"]
     if fp is not None:
         lines.insert(1, "# R55.5 nomes com SHA-256: motor %s · pacote %s · index.html sobe POR ULTIMO" % (fp[2]["executable"], fp[2]["mainPack"]))
-        with open(os.path.join(out, "index.html"), "w", encoding="utf-8", newline="") as w:
-            w.write(fp[1])
+    with open(os.path.join(out, "index.html"), "w", encoding="utf-8", newline="") as w:
+        w.write(html)
     for rel, src in files:
         if src is None:
             src = os.path.join(out, rel)
