@@ -9,9 +9,16 @@ uma pasta voice/ (ou engines/) faltando ou corrompida PARA a montagem em vez de 
 Imagens (.png) vão como <arquivo>.png.b64 (texto base64): a cópia para o PC recomprime PNGs pequenos
 (mesmos pixels, bytes diferentes) e isso quebraria a conferência de SHA256. O MONTAR-UPLOAD decodifica.
 
-Uso: pack_web_release.py <export_dir> <web_dir_do_repo> <saida> <TAG> <commit>
+R55.5 (cache Web): por padrão os arquivos do motor, o PCK e o splash saem com o SHA-256 no nome
+(tools/web_release/fingerprint_web.py) e o index.html aponta para eles. O index.html vai SOZINHO numa
+segunda pasta de upload (UPLOAD-2-POR-ULTIMO): ele só entra no bucket depois que todos os arquivos que
+ele cita já estão lá. --legado gera os nomes antigos (index.pck/index.wasm/index.js).
+
+Uso: pack_web_release.py <export_dir> <web_dir_do_repo> <saida> <TAG> <commit> [--legado]
 """
 import base64, hashlib, os, shutil, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fingerprint_web
 
 PART = 19922944
 INDEX = ["index.html", "index.js", "index.wasm", "index.pck", "index.png", "index.icon.png",
@@ -31,30 +38,56 @@ def sha(path):
     return h.hexdigest().upper()
 
 
-def files_needed(export_dir, web_dir):
+# Arquivos opcionais do export que vão junto SE o index.html os citar (ex.: diagnóstico de reload).
+OPTIONAL = ["reload_diag.js"]
+
+
+def files_needed(export_dir, web_dir, fp=None):
     out = []
-    for n in INDEX:
-        out.append((n, os.path.join(export_dir, n)))
+    if fp is None:
+        for n in INDEX:
+            out.append((n, os.path.join(export_dir, n)))
+    else:
+        files, _html, _info = fp
+        out.append(("index.html", None))                 # gerado (o conteúdo vem do fingerprint)
+        for n in sorted(files):
+            out.append((n, files[n]))
+        for n in ["index.icon.png", "index.apple-touch-icon.png"]:
+            out.append((n, os.path.join(export_dir, n)))
+        for n in OPTIONAL:
+            if os.path.isfile(os.path.join(export_dir, n)) and ('src="%s"' % n) in _html:
+                out.append((n, os.path.join(export_dir, n)))
     for d, names in REQUIRED_DIRS.items():
         for n in names:
             out.append((d + "/" + n, os.path.join(web_dir, d, n)))
-    missing = [rel for rel, src in out if not os.path.isfile(src) or os.path.getsize(src) == 0]
+    missing = [rel for rel, src in out if src is not None and (not os.path.isfile(src) or os.path.getsize(src) == 0)]
     if missing:
         raise SystemExit("ERRO: arquivos obrigatórios ausentes (nada foi gerado): " + ", ".join(missing))
     return out
 
 
 def main(argv):
-    if len(argv) != 6:
+    args = [a for a in argv[1:] if a != "--legado"]
+    legacy = "--legado" in argv[1:]
+    if len(args) != 5:
         raise SystemExit(__doc__)
-    export_dir, web_dir, out, tag, commit = argv[1:]
-    files = files_needed(export_dir, web_dir)
+    export_dir, web_dir, out, tag, commit = args
+    fp = None if legacy else fingerprint_web.plan(export_dir)
+    files = files_needed(export_dir, web_dir, fp)
     if os.path.exists(out) and os.listdir(out):
         raise SystemExit("ERRO: pasta de saída já existe e não está vazia: " + out)
     os.makedirs(out, exist_ok=True)
     lines = ["# FRAIHA build Web %s · commit %s" % (tag, commit),
              "# caminho  tamanho  SHA256 — TODOS obrigatórios no bucket (o MONTAR-UPLOAD confere cada um)"]
+    if fp is not None:
+        lines.insert(1, "# R55.5 nomes com SHA-256: motor %s · pacote %s · index.html sobe POR ULTIMO" % (fp[2]["executable"], fp[2]["mainPack"]))
+        with open(os.path.join(out, "index.html"), "w", encoding="utf-8", newline="") as w:
+            w.write(fp[1])
     for rel, src in files:
+        if src is None:
+            src = os.path.join(out, rel)
+            lines.append("%s  %d  %s" % (rel, os.path.getsize(src), sha(src)))
+            continue
         size = os.path.getsize(src)
         digest = sha(src)
         dest = os.path.join(out, *rel.split("/"))
@@ -90,8 +123,9 @@ def main(argv):
         with open(os.path.join(out, cmd + ".cmd"), "w", newline="\r\n") as f:
             # fail-closed: o código de saída do PowerShell é devolvido DEPOIS do pause (sem isso o .cmd sai 0)
             f.write('@echo off\ntitle FRAIHA %s\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File "%%~dp0%s.ps1" %%*\nset "RC=%%ERRORLEVEL%%"\nif not "%%RC%%"=="0" echo FALHOU (codigo %%RC%%)\nif not defined FRAIHA_NO_PAUSE pause\nexit /b %%RC%%\n' % (cmd, cmd))
-    print("OK: %d arquivos (index %d + engines %d + voice %d) em %s" % (
-        len(files), len(INDEX), len(REQUIRED_DIRS["engines"]), len(REQUIRED_DIRS["voice"]), out))
+    print("OK: %d arquivos (%s · engines %d + voice %d) em %s" % (
+        len(files), "legado" if legacy else "nomes com SHA-256 " + fp[2]["mainPack"],
+        len(REQUIRED_DIRS["engines"]), len(REQUIRED_DIRS["voice"]), out))
 
 
 if __name__ == "__main__":

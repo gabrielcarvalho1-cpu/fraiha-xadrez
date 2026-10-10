@@ -12,12 +12,21 @@ PWSH = os.environ.get("PWSH") or shutil.which("pwsh") or shutil.which("powershel
 NEED = unittest.skipUnless(PWSH, "pwsh/powershell não encontrado: casos de execução PULADOS")
 
 
-def build(base, big=True):
+def build(base, big=True, legado=False):
     exp, web = fake_tree(base, big=big)
     out = os.path.join(base, "OUT")
-    r = subprocess.run([sys.executable, PACK, exp, web, out, "RT", "abc123"], capture_output=True, text=True)
+    r = subprocess.run([sys.executable, PACK, exp, web, out, "RT", "abc123"] + (["--legado"] if legado else []), capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     return out
+
+
+def named(out, prefix, suffix=""):
+    """Nome com SHA-256 no manifesto (ex.: named(out, 'index-p', '.pck'))."""
+    for l in open(os.path.join(out, "ARQUIVOS-SHA256.txt"), encoding="utf-8"):
+        n = l.split()[0] if l.strip() and not l.startswith("#") else ""
+        if n.startswith(prefix) and n.endswith(suffix):
+            return n
+    raise AssertionError("sem " + prefix)
 
 
 def ps(script, *args):
@@ -60,7 +69,21 @@ class Montar(unittest.TestCase):
             self.assertIn("CONFERIDO", r.stdout)
             up = os.path.join(out, "UPLOAD")
             self.assertTrue(os.path.isfile(os.path.join(up, "voice", "fraiha-voice-bridge-v1.js")))
+            self.assertTrue(os.path.isfile(os.path.join(up, named(out, "index-p", ".pck"))))
+            # R55.5: o index.html vai SOZINHO na pasta do passo 2 (sobe por último)
+            self.assertFalse(os.path.exists(os.path.join(up, "index.html")))
+            self.assertEqual(os.listdir(os.path.join(out, "UPLOAD-2-POR-ULTIMO")), ["index.html"])
+            self.assertIn("PASSO 2", r.stdout)
+
+    def test_B2_legado_continua_igual(self):
+        with tempfile.TemporaryDirectory() as t:
+            out = build(t, legado=True)
+            r = self.montar(out)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            up = os.path.join(out, "UPLOAD")
             self.assertTrue(os.path.isfile(os.path.join(up, "index.pck")))
+            self.assertTrue(os.path.isfile(os.path.join(up, "index.html")))
+            self.assertFalse(os.path.exists(os.path.join(out, "UPLOAD-2-POR-ULTIMO")))
 
     def test_C_manifesto_ausente_falha(self):
         with tempfile.TemporaryDirectory() as t:
@@ -80,11 +103,12 @@ class Montar(unittest.TestCase):
                 self.assertNotEqual(r.returncode, 0, "/".join(rel) + " ausente: " + r.stdout)
                 self.assertIn("FALTANDO", r.stdout)
                 self.assertFalse(os.path.exists(os.path.join(out, "UPLOAD")), "UPLOAD parcial removido")
+                self.assertFalse(os.path.exists(os.path.join(out, "UPLOAD-2-POR-ULTIMO")), "UPLOAD-2 parcial removido")
 
     def test_D2_parte_ausente_falha(self):
         with tempfile.TemporaryDirectory() as t:
             out = build(t)
-            os.remove(os.path.join(out, "index.pck.part01"))
+            os.remove(os.path.join(out, named(out, "index-p", ".pck") + ".part01"))
             r = self.montar(out)
             self.assertNotEqual(r.returncode, 0, r.stdout)
 
@@ -101,7 +125,7 @@ class Montar(unittest.TestCase):
     def test_E_tamanho_errado_falha(self):
         with tempfile.TemporaryDirectory() as t:
             out = build(t, big=False)
-            with open(os.path.join(out, "index.js"), "ab") as f:
+            with open(os.path.join(out, named(out, "index-e", ".js")), "ab") as f:
                 f.write(b"x")
             r = self.montar(out)
             self.assertNotEqual(r.returncode, 0, r.stdout)
@@ -130,13 +154,30 @@ class Conferir(unittest.TestCase):
     def site_ok(self, t):
         out = build(t)
         self.assertEqual(ps(os.path.join(out, "MONTAR-UPLOAD-RT.ps1")).returncode, 0)
-        return out, os.path.join(out, "UPLOAD")
+        up = os.path.join(out, "UPLOAD")
+        shutil.copy(os.path.join(out, "UPLOAD-2-POR-ULTIMO", "index.html"), up)   # passo 2 feito
+        return out, up
 
     def test_tudo_no_ar_sai_0(self):
         with tempfile.TemporaryDirectory() as t:
             out, up = self.site_ok(t)
             r = ps(os.path.join(out, "CONFERIR-SITE-RT.ps1"), "-Site", self.serve(up))
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_sem_cache_longo_avisa_mas_nao_falha(self):
+        with tempfile.TemporaryDirectory() as t:
+            out, up = self.site_ok(t)
+            r = ps(os.path.join(out, "CONFERIR-SITE-RT.ps1"), "-Site", self.serve(up))   # servidor simples: sem immutable
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("sem cache longo", r.stdout)
+
+    def test_html_novo_sem_pacote_falha(self):
+        with tempfile.TemporaryDirectory() as t:
+            out, up = self.site_ok(t)
+            os.remove(os.path.join(up, named(out, "index-p", ".pck")))   # index.html subiu antes do PCK
+            r = ps(os.path.join(out, "CONFERIR-SITE-RT.ps1"), "-Site", self.serve(up))
+            self.assertNotEqual(r.returncode, 0, r.stdout)
+            self.assertIn("FALTANDO NO SITE", r.stdout)
 
     def test_faltando_no_site_falha(self):
         with tempfile.TemporaryDirectory() as t:

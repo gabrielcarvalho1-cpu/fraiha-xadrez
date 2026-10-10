@@ -1,0 +1,12 @@
+# FRAIHA R55.5 · EXEMPLO de configuração do Worker do site (NÃO publicado; publicar exige autorização).
+# O Worker atual de jogar.fraihaxadrez.com não está versionado no repositório: antes de usar isto,
+# confira nome, rota e ligações do Worker existente no painel da Cloudflare e copie os valores reais.
+name = "NOME-DO-WORKER-ATUAL"
+main = "fraiha-web-worker.mjs"
+compatibility_date = "2026-09-01"
+
+routes = [{ pattern = "jogar.fraihaxadrez.com/*", zone_name = "fraihaxadrez.com" }]
+
+[[r2_buckets]]
+binding = "BUCKET"              # igual a BUCKET_BINDING em fraiha-web-worker.mjs
+bucket_name = "fraiha-xadrez-web"

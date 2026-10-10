@@ -7,12 +7,19 @@ INDEX = ["index.html", "index.js", "index.wasm", "index.pck", "index.png", "inde
          "index.apple-touch-icon.png", "index.audio.worklet.js", "index.audio.position.worklet.js"]
 
 
-def fake_tree(base, with_voice=True, big=False):
+HTML = ('<html><head><link rel="icon" href="index.icon.png"/><style>#s{background:url("index.png")}</style></head>'
+        '<body><img id="status-splash" src="index.png"><script src="index.js"></script><script>\n'
+        'const GODOT_CONFIG = {"args":[],"executable":"index","fileSizes":{"index.pck":%d,"index.wasm":%d},"gdextensionLibs":[]};\n'
+        'const engine = new Engine(GODOT_CONFIG);</script></body></html>')
+
+
+def fake_tree(base, with_voice=True, big=False, pck_bytes=None):
     exp, web = os.path.join(base, "export"), os.path.join(base, "web")
     os.makedirs(exp); os.makedirs(os.path.join(web, "engines"))
+    pck = pck_bytes if pck_bytes is not None else (os.urandom(19922944 * 2 + 5) if big else b"index.pck")
     for n in INDEX:
         with open(os.path.join(exp, n), "wb") as f:
-            f.write(os.urandom(19922944 * 2 + 5) if (big and n == "index.pck") else n.encode())
+            f.write(pck if n == "index.pck" else (HTML % (len(pck), len(b"index.wasm"))).encode() if n == "index.html" else n.encode())
     for n in ["stockfish-19-lite-single.js", "stockfish-19-lite-single.wasm", "COPYING-GPLv3.txt"]:
         open(os.path.join(web, "engines", n), "w").write(n)
     if with_voice:
@@ -23,9 +30,9 @@ def fake_tree(base, with_voice=True, big=False):
 
 
 class PackTest(unittest.TestCase):
-    def run_pack(self, base, exp, web):
-        out = os.path.join(base, "OUT")
-        return out, subprocess.run([sys.executable, PACK, exp, web, out, "RTEST", "abc123"], capture_output=True, text=True)
+    def run_pack(self, base, exp, web, *extra, out="OUT"):
+        out = os.path.join(base, out)
+        return out, subprocess.run([sys.executable, PACK, exp, web, out, "RTEST", "abc123", *extra], capture_output=True, text=True)
 
     def test_sem_voice_nao_gera(self):
         with tempfile.TemporaryDirectory() as t:
@@ -36,7 +43,7 @@ class PackTest(unittest.TestCase):
 
     def test_manifesto_lista_voice_e_partes(self):
         with tempfile.TemporaryDirectory() as t:
-            out, r = self.run_pack(t, *fake_tree(t, big=True))
+            out, r = self.run_pack(t, *fake_tree(t, big=True), "--legado")
             self.assertEqual(r.returncode, 0, r.stderr)
             rows = [l for l in open(os.path.join(out, "ARQUIVOS-SHA256.txt"), encoding="utf-8").read().splitlines() if l and not l.startswith("#")]
             rels = [l.split()[0] for l in rows]
@@ -55,6 +62,60 @@ class PackTest(unittest.TestCase):
             for n in ["MONTAR-UPLOAD-RTEST.ps1", "MONTAR-UPLOAD-RTEST.cmd", "CONFERIR-SITE-RTEST.ps1", "CONFERIR-SITE-RTEST.cmd"]:
                 self.assertTrue(os.path.isfile(os.path.join(out, n)), n)
             self.assertNotIn("__TAG__", open(os.path.join(out, "MONTAR-UPLOAD-RTEST.ps1"), encoding="utf-8-sig").read())
+
+    def test_nomes_com_sha256(self):
+        import base64, hashlib, json, re
+        with tempfile.TemporaryDirectory() as t:
+            out, r = self.run_pack(t, *fake_tree(t, big=True))
+            self.assertEqual(r.returncode, 0, r.stderr)
+            man = open(os.path.join(out, "ARQUIVOS-SHA256.txt"), encoding="utf-8").read()
+            self.assertIn("# R55.5 ", man)                       # o MONTAR-UPLOAD separa o index.html por isso
+            rows = [l.split() for l in man.splitlines() if l and not l.startswith("#")]
+            rels = [x[0] for x in rows]
+            self.assertEqual(len(rows), 15)
+            for legado in ["index.pck", "index.wasm", "index.js", "index.png", "index.audio.worklet.js"]:
+                self.assertNotIn(legado, rels)                 # nada com nome fixo de motor/pacote
+            pck = [x for x in rels if re.fullmatch(r"index-p[0-9a-f]{16}\.pck", x)]
+            exe = sorted(x for x in rels if re.fullmatch(r"index-e[0-9a-f]{16}\..+", x))
+            self.assertEqual(len(pck), 1)
+            self.assertEqual([x.split(".", 1)[1] for x in exe], ["audio.position.worklet.js", "audio.worklet.js", "js", "wasm"])
+            raw = open(os.path.join(t, "export", "index.pck"), "rb").read()
+            self.assertEqual(pck[0], "index-p%s.pck" % hashlib.sha256(raw).hexdigest()[:16])
+            self.assertTrue(os.path.isfile(os.path.join(out, pck[0] + ".part02")))
+            html = open(os.path.join(out, "index.html"), encoding="utf-8").read()
+            cfg = json.loads(re.search(r"const GODOT_CONFIG = (\{.*?\});", html).group(1))
+            e = exe[0].split(".")[0]
+            self.assertEqual((cfg["executable"], cfg["mainPack"]), (e, pck[0]))
+            self.assertEqual(cfg["fileSizes"], {pck[0]: len(raw), e + ".wasm": len(b"index.wasm")})
+            self.assertIn('<script src="%s.js"></script>' % e, html)
+            self.assertNotIn('src="index.js"', html)
+            self.assertNotIn('"index.png"', html)
+            self.assertIn('id="fraiha-asset-cache"', html)
+            self.assertIn(pck[0], html.split('id="fraiha-asset-cache"')[1].split("</script>")[0])
+            row = [x for x in rows if x[0] == "index.html"][0]
+            self.assertEqual(row[2], hashlib.sha256(html.encode("utf-8")).hexdigest().upper())
+
+    def test_release_novo_muda_so_o_pacote(self):
+        import re
+        names = []
+        for pck in [b"versao-1" * 100, b"versao-2" * 100]:
+            with tempfile.TemporaryDirectory() as t:
+                out, r = self.run_pack(t, *fake_tree(t, pck_bytes=pck))
+                self.assertEqual(r.returncode, 0, r.stderr)
+                names.append(sorted(l.split()[0] for l in open(os.path.join(out, "ARQUIVOS-SHA256.txt"), encoding="utf-8") if l.startswith("index-")))
+        motor = lambda ns: [n for n in ns if n.startswith("index-e")]
+        pacote = lambda ns: [n for n in ns if n.startswith("index-p")]
+        self.assertEqual(motor(names[0]), motor(names[1]))       # mesmo Godot: WASM continua em cache
+        self.assertNotEqual(pacote(names[0]), pacote(names[1]))  # jogo novo: PCK com nome novo
+
+    def test_html_inesperado_falha_fechado(self):
+        with tempfile.TemporaryDirectory() as t:
+            exp, web = fake_tree(t)
+            open(os.path.join(exp, "index.html"), "w").write("<html>sem config</html>")
+            out, r = self.run_pack(t, exp, web)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("GODOT_CONFIG", r.stdout + r.stderr)
+            self.assertFalse(os.path.exists(out))
 
 
 if __name__ == "__main__":
