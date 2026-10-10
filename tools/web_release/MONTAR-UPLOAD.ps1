@@ -8,6 +8,8 @@
 # é removida (nada incompleto fica pronto para subir).
 # AMBIENTE (QA × produção): o ARQUIVOS-SHA256.txt diz "# AMBIENTE staging|producao · servidor ..." (conferido no
 # PCK pelo empacotador) e o index.html tem <meta name="fraiha-ambiente">. Sem isso, ou se divergirem, PARA.
+# ROLLBACK: so monta depois que ROLLBACK-ANTES-DE-PUBLICAR-__TAG__ guardou a versao que esta no ar (pasta ROLLBACK-*
+# com manifesto e LEIA-ME). Sem rollback pronto, PARA: nao se publica sem saber como voltar.
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $up = Join-Path $root 'UPLOAD'
@@ -18,6 +20,11 @@ try {
   $manifest = Join-Path $root 'ARQUIVOS-SHA256.txt'
   if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'ARQUIVOS-SHA256.txt nao encontrado nesta pasta (copie a pasta inteira de novo).' }
   foreach ($d in @($up, $up2)) { if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force } }
+  $rb = @(Get-ChildItem -LiteralPath $root -Directory -Filter 'ROLLBACK-*' -ErrorAction SilentlyContinue | Where-Object {
+      (Test-Path -LiteralPath (Join-Path $_.FullName 'LEIA-ME-ROLLBACK.txt')) -and
+      (Select-String -LiteralPath (Join-Path $_.FullName 'ARQUIVOS-SHA256.txt') -Pattern '^# ROLLBACK ' -Quiet -ErrorAction SilentlyContinue) } | Sort-Object Name)
+  if ($rb.Count -eq 0) { throw 'ROLLBACK ainda nao foi gerado: rode ROLLBACK-ANTES-DE-PUBLICAR-__TAG__.cmd primeiro (guarda a versao que esta no ar).' }
+  Write-Host ("ROLLBACK pronto: " + $rb[-1].Name + " (ver LEIA-ME-ROLLBACK.txt)") -ForegroundColor Green
   New-Item -ItemType Directory -Path $up | Out-Null
   $all = @(Get-Content -LiteralPath $manifest)
   $hashed = [bool]($all | Where-Object { $_ -match '^# R55\.5 ' })
@@ -84,7 +91,8 @@ try {
     Write-Host '  -> ele substitui o index.html da raiz do bucket. E isso que troca a versao do jogo.'
     Write-Host ''
   }
-  Write-Host 'Depois do upload: rode CONFERIR-SITE-__TAG__.cmd (confere no site publicado).'
+  Write-Host 'Depois do upload: rode CONFERIR-SITE-__TAG__.cmd (baixa cada arquivo do site e confere o SHA-256).'
+  Write-Host ('Se precisar voltar: ' + $rb[-1].Name + '\LEIA-ME-ROLLBACK.txt')
   $rc = 0
   if ($env:OS -eq 'Windows_NT' -and -not $env:FRAIHA_NO_EXPLORER) { try { Start-Process explorer.exe $up } catch {} }
 } catch {

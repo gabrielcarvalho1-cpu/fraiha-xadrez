@@ -169,7 +169,7 @@ def main(argv):
     with open(os.path.join(out, "ARQUIVOS-SHA256.txt"), "w", encoding="utf-8", newline="\r\n") as f:
         f.write("\n".join(lines) + "\n")
     here = os.path.dirname(os.path.abspath(__file__))
-    for name in ("MONTAR-UPLOAD.ps1", "CONFERIR-SITE.ps1"):
+    for name in ("ROLLBACK-ANTES-DE-PUBLICAR.ps1", "MONTAR-UPLOAD.ps1", "CONFERIR-SITE.ps1"):
         src = os.path.join(here, name)
         with open(src, encoding="utf-8") as f:
             text = f.read().replace("__TAG__", tag)

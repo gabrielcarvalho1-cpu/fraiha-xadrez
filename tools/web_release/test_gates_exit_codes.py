@@ -20,6 +20,15 @@ def build(base, big=True, legado=False, ambiente="staging"):
     return out
 
 
+def fake_rollback(out):
+    """Pasta ROLLBACK-* mínima (o MONTAR-UPLOAD exige rollback gerado antes de publicar)."""
+    d = os.path.join(out, "ROLLBACK-20260101-000000")
+    os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, "ARQUIVOS-SHA256.txt"), "w").write("# ROLLBACK de teste - SITE VAZIO\n")
+    open(os.path.join(d, "LEIA-ME-ROLLBACK.txt"), "w").write("teste\n")
+    return d
+
+
 def named(out, prefix, suffix=""):
     """Nome com SHA-256 no manifesto (ex.: named(out, 'index-p', '.pck'))."""
     for l in open(os.path.join(out, "ARQUIVOS-SHA256.txt"), encoding="utf-8"):
@@ -45,7 +54,7 @@ class Static(unittest.TestCase):
                 self.assertLess(txt.index("set \"RC="), txt.index("pause"), n + ": código lido ANTES do pause")
 
     def test_scripts_terminam_com_exit(self):
-        for n in ("MONTAR-UPLOAD.ps1", "CONFERIR-SITE.ps1"):
+        for n in ("MONTAR-UPLOAD.ps1", "CONFERIR-SITE.ps1", "ROLLBACK-ANTES-DE-PUBLICAR.ps1"):
             txt = open(os.path.join(HERE, n), encoding="utf-8").read()
             self.assertIn("exit 1", txt.replace("exit $rc", "exit 1"), n)
         qa = open(os.path.join(HERE, "../../distribution/qa/RUN-QA.ps1"), encoding="utf-8").read()
@@ -58,8 +67,18 @@ class Static(unittest.TestCase):
 
 @NEED
 class Montar(unittest.TestCase):
-    def montar(self, out):
+    def montar(self, out, rollback=True):
+        if rollback:
+            fake_rollback(out)
         return ps(os.path.join(out, "MONTAR-UPLOAD-RT.ps1"))
+
+    def test_A3_sem_rollback_nao_monta(self):
+        with tempfile.TemporaryDirectory() as t:
+            out = build(t, big=False)
+            r = self.montar(out, rollback=False)
+            self.assertNotEqual(r.returncode, 0, r.stdout)
+            self.assertIn("ROLLBACK ainda nao foi gerado", r.stdout)
+            self.assertFalse(os.path.exists(os.path.join(out, "UPLOAD")))
 
     def test_B_valido_sai_0_e_upload_confere(self):
         with tempfile.TemporaryDirectory() as t:
@@ -183,6 +202,7 @@ class Conferir(unittest.TestCase):
 
     def site_ok(self, t):
         out = build(t)
+        fake_rollback(out)
         self.assertEqual(ps(os.path.join(out, "MONTAR-UPLOAD-RT.ps1")).returncode, 0)
         up = os.path.join(out, "UPLOAD")
         shutil.copy(os.path.join(out, "UPLOAD-2-POR-ULTIMO", "index.html"), up)   # passo 2 feito
@@ -199,7 +219,7 @@ class Conferir(unittest.TestCase):
             out, up = self.site_ok(t)
             r = ps(os.path.join(out, "CONFERIR-SITE-RT.ps1"), "-Site", self.serve(up))   # servidor simples: sem immutable
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-            self.assertIn("sem cache longo", r.stdout)
+            self.assertIn("sem Cache-Control immutable", r.stdout)
 
     def test_html_novo_sem_pacote_falha(self):
         with tempfile.TemporaryDirectory() as t:

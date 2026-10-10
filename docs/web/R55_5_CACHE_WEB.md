@@ -119,12 +119,12 @@ Os JSONs completos ficam na saída do `measure_cache.cjs`.
 1. Exportar a Web normalmente (preset "Web Alpha").
 2. Empacotar: `python3 tools/web_release/pack_web_release.py <export> web <saida> <TAG> <commit> --ambiente=staging|producao` (ver `docs/web/AMBIENTES_STAGING_PRODUCAO.md`).
    - Os nomes com SHA-256 são o padrão; `--legado` volta aos nomes antigos.
-3. No PC: rodar `MONTAR-UPLOAD-<TAG>.cmd`. Ele confere SHA-256 e gera `UPLOAD` e `UPLOAD-2-POR-ULTIMO`.
+3. No PC: rodar antes `ROLLBACK-ANTES-DE-PUBLICAR-<TAG>.cmd`, que guarda a versão no ar (ver `docs/web/CONFERENCIA_E_ROLLBACK.md`). Depois rodar `MONTAR-UPLOAD-<TAG>.cmd`, que recusa montar sem rollback. Ele confere SHA-256 e gera `UPLOAD` e `UPLOAD-2-POR-ULTIMO`.
 4. **Passo 1:** arrastar todo o conteúdo de `UPLOAD` para o bucket `fraiha-xadrez-web` e esperar chegar a 100%.
 5. **Passo 2:** só então arrastar o `index.html` de `UPLOAD-2-POR-ULTIMO`. Esse arquivo troca a versão.
 6. Não apagar do bucket os arquivos `index-e*`, `index-p*` e `index-s*` antigos.
-7. Rodar `CONFERIR-SITE-<TAG>.cmd`. Ele deve sair "TUDO NO AR".
-   - Enquanto o Worker não for trocado, ele avisa "sem cache longo" (aviso, não erro).
+7. Rodar `CONFERIR-SITE-<TAG>.cmd`. Ele baixa cada arquivo e confere o SHA-256, e deve sair "TUDO NO AR".
+   - Enquanto o Worker não for trocado, ele avisa "sem Cache-Control immutable" (aviso, não erro).
 
 ### B) Worker (deploy separado, exige autorização)
 
