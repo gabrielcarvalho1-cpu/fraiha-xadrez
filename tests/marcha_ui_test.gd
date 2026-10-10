@@ -468,7 +468,10 @@ func run():
         for i in 5:
             var r: Rect2 = rs[i]
             if r.end.x > ui.design.x - 8 or r.position.x < 0: ok5 = false
-            if (not ui.portrait and (r.position.x < 1480 or r.end.y > 800)) or (ui.portrait and r.end.y > 1800): ok5 = false
+            if ui.desk:
+                # R57 · PC: a mão fica embaixo do tabuleiro (referência final), inteira na tela
+                if r.position.y < ui.board_rect().end.y - 2 or r.end.y > ui.design.y: ok5 = false
+            elif (not ui.portrait and (r.position.x < 1480 or r.end.y > 800)) or (ui.portrait and r.end.y > 1800): ok5 = false
             for j in range(i + 1, 5): if r.intersects(rs[j]): ok5 = false
         check(ok5 and ui.hits.filter(func(h): return String(h.id).begins_with("card_")).size() == 5, "R38.3: 5 cartas na mão sem sobrepor (%s)" % ("retrato" if ui.portrait else "paisagem"))
         if OS.get_environment("MARCHA_SHOTS") != "": root.get_texture().get_image().save_png("/tmp/claude-0/sc/hand5_%s.png" % lay)

@@ -9,7 +9,17 @@ signal closed
 
 const Rules := preload("res://marcha/rules.gd")
 const AI := preload("res://marcha/ai.gd")
-const Layout := preload("res://marcha/board_layout.gd")
+const LayoutStd := preload("res://marcha/board_layout.gd")
+const LayoutR57 := preload("res://marcha/board_layout_r57.gd")   # R57 · tabuleiro da arte final (PC)
+const MobileLayout := preload("res://ui_v022/mobile_layout.gd")
+const BOARD_UNITS := 1600.0       # largura do tabuleiro em unidades de desenho (os dois layouts)
+## R57 · no PC (não celular, não em pé) a mesa e o salão são as referências finais do dono
+## (tools/ui_ref/r57, placas em marcha/art/r57). No celular nada muda.
+var Layout = LayoutStd
+var desk := false
+const R57_SIZE := Vector2(1672, 941)          # referência 3 (partida)
+const R57_LOBBY := Vector2(1494, 834)         # referência 4 (antes da partida)
+var r57 := {}
 const Access := preload("res://marcha/marcha_access.gd")
 const Sound := preload("res://ui_v022/mode_sound.gd")
 const FullscreenControl := preload("res://ui_v022/fullscreen_control.gd")
@@ -233,6 +243,15 @@ func _relayout():
     if root == null: return
     var vs := root.get_viewport_rect().size
     portrait = vs.y > vs.x * 1.15
+    desk = not portrait and not MobileLayout.active(get_viewport())
+    Layout = LayoutR57 if desk else LayoutStd
+    if desk and r57.is_empty():
+        for key in ["mesa", "salao", "botao_jogar_vazio", "botao_jogar_agora_vazio"]: r57[key] = load("res://marcha/art/r57/%s.png" % key)
+        for pair in [["r57_name", "res://marcha/art/fonts/oswald-latin-400-normal.woff", 0], ["r57_head", FONT_SEMI, 1], ["r57_bold", FONT_BOLD, 0]]:
+            var fv := FontVariation.new()
+            fv.base_font = pair[1] if pair[1] is Font else load(pair[1])
+            fv.spacing_glyph = pair[2]
+            fonts[pair[0]] = fv
     design = Vector2(1080, 1920) if portrait else Vector2(1920, 1080)
     k = minf(vs.x / design.x, vs.y / design.y)
     origin = (vs - design * k) / 2.0
@@ -305,6 +324,9 @@ func _snap_origin():
 ## Placa do jogador (coordenadas de referência): de onde sai a carta de quem não é você.
 func seat_card_from(seat: int) -> Rect2:
     var r: Rect2
+    if desk:
+        r = rr(Rect2(R57_SEATS[seat].av))
+        return Rect2(r.get_center() - Vector2(46, 64), Vector2(92, 128))
     if portrait: r = [Rect2(20, 1563, 130, 130), Rect2(20, 278, 272, 116), Rect2(360, 138, 360, 124), Rect2(788, 278, 272, 116)][seat]
     else: r = [Rect2(40, 898, 390, 124), Rect2(40, 262, 390, 122), Rect2(40, 120, 390, 122), Rect2(40, 404, 390, 122)][seat]
     return Rect2(r.get_center() - Vector2(46, 64), Vector2(92, 128))
@@ -312,9 +334,13 @@ func seat_card_from(seat: int) -> Rect2:
 ## Centro do monte na mesa (coordenadas de referência) e tamanho de uma carta lá.
 func pile_rect() -> Rect2:
     var br := board_rect()
-    var s: float = br.size.x / Layout.SIZE
+    var s: float = br.size.x / BOARD_UNITS
     var cs := Vector2(270, 378) * s
-    return Rect2(br.position + Vector2(800, 805) * s - cs / 2.0, cs)
+    return Rect2(br.position + pile_center() * s - cs / 2.0, cs)
+
+## centro do emblema da mesa (onde as cartas jogadas caem), em unidades do tabuleiro
+func pile_center() -> Vector2:
+    return LayoutR57.CENTER if desk else Vector2(800, 805)
 
 ## R37.3 · a(s) carta(s) jogada(s) voam até a mesa antes das peças andarem.
 ## idxs: posições na SUA mão (escondidas enquanto voam); vazio = carta de outro jogador (sai da placa dele).
@@ -1042,7 +1068,17 @@ func _seat_screen_rect(seat: int) -> Rect2:
             return Rect2(origin + r.position * k, r.size * k)
     return Rect2()
 
+var hover_id := ""
 func on_hover(p: Vector2):
+    # R57 · botões da arte clareiam com o mouse por cima
+    var hid := ""
+    for h in range(hits.size() - 1, -1, -1):
+        if Rect2(hits[h].rect).has_point(p):
+            hid = String(hits[h].id)
+            break
+    if hid != hover_id:
+        hover_id = hid
+        if view != null: view.queue_redraw()
     var pp = _popup()
     if pp == null: return
     var seat := -1
@@ -1063,7 +1099,7 @@ func on_press(p: Vector2):
             return
     if mode == "game" and tut_page < 0 and not menu_open and g != null and g.turn == 0 and not busy and sel_card >= 0:
         var br := board_rect()
-        var bp := (p - br.position) / (br.size.x / Layout.SIZE)
+        var bp := (p - br.position) / (br.size.x / BOARD_UNITS)
         var best := []
         var best_d := 44.0
         for w in candidate_pawns():
@@ -1157,9 +1193,49 @@ func _on_hit(id: String):
 
 # ---------------------------------------------------------------- layout (coordenadas de referência)
 func board_rect() -> Rect2:
+    if desk: return rr(LayoutR57.ART_RECT)
     return Rect2(30, 430, 1020, 1020) if portrait else Rect2(480, 103, 955, 955)
 
+# ---------------------------------------------------------------- R57 · coordenadas das referências finais
+## px da referência da partida (1672x941) -> tela de desenho (1920x1080)
+func r57_s() -> float:
+    return design.y / R57_SIZE.y
+
+func rp(p: Vector2) -> Vector2:
+    return Vector2((design.x - R57_SIZE.x * r57_s()) / 2.0, 0) + p * r57_s()
+
+func rr(r: Rect2) -> Rect2:
+    return Rect2(rp(r.position), r.size * r57_s())
+
+## px da referência do salão (1494x834) -> tela de desenho
+func lobby_s() -> float:
+    return design.y / R57_LOBBY.y
+
+func lp(p: Vector2) -> Vector2:
+    return Vector2((design.x - R57_LOBBY.x * lobby_s()) / 2.0, 0) + p * lobby_s()
+
+func lr(r: Rect2) -> Rect2:
+    return Rect2(lp(r.position), r.size * lobby_s())
+
+## perfis da referência (só avatar + nome): caixa, retrato, x do nome, linha de base, altura das maiúsculas, fim
+const R57_SEATS := {
+    0: {"box": Rect2(1312, 790, 333, 107), "av": Rect2(1342, 807, 78, 79), "x": 1440.0, "base": 855.0, "cap": 20.0, "end": 1628.0},
+    1: {"box": Rect2(262, 371, 224, 124), "av": Rect2(279, 385, 76, 89), "x": 368.5, "base": 434.0, "cap": 18.0, "end": 480.0},
+    2: {"box": Rect2(645, 4, 402, 108), "av": Rect2(681, 19, 81, 75), "x": 790.0, "base": 67.5, "cap": 25.0, "end": 1030.0},
+    3: {"box": Rect2(1206, 371, 259, 124), "av": Rect2(1222, 385, 84, 89), "x": 1317.5, "base": 434.0, "cap": 18.0, "end": 1458.0},
+}
+const R57_ICONS := [["fullscreen", Rect2(1300, 12, 54, 53)], ["mute_music", Rect2(1370, 12, 54, 53)], ["mute_fx", Rect2(1440, 12, 54, 53)], ["help", Rect2(1510, 12, 54, 53)], ["menu", Rect2(1577, 12, 54, 53)]]
+const R57_TIMER := Rect2(62, 720, 265, 107)
+const R57_PLAY := Rect2(62, 840, 273, 62)
+const R57_CARD := Vector2(138, 195)
+
 func card_rect(i: int, n: int) -> Rect2:
+    if desk:
+        # R57 · mão aberta embaixo do tabuleiro, como na referência — cartas inteiras à vista
+        var gap := 147.0 if n <= 4 else 128.0
+        var sz: Vector2 = R57_CARD if n <= 4 else R57_CARD * 0.9
+        var cx := 838.5 + (i - (n - 1) / 2.0) * gap
+        return rr(Rect2(cx - sz.x / 2.0, 742.0 + (R57_CARD.y - sz.y), sz.x, sz.y))
     # R38.3 · 3ª rodada do ciclo do baralho: 5 cartas na mão (menores, para caber no mesmo espaço)
     if n >= 5:
         if portrait: return Rect2(238.0 + i * 166.0, 1548.0, 152, 214)
@@ -1220,12 +1296,23 @@ class TableView extends Control:
         if ui == null: return
         ui.hits.clear()
         var vs := size
-        draw_texture_rect(ui.BG, Rect2(Vector2.ZERO, vs), false)
+        if ui.desk:
+            # R57 · janela fora de 16:9: a própria arte (escurecida) cobre as sobras
+            var lob: bool = ui.mode == "lobby"
+            var ps: Vector2 = ui.R57_LOBBY if lob else ui.R57_SIZE
+            var cov := maxf(vs.x / ps.x, vs.y / ps.y)
+            var cs := ps * cov
+            draw_texture_rect(ui.r57.salao if lob else ui.r57.mesa, Rect2((vs - cs) / 2.0, cs), false, Color(0.4, 0.38, 0.38))
+        else:
+            draw_texture_rect(ui.BG, Rect2(Vector2.ZERO, vs), false)
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         match ui.mode:
-            "lobby": _draw_lobby()
+            "lobby":
+                if ui.desk: _draw_lobby_r57()
+                else: _draw_lobby()
             "game", "over":
-                _draw_game()
+                if ui.desk: _draw_game_r57()
+                else: _draw_game()
                 _draw_flies()
         if ui.mode == "over" and not ui.overlay_wait: _draw_over()
         if ui.choice_open and ui.mode == "game" and not ui.menu_open: _draw_choice()
@@ -1428,8 +1515,8 @@ class TableView extends Control:
     # ------------------------------------------------------------ tabuleiro, peões e descarte
     func _draw_board():
         var br: Rect2 = ui.board_rect()
-        draw_texture_rect(ui.BOARD, br, false)
-        var s: float = br.size.x / ui.Layout.SIZE
+        if not ui.desk: draw_texture_rect(ui.BOARD, br, false)     # R57: no PC o tabuleiro já está na placa da mesa
+        var s: float = br.size.x / ui.BOARD_UNITS
         var g = ui.g
         if g == null: return
         draw_set_transform(ui.origin + br.position * ui.k, 0.0, Vector2(ui.k * s, ui.k * s))
@@ -1441,7 +1528,7 @@ class TableView extends Control:
             var rank: String = it.rank
             var a: float = rots[(j - maxi(0, n - 3)) % 3]
             var cs := Vector2(270, 378)
-            draw_set_transform(ui.origin + (br.position + Vector2(800, 805) * s) * ui.k, a, Vector2(ui.k * s, ui.k * s))
+            draw_set_transform(ui.origin + (br.position + ui.pile_center() * s) * ui.k, a, Vector2(ui.k * s, ui.k * s))
             # R37.3 · carta descartada sem jogada: cinza-avermelhada (diferente das cartas jogadas)
             var mod := Color(0.55, 0.47, 0.47) if bool(it.dead) else Color.WHITE
             draw_texture_rect(Crisp.at(ui.cards[rank], cs * s * ui.k), Rect2(-cs / 2.0, cs), false, mod)
@@ -1451,7 +1538,7 @@ class TableView extends Control:
         # R38.2 · carta JOGADA esperando a peça: fica por cima do monte, com brilho dourado
         if ui.card_played and ui.sel_card >= 0 and ui.sel_card < g.hands[0].size():
             var cs2 := Vector2(270, 378)
-            draw_set_transform(ui.origin + (br.position + Vector2(800, 805) * s) * ui.k, 0.04, Vector2(ui.k * s, ui.k * s))
+            draw_set_transform(ui.origin + (br.position + ui.pile_center() * s) * ui.k, 0.04, Vector2(ui.k * s, ui.k * s))
             var lr := Rect2(-cs2 / 2.0, cs2)
             var pz := 0.5 + 0.5 * sin(ui.t * 5.0)
             for gl in 5: draw_rect(lr.grow(4 + gl * 5), Color(1.0, 0.82, 0.3, (0.30 - gl * 0.05) * (0.6 + 0.4 * pz)), false, 5.0)
@@ -1509,7 +1596,7 @@ class TableView extends Control:
                 lift = 6.0
             var crowned: bool = g.pawns[w[0]][w[1]].zone == "lane"
             var tx: Texture2D = ui.pawn_tex[w[0] + (10 if crowned else 0)]
-            var sz: Vector2 = tx.get_size() * ui.PAWN_SCALE
+            var sz: Vector2 = tx.get_size() * (0.34 if ui.desk else ui.PAWN_SCALE)     # R57: peões do tamanho da arte final
             var rr := Rect2(Vector2(c.x - sz.x / 2.0, c.y + ui.PAWN_BASE - sz.y - lift), sz)
             if ui.anim_rot.has(key):
                 # R38.3 · peão abatido girando em volta do próprio centro, a caminho da base
@@ -1635,9 +1722,11 @@ class TableView extends Control:
             var selected: bool = i == ui.sel_card
             var rot := 0.0
             if ui.portrait: rot = [-0.05, 0.03, 0.03, 0.06][mini(i, 3)]
+            elif ui.desk: rot = lerpf(-0.07, 0.085, float(i) / maxf(1.0, n - 1.0)) if n > 1 else 0.0     # leque da referência
             if selected:
-                r = r.grow(6)
-                r.position.y -= 18 if ui.portrait else 4
+                # R57 · no PC a carta sobe pouco: não pode cobrir as casas de baixo do tabuleiro
+                r = r.grow(4 if ui.desk else 6)
+                r.position.y -= 18 if ui.portrait else (6 if ui.desk else 4)
             var c := r.get_center()
             draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k, ui.k))
             var local := Rect2(-r.size / 2.0, r.size)
@@ -1652,7 +1741,7 @@ class TableView extends Control:
                 if ui.card_can_crown(i): tags.append(["CHEGADA", Color("23824a")])
                 var pz := 0.5 + 0.5 * sin(ui.t * 6.0)
                 for ti in tags.size():
-                    var br := Rect2(local.position.x + 8, local.position.y - 16 + ti * 38, local.size.x - 16, 34)
+                    var br := Rect2(local.position.x + 8, local.position.y + (8.0 if ui.desk else -16.0) + ti * 38, local.size.x - 16, 34)
                     var tc: Color = tags[ti][1]
                     draw_rect(br.grow(2 + pz * 2), Color(tc.r, tc.g, tc.b, 0.35))
                     draw_rect(br, tc)
@@ -1775,6 +1864,176 @@ class TableView extends Control:
             if ui.can_discard_all(): dark_button(Rect2(1482, 812, 398, 58), "DESCARTAR TODAS (%d)" % g.hands[0].size(), 28, "discard_all")
             gold_button(Rect2(1482, 880, 398, 86), "DESCARTAR CARTA" if ui.pending.get("kind", "") == "discard" else "JOGAR CARTA", 40, "play", ui.can_play())
             dark_button(Rect2(1482, 985, 398, 64), "CANCELAR", 30, "cancel", not ui.pending.is_empty() or ui.sel_card >= 0)
+
+    # ------------------------------------------------------------ R57 · PC: partida e salão das referências finais
+    ## texto em px da referência da partida (pos = linha de base; fs = tamanho na referência)
+    func rtext(s: String, pos: Vector2, fk: String, fs: float, col: Color, width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT, room := -1.0, outline := 0, ocol := Color.BLACK, lobby := false):
+        var S: float = ui.lobby_s() if lobby else ui.r57_s()
+        var size := int(round(fs * S))
+        if room > 0.0:
+            while size > 9 and text_w(s, fk, size) > room * S: size -= 1
+        var p: Vector2 = ui.lp(pos) if lobby else ui.rp(pos)
+        text(s, p, fk, size, col, width * S if width > 0.0 else -1.0, align, outline, ocol)
+
+    func cover(tex: Texture2D, dst: Rect2):
+        if tex == null: return
+        var ts := tex.get_size()
+        var want := dst.size.x / dst.size.y
+        var src := Rect2(Vector2.ZERO, ts)
+        if ts.x / ts.y > want: src = Rect2((ts.x - ts.y * want) / 2.0, 0, ts.y * want, ts.y)
+        else: src = Rect2(0, (ts.y - ts.x / want) / 2.0, ts.x, ts.x / want)
+        draw_texture_rect_region(tex, dst, src)
+
+    ## botão que já está na arte: área de toque + brilho no hover (a própria arte mais clara)
+    func art_button(plate: Texture2D, ref_r: Rect2, dst: Rect2, id: String, enabled := true):
+        if enabled and ui.hover_id == id:
+            draw_texture_rect_region(plate, dst, ref_r, Color(1.22, 1.18, 1.1))
+        if not enabled:
+            draw_rect(dst.grow(-3), Color(0.03, 0.01, 0.06, 0.32))
+            return
+        ui.hits.append({"rect": dst, "id": id})
+
+    ## ícones do canto (tela cheia, música, efeitos, ajuda, menu) — os da arte
+    func _r57_icons(plate: Texture2D, icons: Array, lobby: bool):
+        for it in icons:
+            var id: String = it[0]
+            var rref: Rect2 = it[1]
+            var dst: Rect2 = ui.lr(rref) if lobby else ui.rr(rref)
+            if id == "fullscreen":
+                var sm = ui.screen_mode()
+                if sm == null or not sm.supported():
+                    draw_rect(dst.grow(-4), Color(0.03, 0.01, 0.06, 0.6))
+                    continue
+            art_button(plate, rref, dst, id)
+            var off := false
+            if id == "mute_music": off = ui.Sound.music_muted(ui.hub)
+            elif id == "mute_fx": off = ui.Sound.effects_muted(ui.hub)
+            if off:
+                draw_rect(dst.grow(-5), Color(0.03, 0.01, 0.06, 0.5))
+                draw_line(dst.position + Vector2(9, 9), dst.end - Vector2(9, 9), Color("e0503c"), 4.0)
+        # FRAIHA Voice (partida online com outro humano): à esquerda dos ícones, no mesmo estilo
+        var vo = ui.voice()
+        if not lobby and ui.mode == "game" and vo != null and vo.in_match() and vo.available():
+            var vr: Rect2 = ui.rr(Rect2(1230, 12, 54, 53))
+            draw_rect(vr, Color("0a0612"))
+            draw_rect(vr, ui.GOLD, false, 2.0)
+            ui.VoiceGlyph.draw_mic(self, vr.grow(-8), vo.state, ui.GOLD, vo.is_speaking(vo.my_uid))
+            ui.hits.append({"rect": vr, "id": "voice"})
+            if vo.active() or vo.state == "ERROR": ui.hits.append({"rect": ui.VoiceGlyph.draw_leave_badge(self, vr), "id": "voice_off"})
+            var tx := vr.position.x - 10
+            if vo.active():
+                var er: Rect2 = ui.rr(Rect2(1162, 12, 54, 53))
+                draw_rect(er, Color("0a0612"))
+                draw_rect(er, ui.GOLD, false, 2.0)
+                ui.VoiceGlyph.draw_headphones(self, er.grow(-9), vo.speaker_muted, ui.GOLD)
+                ui.hits.append({"rect": er, "id": "voice_ear"})
+                tx = er.position.x - 10
+            ui.VoiceGlyph.draw_status(self, tx, vr.get_center().y, 300, vo.status_text(), 17, Color("e8dcc0"))
+
+    func _draw_game_r57():
+        var g = ui.g
+        var plate: Texture2D = ui.r57.mesa
+        draw_texture_rect(plate, ui.rr(Rect2(Vector2.ZERO, ui.R57_SIZE)), false)
+        var sub := "MODO DE CARTAS E CORRIDA"
+        if g != null: sub = "RODADA %d - %d X %d PEÕES COROADOS" % [g.round_no, g.team_crowned(0), g.team_crowned(1)]
+        rtext(sub, Vector2(187, 64), "r57_head", 17.6, Color("f2c94c"), -1.0, HORIZONTAL_ALIGNMENT_LEFT, 305.0)
+        if ui.mode == "game": _r57_icons(plate, ui.R57_ICONS, false)
+        else: _r57_icons(plate, ui.R57_ICONS.slice(0, 3), false)
+        for seat in 4: _r57_seat(seat)
+        _draw_board()
+        _r57_timer()
+        _r57_play(plate)
+        _draw_hand()
+        _r57_context()
+
+    ## perfil: só avatar + nome (a moldura é da arte); brilho dourado em quem está na vez
+    func _r57_seat(seat: int):
+        var g = ui.g
+        var d: Dictionary = ui.R57_SEATS[seat]
+        var box: Rect2 = ui.rr(Rect2(d.box))
+        ui.hits.append({"rect": box, "id": "seat_%d" % seat})
+        if g != null and g.turn == seat and ui.mode == "game":
+            var pz := 0.65 + 0.35 * sin(ui.t * 4.0)
+            for i in 4: draw_rect(box.grow(1.0 + i * 3.0), Color(1.0, 0.84, 0.38, (0.42 - i * 0.1) * pz), false, 3.0)
+        var av: Rect2 = ui.rr(Rect2(d.av))
+        # os retratos da arte JÁ são os bots (ReiDoBlitz, Lady Torre, Cavalo_Louco) e o cavalo branco do "Você";
+        # só um avatar de verdade (o seu, ou o de um amigo online) entra por cima
+        var tex: Texture2D = ui.my_portrait if seat == 0 else ui.seat_avatar(seat)
+        if tex != null: cover(tex, av)
+        _look(av, ui.seat_look(seat))
+        if ui.online: ui.VoiceGlyph.draw_seat_voice(self, av, ui.voice(), seat)
+        var gone: bool = ui.online and seat < ui.players.size() and (bool(ui.players[seat].get("left", false)) or not bool(ui.players[seat].get("connected", true)))
+        var nm: String = ui.names[seat]
+        rtext(nm, Vector2(d.x, d.base), "r57_name", float(d.cap) / 0.81, Color("8a8478") if gone else Color("f4efe6"), -1.0, HORIZONTAL_ALIGNMENT_LEFT, float(d.end) - float(d.x))
+
+    ## SUA VEZ + tempo (a ampulheta e o pergaminho são da arte)
+    func _r57_timer():
+        var g = ui.g
+        if g == null: return
+        var ink := Color("1a1208")
+        if g.turn == 0 and ui.mode == "game":
+            var secs := int(ceil(ui.turn_left_ms / 1000.0))
+            rtext("SUA VEZ", Vector2(155, 760), "r57_bold", 27.8, ink)
+            rtext("0:%02d" % secs, Vector2(62, 815), "r57_bold", 50.6, ink, 265.0, HORIZONTAL_ALIGNMENT_CENTER)
+        else:
+            rtext("VEZ DE" if ui.mode == "game" else "FIM", Vector2(155, 760), "r57_bold", 27.8, ink)
+            if ui.mode == "game":
+                rtext(String(ui.names[g.turn]).to_upper(), Vector2(62, 810), "r57_bold", 36.0, ink, 265.0, HORIZONTAL_ALIGNMENT_CENTER, 240.0)
+
+    ## JOGAR CARTA da arte (DESCARTAR CARTA quando é descarte; escurecido quando não dá para jogar)
+    func _r57_play(plate: Texture2D):
+        var rref: Rect2 = ui.R57_PLAY
+        var dst: Rect2 = ui.rr(rref)
+        if ui.pending.get("kind", "") == "discard":
+            draw_texture_rect(ui.r57.botao_jogar_vazio, dst, false)
+            rtext("DESCARTAR CARTA", Vector2(rref.position.x + 72, 882.5), "r57_name", 21.0, Color("f4efe6"), rref.size.x - 84, HORIZONTAL_ALIGNMENT_CENTER, rref.size.x - 90)
+        art_button(plate, rref, dst, "play", ui.mode == "game" and ui.can_play())
+
+    ## ajuda da carta escolhida, divisão do 7, opções do 10, descartar todas e CANCELAR — só quando há algo a fazer
+    func _r57_context():
+        var g = ui.g
+        if g == null or ui.mode != "game": return
+        var choosing: bool = ui.sel_card >= 0 or not ui.pending.is_empty()
+        var extra: bool = ui.can_discard_all() or ui.ten_choice() or ui.split_options().size() > 1
+        if not choosing and not extra: return
+        var pr: Rect2 = ui.rr(Rect2(22, 504, 326, 132))
+        draw_rect(pr, Color(0.05, 0.02, 0.08, 0.88))
+        draw_rect(pr, Color("c99a45"), false, 2.0)
+        draw_rect(pr.grow(-5), Color(0.79, 0.6, 0.27, 0.3), false, 1.0)
+        var S: float = ui.r57_s()
+        var line: String = ui.help_line().to_upper()
+        var lines := _wrap(line, "semi_sp", int(15 * S), pr.size.x - 24)
+        for li in mini(2, lines.size()):
+            text(lines[li], Vector2(pr.position.x + 12, pr.position.y + 26 * S + li * 20 * S), "semi_sp", int(15 * S), Color("e9c46e"))
+        var row_y: float = pr.position.y + 84 * S
+        if ui.can_discard_all():
+            dark_button(Rect2(pr.position.x + 10, row_y, 210 * S, 38 * S), "DESCARTAR TODAS (%d)" % g.hands[0].size(), int(15 * S), "discard_all")
+        elif ui.ten_choice():
+            _draw_ten(Vector2(pr.position.x + 12, row_y + 4 * S), 214.0 * S)
+        elif ui.split_options().size() > 1:
+            _draw_split(Vector2(pr.position.x + 12, row_y + 4 * S), 46.0 * S)
+        if choosing:
+            dark_button(Rect2(pr.end.x - 96 * S, row_y, 86 * S, 38 * S), "CANCELAR", int(15 * S), "cancel")
+
+    func _draw_lobby_r57():
+        var plate: Texture2D = ui.r57.salao
+        draw_texture_rect(plate, ui.lr(Rect2(Vector2.ZERO, ui.R57_LOBBY)), false)
+        _r57_icons(plate, [["fullscreen", Rect2(1165, 12, 50, 50)], ["mute_music", Rect2(1222, 12, 50, 50)], ["mute_fx", Rect2(1282, 12, 50, 50)], ["lobby_tutorial", Rect2(1342, 12, 50, 50)], ["lobby_back", Rect2(1409, 12, 51, 50)]], true)
+        # acesso (Club / partida grátis do dia): uma linha discreta no rodapé do painel
+        var info: Dictionary = ui.gate_info
+        var ok: bool = bool(info.get("can_play", false))
+        var badge := String(info.get("label", "VERIFICANDO ACESSO…"))
+        var note := String(info.get("note", ""))
+        var line := badge if ok or note.is_empty() else badge + " · " + note
+        rtext(line, Vector2(232, 538), "semi_sp", 15.0, Color("9fe3b5") if ok else Color("f2b27a"), 586.0, HORIZONTAL_ALIGNMENT_CENTER, 580.0, 0, Color.BLACK, true)
+        var jr := Rect2(485, 580, 525, 80)
+        if ok: art_button(plate, jr, ui.lr(jr), "lobby_play")
+        else:
+            draw_texture_rect(ui.r57.botao_jogar_agora_vazio, ui.lr(jr), false)
+            rtext("CONHECER CLUB FRAIHA", Vector2(jr.position.x + 70, 634), "title", 34.0, Color("f2c75a"), jr.size.x - 140, HORIZONTAL_ALIGNMENT_CENTER, jr.size.x - 150, 3, Color("2a1a04"), true)
+            art_button(plate, jr, ui.lr(jr), "lobby_club")
+        for b in [["lobby_tutorial", Rect2(445, 672, 320, 63)], ["lobby_back", Rect2(775, 672, 275, 63)], ["lobby_invite", Rect2(535, 740, 425, 63)]]:
+            art_button(plate, b[1], ui.lr(b[1]), b[0])
 
     # ------------------------------------------------------------ lobby
     func _draw_lobby():
@@ -1951,8 +2210,9 @@ class TableView extends Control:
 
     ## Números dos componentes sobre o tabuleiro (como na página 03 do conceito).
     func _tutorial_marks(ir: Rect2):
-        var s: float = ir.size.x / ui.Layout.SIZE
-        var marks := [[ui.Layout.home_center(0), "1"], [ui.Layout.track_cell(0), "2"], [ui.Layout.track_cell(9), "3"], [ui.Layout.track_cell(74), "4"], [ui.Layout.lane_cell(0, 2), "5"]]
+        var s: float = ir.size.x / ui.BOARD_UNITS
+        var LS = ui.LayoutStd           # a imagem do tutorial é o tabuleiro antigo
+        var marks := [[LS.home_center(0), "1"], [LS.track_cell(0), "2"], [LS.track_cell(9), "3"], [LS.track_cell(74), "4"], [LS.lane_cell(0, 2), "5"]]
         for m in marks:
             var c: Vector2 = ir.position + Vector2(m[0]) * s + Vector2(26, -26)
             draw_circle(c, 17, Color("f0c44c"))

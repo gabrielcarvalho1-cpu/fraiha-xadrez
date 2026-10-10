@@ -278,6 +278,11 @@ func _draw():
         var cov := maxf(vs.x / 1672.0, vs.y / 941.0)
         var cs := Vector2(1672, 941) * cov
         draw_texture_rect(SCENE_BLUR, Rect2((vs - cs) / 2.0, cs), false, Color(0.62, 0.6, 0.58))
+    if ui.mode == "over" and ui.layout == "desktop" and ui.g != null:
+        # R57 · janela fora de 16:9: a própria arte do resultado, escurecida, cobre as sobras
+        var cov2 := maxf(vs.x / 1672.0, vs.y / 941.0)
+        var cs2 := Vector2(1672, 941) * cov2
+        draw_texture_rect(r57_tex("vitoria" if ui.g.winner == 0 else "derrota"), Rect2((vs - cs2) / 2.0, cs2), false, Color(0.38, 0.36, 0.36))
     # telas 16:9 (tutorial e resultado) usam o desenho do PC também no celular deitado
     var dsg: Vector2 = ui.design
     if ui.mode in ["tutorial", "over"] and ui.layout == "landscape": dsg = Vector2(1920, 1080)
@@ -1179,6 +1184,9 @@ func _tutorial_art(a: Rect2, kind: String):
 func _draw_result(d: Vector2):
     var g = ui.g
     if g == null: return
+    if ui.layout == "desktop":
+        _draw_result_r57(d)
+        return
     var portrait: bool = ui.layout == "portrait"
     var won: bool = g.winner == 0
     if portrait:
@@ -1954,3 +1962,109 @@ func prewarm_jobs() -> Array:
         seen[key] = true
         out.append([ui.CARD_BACK, px])
     return out
+
+
+# ---------------------------------------------------------------- R57 · resultado no PC = referências finais 1 e 2
+## A própria referência (derrota vermelha / vitória azul) é a placa de fundo, sem os dados dinâmicos
+## (tools/visual_final_r57.py). Aqui entram, nos mesmos lugares da referência: retrato e nome do vencedor,
+## "VOCÊ FICOU EM Nº LUGAR", a faixa do xeque-mate final e as 4 linhas da classificação.
+## Coordenadas em px da referência (1672x941); r57_p / r57_r convertem para a tela de desenho (1920x1080).
+const R57_SIZE := Vector2(1672, 941)
+const R57_PORTRAIT := Rect2(351, 281, 294, 269)
+const R57_ROWS_Y := [370.0, 462.0, 553.0, 645.0]
+const R57_BUTTONS := [["again", Rect2(230, 780, 422, 118)], ["over_tutorial", Rect2(672, 792, 349, 105)], ["over_menu", Rect2(1042, 780, 392, 119)]]
+var _r57_tex := {}
+var _r57_font := {}
+
+func r57_tex(key: String) -> Texture2D:
+    if not _r57_tex.has(key): _r57_tex[key] = load("res://xeque/art/telas/r57_%s.png" % key)
+    return _r57_tex[key]
+
+func r57_scale(d: Vector2) -> float:
+    return d.y / R57_SIZE.y
+
+func r57_p(d: Vector2, p: Vector2) -> Vector2:
+    var sc := r57_scale(d)
+    return Vector2((d.x - R57_SIZE.x * sc) / 2.0, 0) + p * sc
+
+func r57_r(d: Vector2, r: Rect2) -> Rect2:
+    return Rect2(r57_p(d, r.position), r.size * r57_scale(d))
+
+## fontes das referências finais: "name" = Grenze Bold (nomes), "mono" = VT323 (faixa, lugar, legendas),
+## "ui" = Jersey 20 (selo BOT). sp = espaço extra entre letras (px na tela).
+const R57_FONTS := {"name": "res://xeque/art/fontes/Grenze-Bold.woff", "mono": "res://xeque/art/fontes/VT323-Regular.woff"}
+func r57_f(key: String, sp: int) -> Font:
+    var id := "%s_%d" % [key, sp]
+    if not _r57_font.has(id):
+        var fv := FontVariation.new()
+        fv.base_font = ui.FONT_UI if key == "ui" else load(R57_FONTS[key])
+        fv.spacing_glyph = sp
+        _r57_font[id] = fv
+    return _r57_font[id]
+
+## texto em coordenadas da referência: pos = linha de base; fs = tamanho na referência; encolhe se passar de room
+func r57_text(d: Vector2, s: String, pos: Vector2, fkey: String, fs: float, col: Color, sp := 0.0, room := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT, width := -1.0, outline := 0, ocol := Color("120a06"), bold := false):
+    var sc := r57_scale(d)
+    var f := r57_f(fkey, int(round(sp * sc)))
+    var size := int(round(fs * sc))
+    if room > 0.0:
+        while size > 10 and f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > room * sc: size -= 1
+    var p := r57_p(d, pos)
+    var w := width * sc if width > 0.0 else -1.0
+    if outline > 0: draw_string_outline(f, p, s, align, w, size, outline, ocol)
+    draw_string(f, p, s, align, w, size, col)
+    if bold: draw_string(f, p + Vector2(1, 0), s, align, w, size, col)      # traço mais grosso (a VT323 é fina)
+    return f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x / sc
+
+## textura cobrindo o retângulo (corta o excesso, sem deformar)
+func r57_cover(tex: Texture2D, dst: Rect2):
+    if tex == null: return
+    var ts := tex.get_size()
+    var want := dst.size.x / dst.size.y
+    var src := Rect2(Vector2.ZERO, ts)
+    if ts.x / ts.y > want: src = Rect2((ts.x - ts.y * want) / 2.0, 0, ts.y * want, ts.y)
+    else: src = Rect2(0, (ts.y - ts.x / want) / 2.0, ts.x, ts.x / want)
+    draw_texture_rect_region(tex, dst, src)
+
+func _draw_result_r57(d: Vector2):
+    var g = ui.g
+    var won: bool = g.winner == 0
+    var key := "vitoria" if won else "derrota"
+    var plate := r57_tex(key)
+    draw_texture_rect(plate, r57_r(d, Rect2(Vector2.ZERO, R57_SIZE)), false)
+    # botões da arte: hover = a própria arte um pouco mais clara
+    for b in R57_BUTTONS:
+        var br: Rect2 = b[1]
+        if ui.hover_id == String(b[0]):
+            draw_texture_rect_region(plate, r57_r(d, br), br, Color(1.22, 1.18, 1.1) if ui.pressed_id != String(b[0]) else Color(0.9, 0.88, 0.85))
+        hit(r57_r(d, br), String(b[0]))
+    # retrato do vencedor (você, se venceu) + joias da moldura por cima
+    var hero: int = 0 if won else int(g.winner)
+    r57_cover(ui.avatars[hero], r57_r(d, R57_PORTRAIT))
+    draw_texture_rect(r57_tex("joias_" + key), r57_r(d, Rect2(320, 250, 360, 335)), false)
+    var nm: String = "Você" if won else String(g.names[hero])
+    r57_text(d, nm, Vector2(366, 626), "name", 52, Color("f5e8bc"), 0.0, 252.0, HORIZONTAL_ALIGNMENT_CENTER, 264.0, 3)
+    r57_text(d, "VOCÊ FICOU EM %dº LUGAR" % g.placement(0), Vector2(330, 680), "mono", 38, Color("eeb63b"), 0.0, 320.0, HORIZONTAL_ALIGNMENT_CENTER, 330.0, 2, Color("120a06"), true)
+    # faixa vermelha: xeque-mate final
+    var last_loser := -1
+    if not g.finish_order.is_empty(): last_loser = int(g.finish_order[g.finish_order.size() - 1])
+    var bt := "XEQUE-MATE FINAL EM %s" % String(g.names[last_loser]).to_upper() if last_loser >= 0 else "FIM DE PARTIDA"
+    r57_text(d, bt, Vector2(910, 312), "mono", 43, Color("f6e1a3"), -2.0, 505.0, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 0, Color("120a06"), true)
+    # classificação: números, coroas e molduras já estão na arte
+    var order := [g.winner]
+    for i in range(g.finish_order.size() - 1, -1, -1): order.append(g.finish_order[i])
+    for i in mini(order.size(), 4):
+        var s: int = order[i]
+        var y0: float = R57_ROWS_Y[i]
+        r57_cover(ui.avatars[s], r57_r(d, Rect2(859, y0 + 2, 70, 70)))
+        var name: String = "Você" if s == 0 else String(g.names[s])
+        var tag: String = "" if s == 0 else String(ui.seat_tag(s))
+        var nw: float = r57_text(d, name, Vector2(951, y0 + 30), "name", 29, Color("f5eabc"), 0.0, 300.0 - (60.0 if not tag.is_empty() else 0.0), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 2)
+        if not tag.is_empty():
+            var tw0: float = r57_f("ui", 0).get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 19).x + 22.0
+            var tr := Rect2(951 + nw + 14, y0 + 10, maxf(43.0, tw0), 26)
+            draw_rect(r57_r(d, tr.grow(1.5)), Color("0c1418"))
+            draw_rect(r57_r(d, tr), Color("8ec7f6"))
+            r57_text(d, tag, Vector2(tr.position.x, tr.position.y + 19.5), "ui", 19, Color("10243a"), 1.0, tr.size.x - 6, HORIZONTAL_ALIGNMENT_CENTER, tr.size.x)
+        var line := "Último de pé" if i == 0 else ("Xeque-mate final na rodada %d" % g.eliminated_round[s] if i == 1 else "Eliminad%s na rodada %d" % ["a" if s == 1 else "o", g.eliminated_round[s]])
+        r57_text(d, line, Vector2(952, y0 + 58), "mono", 27, Color("abb7b1"), 1.0, 300.0, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 0, Color("120a06"), true)
