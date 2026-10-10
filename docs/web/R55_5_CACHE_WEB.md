@@ -117,7 +117,7 @@ Os JSONs completos ficam na saída do `measure_cache.cjs`.
 ### A) Build Web (pode ir antes do Worker; já dá o ganho principal)
 
 1. Exportar a Web normalmente (preset "Web Alpha").
-2. Empacotar: `python3 tools/web_release/pack_web_release.py <export> web <saida> <TAG> <commit>`.
+2. Empacotar: `python3 tools/web_release/pack_web_release.py <export> web <saida> <TAG> <commit> --ambiente=staging|producao` (ver `docs/web/AMBIENTES_STAGING_PRODUCAO.md`).
    - Os nomes com SHA-256 são o padrão; `--legado` volta aos nomes antigos.
 3. No PC: rodar `MONTAR-UPLOAD-<TAG>.cmd`. Ele confere SHA-256 e gera `UPLOAD` e `UPLOAD-2-POR-ULTIMO`.
 4. **Passo 1:** arrastar todo o conteúdo de `UPLOAD` para o bucket `fraiha-xadrez-web` e esperar chegar a 100%.

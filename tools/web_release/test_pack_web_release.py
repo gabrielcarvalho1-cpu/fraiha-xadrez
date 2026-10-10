@@ -13,10 +13,37 @@ HTML = ('<html><head><link rel="icon" href="index.icon.png"/><style>#s{backgroun
         'const engine = new Engine(GODOT_CONFIG);</script></body></html>')
 
 
-def fake_tree(base, with_voice=True, big=False, pck_bytes=None):
+CFG = ('[online]\nserver_url="wss://fraiha-xadrez.onrender.com"\n\n[accounts]\nsupabase_url=""\n\n'
+       '[staging]\nserver_url="wss://fraiha-xadrez-staging.onrender.com"\n')
+
+
+def make_pck(features="staging", cfg=CFG, pad=b""):
+    """PCK mínimo do Godot 4 (formato 3) com project.binary (_custom_features) + online.cfg + um arquivo de enchimento."""
+    import struct
+    pb = b""
+    if features is not None:
+        k, v = b"_custom_features", features.encode()
+        val = struct.pack("<II", 4, len(v)) + v + b"\0" * (-len(v) % 4)
+        pb = struct.pack("<I", 1) + struct.pack("<I", len(k)) + k + struct.pack("<I", len(val)) + val
+    files = [("res://project.binary", pb), ("res://online.cfg", cfg.encode()), ("res://pad.bin", pad)]
+    base = 4 + 4 * 4 + 4 + 8 + 8 + 16 * 4
+    data, entries, off = b"", [], 0
+    for path, content in files:
+        entries.append((path, off, len(content)))
+        data += content
+        off += len(content)
+    d = struct.pack("<I", len(files))
+    for path, o, n in entries:
+        pe = path.encode(); pe += b"\0" * (-len(pe) % 4)
+        d += struct.pack("<I", len(pe)) + pe + struct.pack("<QQ", o, n) + b"\0" * 16 + struct.pack("<I", 0)
+    head = b"GDPC" + struct.pack("<IIIIIQQ", 3, 4, 5, 1, 2, base, base + len(data)) + b"\0" * 64
+    return head + data + d
+
+
+def fake_tree(base, with_voice=True, big=False, pck_bytes=None, features="staging", cfg=CFG):
     exp, web = os.path.join(base, "export"), os.path.join(base, "web")
     os.makedirs(exp); os.makedirs(os.path.join(web, "engines"))
-    pck = pck_bytes if pck_bytes is not None else (os.urandom(19922944 * 2 + 5) if big else b"index.pck")
+    pck = make_pck(features, cfg, pck_bytes if pck_bytes is not None else (os.urandom(19922944 * 2 + 5) if big else b"index.pck"))
     for n in INDEX:
         with open(os.path.join(exp, n), "wb") as f:
             f.write(pck if n == "index.pck" else (HTML % (len(pck), len(b"index.wasm"))).encode() if n == "index.html" else n.encode())
@@ -35,7 +62,70 @@ def fake_tree(base, with_voice=True, big=False, pck_bytes=None):
 class PackTest(unittest.TestCase):
     def run_pack(self, base, exp, web, *extra, out="OUT"):
         out = os.path.join(base, out)
+        if not any(e.startswith("--ambiente") or e == "--sem-ambiente" for e in extra):
+            extra = extra + ("--ambiente=staging",)
+        extra = tuple(e for e in extra if e != "--sem-ambiente")
         return out, subprocess.run([sys.executable, PACK, exp, web, out, "RTEST", "abc123", *extra], capture_output=True, text=True)
+
+    # ---- AMBIENTE (QA/staging × produção): conferido no próprio PCK, fail-closed
+    def test_ambiente_staging_marcado(self):
+        with tempfile.TemporaryDirectory() as t:
+            out, r = self.run_pack(t, *fake_tree(t))
+            self.assertEqual(r.returncode, 0, r.stderr)
+            man = open(os.path.join(out, "ARQUIVOS-SHA256.txt"), encoding="utf-8").read()
+            self.assertIn("# AMBIENTE staging - servidor wss://fraiha-xadrez-staging.onrender.com\n", man)
+            self.assertIn('<meta name="fraiha-ambiente" content="staging">', open(os.path.join(out, "index.html"), encoding="utf-8").read())
+            self.assertIn("STAGING", r.stdout)
+
+    def test_ambiente_producao_marcado(self):
+        with tempfile.TemporaryDirectory() as t:
+            out, r = self.run_pack(t, *fake_tree(t, features="production"), "--ambiente=producao")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            man = open(os.path.join(out, "ARQUIVOS-SHA256.txt"), encoding="utf-8").read()
+            self.assertIn("# AMBIENTE producao - servidor wss://fraiha-xadrez.onrender.com\n", man)
+            self.assertIn('<meta name="fraiha-ambiente" content="producao">', open(os.path.join(out, "index.html"), encoding="utf-8").read())
+
+    def test_ambiente_falha_fechado(self):
+        stg = CFG.replace("fraiha-xadrez.onrender.com", "fraiha-xadrez-staging.onrender.com")
+        casos = [
+            ("staging pedido como produção", dict(features="staging"), "--ambiente=producao", "PCK é de STAGING"),
+            ("produção pedida como staging", dict(features="production"), "--ambiente=staging", "PCK é de PRODUCAO"),
+            ("produção com [online] = staging", dict(features="production", cfg=stg), "--ambiente=producao", "PRODUÇÃO apontando para STAGING"),
+            ("produção com outro servidor", dict(features="production", cfg=CFG.replace("fraiha-xadrez.onrender.com", "outro.example.com")), "--ambiente=producao", "o oficial é"),
+            ("staging e produção juntos", dict(features="staging,production"), "--ambiente=producao", "staging E produção"),
+            ("sem feature de ambiente", dict(features=None), "--ambiente=producao", "sem feature de ambiente".replace("sem feature de ambiente", "não tem feature de ambiente")),
+            ("ambiente não informado", dict(), "--sem-ambiente", "informe o ambiente"),
+            ("ambiente inválido", dict(), "--ambiente=prod", "ambiente declarado inválido"),
+            ("sem online.cfg no PCK", dict(cfg=None), "--ambiente=staging", "online.cfg ausente"),
+        ]
+        for nome, kw, flag, msg in casos:
+            with self.subTest(nome), tempfile.TemporaryDirectory() as t:
+                if kw.get("cfg", "") is None:
+                    exp, web = fake_tree(t)
+                    raw = open(os.path.join(exp, "index.pck"), "rb").read().replace(b"res://online.cfg", b"res://online.xyz")
+                    open(os.path.join(exp, "index.pck"), "wb").write(raw)
+                else:
+                    exp, web = fake_tree(t, **kw)
+                out, r = self.run_pack(t, exp, web, flag)
+                self.assertNotEqual(r.returncode, 0, nome)
+                self.assertIn(msg, r.stdout + r.stderr, nome)
+                self.assertFalse(os.path.exists(out), nome)
+
+    def test_presets_staging_e_producao(self):
+        """export_presets.cfg: "Web Alpha" = staging e "Web Producao" = production, com as MESMAS opções."""
+        import configparser
+        cp = configparser.RawConfigParser(strict=False)
+        cp.read(os.path.join(HERE, "../../export_presets.cfg"), encoding="utf-8")
+        web = {cp.get(s, "name").strip('"'): s for s in cp.sections() if s.count(".") == 1 and cp.get(s, "platform").strip('"') == "Web"}
+        self.assertEqual(sorted(web), ["Web Alpha", "Web Producao"])
+        a, p = web["Web Alpha"], web["Web Producao"]
+        self.assertEqual(cp.get(a, "custom_features"), '"staging"')
+        self.assertEqual(cp.get(p, "custom_features"), '"production"')
+        for sec in ("", ".options"):
+            da, dp = dict(cp.items(a + sec)), dict(cp.items(p + sec))
+            for k in ("name", "custom_features"):
+                da.pop(k, None); dp.pop(k, None)
+            self.assertEqual(da, dp, "os presets Web divergem em " + (sec or "preset"))
 
     def test_sem_voice_nao_gera(self):
         with tempfile.TemporaryDirectory() as t:

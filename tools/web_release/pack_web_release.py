@@ -17,11 +17,17 @@ ele cita já estão lá. --legado gera os nomes antigos (index.pck/index.wasm/in
 R55.6: o index.html (nos dois modos) recebe INLINE a recuperação de perda de contexto WebGL
 (web/gl_recovery/fraiha-gl-recovery.js). Sem esse arquivo, nada é gerado.
 
-Uso: pack_web_release.py <export_dir> <web_dir_do_repo> <saida> <TAG> <commit> [--legado]
+AMBIENTE (QA × produção): --ambiente=staging|producao é OBRIGATÓRIO. O empacotador lê o index.pck
+(tools/web_release/ambiente_web.py), confere feature de export + servidor efetivo com o ambiente declarado e
+PARA se divergir (ex.: build de staging pedida como produção). O ambiente vai para o ARQUIVOS-SHA256.txt
+("# AMBIENTE ...") e para o index.html (<meta name="fraiha-ambiente">); o MONTAR-UPLOAD mostra e confere.
+
+Uso: pack_web_release.py <export_dir> <web_dir_do_repo> <saida> <TAG> <commit> --ambiente=staging|producao [--legado]
 """
 import base64, hashlib, os, shutil, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fingerprint_web
+import ambiente_web
 
 PART = 19922944
 INDEX = ["index.html", "index.js", "index.wasm", "index.pck", "index.png", "index.icon.png",
@@ -89,14 +95,31 @@ def files_needed(export_dir, web_dir, fp=None):
     return out
 
 
+AMB_META = "fraiha-ambiente"
+
+
+def inject_ambiente(html, amb):
+    """Marca o ambiente no index.html (visível no código da página e conferido pelo MONTAR-UPLOAD)."""
+    if 'name="%s"' % AMB_META in html:
+        raise SystemExit("ERRO: index.html já tem a marca de ambiente")
+    return html.replace("<head>", '<head>\n<meta name="%s" content="%s">' % (AMB_META, amb), 1)
+
+
 def main(argv):
-    args = [a for a in argv[1:] if a != "--legado"]
+    amb_args = [a for a in argv[1:] if a.startswith("--ambiente")]
+    args = [a for a in argv[1:] if a != "--legado" and not a.startswith("--ambiente")]
     legacy = "--legado" in argv[1:]
     if len(args) != 5:
         raise SystemExit(__doc__)
+    if len(amb_args) != 1 or not amb_args[0].startswith("--ambiente="):
+        raise SystemExit("ERRO: informe o ambiente: --ambiente=staging (QA) ou --ambiente=producao")
+    ambiente = amb_args[0].split("=", 1)[1]
     export_dir, web_dir, out, tag, commit = args
     if not os.path.isfile(os.path.join(export_dir, "index.html")):
         raise SystemExit("ERRO: arquivos obrigatórios ausentes (nada foi gerado): index.html")
+    if not os.path.isfile(os.path.join(export_dir, "index.pck")):
+        raise SystemExit("ERRO: arquivos obrigatórios ausentes (nada foi gerado): index.pck")
+    amb = ambiente_web.conferir(os.path.join(export_dir, "index.pck"), ambiente)   # fail-closed, antes de tudo
     fp = None if legacy else fingerprint_web.plan(export_dir)
     files = files_needed(export_dir, web_dir, fp)
     if fp is not None:
@@ -105,10 +128,12 @@ def main(argv):
         with open(os.path.join(export_dir, "index.html"), encoding="utf-8") as f:
             html = f.read()
     html = inject_gl_recovery(html, web_dir)          # valida ANTES de criar qualquer coisa
+    html = inject_ambiente(html, ambiente)
     if os.path.exists(out) and os.listdir(out):
         raise SystemExit("ERRO: pasta de saída já existe e não está vazia: " + out)
     os.makedirs(out, exist_ok=True)
     lines = ["# FRAIHA build Web %s · commit %s" % (tag, commit),
+             "# AMBIENTE %s - servidor %s" % (ambiente, amb["servidor"]),
              "# caminho  tamanho  SHA256 — TODOS obrigatórios no bucket (o MONTAR-UPLOAD confere cada um)"]
     if fp is not None:
         lines.insert(1, "# R55.5 nomes com SHA-256: motor %s · pacote %s · index.html sobe POR ULTIMO" % (fp[2]["executable"], fp[2]["mainPack"]))
@@ -154,7 +179,8 @@ def main(argv):
         with open(os.path.join(out, cmd + ".cmd"), "w", newline="\r\n") as f:
             # fail-closed: o código de saída do PowerShell é devolvido DEPOIS do pause (sem isso o .cmd sai 0)
             f.write('@echo off\ntitle FRAIHA %s\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File "%%~dp0%s.ps1" %%*\nset "RC=%%ERRORLEVEL%%"\nif not "%%RC%%"=="0" echo FALHOU (codigo %%RC%%)\nif not defined FRAIHA_NO_PAUSE pause\nexit /b %%RC%%\n' % (cmd, cmd))
-    print("OK: %d arquivos (%s · engines %d + voice %d) em %s" % (
+    print("OK: AMBIENTE %s (servidor %s) · %d arquivos (%s · engines %d + voice %d) em %s" % (
+        ambiente_web.rotulo(ambiente), amb["servidor"],
         len(files), "legado" if legacy else "nomes com SHA-256 " + fp[2]["mainPack"],
         len(REQUIRED_DIRS["engines"]), len(REQUIRED_DIRS["voice"]), out))
 

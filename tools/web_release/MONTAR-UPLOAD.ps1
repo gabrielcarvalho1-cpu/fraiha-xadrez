@@ -6,6 +6,8 @@
 # SOZINHO em UPLOAD-2-POR-ULTIMO e só deve subir DEPOIS que o UPLOAD terminar (o html novo cita os arquivos novos).
 # FAIL-CLOSED (auditoria R46): sucesso real = exit 0; QUALQUER falha = exit 1 e a pasta UPLOAD parcial
 # é removida (nada incompleto fica pronto para subir).
+# AMBIENTE (QA × produção): o ARQUIVOS-SHA256.txt diz "# AMBIENTE staging|producao · servidor ..." (conferido no
+# PCK pelo empacotador) e o index.html tem <meta name="fraiha-ambiente">. Sem isso, ou se divergirem, PARA.
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $up = Join-Path $root 'UPLOAD'
@@ -20,6 +22,17 @@ try {
   $all = @(Get-Content -LiteralPath $manifest)
   $hashed = [bool]($all | Where-Object { $_ -match '^# R55\.5 ' })
   if ($hashed) { New-Item -ItemType Directory -Path $up2 | Out-Null }
+  $ambLine = @($all | Where-Object { $_ -match '^# AMBIENTE (staging|producao) - servidor (wss://\S+)$' })
+  if ($ambLine.Count -ne 1) { throw 'ARQUIVOS-SHA256.txt sem a linha de AMBIENTE (build antiga ou alterada): gere de novo.' }
+  $null = $ambLine[0] -match '^# AMBIENTE (staging|producao) - servidor (wss://\S+)$'
+  $amb = $Matches[1]; $servidor = $Matches[2]
+  if ($amb -eq 'producao' -and $servidor -match 'staging') { throw "build marcada como PRODUCAO aponta para STAGING ($servidor)." }
+  if ($amb -eq 'staging' -and $servidor -notmatch 'staging') { throw "build marcada como STAGING aponta para fora do staging ($servidor)." }
+  $ambNome = if ($amb -eq 'producao') { 'PRODUCAO (jogadores reais)' } else { 'STAGING (QA/testes) - NAO e producao' }
+  $ambCor = if ($amb -eq 'producao') { 'Magenta' } else { 'Cyan' }
+  Write-Host ''
+  Write-Host "AMBIENTE DESTA BUILD: $ambNome" -ForegroundColor $ambCor
+  Write-Host "SERVIDOR: $servidor" -ForegroundColor $ambCor
   $rows = @($all | Where-Object { $_ -match '^[^#\s]\S*\s+\d+\s+[0-9A-Fa-f]{64}$' })
   if ($rows.Count -lt 15) { throw "ARQUIVOS-SHA256.txt incompleto ($($rows.Count) linhas)." }
   $count = @{ 'raiz' = 0; 'engines' = 0; 'voice' = 0 }
@@ -49,9 +62,13 @@ try {
     $top = if ($rel.Contains('/')) { $rel.Split('/')[0] } else { 'raiz' }
     $count[$top] = $count[$top] + 1
   }
+  $htmlFinal = if ($hashed) { Join-Path $up2 'index.html' } else { Join-Path $up 'index.html' }
+  $htmlText = [System.IO.File]::ReadAllText($htmlFinal)
+  if ($htmlText -notmatch ('<meta name="fraiha-ambiente" content="' + $amb + '">')) { throw "o index.html nao esta marcado como $amb (mistura de builds?)." }
   if ($count['voice'] -lt 3) { throw 'A pasta voice/ esta incompleta: a voz daria 404 no site.' }
   if ($count['engines'] -lt 3) { throw 'A pasta engines/ esta incompleta: a analise daria 404 no site.' }
   Write-Host ''
+  Write-Host "AMBIENTE: $ambNome - servidor $servidor" -ForegroundColor $ambCor
   Write-Host ('CONFERIDO (tamanho + SHA256): raiz {0} | engines/ {1} | voice/ {2} | total {3}' -f $count['raiz'], $count['engines'], $count['voice'], $rows.Count) -ForegroundColor Green
   Write-Host ''
   Write-Host 'PASSO 1 - ENVIE PARA O BUCKET fraiha-xadrez-web O CONTEUDO INTEIRO DE:' -ForegroundColor Yellow

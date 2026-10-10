@@ -12,10 +12,10 @@ PWSH = os.environ.get("PWSH") or shutil.which("pwsh") or shutil.which("powershel
 NEED = unittest.skipUnless(PWSH, "pwsh/powershell não encontrado: casos de execução PULADOS")
 
 
-def build(base, big=True, legado=False):
-    exp, web = fake_tree(base, big=big)
+def build(base, big=True, legado=False, ambiente="staging"):
+    exp, web = fake_tree(base, big=big, features="production" if ambiente == "producao" else "staging")
     out = os.path.join(base, "OUT")
-    r = subprocess.run([sys.executable, PACK, exp, web, out, "RT", "abc123"] + (["--legado"] if legado else []), capture_output=True, text=True)
+    r = subprocess.run([sys.executable, PACK, exp, web, out, "RT", "abc123", "--ambiente=" + ambiente] + (["--legado"] if legado else []), capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     return out
 
@@ -84,6 +84,36 @@ class Montar(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(up, "index.pck")))
             self.assertTrue(os.path.isfile(os.path.join(up, "index.html")))
             self.assertFalse(os.path.exists(os.path.join(out, "UPLOAD-2-POR-ULTIMO")))
+
+    def test_A_ambiente_aparece(self):
+        for amb, txt in (("staging", "STAGING (QA/testes) - NAO e producao"), ("producao", "PRODUCAO (jogadores reais)")):
+            with self.subTest(amb), tempfile.TemporaryDirectory() as t:
+                r = self.montar(build(t, big=False, ambiente=amb))
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn("AMBIENTE DESTA BUILD: " + txt, r.stdout)
+
+    def _manifesto(self, out, troca):
+        m = os.path.join(out, "ARQUIVOS-SHA256.txt")
+        txt = open(m, encoding="utf-8").read()
+        novo = troca(txt)
+        self.assertNotEqual(novo, txt)
+        open(m, "w", encoding="utf-8", newline="\r\n").write(novo)
+
+    def test_A2_ambiente_ausente_ou_trocado_falha(self):
+        trocas = {
+            "sem linha de AMBIENTE": (lambda x: "\n".join(l for l in x.splitlines() if not l.startswith("# AMBIENTE")) + "\n", "sem a linha de AMBIENTE"),
+            "producao apontando para staging": (lambda x: x.replace("# AMBIENTE staging", "# AMBIENTE producao"), "aponta para STAGING"),
+            "manifesto de producao com html de staging": (lambda x: x.replace("# AMBIENTE staging - servidor wss://fraiha-xadrez-staging.onrender.com", "# AMBIENTE producao - servidor wss://fraiha-xadrez.onrender.com"), "nao esta marcado como producao"),
+        }
+        for nome, (troca, msg) in trocas.items():
+            with self.subTest(nome), tempfile.TemporaryDirectory() as t:
+                out = build(t, big=False)
+                self._manifesto(out, troca)
+                r = self.montar(out)
+                self.assertNotEqual(r.returncode, 0, nome + r.stdout)
+                self.assertIn(msg, r.stdout, nome)
+                self.assertFalse(os.path.exists(os.path.join(out, "UPLOAD")), nome)
+                self.assertFalse(os.path.exists(os.path.join(out, "UPLOAD-2-POR-ULTIMO")), nome)
 
     def test_C_manifesto_ausente_falha(self):
         with tempfile.TemporaryDirectory() as t:
