@@ -385,20 +385,49 @@ def marcha_plate():
 
 
 # ------------------------------------------------------------------ MARCHA REAL · antes da partida (referência 4)
+LOBBY_INNER = (859, 150, 1305, 562)   # vão interno da moldura do painel direito (dentro do filete dourado)
+LOBBY_PAD_X = 16                       # folga escura dos lados (na referência: ~26 px dos lados, ~28 em cima/embaixo)
+
+
+def lobby_frame_fit(a, b):
+    """Tabuleiro aprovado (sem distorcer) dentro da moldura original do painel: o vão inteiro fica com a cor
+    escura do próprio painel e o tabuleiro centrado, com folga dos 4 lados como na referência — sem faixas."""
+    a = a.copy()
+    ix0, iy0, ix1, iy1 = LOBBY_INNER
+    # fundo do vão = o mesmo vinho-escuro do painel da esquerda, com luz suave no centro
+    yy, xx = np.mgrid[iy0:iy1, ix0:ix1].astype(np.float32)
+    cx, cy = (ix0 + ix1) / 2.0, (iy0 + iy1) / 2.0
+    r = np.sqrt(((xx - cx) / ((ix1 - ix0) / 2.0)) ** 2 + ((yy - cy) / ((iy1 - iy0) / 2.0)) ** 2)
+    base = np.array([16, 1, 8], np.float32)
+    lit = np.array([34, 10, 26], np.float32)
+    a[iy0:iy1, ix0:ix1] = (base + (lit - base) * np.clip(1.0 - r, 0, 1)[..., None]).astype(np.uint8)
+    bx0, by0, bx1, by1 = BOARD_CROP
+    board = b[by0:by1, bx0:bx1]
+    w = ix1 - ix0 - 2 * LOBBY_PAD_X
+    h = int(round(board.shape[0] * w / board.shape[1]))
+    small = cv2.resize(board, (w, h), interpolation=cv2.INTER_AREA)
+    tx = ix0 + LOBBY_PAD_X
+    ty = iy0 + (iy1 - iy0 - h) // 2
+    # sombra suave do tabuleiro sobre o fundo do painel (assenta, em vez de parecer recortado)
+    sh = np.zeros(a.shape[:2], np.float32)
+    sh[ty + 3:ty + h + 5, tx + 2:tx + w + 4] = 1.0
+    sh = cv2.GaussianBlur(sh, (0, 0), 5.0)[..., None] * 0.55
+    a = (a.astype(np.float32) * (1 - sh)).astype(np.uint8)
+    a[ty:ty + h, tx:tx + w] = small
+    # filete dourado fino em volta (passe-partout), como os filetes do painel da esquerda
+    g = 6
+    cv2.rectangle(a, (tx - g, ty - g), (tx + w + g - 1, ty + h + g - 1), (96, 62, 18), 1, cv2.LINE_AA)
+    cv2.rectangle(a, (tx - g - 1, ty - g - 1), (tx + w + g, ty + h + g), (214, 160, 52), 1, cv2.LINE_AA)
+    print("salão: tabuleiro %dx%d em (%d,%d); folgas lados %d, cima %d, baixo %d" % (w, h, tx, ty, LOBBY_PAD_X, ty - iy0, iy1 - ty - h))
+    return a
+
+
 def marcha_lobby():
     a = load("marcha_lobby.png")
     # o tabuleiro do painel da direita é o MESMO tabuleiro aprovado da partida (referência 3, cores certas),
-    # com os peões nos Pátios — encaixado na moldura do painel
+    # sem distorcer, centrado na moldura original com folga escura dos 4 lados (como a referência).
     b = fix_board(load("marcha_partida.png"))
-    x0, y0, x1, y1 = BOARD_CROP
-    board = b[y0:y1, x0:x1]
-    ix0, iy0, ix1, iy1 = 880, 170, 1295, 555
-    w = ix1 - ix0
-    h = int(round(board.shape[0] * w / board.shape[1]))
-    small = cv2.resize(board, (w, h), interpolation=cv2.INTER_AREA)
-    a[iy0:iy1, ix0:ix1] = np.array([16, 11, 18], np.uint8)
-    ty = iy0 + (iy1 - iy0 - h) // 2
-    a[ty:ty + h, ix0:ix1] = small
+    a = lobby_frame_fit(a, b)
     save(a, "marcha/art/r57/salao.png")
     # face do JOGAR AGORA sem texto (para "CONHECER CLUB FRAIHA" quando não há acesso)
     m = text_mask(a, (520, 592, 975, 650), "light")
