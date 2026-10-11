@@ -226,7 +226,7 @@ func open():
     g = null
     _load_avatars()
     _relayout()
-    _prewarm = view.prewarm_jobs() if layout == "desktop" else []   # R55.3
+    _prewarm = view.prewarm_jobs()   # R55.3 (PC) · R61: celular também (só o verso da distribuição)
 
 ## R55.3 · PC: enquanto a tela "Como jogar" está aberta, o que a partida monta na hora é preparado antes —
 ## vinheta da mesa e cartas reduzidas para os tamanhos exatos (mão, revelação, A MESA PEDE, verso na
@@ -234,10 +234,13 @@ func open():
 var _prewarm: Array = []
 const Crisp := preload("res://ui_v022/crisp_tex.gd")
 func _prewarm_step():
-    if _prewarm.is_empty() or mode != "tutorial": return
+    # R61: também durante a abertura da partida (a distribuição corre por baixo dela), para quem sai do
+    # "Como jogar" na hora. Um item por quadro, sem leitura da GPU; não muda tempo nem animação.
+    if _prewarm.is_empty() or not (mode == "tutorial" or (mode == "game" and intro_anim >= 0.0)): return
     var j: Array = _prewarm.pop_front()
     if j[0] is String: view._vignette()
     else: Crisp.at(j[0], j[1])
+    if _prewarm.is_empty(): Crisp.release_sources()   # R61: memória — fontes na CPU só durante o preparo
 
 func close():
     _popup_close()

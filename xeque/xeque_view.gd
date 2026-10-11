@@ -1963,15 +1963,16 @@ func _steel_immediate(rr: Rect2, lt: Color, dk: Color):
 ## R55.3 · tamanhos das cartas da partida no PC (largura em px de referência): mão, revelação, A MESA PEDE.
 const PREWARM_CARD_W := [DESK_CARD_W, 150.0, 104.0]
 ## Lista de reduções de carta que a partida no PC vai pedir (mesmos argumentos de card_face/Crisp.at).
+## R61 · vale para os 3 layouts (antes só PC): o verso da distribuição é preparado na tela "Como jogar" /
+## durante a abertura, sem leitura da GPU (Crisp decodifica a arte na CPU). Só entra o que ainda não está pronto,
+## então a reentrada não refaz nada.
 func prewarm_jobs() -> Array:
     var out := []
-    out.append(["vinheta"])                       # vinheta da mesa (montada pixel a pixel no 1º desenho)
-    for w in PREWARM_CARD_W:
-        for kind in ["rei", "rainha", "cavalo", "peao"]:
-            var tex: Texture2D = ui.cards_clean.get(kind, ui.cards.get(kind))
-            out.append([tex, Vector2(w, w * 1.4) * ui.k])
-    # verso da carta na pilha, no voo e na distribuição (a escala varia de 2,0 a 2,6 × a da pilha)
-    var pl: Array = LAYOUTS["desktop"].pile
+    var d := desk()
+    if d: out.append(["vinheta"])                 # vinheta da mesa (montada pixel a pixel no 1º desenho)
+    # verso da carta na pilha, no voo e na distribuição (a escala varia de 2,0 a 2,6 × a da pilha): primeiro,
+    # porque a distribuição é o que vem logo depois da abertura
+    var pl: Array = L().pile
     var seen := {}
     for i in 31:
         var sc: float = pl[1] * (2.0 + 0.6 * i / 30.0)
@@ -1979,7 +1980,13 @@ func prewarm_jobs() -> Array:
         var key := int(round(px.x / 4.0))
         if seen.has(key): continue
         seen[key] = true
-        out.append([ui.CARD_BACK, px])
+        if not Crisp.has(ui.CARD_BACK, px): out.append([ui.CARD_BACK, px])
+    if d:
+        for kind in ["rei", "rainha", "cavalo", "peao"]:      # carta a carta: cada arte é decodificada uma vez
+            for w in PREWARM_CARD_W:
+                var tex: Texture2D = ui.cards_clean.get(kind, ui.cards.get(kind))
+                var px: Vector2 = Vector2(w, w * 1.4) * ui.k
+                if not Crisp.has(tex, px): out.append([tex, px])
     return out
 
 
