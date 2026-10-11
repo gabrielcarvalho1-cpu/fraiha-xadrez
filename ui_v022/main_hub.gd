@@ -17,7 +17,8 @@ const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
 const APP_VERSION = "0.37"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
-const FOREST = preload("res://ui_v022/assets/home_forest_v8.png")   # R47: arte de REFERÊNCIA do dono (tools/home_ref_v8.py): menu em 3 linhas grandes + grade 2×3 + CONFIGURAÇÕES/SAIR; só o que é vivo foi apagado   # R36: arte de REFERÊNCIA aprovada pelo dono (tools/home_ref_v7.py): menu com pilares e tochas, 11 linhas com textos; só o que é vivo foi apagado
+const FOREST = preload("res://ui_v022/assets/home_forest_v9.png")   # R64: botões do menu (ícones e textos) da nova referência do dono (tools/home_ref_v9.py)
+#   # R47: arte de REFERÊNCIA do dono (tools/home_ref_v8.py): menu em 3 linhas grandes + grade 2×3 + CONFIGURAÇÕES/SAIR; só o que é vivo foi apagado   # R36: arte de REFERÊNCIA aprovada pelo dono (tools/home_ref_v7.py): menu com pilares e tochas, 11 linhas com textos; só o que é vivo foi apagado
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
 ## R36 · linhas do menu na arte v7 (y da borda dourada de cima, altura até a de baixo) — medidas na referência
 # R43: menu da arte em 92% (tools/home_r43_art.py): x' = 554 + (x-530)*0,92 ; y' = 292 + (y-288)*0,92
@@ -30,12 +31,14 @@ const MENU_TEXT_X := 705.8  # onde começam os textos das linhas na arte v7 (R43
 ## cada um ganha o retângulo do botão DESENHADO na arte e os textos no lugar/medida da referência.
 ## Textos: [título, Rect2(x, topo das maiúsculas, largura da tinta, altura das maiúsculas), fonte] e,
 ## nas 3 linhas grandes, o subtítulo [texto, Rect2(x, topo, largura, 0)].
-const PC_MENU := [Rect2(607,340,436,69), Rect2(607,416,436,66), Rect2(605,490,440,72), Rect2(603,660,216,55), Rect2(602,597,217,55), Rect2(830,597,215,55), Rect2(603,722,216,54), Rect2(609,805,217,49), Rect2(830,722,215,54), Rect2(830,660,215,55), Rect2(837,805,204,49)]
+## R64 · botões da arte v9 (medidos na referência do dono). Os TEXTOS dos botões estão na arte, iguais à referência.
+const PC_MENU := [Rect2(607,339,435,71), Rect2(607,417,435,68), Rect2(605,491,440,71), Rect2(601,662,218,59), Rect2(601,598,218,56), Rect2(830,598,217,56), Rect2(601,729,218,61), Rect2(603,803,216,59), Rect2(830,729,217,61), Rect2(830,662,217,59), Rect2(830,803,212,59)]
+const REF_TEXT_IN_ART := true
 const PC_TITLE := [Rect2(699,358,296,15), Rect2(700,431,149,15), Rect2(707,505,232,19), Rect2(661,678,120,13), Rect2(661,618,97,13), Rect2(899,619,46,13), Rect2(671,742,55,13), Rect2(674,824,114,13), Rect2(899,742,131,13), Rect2(899,678,133,13), Rect2(903,824,32,13)]
 const PC_SUB := {0: ["Treine e evolua seu jogo", Rect2(700,381,184,0)], 1: ["Partida casual · fila automática", Rect2(702,455,220,0)], 2: ["Compita e conquiste seu lugar", Rect2(707,532,239,0)]}
-const PC_COVER := Rect2(606,322,438,543)   # miolo do menu entre os pilares (páginas internas)
+const PC_COVER := Rect2(598,322,452,548)   # miolo do menu entre os pilares (páginas internas)
 const FOREST_V2 = FOREST
-const FOREST_WIDE = preload("res://ui_v022/assets/home_forest_v8_wide.png")   # R43: laterais completadas (tools/home_wide_r43.py)
+const FOREST_WIDE = preload("res://ui_v022/assets/home_forest_v9_wide.png")   # R64   # R43: laterais completadas (tools/home_wide_r43.py)
 const WIDE_PAD := 84.0
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
@@ -287,7 +290,7 @@ func _build():
     presentation_frame.name = "PresentationFrame"
     presentation_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     presentation_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    presentation_frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+    presentation_frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR   # R64: laterais sem serrilhado
     presentation_frame.draw.connect(_draw_presentation_frame)
     root.add_child(presentation_frame)
     canvas = Control.new()
@@ -298,6 +301,7 @@ func _build():
     var art = TextureRect.new()
     art.name = "ForestArtwork"
     art.texture = FOREST_V2
+    art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR   # R64: botões/textos da arte sem serrilhado em qualquer escala
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     art.stretch_mode = TextureRect.STRETCH_SCALE
     art.size = DESIGN
@@ -2639,11 +2643,10 @@ const STATUS_DEFAULT_AUTHOR := "— Blaise Pascal"
 var ref_status_label: Label
 var ref_status_author: Label
 var ref_status_edit: Button
-var status_editor: PanelContainer
+var status_editor: Control
 var status_input: LineEdit
 var status_count: Label
 var status_note: Label
-var status_save: Button
 
 const REF_MENU_RECT = Rect2(616.56,319.6,430.56,529.0)   # R36/R43: miolo do menu da arte v7 (entre os pilares, menu 92%)
 var ref_nodes: Array = []
@@ -2849,19 +2852,25 @@ func refresh_profile_status():
         ref_status_label.text = fit[0]
         ref_status_label.add_theme_font_size_override("font_size", fit[1])
     ref_status_edit.visible = ref_mode
+    ref_status_label.visible = not _status_editing   # R64: editando, o campo fica no lugar da frase
+    if _status_editing: ref_status_author.visible = false
 
-# ---------- R55 · editor do STATUS (janela pequena, logo abaixo do painel) ----------
+# ---------- R64 · edição do STATUS no PRÓPRIO painel (só o lápis; sem janela) ----------
+## O lápis troca a frase por um campo de texto no mesmo lugar, mesma letra. ENTER salva, ESC cancela,
+## clicar fora salva (se mudou). Contador pequeno no lugar do autor. Limite: account_service.STATUS_MAX (40).
 func open_status_editor():
     if status_editor == null: _build_status_editor()
     var logged: bool = account != null and account.has_profile()
     var cur := profile_status_text()
-    # R63 · frase antiga acima do limite novo: aparece inteira (sem corte silencioso); o campo só deixa encurtar
+    # frase antiga acima do limite novo: aparece inteira (sem corte silencioso); o campo só deixa encurtar
     status_input.max_length = maxi(_status_max(), cur.length())
     status_input.text = cur
     status_input.editable = logged
-    status_save.disabled = not logged
-    status_note.text = "" if logged else "Entre na sua conta para salvar um status."
-    status_note.add_theme_color_override("font_color", MUTED)
+    _status_editing = true
+    ref_status_label.visible = false
+    ref_status_author.visible = false
+    status_note.text = "" if logged else "Entre na sua conta para salvar."
+    status_note.add_theme_color_override("font_color", Color("ff9d86"))
     _status_count()
     status_editor.show()
     if logged:
@@ -2869,30 +2878,31 @@ func open_status_editor():
         status_input.caret_column = status_input.text.length()
 
 func close_status_editor():
-    if status_editor != null: status_editor.hide()
+    if status_editor == null or not status_editor.visible: return
+    _status_editing = false
+    status_editor.hide()
+    if status_input.has_focus(): status_input.release_focus()
+    refresh_profile_status()
 
-## R63 · limite da frase: 30 (account_service.STATUS_MAX).
+var _status_editing := false
+
 func _status_max() -> int:
-    return int(account.STATUS_MAX) if account != null else 30
+    return int(account.STATUS_MAX) if account != null else 40
 
-const STATUS_OVER_NOTE := "Limite agora é %d: encurte para salvar."
+func status_can_save() -> bool:
+    return account != null and account.has_profile() and status_input != null and status_input.text.length() <= _status_max()
 
 func _status_count():
     if status_count == null: return
     var n: int = status_input.text.length()
     var lim := _status_max()
     if n < status_input.max_length: status_input.max_length = maxi(lim, n)   # frase antiga longa: só encolhe
-    status_count.text = "%d / %d" % [n, lim]
-    var over := n > lim
-    status_count.add_theme_color_override("font_color", Color("ff9d86") if over else MUTED)
-    var logged: bool = account != null and account.has_profile()
-    if status_save != null: status_save.disabled = not logged or over
-    if status_note != null:
-        if over:
-            status_note.text = STATUS_OVER_NOTE % lim
-            status_note.add_theme_color_override("font_color", Color("ff9d86"))
-        elif status_note.text == STATUS_OVER_NOTE % lim:
-            status_note.text = ""
+    status_count.text = "%d/%d" % [n, lim]
+    status_count.add_theme_color_override("font_color", Color("ff9d86") if n > lim else Color(0.95, 0.9, 0.8, 0.7))
+    if n > lim:
+        status_note.text = "encurte para salvar"
+    elif status_note.text == "encurte para salvar":
+        status_note.text = ""
 
 func save_status():
     if account == null or not account.has_profile(): return
@@ -2900,82 +2910,89 @@ func save_status():
     if t.length() > _status_max():
         _status_count()
         return
+    if t == profile_status_text():
+        close_status_editor()
+        return
     if account.set_status(t):
-        status_save.disabled = true
-        status_note.text = "Salvando…"
-        status_note.add_theme_color_override("font_color", MUTED)
+        status_input.editable = false
+        status_note.text = "salvando…"
+        status_note.add_theme_color_override("font_color", Color(0.95, 0.9, 0.8, 0.7))
     else:
-        status_note.text = "Sem conexão com o servidor. Tente de novo em instantes."
+        status_note.text = "sem conexão"
         status_note.add_theme_color_override("font_color", Color("ff9d86"))
 
 func _on_status_saved(_st: String):
-    refresh_profile_status()
     if status_editor != null and status_editor.visible:
-        status_save.disabled = false
-        close_status_editor()
+        status_input.editable = true
+        _status_editing = false
+        status_editor.hide()
+    refresh_profile_status()
 
 func _on_status_failed(_code: String, message: String):
-    if status_editor == null: return
-    status_save.disabled = not (account != null and account.has_profile())
-    status_note.text = message if not message.is_empty() else "Não foi possível salvar o status."
+    if status_editor == null or not status_editor.visible: return
+    status_input.editable = account != null and account.has_profile()
+    status_note.text = message if not message.is_empty() else "não foi possível salvar"
     status_note.add_theme_color_override("font_color", Color("ff9d86"))
 
 func _build_status_editor():
-    status_editor = PanelContainer.new()
+    var host: Control = ref_status_label.get_parent()
+    status_editor = Control.new()
     status_editor.name = "StatusEditor"
-    var sb := StyleBoxFlat.new()
-    sb.bg_color = Color(0.04, 0.11, 0.07, 0.97)
-    sb.border_color = Color("d9a93f")
-    sb.set_border_width_all(2)
-    sb.set_corner_radius_all(8)
-    sb.shadow_color = Color(0, 0, 0, 0.5)
-    sb.shadow_size = 8
-    sb.content_margin_left = 16; sb.content_margin_right = 16; sb.content_margin_top = 12; sb.content_margin_bottom = 12
-    status_editor.add_theme_stylebox_override("panel", sb)
-    status_editor.position = Vector2(PROFILE_FRAME_RECT.position.x + 30, PROFILE_FRAME_RECT.end.y - 6)
-    status_editor.size = Vector2(PROFILE_FRAME_RECT.size.x - 60, 0)
-    status_editor.custom_minimum_size = Vector2(PROFILE_FRAME_RECT.size.x - 60, 0)
-    status_editor.mouse_filter = Control.MOUSE_FILTER_STOP
-    canvas.add_child(status_editor)
-    var col := VBoxContainer.new()
-    col.add_theme_constant_override("separation", 8)
-    status_editor.add_child(col)
-    var title := Label.new()
-    title.text = "SEU STATUS"
-    title.add_theme_font_override("font", PROFILE_NAME_FONT)
-    title.add_theme_font_size_override("font_size", 18)
-    title.add_theme_color_override("font_color", GOLD)
-    col.add_child(title)
+    status_editor.position = ref_status_label.position
+    status_editor.size = PROFILE_STATUS.size
+    status_editor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    host.add_child(status_editor)
     status_input = LineEdit.new()
     status_input.name = "StatusInput"
-    status_input.max_length = _status_max()   # R63 · 30 (era 80)
-    status_input.placeholder_text = "Escreva uma frase curta (deixe vazio para a frase padrão)"
+    status_input.max_length = _status_max()
+    status_input.placeholder_text = "Escreva sua frase"
+    status_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
+    status_input.add_theme_font_override("font", PROFILE_STATUS_FONT)
     status_input.add_theme_font_size_override("font_size", 16)
-    status_input.custom_minimum_size = Vector2(0, 38)
+    status_input.add_theme_color_override("font_color", Color("f1e6cc"))
+    status_input.add_theme_color_override("font_placeholder_color", Color(0.95, 0.9, 0.8, 0.45))
+    status_input.add_theme_color_override("caret_color", Color("f4ce7f"))
+    status_input.add_theme_color_override("selection_color", Color(0.85, 0.66, 0.25, 0.35))
+    status_input.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    status_input.add_theme_constant_override("outline_size", 3)
+    for st in ["normal", "focus", "read_only"]:
+        status_input.add_theme_stylebox_override(st, StyleBoxEmpty.new())   # sem caixa: a frase vira o campo
+    status_input.position = Vector2(0, -3)
+    status_input.size = Vector2(PROFILE_STATUS.size.x, 26)
+    status_input.context_menu_enabled = false
     status_input.text_changed.connect(func(_t): _status_count())
     status_input.text_submitted.connect(func(_t): save_status())
-    col.add_child(status_input)
-    var row := HBoxContainer.new()
-    row.add_theme_constant_override("separation", 10)
-    col.add_child(row)
-    status_count = Label.new()
-    status_count.add_theme_font_size_override("font_size", 13)
-    status_count.add_theme_color_override("font_color", MUTED)
-    row.add_child(status_count)
+    status_input.focus_exited.connect(func(): if _status_editing and status_input.editable: save_status())
+    status_editor.add_child(status_input)
     status_note = Label.new()
-    status_note.add_theme_font_size_override("font_size", 13)
-    status_note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    status_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    row.add_child(status_note)
-    var cancel := _hud_text_button("CANCELAR", Vector2(110, 36))
-    cancel.name = "StatusCancel"
-    cancel.pressed.connect(close_status_editor)
-    row.add_child(cancel)
-    status_save = _hud_text_button("SALVAR", Vector2(100, 36))
-    status_save.name = "StatusSave"
-    status_save.pressed.connect(save_status)
-    row.add_child(status_save)
+    status_note.name = "StatusNote"
+    status_note.add_theme_font_size_override("font_size", 12)
+    status_note.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    status_note.add_theme_constant_override("outline_size", 3)
+    status_note.position = Vector2(4, 24)
+    status_note.size = Vector2(PROFILE_STATUS.size.x - 60, 18)
+    status_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    status_editor.add_child(status_note)
+    status_count = Label.new()
+    status_count.name = "StatusCount"
+    status_count.add_theme_font_size_override("font_size", 12)
+    status_count.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    status_count.add_theme_constant_override("outline_size", 3)
+    status_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    status_count.position = Vector2(PROFILE_STATUS.size.x - 60, 24)
+    status_count.size = Vector2(54, 18)
+    status_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    status_editor.add_child(status_count)
     status_editor.hide()
+
+## R64 · clicar/tocar fora do campo da frase termina a edição (salva se mudou).
+func _input(e):
+    if not _status_editing or status_input == null: return
+    var down: bool = (e is InputEventMouseButton and e.pressed) or (e is InputEventScreenTouch and e.pressed)
+    if down and not status_input.get_global_rect().has_point(e.position) \
+            and not (is_instance_valid(ref_status_edit) and ref_status_edit.get_global_rect().has_point(e.position)):
+        if status_input.has_focus(): status_input.release_focus()
+        else: close_status_editor()
 
 func _unhandled_key_input(e):
     if status_editor != null and status_editor.visible and e is InputEventKey and e.pressed and e.keycode == KEY_ESCAPE:
@@ -3234,7 +3251,7 @@ func _sync_chrome():
         button.texture_disabled = tex
         if button.get_child_count() > 0 and button.get_child(0) is MarginContainer: button.get_child(0).visible = not ref
         var rcap = button.get_node_or_null("RefCaption")
-        if rcap != null: rcap.visible = ref
+        if rcap != null: rcap.visible = ref and not REF_TEXT_IN_ART   # R64: texto já está na arte
         if ref_hovers.has(button) and not ref: ref_hovers[button].hide()
     # Cartão da conta: arte traz moldura, medalhão e seta; ficam só os textos vivos.
     if is_instance_valid(account_card):

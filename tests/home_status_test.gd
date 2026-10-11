@@ -30,7 +30,7 @@ func run():
 	# convidado: o editor abre mas não salva
 	hub.open_status_editor()
 	await frames(2)
-	check(hub.status_editor.visible and hub.status_save.disabled and not hub.status_input.editable and "Entre" in hub.status_note.text, "convidado: precisa entrar na conta para salvar")
+	check(hub.status_editor.visible and not hub.status_input.editable and "Entre" in hub.status_note.text, "convidado: precisa entrar na conta para salvar")
 	hub.close_status_editor()
 	# conta com status (acct_state = recarregar a página / outro aparelho)
 	acc.access_token = "t"; acc.user_id = "u1"     # já logado (o acct_state chega depois do login)
@@ -41,7 +41,8 @@ func run():
 	hub.ref_status_edit.pressed.emit()
 	await frames(2)
 	check(hub.status_editor.visible and hub.status_input.text == "Rumo ao Diamante!" and hub.status_input.editable, "lápis abre o editor com o status atual")
-	check(hub.status_input.max_length == 30 and hub.status_count.text == "17 / 30", "limite de 30 e contador (R63)")
+	check(hub.status_input.max_length == 40 and hub.status_count.text == "17/40", "limite de 40 e contador (R64)")
+	check(hub.status_editor.get_parent() == hub.ref_status_label.get_parent() and not hub.ref_status_label.visible, "R64: edição no próprio painel (sem janela), no lugar da frase")
 	hub.status_input.text = "  Foco   total\tno Ranked  "
 	hub.save_status()
 	check("conexão" in hub.status_note.text, "sem servidor: o editor avisa e não fecha")

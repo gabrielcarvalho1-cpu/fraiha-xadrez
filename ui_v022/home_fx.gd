@@ -4,7 +4,7 @@ extends Control
 ## (só a barriga: cabeça, orelhas, patas e contorno ficam parados).
 ## Tudo em coordenadas do canvas 1672 x 941, por cima da arte e por baixo dos painéis/botões.
 ## Só recortes da PRÓPRIA arte animados por shader (nada redesenhado) + luz aditiva discreta.
-const FOREST := preload("res://ui_v022/assets/home_forest_v8.png")   # R47: arte de referência v8
+const FOREST := preload("res://ui_v022/assets/home_forest_v9.png")   # R64: arte v9 (R47: v8)
 
 ## [centro da chama, tamanho do recorte, raio da luz]
 const TORCHES := [

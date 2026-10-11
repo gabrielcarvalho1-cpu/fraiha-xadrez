@@ -1,5 +1,5 @@
 extends SceneTree
-## R63 · SEJA MEMBRO + FRASE DO PERFIL (30).
+## R63 · SEJA MEMBRO + FRASE DO PERFIL (R64: 40, editada no próprio painel pelo lápis).
 ## Botão do topo da Home: texto "SEJA MEMBRO" e abre a página geral FRAIHA PREMIUM (Fundador e Club), não o Club
 ## direto; Fundador e Club abrem a partir dela e o VOLTAR volta para ela; VOLTAR na geral fecha.
 ## Frase do perfil (só na Home do PC): campo limita a 30, contador "/30", não salva acima de 30, frase antiga
@@ -114,56 +114,57 @@ func run():
 	prem.close()
 	hub.monetization_state.mock_reset(); await frames(3)
 
-	# ---------- 3 · FRASE DO PERFIL (editor só existe na Home do PC) ----------
+	# ---------- 3 · FRASE DO PERFIL (R64: 40, editada no próprio painel; só existe na Home do PC) ----------
 	if not mobile:
 		var acc = stage.account
-		check(acc.STATUS_MAX == 30, "STATUS_MAX = 30")
+		check(acc.STATUS_MAX == 40, "STATUS_MAX = 40")
 		acc.access_token = "t"; acc.user_id = "u1"
 		acc._receive({"type": "acct_state", "user_id": "u1", "profile": {"user_id": "u1", "nickname": "SextoSentro", "avatar_id": "warrior", "status": ""}, "ranked": {}})
 		await frames(3)
 		var too_long := []
 		acc.status_failed.connect(func(code, _m): if code == "status_too_long": too_long.append(code))
-		for n in [29, 30, 31]:
+		hub.ref_status_edit.pressed.emit(); await frames(2)
+		check(hub.status_editor.visible and hub.status_editor.get_parent() == hub.ref_status_label.get_parent() and not hub.ref_status_label.visible,
+			"lápis: a frase vira campo no próprio painel (sem janela)")
+		check(hub.status_input.get_theme_stylebox("normal") is StyleBoxEmpty, "campo sem caixa")
+		hub.close_status_editor(); await frames(1)
+		for n in [39, 40, 41]:
 			hub.open_status_editor(); await frames(2)
 			var le: LineEdit = hub.status_input
 			le.text = ""
 			le.grab_focus()
 			type_text(le, "a".repeat(n))
 			hub._status_count(); await frames(1)
-			var want := mini(n, 30)
-			check(le.text.length() == want and hub.status_count.text == "%d / 30" % want and not hub.status_save.disabled,
+			var want := mini(n, 40)
+			check(le.text.length() == want and hub.status_count.text == "%d/40" % want and hub.status_can_save(),
 				"digitar %d: campo fica com %d, contador '%s'" % [n, want, hub.status_count.text])
-			if n == 30: await shot("5_frase30")
+			if n == 40: await shot("5_frase40")
 			hub.close_status_editor()
 		too_long.clear()
-		check(not acc.set_status("b".repeat(31)) and too_long.size() == 1, "salvar 31 é recusado (status_too_long)")
+		check(not acc.set_status("b".repeat(41)) and too_long.size() == 1, "salvar 41 é recusado (status_too_long)")
 		too_long.clear()
-		acc.set_status("c".repeat(30))
-		check(too_long.is_empty(), "salvar 30 passa na validação")
-		# salvar e reabrir (resposta do servidor = como ao recarregar)
-		var s30 := "Rumo ao Diamante com foco 2026"
-		check(s30.length() == 30, "frase de teste tem 30")
-		acc._receive({"type": "acct_status_saved", "status": s30}); await frames(2)
-		check(hub.ref_status_label.text.replace("\n", " ") == "“%s”" % s30, "frase de 30 aparece inteira no painel")
+		acc.set_status("c".repeat(40))
+		check(too_long.is_empty(), "salvar 40 passa na validação")
+		var s40 := "Rumo ao Diamante com foco e disciplina!!"
+		check(s40.length() == 40, "frase de teste tem 40")
+		acc._receive({"type": "acct_status_saved", "status": s40}); await frames(2)
+		check(hub.ref_status_label.visible and hub.ref_status_label.text.replace("\n", " ") == "“%s”" % s40, "frase de 40 aparece inteira no painel")
 		hub.open_status_editor(); await frames(2)
-		check(hub.status_input.text == s30 and hub.status_count.text == "30 / 30", "reabrir: editor com a frase salva (30 / 30)")
-		hub.close_status_editor()
-		# frase antiga (até 80, salva antes do R63): sem corte silencioso
-		var old := "Frase antiga salva antes do limite novo, com cinquenta"
+		check(hub.status_input.text == s40 and hub.status_count.text == "40/40", "reabrir: campo com a frase salva (40/40)")
+		hub.close_status_editor(); await frames(1)
+		check(not hub.status_editor.visible and hub.ref_status_label.visible, "ESC/cancelar: volta a frase")
+		var old := "Frase antiga salva antes do limite novo, com mais de quarenta"
 		acc._receive({"type": "acct_status_saved", "status": old}); await frames(2)
 		check(acc.profile_status() == old and "antiga" in hub.ref_status_label.text, "frase antiga longa continua salva e aparece no painel")
 		hub.open_status_editor(); await frames(2)
 		var le2: LineEdit = hub.status_input
-		check(le2.text == old and hub.status_save.disabled and "encurte" in hub.status_note.text and hub.status_count.text == "%d / 30" % old.length(),
-			"editor: frase antiga inteira, SALVAR bloqueado, aviso para encurtar")
+		check(le2.text == old and not hub.status_can_save() and "encurte" in hub.status_note.text, "frase antiga inteira, não salva até encurtar")
 		await shot("6_frase_antiga")
 		le2.caret_column = le2.text.length()
 		le2.insert_text_at_caret("x"); await frames(1)
 		check(le2.text == old, "frase antiga: não deixa crescer")
-		le2.text = old.substr(0, 30); hub._status_count(); await frames(1)
-		check(not hub.status_save.disabled and hub.status_note.text == "" and le2.max_length == 30, "encurtada para 30: SALVAR liberado, limite volta a 30")
-		le2.insert_text_at_caret("y"); await frames(1)
-		check(le2.text.length() == 30, "depois de encurtar: não passa de 30")
+		le2.text = old.substr(0, 40); hub._status_count(); await frames(1)
+		check(hub.status_can_save() and hub.status_note.text == "" and le2.max_length == 40, "encurtada para 40: pode salvar, limite volta a 40")
 		hub.close_status_editor()
 	print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
 	quit(0 if failures == 0 else 1)
