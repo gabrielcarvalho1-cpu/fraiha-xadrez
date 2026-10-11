@@ -80,7 +80,8 @@ const CARD_FLY := 0.45            # R37.3: a carta jogada voa da mão (ou da pla
 const BOTS := {1: {"name": "ReiDoBlitz", "portrait": "rei_do_blitz"}, 2: {"name": "Lady Torre", "portrait": "lady_torre"}, 3: {"name": "Cavalo_Louco", "portrait": "cavalo_louco"}}
 const PAWN_SCALE := 0.24          # peão PNG (211x279) sobre a casa da arte 1600x1600
 const PAWN_BASE := 11.0           # a base do peão assenta 11 px abaixo do centro da casa
-const DESK_PAWN_H := 84.0         # R66 · altura do peão no PC (unidades do tabuleiro de 1600)
+const DESK_PAWN_H := 84.0         # R66 · altura do peão no Pátio, no PC (unidades do tabuleiro de 1600)
+const DESK_PAWN_H_TRACK := 62.0   # R68 · altura do peão na Muralha (menor: do tamanho da conta)
 
 var hub = null
 var stage = null
@@ -1704,7 +1705,9 @@ class TableView extends Control:
             var crowned: bool = g.pawns[w[0]][w[1]].zone == "lane"
             var tx: Texture2D = ui.pawn_tex[w[0] + (10 if crowned else 0)]
             var sz: Vector2 = tx.get_size() * (0.34 if ui.desk else ui.PAWN_SCALE)     # R57: peões do tamanho da arte final
-            if ui.desk and not crowned: sz = tx.get_size() * (ui.DESK_PAWN_H / tx.get_height())   # R66: altura do peão da referência
+            if ui.desk and not crowned:   # R66/R68: no Pátio do tamanho da casa; na Muralha menor, do tamanho da conta
+                var hp: float = ui.DESK_PAWN_H if g.pawns[w[0]][w[1]].zone == "home" else ui.DESK_PAWN_H_TRACK
+                sz = tx.get_size() * (hp / tx.get_height())
             var rr := Rect2(Vector2(c.x - sz.x / 2.0, c.y + ui.PAWN_BASE - sz.y - lift), sz)
             if ui.desk:
                 # R67 · acabamento: sombra macia sob o peão e arte em alta reduzida (Lanczos) para o tamanho real na tela
