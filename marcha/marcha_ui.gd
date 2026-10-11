@@ -246,7 +246,7 @@ func _relayout():
     desk = not portrait and not MobileLayout.active(get_viewport())
     Layout = LayoutR57 if desk else LayoutStd
     if desk and r57.is_empty():
-        for key in ["mesa", "salao", "botao_jogar_vazio", "botao_jogar_agora_vazio"]: r57[key] = load("res://marcha/art/r57/%s.png" % key)
+        for key in ["mesa", "salao", "botao_jogar_vazio", "botao_jogar_agora_vazio", "mesa_wide", "salao_wide"]: r57[key] = load("res://marcha/art/r57/%s.png" % key)
         for pair in [["r57_name", "res://marcha/art/fonts/oswald-latin-400-normal.woff", 0], ["r57_head", FONT_SEMI, 1], ["r57_bold", FONT_BOLD, 0]]:
             var fv := FontVariation.new()
             fv.base_font = pair[1] if pair[1] is Font else load(pair[1])
@@ -1253,21 +1253,23 @@ func card_rect(i: int, n: int) -> Rect2:
     return Rect2(1490.0 + col * 200.0, 266.0 + row * 280.0, 183, 258)
 
 # ---------------------------------------------------------------- tutorial
+## R65 · COMO JOGAR com as regras ATUAIS (marcha-real-10: baralho de 52, rodadas 4·4·5, Ás/Rei garantido,
+## K só tira da base, 10 anda 10 ou faz descartar, 5 move qualquer peça, entrada trancada, 15 s por vez).
 const TUTORIAL := [
     {"title": "BEM-VINDO À MARCHA REAL", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png",
-        "text": "Quatro reinos disputam uma corrida de peões ao redor da mesa de pedra. Você joga com o MARFIM (embaixo) ao lado do aliado ÔNIX (em cima), contra RUBI e ESMERALDA.\n\nCada peão que chega ao fim do caminho vira DAMA, como na promoção do xadrez."},
+        "text": "Quatro reinos correm com seus peões ao redor da mesa. Você joga com o MARFIM (embaixo) em dupla com o ÔNIX (em cima), contra RUBI e ESMERALDA.\n\nA vez gira no sentido horário e cada jogador tem 15 segundos. Vence a dupla que coroar primeiro os seus 8 peões."},
     {"title": "O CAMINHO", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "marks": true,
-        "text": "1 PÁTIO: onde seus 4 peões começam.\n2 PORTÃO: a casa de saída, com a seta do sentido.\n3 MURALHA: a trilha de 76 casas, no sentido horário.\n4 ENTRADA DO SALÃO: a casa com aro na sua cor.\n5 SALÃO DO TRONO: 4 casas; quem entra vira DAMA."},
+        "text": "1 PÁTIO: onde seus 4 peões começam.\n2 PORTÃO: a casa de saída do seu reino.\n3 MURALHA: a trilha de 76 casas, no sentido horário.\n4 ENTRADA DO SALÃO: a casa de onde o peão entra no Salão.\n5 SALÃO DO TRONO: 4 casas; o peão que entra é COROADO."},
     {"title": "AS CARTAS", "img": "res://marcha/art/tutorial/cartas_todas.png",
-        "text": "Na sua vez você joga UMA carta da mão (4 cartas por rodada). A carta diz o que fazer na faixa de ação e na frase embaixo da ilustração: K tira um peão da base. A tira um peão da base, anda 11 ou anda 1 (você escolhe). Q anda 12; 10, 9, 8, 6, 3 e 2 andam o número. Carta com ABATER derruba um adversário; com CHEGADA leva um peão ao Salão."},
+        "text": "Baralho de 52 cartas (4 de cada valor), repartido em rodadas de 4, 4 e 5 cartas. Quem tem peão no Pátio sempre recebe um Ás ou um Rei.\n\nNa sua vez, jogue UMA carta:\nÁs: tira um peão do Pátio, anda 11 ou anda 1.\nRei: só tira um peão do Pátio.\nDama: anda 12.  9, 8, 6, 3 e 2: andam o número."},
     {"title": "CARTAS ESPECIAIS", "img": "res://marcha/art/simbolos_de_acao.png",
-        "text": "J troca um peão SEU (mesmo o que acabou de sair) com outra peça; a peça dos outros parada no Portão dela não pode ser trocada.\n7 divide as 7 casas entre até 2 peões seus.\n5 move QUALQUER peça da mesa 5 casas: jogue a carta e toque na peça (a do aliado ou do oponente que acabou de sair não; a sua, sim).\n-4 só volta 4 casas (logo depois do Portão, volta para perto da Entrada do Salão).\nSem jogada possível: descarte uma carta."},
+        "text": "10: anda 10 casas OU faz o próximo jogador descartar 1 carta (sorteada).\nValete: troca um peão SEU de lugar com outra peça.\n7: divide as 7 casas entre até 2 peões seus.\n5: anda 5 com QUALQUER peça da mesa; a do adversário passa direto pela Entrada e dá mais uma volta.\n4: volta 4 casas; saindo do Portão, cai perto da sua Entrada (atalho).\nSem jogada possível: descarte uma carta."},
     {"title": "CAPTURA E PROTEÇÃO", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png",
-        "text": "Cair na casa de outro peão manda esse peão de volta ao Pátio (cuidado: vale até para o aliado).\n\nPeão parado no PRÓPRIO Portão (escudo) bloqueia a casa: ninguém passa por cima nem cai nela — trava todos que vêm atrás."},
+        "text": "Cair na casa de outro peão manda ele de volta ao Pátio (vale até para o aliado).\n\nPeão parado no PRÓPRIO Portão bloqueia a casa: ninguém passa por cima, cai nela ou troca com ele.\n\nPeão da outra dupla parado na Entrada de um reino tranca a entrada desse reino até sair; cair nele captura."},
     {"title": "COROAÇÃO E VITÓRIA", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png",
-        "text": "Na Entrada do Salão o peão entra no Salão do Trono e vira DAMA — o número de casas precisa caber.\n\nQuem coroar os 4 peões passa a jogar com os peões do aliado. Vence a dupla que coroar os 8."},
+        "text": "Da Entrada do Salão o peão entra no Salão do Trono e é coroado: o número de casas precisa caber, sem passar do fundo nem pular peões seus.\n\nQuem coroar os 4 peões passa a jogar com os peões do aliado. Vence a dupla que coroar os 8."},
     {"title": "COMO JOGAR NA TELA", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png",
-        "text": "1 Toque numa carta da mão: ela sobe e a linha de ajuda diz o que ela faz.\n2 Toque em JOGAR CARTA: ela vai para a mesa.\n3 Toque na peça com aro dourado (no 7, escolha a divisão e o 2º peão): a jogada acontece. CANCELAR devolve a carta.\nVocê tem 30 segundos por vez."},
+        "text": "1 Toque numa carta da mão: ela sobe e a linha de ajuda diz o que ela faz.\n2 Toque em JOGAR CARTA.\n3 Toque na peça marcada (no 7, escolha a divisão e o 2º peão; no Ás e no 10, escolha a opção). CANCELAR devolve a carta.\nSe o tempo acabar, o jogo faz uma jogada por você."},
 ]
 
 # ================================================================= desenho
@@ -1297,12 +1299,14 @@ class TableView extends Control:
         ui.hits.clear()
         var vs := size
         if ui.desk:
-            # R57 · janela fora de 16:9: a própria arte (escurecida) cobre as sobras
+            # R65 · janela fora de 16:9: a arte CONTINUA nas sobras (as bordas dela, espelhadas, coladas na própria
+            # arte) — antes uma cópia inteira escurecida e ampliada ficava atrás e parecia um fundo duplicado.
             var lob: bool = ui.mode == "lobby"
             var ps: Vector2 = ui.R57_LOBBY if lob else ui.R57_SIZE
-            var cov := maxf(vs.x / ps.x, vs.y / ps.y)
-            var cs := ps * cov
-            draw_texture_rect(ui.r57.salao if lob else ui.r57.mesa, Rect2((vs - cs) / 2.0, cs), false, Color(0.4, 0.38, 0.38))
+            var art_tex: Texture2D = ui.r57.salao if lob else ui.r57.mesa
+            var wide_tex: Texture2D = ui.r57.salao_wide if lob else ui.r57.mesa_wide
+            var dr: Rect2 = ui.lr(Rect2(Vector2.ZERO, ps)) if lob else ui.rr(Rect2(Vector2.ZERO, ps))
+            _fill_sides(art_tex, wide_tex, Rect2(ui.origin + dr.position * ui.k, dr.size * ui.k), vs)
         else:
             draw_texture_rect(ui.BG, Rect2(Vector2.ZERO, vs), false)
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
@@ -1321,6 +1325,32 @@ class TableView extends Control:
         if not ui.flash.is_empty(): _draw_flash()
         draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+    ## Preenche as sobras da janela em volta de `a` (onde a arte é desenhada): nas laterais, a versão larga da
+    ## mesma arte (tools/marcha_wide_r65.py: cenário limpo da borda, sem painéis); em cima/embaixo (janela mais
+    ## alta que 16:9), a linha da borda esticada e escurecida. Nada de segunda cópia da arte por trás.
+    func _fill_sides(t: Texture2D, wide: Texture2D, a: Rect2, vs: Vector2):
+        var ts := t.get_size()
+        var s := a.size.x / ts.x
+        if s <= 0.0: return
+        if a.position.x > 0.5 or vs.x - a.end.x > 0.5:
+            var pad := (wide.get_width() - ts.x) / 2.0
+            draw_texture_rect(wide, Rect2(a.position.x - pad * s, a.position.y, wide.get_width() * s, a.size.y), false)
+        var deep := Color(0.055, 0.03, 0.07)
+        if a.position.y > 0.5: _band_v(Rect2(0, 0, vs.x, a.position.y), deep, true)
+        if vs.y - a.end.y > 0.5: _band_v(Rect2(0, a.end.y, vs.x, vs.y - a.end.y), deep, false)
+
+    ## faixa de cima/baixo: roxo profundo do salão, com uma luz dourada fraca junto da arte
+    func _band_v(r: Rect2, deep: Color, toward_bottom: bool):
+        draw_rect(r, deep)
+        var n := 16
+        for i in n:
+            var f := float(i) / n
+            var h := minf(r.size.y, 90.0) / n
+            var y := (r.end.y - (i + 1) * h) if toward_bottom else (r.position.y + i * h)
+            draw_rect(Rect2(r.position.x, y, r.size.x, h + 0.5), Color(0.85, 0.62, 0.25, 0.10 * (1.0 - f)))
+        var ly := r.end.y - 1.5 if toward_bottom else r.position.y + 0.5
+        draw_line(Vector2(r.position.x, ly), Vector2(r.end.x, ly), Color(0.85, 0.66, 0.31, 0.55), 2.0)
+
     # ------------------------------------------------------------ primitivas
     func text(s: String, pos: Vector2, font_key: String, fs: int, col: Color, width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT, outline := 0, ocol := Color.BLACK):
         if outline > 0: draw_string_outline(ui.fonts[font_key], pos, s, align, width, fs, outline, ocol)
@@ -1332,6 +1362,9 @@ class TableView extends Control:
         while f > 10 and text_w(s, font_key, f) > room: f -= 1
         return f
     func panel(r: Rect2, glow := false, fill: Color = Color("0f2b20")):
+        if ui.desk:
+            _panel_r57(r, glow)
+            return
         if glow:
             for i in 4: draw_rect(r.grow(2 + i * 3), Color(1.0, 0.8, 0.35, 0.16 - i * 0.035), false, 3.0)
         draw_rect(r, fill)
@@ -1349,7 +1382,37 @@ class TableView extends Control:
         var f2 := fit(label, "bold_sp", fs, r.size.x - 24)
         text(label, Vector2(r.position.x, r.get_center().y + f2 * 0.36), "bold_sp", f2, Color("2a1a04") if enabled else Color("3a3220"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
         if enabled: ui.hits.append({"rect": r, "id": id})
+    ## R65 · tema da mesa nova (PC): roxo profundo do salão, ouro envelhecido, cantos com losango.
+    const R57_FILL := Color("150a1d")
+    const R57_FILL2 := Color("241030")
+    const R57_GOLD := Color("d9aa4f")
+    const R57_GOLD_HI := Color("ffd98a")
+    func _panel_r57(r: Rect2, glow := false):
+        if glow:
+            for i in 4: draw_rect(r.grow(2 + i * 3), Color(1.0, 0.78, 0.35, 0.14 - i * 0.03), false, 3.0)
+        var steps := 24
+        for i in steps:
+            var f := float(i) / steps
+            draw_rect(Rect2(r.position + Vector2(0, r.size.y * f), Vector2(r.size.x, r.size.y / steps + 1.0)), R57_FILL2.lerp(R57_FILL, f))
+        draw_rect(r, R57_GOLD, false, 3.0)
+        draw_rect(r.grow(-7), Color(0.85, 0.66, 0.31, 0.55), false, 1.5)
+        draw_rect(r.grow(-11), Color(0.85, 0.66, 0.31, 0.18), false, 1.0)
+        for c in [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y), Vector2(r.get_center().x, r.position.y), Vector2(r.get_center().x, r.end.y)]:
+            _diamond(c, 9.0, R57_GOLD_HI, Color("5a3b06"))
+    func _diamond(c: Vector2, s: float, fill: Color, line: Color):
+        var pts := PackedVector2Array([c + Vector2(0, -s), c + Vector2(s, 0), c + Vector2(0, s), c + Vector2(-s, 0)])
+        draw_colored_polygon(pts, fill)
+        draw_polyline(pts + PackedVector2Array([pts[0]]), line, 1.5)
     func dark_button(r: Rect2, label: String, fs: int, id: String, enabled := true):
+        if ui.desk:
+            draw_rect(r, Color("1d0d28") if enabled else Color("140a1a"))
+            draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * 0.45)), Color(1, 1, 1, 0.04))
+            draw_rect(r, R57_GOLD if enabled else Color("4a3d30"), false, 2.0)
+            draw_rect(r.grow(-5), Color(0.85, 0.66, 0.31, 0.3), false, 1.0)
+            var fr := fit(label, "bold_sp", fs, r.size.x - 20)
+            text(label, Vector2(r.position.x, r.get_center().y + fr * 0.36), "bold_sp", fr, Color("f4ead2") if enabled else Color("6b6060"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3, Color(0.05, 0.02, 0.06, 0.8))
+            if enabled: ui.hits.append({"rect": r, "id": id})
+            return
         draw_rect(r, Color("07110c"))
         draw_rect(r, Color("c99a45") if enabled else Color("4a4030"), false, 2.0)
         draw_rect(r.grow(-5), Color(0.79, 0.6, 0.27, 0.25), false, 1.0)
@@ -2178,8 +2241,11 @@ class TableView extends Control:
         var r := Rect2(60, 140, d.x - 120, d.y - 260) if not ui.portrait else Rect2(30, 150, d.x - 60, d.y - 260)
         panel(r, true, ui.PANEL_DARK)
         text("COMO JOGAR · %d / %d" % [ui.tut_page + 1, ui.TUTORIAL.size()], Vector2(r.position.x + 36, r.position.y + 44), "semi_sp2", 18, Color("d9a441"))
-        text(String(page.title), Vector2(r.position.x + 36, r.position.y + 96), "title", 40 if not ui.portrait else 38, Color("e9b94a"))
-        var img: Texture2D = tex(String(page.img))
+        text(String(page.title), Vector2(r.position.x + 36, r.position.y + 96), "title", 40 if not ui.portrait else 38, Color("e9b94a") if not ui.desk else R57_GOLD_HI, -1, HORIZONTAL_ALIGNMENT_LEFT, 3 if ui.desk else 0, Color(0.05, 0.02, 0.06, 0.8))
+        if ui.desk:   # páginas: losangos acesos
+            for i in ui.TUTORIAL.size():
+                _diamond(Vector2(r.end.x - 40 - (ui.TUTORIAL.size() - 1 - i) * 26, r.position.y + 38), 7.0, R57_GOLD_HI if i == ui.tut_page else Color(0.45, 0.33, 0.18), Color("5a3b06"))
+        var img: Texture2D = _tut_image(String(page.img))
         var ir: Rect2
         var tr: Rect2
         if ui.portrait:
@@ -2195,7 +2261,8 @@ class TableView extends Control:
             ir = Rect2(Vector2(r.position.x + 36, r.position.y + 130), Vector2(iw2, ih2))
             tr = Rect2(ir.end.x + 40, r.position.y + 140, r.end.x - ir.end.x - 76, r.size.y - 260)
         draw_texture_rect(img, ir, false)
-        draw_rect(ir, Color("c99a45"), false, 2.0)
+        draw_rect(ir, Color("c99a45") if not ui.desk else R57_GOLD, false, 2.0)
+        if ui.desk: draw_rect(ir.grow(5), Color(0.85, 0.66, 0.31, 0.4), false, 1.0)
         if page.get("marks", false): _tutorial_marks(ir)
         var y := tr.position.y + 26
         for para in String(page.text).split("\n"):
@@ -2208,10 +2275,21 @@ class TableView extends Control:
         dark_button(Rect2(r.get_center().x - 110, by, 220, 66), "FECHAR", 26, "tut_close")
         gold_button(Rect2(r.end.x - 316, by, 280, 66), "COMEÇAR" if ui.tut_page == ui.TUTORIAL.size() - 1 else "PRÓXIMO", 28, "tut_next")
 
+    ## R65 · no PC o tutorial mostra o tabuleiro da mesa nova (recorte da própria arte da partida).
+    var _tut_board: AtlasTexture
+    func _tut_image(path: String) -> Texture2D:
+        if ui.desk and path.begins_with("res://marcha/art/tutorial/tabuleiro") and not ui.r57.is_empty():
+            if _tut_board == null:
+                _tut_board = AtlasTexture.new()
+                _tut_board.atlas = ui.r57.mesa
+                _tut_board.region = ui.LayoutR57.ART_RECT
+            return _tut_board
+        return tex(path)
+
     ## Números dos componentes sobre o tabuleiro (como na página 03 do conceito).
     func _tutorial_marks(ir: Rect2):
-        var s: float = ir.size.x / ui.BOARD_UNITS
-        var LS = ui.LayoutStd           # a imagem do tutorial é o tabuleiro antigo
+        var LS = ui.LayoutR57 if ui.desk else ui.LayoutStd   # PC: tabuleiro da mesa nova; celular: o antigo
+        var s: float = ir.size.x / (LS.SIZE if ui.desk else ui.BOARD_UNITS)
         var marks := [[LS.home_center(0), "1"], [LS.track_cell(0), "2"], [LS.track_cell(9), "3"], [LS.track_cell(74), "4"], [LS.lane_cell(0, 2), "5"]]
         for m in marks:
             var c: Vector2 = ir.position + Vector2(m[0]) * s + Vector2(26, -26)

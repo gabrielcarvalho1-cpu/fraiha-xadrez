@@ -1134,6 +1134,23 @@ func avatar_key() -> String:
 func custom_avatar() -> Texture2D:
     return avatar_store.texture_for(avatar_key()) if avatar_store != null else null
 
+## R65 · os avatares do catálogo (profile/avatars) já trazem uma moldura própria desenhada na borda; dentro da
+## moldura do cartão da Home isso virava "moldura dentro da moldura" e a foto parecia não preencher o vão.
+## Aqui a borda desenhada do avatar é recortada (a foto enviada pelo jogador e os medalhões ficam como estão).
+const AVATAR_ART_INSET := 26.0 / 512.0        # moldura desenhada nos avatares de recompensa e peões
+const AVATAR_ART_INSET_WIDE := 36.0 / 512.0   # Club e Fundador (moldura mais larga)
+func slot_avatar_texture() -> Texture2D:
+    var t := avatar_texture()
+    if t == null or custom_avatar() != null: return t
+    var id := avatar_id
+    if id in ["warrior", "archer", "mage", "paladin"] or not AvatarCatalog.has_art(id): return t
+    var inset: float = AVATAR_ART_INSET_WIDE if (id == AvatarCatalog.FOUNDER or AvatarCatalog.is_club_avatar(id)) else AVATAR_ART_INSET
+    var sz := t.get_size()
+    var at := AtlasTexture.new()
+    at.atlas = t
+    at.region = Rect2(sz * inset, sz * (1.0 - 2.0 * inset))
+    return at
+
 func avatar_texture(id: String = "") -> Texture2D:
     if id.is_empty():
         var custom := custom_avatar()
@@ -1394,7 +1411,7 @@ func _refresh_badge_detail():
     b.disabled = st != "unlocked"
 
 func _refresh_avatars():
-    if is_instance_valid(profile_portrait): profile_portrait.texture = avatar_texture()
+    if is_instance_valid(profile_portrait): profile_portrait.texture = slot_avatar_texture() if ref_mode else avatar_texture()
     if is_instance_valid(profile_portrait): attach_league_frame(profile_portrait)
     if ref_mode and not ref_profile.is_empty(): _use_profile(true)
     _refresh_ref_account()
@@ -2628,7 +2645,7 @@ const PROFILE_UNDER_SIZE := Vector2(476, 252)
 const PROFILE_UNDER_POS := Vector2(1196, 6)
 const PROFILE_FRAME_RECT := Rect2(1198, 19.5, 470, 235)
 const PROFILE_BODY := Rect2(1214, 36.5, 438, 200)     # área clicável (corpo da moldura, sem os ornamentos de fora)
-const PROFILE_PORTRAIT := Rect2(1255, 78, 85, 74)
+const PROFILE_PORTRAIT := Rect2(1254, 77.5, 86.5, 78)   # R65: o retrato preenche todo o vão da moldura (medido em home_profile_frame.png: 1254.2,77.8 · 85.9×77.4)
 const PROFILE_NAME := Rect2(1410, 64, 150, 40)
 const PROFILE_LEAGUE := Rect2(1360, 102, 196, 30)
 const PROFILE_BAR := Rect2(1366, 137, 176, 10)
@@ -3280,7 +3297,7 @@ func _use_profile(ref: bool):
     profile_name = src.name
     profile_portrait = src.portrait
     profile_name.text = text
-    profile_portrait.texture = avatar_texture()
+    profile_portrait.texture = slot_avatar_texture() if ref else avatar_texture()
     if ref: _fit_ref_name()
     refresh_founder.call_deferred()
     if ref:
