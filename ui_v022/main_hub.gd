@@ -2913,7 +2913,10 @@ func _status_count():
     if status_count == null: return
     var n: int = status_input.text.length()
     var lim := _status_max()
-    if n < status_input.max_length: status_input.max_length = maxi(lim, n)   # frase antiga longa: só encolhe
+    if status_input.max_length > lim and n < status_input.max_length:   # frase antiga longa: só encolhe
+        var cc := status_input.caret_column                              # (trocar max_length volta o cursor ao início)
+        status_input.max_length = maxi(lim, n)
+        status_input.caret_column = cc
     status_count.text = "%d/%d" % [n, lim]
     status_count.add_theme_color_override("font_color", Color("ff9d86") if n > lim else Color(0.95, 0.9, 0.8, 0.7))
     if n > lim:

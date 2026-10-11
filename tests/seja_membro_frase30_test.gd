@@ -128,6 +128,13 @@ func run():
 			"lápis: a frase vira campo no próprio painel (sem janela)")
 		check(hub.status_input.get_theme_stylebox("normal") is StyleBoxEmpty, "campo sem caixa")
 		hub.close_status_editor(); await frames(1)
+		# R67 · digitar na ordem certa ("oi" não pode virar "io")
+		hub.open_status_editor(); await frames(2)
+		hub.status_input.text = ""
+		type_text(hub.status_input, "oi tudo bem")
+		await frames(1)
+		check(hub.status_input.text == "oi tudo bem", "digitação na ordem certa ('%s')" % hub.status_input.text)
+		hub.close_status_editor(); await frames(1)
 		for n in [39, 40, 41]:
 			hub.open_status_editor(); await frames(2)
 			var le: LineEdit = hub.status_input

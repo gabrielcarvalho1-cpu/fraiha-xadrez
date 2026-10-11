@@ -80,7 +80,7 @@ const CARD_FLY := 0.45            # R37.3: a carta jogada voa da mão (ou da pla
 const BOTS := {1: {"name": "ReiDoBlitz", "portrait": "rei_do_blitz"}, 2: {"name": "Lady Torre", "portrait": "lady_torre"}, 3: {"name": "Cavalo_Louco", "portrait": "cavalo_louco"}}
 const PAWN_SCALE := 0.24          # peão PNG (211x279) sobre a casa da arte 1600x1600
 const PAWN_BASE := 11.0           # a base do peão assenta 11 px abaixo do centro da casa
-const DESK_PAWN_H := 80.0         # R66 · altura do peão novo no PC (unidades do tabuleiro de 1600)
+const DESK_PAWN_H := 84.0         # R66 · altura do peão no PC (unidades do tabuleiro de 1600)
 
 var hub = null
 var stage = null
@@ -169,7 +169,6 @@ func _ready():
     for s in 4:
         pawn_tex[s] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + ".png")
         pawn_tex[s + 10] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + "_dama.png")   # R37: no Salão o peão vira DAMA
-        pawn_tex[s + 20] = load("res://marcha/art/pawns/r66/peao_" + PAWN_FILES[s] + ".png")   # R66: peão da referência nova (PC)
     for key in ["lady_torre", "rei_do_blitz", "cavalo_louco", "voce"]: portraits[key] = load("res://marcha/art/portraits/" + key + ".png")
     for pair in [["title", FONT_TITLE, 0], ["bold", FONT_BOLD, 0], ["semi", FONT_SEMI, 0], ["bold_sp", FONT_BOLD, 3], ["semi_sp", FONT_SEMI, 3], ["semi_sp2", FONT_SEMI, 5]]:
         var fv := FontVariation.new()
@@ -1255,24 +1254,62 @@ func card_rect(i: int, n: int) -> Rect2:
     return Rect2(1490.0 + col * 200.0, 266.0 + row * 280.0, 183, 258)
 
 # ---------------------------------------------------------------- tutorial
-## R65 · COMO JOGAR com as regras ATUAIS (marcha-real-10: baralho de 52, rodadas 4·4·5, Ás/Rei garantido,
-## K só tira da base, 10 anda 10 ou faz descartar, 5 move qualquer peça, entrada trancada, 15 s por vez).
+## R67 · COMO JOGAR com as regras ATUAIS (marcha-real-10), em itens: cada página tem "rows" [chave, texto] e,
+## nas páginas de cartas, [valor da carta, nome, texto] (o PC desenha a carta de verdade ao lado). "intro"/"outro"
+## são frases soltas. kind: "rules" (losango dourado), "steps" (número) ou "cards" (cartas).
 const TUTORIAL := [
-    {"title": "BEM-VINDO À MARCHA REAL", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png",
-        "text": "Quatro reinos correm com seus peões ao redor da mesa. Você joga com o MARFIM (embaixo) em dupla com o ÔNIX (em cima), contra RUBI e ESMERALDA.\n\nA vez gira no sentido horário e cada jogador tem 15 segundos. Vence a dupla que coroar primeiro os seus 8 peões."},
-    {"title": "O CAMINHO", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "marks": true,
-        "text": "1 PÁTIO: onde seus 4 peões começam.\n2 PORTÃO: a casa de saída do seu reino.\n3 MURALHA: a trilha de 76 casas, no sentido horário.\n4 ENTRADA DO SALÃO: a casa de onde o peão entra no Salão.\n5 SALÃO DO TRONO: 4 casas; o peão que entra é COROADO."},
-    {"title": "AS CARTAS (1/2)", "img": "res://marcha/art/tutorial/cartas_todas.png",
-        "text": "Baralho de 52 cartas (4 de cada), repartido em rodadas de 4, 4 e 5 cartas. Quem tem peão no Pátio sempre recebe um A ou um K. Na sua vez, jogue UMA carta:\n\nA (Ás): VOCÊ ESCOLHE: tira um peão do Pátio, anda 11 casas ou anda 1 casa.\nK (Rei): só tira um peão do Pátio.\nQ (Dama): anda 12 casas.\nJ (Valete): troca de lugar um peão SEU com qualquer outra peça da mesa (amiga ou adversária)."},
-    {"title": "AS CARTAS (2/2)", "img": "res://marcha/art/simbolos_de_acao.png",
-        "text": "10: anda 10 casas OU faz o próximo jogador descartar 1 carta (sorteada).\n9, 8, 6, 3 e 2: andam o número de casas.\n7: divide as 7 casas entre até 2 peões seus (ex.: 4 + 3) ou anda 7 com um só.\n5: anda 5 casas com QUALQUER peça da mesa.\n-4: o peão VOLTA 4 casas. Saindo do Portão, ele cai perto da sua Entrada (atalho).\nSem jogada possível: descarte uma carta."},
-    {"title": "CAPTURA E PROTEÇÃO", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png",
-        "text": "Cair na casa de outro peão manda ele de volta ao Pátio (vale até para o aliado).\n\nPeão parado no PRÓPRIO Portão bloqueia a casa: ninguém passa por cima, cai nela ou troca com ele.\n\nPeão da outra dupla parado na Entrada de um reino tranca a entrada desse reino até sair; cair nele captura."},
-    {"title": "COROAÇÃO E VITÓRIA", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png",
-        "text": "Da Entrada do Salão o peão entra no Salão do Trono e é coroado: o número de casas precisa caber, sem passar do fundo nem pular peões seus.\n\nQuem coroar os 4 peões passa a jogar com os peões do aliado. Vence a dupla que coroar os 8."},
-    {"title": "COMO JOGAR NA TELA", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png",
-        "text": "1 Toque numa carta da mão: ela sobe e a linha de ajuda diz o que ela faz.\n2 Toque em JOGAR CARTA.\n3 Toque na peça marcada (no 7, escolha a divisão e o 2º peão; no Ás e no 10, escolha a opção). CANCELAR devolve a carta.\nSe o tempo acabar, o jogo faz uma jogada por você."},
+    {"title": "BEM-VINDO À MARCHA REAL", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "kind": "rules",
+        "intro": "Quatro reinos correm com seus peões ao redor da mesa.",
+        "rows": [["SUA DUPLA", "Você é o MARFIM (embaixo) e joga junto com o ÔNIX (em cima)."],
+            ["ADVERSÁRIOS", "RUBI e ESMERALDA, também em dupla."],
+            ["A VEZ", "Gira no sentido horário. Cada jogador tem 15 segundos."],
+            ["OBJETIVO", "Coroar os 8 peões da sua dupla antes da outra dupla."]]},
+    {"title": "O CAMINHO", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "kind": "steps", "marks": true,
+        "rows": [["PÁTIO", "Onde seus 4 peões começam."],
+            ["PORTÃO", "A casa de saída do seu reino."],
+            ["MURALHA", "A trilha de 76 casas, no sentido horário."],
+            ["ENTRADA DO SALÃO", "A casa de onde o peão entra no Salão."],
+            ["SALÃO DO TRONO", "4 casas. O peão que entra é COROADO."]]},
+    {"title": "AS CARTAS (1/2)", "img": "res://marcha/art/tutorial/cartas_todas.png", "kind": "cards",
+        "intro": "52 cartas, em rodadas de 4, 4 e 5. Quem tem peão no Pátio sempre recebe um A ou um K. Na sua vez, jogue UMA carta.",
+        "rows": [["A", "ÁS", "Você escolhe: tira um peão do Pátio, anda 11 casas ou anda 1 casa."],
+            ["K", "REI", "Só tira um peão do Pátio."],
+            ["Q", "DAMA", "Anda 12 casas."],
+            ["J", "VALETE", "Troca um peão SEU de lugar com qualquer outra peça da mesa (amiga ou adversária)."]]},
+    {"title": "AS CARTAS (2/2)", "img": "res://marcha/art/simbolos_de_acao.png", "kind": "cards",
+        "rows": [["10", "DEZ", "Anda 10 casas OU faz o próximo jogador descartar 1 carta (sorteada)."],
+            ["9 8 6 3 2", "NÚMEROS", "9, 8, 6, 3 e 2: andam o número de casas da carta."],
+            ["7", "SETE", "Divide 7 casas entre até 2 peões seus (ex.: 4 + 3) ou anda 7 com um só."],
+            ["5", "CINCO", "Anda 5 casas com QUALQUER peça da mesa."],
+            ["4", "MENOS 4", "O peão VOLTA 4 casas. Saindo do Portão, cai perto da sua Entrada (atalho)."]],
+        "outro": "Sem jogada possível? Descarte uma carta."},
+    {"title": "CAPTURA E PROTEÇÃO", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png", "kind": "rules",
+        "rows": [["CAPTURA", "Cair na casa de outro peão manda ele de volta ao Pátio (vale até para o aliado)."],
+            ["PORTÃO PROTEGIDO", "Peão parado no PRÓPRIO Portão (escudo) bloqueia a casa: ninguém passa, cai nela ou troca com ele."],
+            ["ENTRADA TRANCADA", "Peão da outra dupla parado na Entrada de um reino tranca a entrada até sair. Cair nele captura."]]},
+    {"title": "COROAÇÃO E VITÓRIA", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "kind": "rules",
+        "rows": [["COROAÇÃO", "Da Entrada, o peão entra no Salão do Trono. O número precisa caber, sem passar do fundo nem pular peões seus."],
+            ["AJUDE O ALIADO", "Quem coroar os 4 peões passa a jogar com os peões do aliado."],
+            ["VITÓRIA", "Vence a dupla que coroar os 8 peões."]]},
+    {"title": "COMO JOGAR NA TELA", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png", "kind": "steps",
+        "rows": [["ESCOLHA", "Toque numa carta: ela sobe e a linha de ajuda diz o que ela faz."],
+            ["JOGUE", "Toque em JOGAR CARTA."],
+            ["MOVA", "Toque na peça marcada (no 7, escolha a divisão; no A e no 10, a opção). CANCELAR devolve a carta."],
+            ["TEMPO", "Se o tempo acabar, o jogo faz uma jogada por você."]]},
 ]
+
+## Texto corrido da página (celular e testes): intro, itens "CHAVE: texto" e outro.
+static func tutorial_text(page: Dictionary) -> String:
+    var parts := []
+    if page.has("intro"): parts.append(String(page.intro))
+    var i := 0
+    for row in page.get("rows", []):
+        i += 1
+        var key: String = String(row[1]) if row.size() > 2 else String(row[0])
+        var pre := ("%d " % i) if String(page.get("kind", "")) == "steps" else ""
+        parts.append(pre + key + ": " + String(row[row.size() - 1]))
+    if page.has("outro"): parts.append(String(page.outro))
+    return "\n".join(parts)
 
 # ================================================================= desenho
 class TableView extends Control:
@@ -1352,6 +1389,11 @@ class TableView extends Control:
             draw_rect(Rect2(r.position.x, y, r.size.x, h + 0.5), Color(0.85, 0.62, 0.25, 0.10 * (1.0 - f)))
         var ly := r.end.y - 1.5 if toward_bottom else r.position.y + 0.5
         draw_line(Vector2(r.position.x, ly), Vector2(r.end.x, ly), Color(0.85, 0.66, 0.31, 0.55), 2.0)
+
+    func _ellipse(c: Vector2, r: Vector2, col: Color):
+        var pts := PackedVector2Array()
+        for i in 24: pts.append(c + Vector2(cos(TAU * i / 24.0) * r.x, sin(TAU * i / 24.0) * r.y))
+        draw_colored_polygon(pts, col)
 
     # ------------------------------------------------------------ primitivas
     func text(s: String, pos: Vector2, font_key: String, fs: int, col: Color, width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT, outline := 0, ocol := Color.BLACK):
@@ -1660,10 +1702,15 @@ class TableView extends Control:
                 draw_arc(c + Vector2(0, 2), 26.0, 0, TAU, 36, Color(1, 1, 1, 0.95), 5.0)
                 lift = 6.0
             var crowned: bool = g.pawns[w[0]][w[1]].zone == "lane"
-            var tx: Texture2D = ui.pawn_tex[w[0] + (10 if crowned else (20 if ui.desk else 0))]
+            var tx: Texture2D = ui.pawn_tex[w[0] + (10 if crowned else 0)]
             var sz: Vector2 = tx.get_size() * (0.34 if ui.desk else ui.PAWN_SCALE)     # R57: peões do tamanho da arte final
-            if ui.desk and not crowned: sz = tx.get_size() * (ui.DESK_PAWN_H / tx.get_height())   # R66: peão novo, mesma altura em toda cor
+            if ui.desk and not crowned: sz = tx.get_size() * (ui.DESK_PAWN_H / tx.get_height())   # R66: altura do peão da referência
             var rr := Rect2(Vector2(c.x - sz.x / 2.0, c.y + ui.PAWN_BASE - sz.y - lift), sz)
+            if ui.desk:
+                # R67 · acabamento: sombra macia sob o peão e arte em alta reduzida (Lanczos) para o tamanho real na tela
+                var foot := Vector2(c.x, c.y + ui.PAWN_BASE - 2.0)
+                for i in 3: _ellipse(foot, Vector2(sz.x * (0.50 - i * 0.08), sz.x * (0.17 - i * 0.03)), Color(0, 0, 0, (0.14 + i * 0.07) * alpha))
+                tx = Crisp.at(tx, sz * ui.k * s)
             if ui.anim_rot.has(key):
                 # R38.3 · peão abatido girando em volta do próprio centro, a caminho da base
                 var th: float = ui.anim_rot[key]
@@ -2263,16 +2310,24 @@ class TableView extends Control:
             ih2 = iw2 * img.get_size().y / img.get_size().x
             ir = Rect2(Vector2(r.position.x + 36, r.position.y + 130), Vector2(iw2, ih2))
             tr = Rect2(ir.end.x + 40, r.position.y + 140, r.end.x - ir.end.x - 76, r.size.y - 260)
-        draw_texture_rect(img, ir, false)
-        draw_rect(ir, Color("c99a45") if not ui.desk else R57_GOLD, false, 2.0)
-        if ui.desk: draw_rect(ir.grow(5), Color(0.85, 0.66, 0.31, 0.4), false, 1.0)
-        if page.get("marks", false): _tutorial_marks(ir)
-        var y := tr.position.y + 26
-        for para in String(page.text).split("\n"):
-            for ln in _wrap(para, "semi", 25, tr.size.x):
-                text(ln, Vector2(tr.position.x, y), "semi", 25, ui.CREAM)
-                y += 34
-            y += 6 if para.is_empty() else 4
+        if ui.desk and String(page.get("kind", "")) == "cards":
+            ir = Rect2(r.position.x + 36, r.position.y + 128, 0, 0)
+            tr = Rect2(r.position.x + 36, r.position.y + 128, r.size.x - 72, r.size.y - 250)
+            img = null
+        if img != null:
+            draw_texture_rect(img, ir, false)
+        if img != null: draw_rect(ir, Color("c99a45") if not ui.desk else R57_GOLD, false, 2.0)
+        if ui.desk and img != null: draw_rect(ir.grow(5), Color(0.85, 0.66, 0.31, 0.4), false, 1.0)
+        if page.get("marks", false) and img != null: _tutorial_marks(ir)
+        if ui.desk:
+            _tut_rows(page, tr)
+        else:
+            var y := tr.position.y + 26
+            for para in ui.tutorial_text(page).split("\n"):
+                for ln in _wrap(para, "semi", 25, tr.size.x):
+                    text(ln, Vector2(tr.position.x, y), "semi", 25, ui.CREAM)
+                    y += 34
+                y += 6 if para.is_empty() else 4
         var by: float = r.end.y - 96
         dark_button(Rect2(r.position.x + 36, by, 220, 66), "ANTERIOR", 26, "tut_prev", ui.tut_page > 0)
         dark_button(Rect2(r.get_center().x - 110, by, 220, 66), "FECHAR", 26, "tut_close")
@@ -2288,6 +2343,89 @@ class TableView extends Control:
                 _tut_board.region = ui.LayoutR57.ART_RECT
             return _tut_board
         return tex(path)
+
+    ## R67 · itens da página (PC): caixas com marcador (losango ou número) ou com a carta de verdade ao lado.
+    func _tut_rows(page: Dictionary, tr: Rect2):
+        var kind := String(page.get("kind", "rules"))
+        var y := tr.position.y
+        if page.has("intro"):
+            for ln in _wrap(String(page.intro), "semi", 23, tr.size.x):
+                text(ln, Vector2(tr.position.x, y + 24), "semi", 23, Color(0.93, 0.86, 0.72), -1, HORIZONTAL_ALIGNMENT_LEFT, 2, Color(0.05, 0.02, 0.06, 0.8))
+                y += 31
+            y += 14
+        var rows: Array = page.get("rows", [])
+        if kind == "cards":
+            _tut_card_rows(rows, Rect2(tr.position.x, y, tr.size.x, tr.end.y - y), page.get("outro", ""))
+            return
+        var gap := 12.0
+        var room: float = tr.end.y - y
+        var hh: float = minf(118.0, (room - gap * (rows.size() - 1)) / maxf(1.0, rows.size()))
+        for i in rows.size():
+            var row: Array = rows[i]
+            var box := Rect2(tr.position.x, y, tr.size.x, hh)
+            _row_box(box)
+            var mc := Vector2(box.position.x + 38, box.get_center().y)
+            if kind == "steps":
+                draw_circle(mc, 21, Color("5a3b06"))
+                draw_circle(mc, 19, R57_GOLD_HI)
+                draw_circle(mc, 15, Color("e9b94a"))
+                text(str(i + 1), Vector2(mc.x - 20, mc.y + 9), "bold", 25, Color("2a1704"), 40, HORIZONTAL_ALIGNMENT_CENTER)
+            else:
+                _diamond(mc, 15.0, R57_GOLD_HI, Color("5a3b06"))
+                _diamond(mc, 7.0, Color("7a1f2b"), Color(0, 0, 0, 0))
+            var tx := box.position.x + 76
+            var tw := box.end.x - tx - 18
+            text(String(row[0]), Vector2(tx, box.position.y + 34), "bold_sp", 22, R57_GOLD_HI, -1, HORIZONTAL_ALIGNMENT_LEFT, 2, Color(0.05, 0.02, 0.06, 0.8))
+            var ly := box.position.y + 66
+            for ln in _wrap(String(row[1]), "semi", 21, tw):
+                if ly > box.end.y - 4: break
+                text(ln, Vector2(tx, ly), "semi", 21, ui.CREAM)
+                ly += 27
+            y += hh + gap
+
+    func _row_box(box: Rect2):
+        draw_rect(box, Color(0.16, 0.08, 0.2, 0.85))
+        draw_rect(Rect2(box.position, Vector2(box.size.x, box.size.y * 0.5)), Color(1, 1, 1, 0.025))
+        draw_rect(box, Color(0.85, 0.66, 0.31, 0.55), false, 1.5)
+        draw_rect(Rect2(box.position, Vector2(5, box.size.y)), R57_GOLD)
+
+    ## Cartas: 2 colunas; cada item = a carta (ou um leque de cartas) + nome + o que faz.
+    func _tut_card_rows(rows: Array, area: Rect2, outro: String):
+        var cols := 2
+        var gap := 16.0
+        var nrow := int(ceil(rows.size() / float(cols)))
+        var reserve := 46.0 if outro != "" else 0.0
+        var cw := (area.size.x - gap) / cols
+        var ch := minf(196.0, (area.size.y - reserve - gap * (nrow - 1)) / nrow)
+        for i in rows.size():
+            var row: Array = rows[i]
+            var box := Rect2(area.position.x + (i % cols) * (cw + gap), area.position.y + (i / cols) * (ch + gap), cw, ch)
+            if rows.size() % 2 == 1 and i == rows.size() - 1: box.size.x = area.size.x   # último sozinho: linha inteira
+            _row_box(box)
+            var card_h := box.size.y - 20.0
+            var card_w := card_h * 0.70
+            var ranks := String(row[0]).split(" ")
+            var n := ranks.size()
+            var step := minf(26.0, card_w * 0.32) if n > 1 else 0.0
+            var cx0 := box.position.x + 18
+            for k in n:
+                var tex: Texture2D = ui.cards.get(String(ranks[k]))
+                if tex == null: continue
+                var cr := Rect2(cx0 + k * step, box.position.y + 10, card_w, card_h)
+                draw_rect(cr.grow(2), Color(0, 0, 0, 0.35))
+                draw_texture_rect(Crisp.at(tex, cr.size * ui.k), cr, false)
+            var tx := cx0 + card_w + (n - 1) * step + 22
+            var tw := box.end.x - tx - 16
+            text(String(row[1]), Vector2(tx, box.position.y + 40), "title", 26, R57_GOLD_HI, -1, HORIZONTAL_ALIGNMENT_LEFT, 3, Color(0.05, 0.02, 0.06, 0.8))
+            var ly := box.position.y + 74
+            for ln in _wrap(String(row[2]), "semi", 21, tw):
+                if ly > box.end.y - 6: break
+                text(ln, Vector2(tx, ly), "semi", 21, ui.CREAM)
+                ly += 27
+        if outro != "":
+            var oy := area.position.y + nrow * (ch + gap) + 6
+            _diamond(Vector2(area.position.x + 14, oy + 8), 8.0, R57_GOLD_HI, Color("5a3b06"))
+            text(outro, Vector2(area.position.x + 32, oy + 16), "semi", 22, Color(0.93, 0.86, 0.72))
 
     ## Números dos componentes sobre o tabuleiro (como na página 03 do conceito).
     func _tutorial_marks(ir: Rect2):

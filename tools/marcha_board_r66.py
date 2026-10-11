@@ -6,11 +6,10 @@ Muda só o que a referência redesenhou:
   • PÁTIO: losango com grade 2x2 (4 casas quadradas) e flores-de-lis nas pontas, recortado da referência,
     sem os peões (o miolo de cada casa é refeito a partir da borda da própria casa) e colado no lugar do losango
     antigo de cada reino. Os 4 círculos de silhueta (que a referência não tem) saem da mesa.
-  • PEÃO: o peão da referência (o mesmo no Pátio e na Muralha), recortado com transparência.
+  • PEÃO: o jogo usa a arte em alta dos peões (marcha/art/pawns), que já é o peão da referência (R67).
   • board_layout_r57.gd: HOMES / HOME_CENTERS passam a ser as 4 casas da grade de cada Pátio.
 Entradas: tools/ui_ref/r66/marcha_tabuleiro_ref.png, marcha/art/r57/mesa.png (versão R57, sem Pátio novo).
-Saídas: marcha/art/r57/mesa.png, mesa_wide.png (via tools/marcha_wide_r65.py), marcha/art/pawns/r66/peao_<reino>.png,
-        HOMES em marcha/board_layout_r57.gd.
+Saídas: marcha/art/r57/mesa.png, mesa_wide.png (via tools/marcha_wide_r65.py) e HOMES em marcha/board_layout_r57.gd.
 Uso: python3 tools/marcha_board_r66.py   (roda sobre a mesa R57 guardada em tools/ui_ref/r66/mesa_r57.png)
 """
 import os
@@ -67,7 +66,6 @@ def coons(a, x0, y0, x1, y1):
 
 
 PAD = 7
-PAWN_CELL = 1   # casa de cima à direita: o corte do losango (canto de cima à direita) fica longe do peão
 
 
 def smooth_cell(a, x0, y0, x1, y1, outer):
@@ -114,36 +112,6 @@ def clean_base(ref, spec):
         smooth_cell(a, bx0, by0, bx1, by1, i)
         m[by0:by1 + 1, bx0:bx1 + 1] = 255
     return a, m
-
-
-def pawn_sprite(ref, clean, spec):
-    """Peão de uma casa do Pátio, com transparência: o que difere da casa limpa, dentro do contorno convexo
-    das partes grandes (cabeça, colar, base), sem a borda da casa."""
-    x0, y0, x1, y1 = [int(v) for v in cells(spec["grid"])[PAWN_CELL]]
-    o = ref[y0:y1, x0:x1].astype(np.int32)
-    c = clean[y0:y1, x0:x1].astype(np.int32)
-    d = np.abs(o - c).sum(axis=2)
-    h, w = d.shape
-    inner = np.zeros((h, w), np.uint8)
-    inner[PAD + 2:h - PAD - 2, PAD + 2:w - PAD - 2] = 255
-    yy, xx = np.mgrid[0:h, 0:w]
-    inner[((w - 1 - xx) + yy) < 0.30 * (w + h)] = 0          # canto cortado pelo losango (em cima à direita)
-    strong = ((d > 70).astype(np.uint8) * 255) & inner
-    n, lab, st, _ = cv2.connectedComponentsWithStats(strong)
-    keep = np.zeros_like(strong)
-    for i in range(1, n):
-        if st[i, cv2.CC_STAT_AREA] >= 12: keep[lab == i] = 255
-    pts = cv2.findNonZero(keep)
-    hull = np.zeros_like(keep)
-    cv2.fillConvexPoly(hull, cv2.convexHull(pts), 255)
-    near = cv2.dilate(keep, np.ones((7, 7), np.uint8))                     # só perto das partes fortes
-    soft = cv2.dilate(((d > 34).astype(np.uint8) * 255) & inner, np.ones((3, 3), np.uint8))
-    solid = hull & soft & near
-    solid = cv2.morphologyEx(solid, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
-    alpha = cv2.GaussianBlur(solid.astype(np.float32), (0, 0), 0.5)
-    bx, by, bw, bh = cv2.boundingRect(hull)
-    rgba = np.dstack([ref[y0:y1, x0:x1], np.clip(alpha, 0, 255).astype(np.uint8)])
-    return rgba[by:by + bh, bx:bx + bw]
 
 
 def stone_patch(a, cx, cy, r, src_img):
@@ -198,11 +166,8 @@ def main():
         stone_patch(mesa, int(round(cx + ox)), int(round(cy + oy)), r, ref_small)
     # 2) Pátios novos (recorte da referência, sem peões) + peões novos
     homes_units, centers_units = {}, {}
-    os.makedirs(os.path.join(ROOT, "marcha/art/pawns/r66"), exist_ok=True)
     for name, spec in REF_BASES.items():
         clean, _ = clean_base(ref, spec)
-        sprite = pawn_sprite(ref, clean, spec)
-        Image.fromarray(sprite, "RGBA").save(os.path.join(ROOT, "marcha/art/pawns/r66/peao_%s.png" % name), optimize=True)
         l, t, r, b = spec["tips"]
         crop = clean[t:b + 1, l:r + 1]
         W, H = NEW_SIZE
