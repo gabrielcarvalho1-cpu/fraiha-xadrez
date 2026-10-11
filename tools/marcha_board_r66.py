@@ -140,6 +140,68 @@ def stone_patch(a, cx, cy, r, src_img):
     a[cy - R:cy + R + 1, cx - R:cx + R + 1] = np.clip(tgt * (1 - al) + src * al + 0.5, 0, 255).astype(np.uint8)
 
 
+# Portão de cada reino (centro) e a conta vizinha da trilha (modelo da conta), px do recorte do tabuleiro
+GATES = [((309.4, 604.2), (309.3, 576.7)), ((45.0, 255.5), (79.1, 257.7)), ((425.0, 38.4), (423.0, 63.7)), ((684.0, 372.5), (652.0, 373.6))]
+GATE_TINT = [None, (205, 28, 44), (38, 40, 52), (24, 150, 86)]       # Marfim fica com a conta clara (só o aro)
+YOU_PANEL = (1306, 784, 1656, 908)                                   # painel "Você" (px da mesa 1672x941)
+
+
+def gate_bead(a, c, src, tint, r=15):
+    """Copia a conta vizinha (mesma luz e sombra da trilha) para o Portão, tinge na cor do reino mantendo o brilho
+    e põe um aro dourado fino, macio."""
+    cx, cy = int(round(c[0])), int(round(c[1]))
+    sx, sy = int(round(src[0])), int(round(src[1]))
+    R = r + 3
+    yy, xx = np.mgrid[-R:R + 1, -R:R + 1].astype(np.float32)
+    d = np.sqrt(xx ** 2 + yy ** 2)
+    patch = a[sy - R:sy + R + 1, sx - R:sx + R + 1].astype(np.float32)
+    tgt = a[cy - R:cy + R + 1, cx - R:cx + R + 1].astype(np.float32)
+    if tint is not None:
+        L = patch.mean(axis=2, keepdims=True) / 255.0
+        col = np.array(tint, np.float32)
+        tinted = col * np.clip(L * 1.08, 0, 1.15) + (255 - col) * np.clip((L - 0.9) / 0.1, 0, 1) ** 2 * 0.6
+        inb = np.clip((r - 2.0 - d) / 1.5, 0, 1)[..., None]
+        patch = patch * (1 - inb) + tinted * inb
+    al = np.clip((R - d) / 2.5, 0, 1)[..., None]
+    out = tgt * (1 - al) + patch * al
+    ring = np.clip(1.0 - np.abs(d - (r - 0.5)) / 1.1, 0, 1)[..., None] * 0.9
+    out = out * (1 - ring) + np.array([238, 196, 70], np.float32) * ring
+    a[cy - R:cy + R + 1, cx - R:cx + R + 1] = np.clip(out + 0.5, 0, 255).astype(np.uint8)
+
+
+def remove_panel(a, box):
+    """Tira o painel: o tapete de baixo continua para cima ao longo da diagonal das listras (amostrando uma faixa de
+    linhas limpas, não uma só, para manter a textura) e o canto ganha a sombra do salão; emenda suave."""
+    x0, y0, x1, y1 = box
+    H, W = a.shape[:2]
+    b0, b1 = y1 + 4, H - 2               # faixa limpa abaixo do painel
+    vx, vy = 1.0, 0.55                   # direção das listras do tapete
+    f = a.astype(np.float32)
+    out = f.copy()
+    band = b1 - b0
+    for y in range(y0 - 8, y1 + 6):
+        for x in range(x0 - 10, x1 + 10):
+            ph = ((y - b0) % band + band) % band
+            acc = 0.0
+            col = np.zeros(3, np.float32)
+            for k, w in ((0, 1.0 - ph / band), (1, ph / band)):    # duas amostras: a emenda entre faixas some
+                sy = b0 + ph - k * band if k else b0 + ph
+                if sy < b0: sy += band
+                sy = min(sy, b1 - 1)
+                sx = x + (sy - y) / vy * vx
+                while sx > W - 1: sx -= 2 * band / vy * vx
+                col += f[int(sy), int(np.clip(round(sx), 0, W - 1))] * (0.5 + 0.5 * w)
+                acc += 0.5 + 0.5 * w
+            out[y, x] = col / acc
+    m = np.zeros((H, W), np.float32)
+    m[y0 - 2:y1 + 2, x0 - 4:x1 + 4] = 1.0
+    m = cv2.GaussianBlur(m, (0, 0), 3.5)
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    shade = 0.62 + 0.38 * np.clip((yy - y0) / (y1 - y0 + 30.0), 0, 1)      # mais escuro em cima (sombra das colunas)
+    res = f * (1 - m[..., None]) + out * (shade * m)[..., None]
+    return np.clip(res + 0.5, 0, 255).astype(np.uint8)
+
+
 def diamond_alpha(w, h, feather=1.5):
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     d = np.abs(xx - (w - 1) / 2.0) / (w / 2.0) + np.abs(yy - (h - 1) / 2.0) / (h / 2.0)
@@ -150,6 +212,11 @@ def main():
     ref = load(REF)
     mesa = load(MESA_R57)
     ox, oy = BOARD_CROP[0], BOARD_CROP[1]
+    # 0) R69 · Portões: a conta pintada (parecia adesivo) vira a conta de verdade da trilha, tingida na cor do reino
+    for seat, (g, nb) in enumerate(GATES):
+        gate_bead(mesa, (g[0] + ox, g[1] + oy), (nb[0] + ox, nb[1] + oy), GATE_TINT[seat])
+    # 0b) R69 · sai o painel "Você" do canto de baixo à direita (cenário refeito por textura)
+    mesa = remove_panel(mesa, YOU_PANEL)
     # 1) losangos antigos e círculos de silhueta saem da mesa (recomposição a partir da pedra em volta)
     hole = np.zeros(mesa.shape[:2], np.uint8)
     for (cx, cy) in HOMES_R57.values():

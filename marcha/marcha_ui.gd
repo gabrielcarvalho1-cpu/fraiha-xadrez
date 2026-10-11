@@ -1120,11 +1120,24 @@ func _cue(kind: String, pitch := 1.0, from_pos := 0.0):
     var st: AudioStream = SFX_R50.get(kind, SFX.get(kind))
     if st != null: Sound.play(stage, st, float(SFX_DB.get(kind, -8.0)), pitch, from_pos)
 
+const DOUBLE_CLICK_MS := 450
+var _last_card_click := -1
+var _last_card_ms := 0
 func _on_hit(id: String):
     var audio = stage.get_node_or_null("GameAudio") if stage != null else null
     if audio != null and audio.has_method("play_cue"): audio.play_cue("ui")
     if id.begins_with("card_"):
-        pick_card(int(id.substr(5)))
+        var ci := int(id.substr(5))
+        var now := Time.get_ticks_msec()
+        # R69 · duplo clique/toque na carta = JOGAR CARTA (o mesmo que o botão)
+        if ci == _last_card_click and now - _last_card_ms <= DOUBLE_CLICK_MS and sel_card == ci:
+            _last_card_click = -1
+            if can_play(): confirm()
+            _redraw()
+            return
+        _last_card_click = ci
+        _last_card_ms = now
+        pick_card(ci)
         return
     if id.begins_with("choice_"):
         if id == "choice_cancel": cancel()
@@ -1321,6 +1334,8 @@ class TableView extends Control:
     var tex_cache := {}
     func _init():
         mouse_filter = Control.MOUSE_FILTER_STOP
+        # R69 · filtro linear: as cartas (giradas e reduzidas) e os peões ficavam serrilhados com o NEAREST do projeto
+        texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
     func _gui_input(event):
         if event is InputEventMouseMotion:
             ui.on_hover((event.position - ui.origin) / ui.k)
@@ -2055,7 +2070,7 @@ class TableView extends Control:
         rtext(sub, Vector2(187, 64), "r57_head", 17.6, Color("f2c94c"), -1.0, HORIZONTAL_ALIGNMENT_LEFT, 305.0)
         if ui.mode == "game": _r57_icons(plate, ui.R57_ICONS, false)
         else: _r57_icons(plate, ui.R57_ICONS.slice(0, 3), false)
-        for seat in 4: _r57_seat(seat)
+        for seat in [1, 2, 3]: _r57_seat(seat)   # R69: o painel "Você" saiu da mesa
         _draw_board()
         _r57_timer()
         _r57_play(plate)
