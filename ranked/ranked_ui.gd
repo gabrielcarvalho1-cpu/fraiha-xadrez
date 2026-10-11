@@ -927,16 +927,24 @@ func _refresh_strips():
         if bid != strip.seal_id:
             strip.seal_id = bid
             strip.seal.texture = Cosmetics.badge_texture(bid)
-        # celular deitado (faixa estreita): o selo vai para o canto do retrato e o nome ganha o espaço
-        strip.seal.visible = strip.seal.texture != null and not two_line
+        # celular deitado (faixa estreita): o selo vai para o canto do retrato e o nome ganha o espaço.
+        # R62 · com o HUD do celular (R53) o retrato não mostra selo nem moldura (fica no círculo da arte) e o
+        # selo é posto logo depois do nome: aí ele fica AO LADO DO NOME também deitado (antes sumia dos dois lugares).
+        var corner: bool = two_line and not _hud_owns_strips()
+        strip.seal.visible = strip.seal.texture != null and not corner
         strip.portrait.seal_rect.texture = strip.seal.texture
-        strip.portrait.seal_rect.visible = two_line and strip.seal.texture != null
+        strip.portrait.seal_rect.visible = corner and strip.seal.texture != null
         var running = ctl.status == "playing" and ctl.clock.active == pair[1]
         strip.clock.show_time(ctl.clock.remaining_ms(pair[1]), running)
         strip.style.border_color = Color(0, 0, 0, 0)
         strip.plaque.active = running
     resign_button.visible = ctl.in_match() and not Mobile.active(get_viewport())
     if ctl.status == "playing" and account.server_ready: link_label.text = ""
+
+## R62 · o HUD do celular (ranked/mobile_match_hud.gd) está cuidando das faixas desta partida?
+func _hud_owns_strips() -> bool:
+    var st = get_parent()
+    return st != null and st.has_method("mobile_hud_on") and bool(st.mobile_hud_on())
 
 # Posiciona as faixas dos jogadores em volta do tabuleiro (retângulo em pixels de tela).
 const PLAQUE_H := 98.0

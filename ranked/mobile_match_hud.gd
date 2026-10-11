@@ -996,6 +996,12 @@ func _keep_strips() -> void:
 		if _texts.get(key, "") == sig: continue
 		_texts[key] = sig
 		_fit(nm, FONT_TITLE)
+		# R62 · deitado: o selo agora fica ao lado do nome também aqui; o nome encolhe para o selo caber na caixa
+		if orient == "l" and s.seal.visible and s.seal.texture != null:
+			var room: float = nm.size.x - s.seal.size.x - 6.0
+			var fpx := nm.get_theme_font_size("font_size")
+			while fpx > 9 and FONT_TITLE.get_string_size(nm.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fpx).x > room: fpx -= 1
+			if nm.get_theme_font_size("font_size") != fpx: nm.add_theme_font_size_override("font_size", fpx)
 		var sr: Rect2 = sub.get_meta("hud_rect", Rect2(sub.position, sub.size))
 		var shift: float = sr.size.y + 4.0 if s.emblem.visible else 0.0
 		sub.position = sr.position + Vector2(shift, 0)

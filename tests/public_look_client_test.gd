@@ -52,9 +52,11 @@ func run():
     var top: Dictionary = stage.casual_ui.strips.top
     var bottom: Dictionary = stage.casual_ui.strips.bottom
     var land: bool = root.size.x > root.size.y and root.size.y < 600
-    check((top.portrait.avatar_rect.texture != null and frame_style(top.portrait) == "fundador") and (land or (top.seal.visible and not top.portrait.seal_rect.visible)), "faixa do adversário: avatar + moldura Fundador + selo (ao lado do nome, sem repetir no retrato)")
-    # R46 (placa aprovada): no celular deitado o retrato pequeno também aparece, junto com o selo
-    if land: check(top.portrait.visible and top.portrait.size.x <= 32.0 and top.portrait.seal_rect.visible and not top.seal.visible and top.name.get_line_count() <= 2 and top.name.get_visible_line_count() == top.name.get_line_count(), "celular deitado: retrato pequeno com o selo no canto; nome inteiro (%s)" % top.name.text)
+    # R62 · contrato do HUD atual (R53/R54): a faixa da partida mostra o avatar SEM moldura premium (a moldura
+    # Fundador aparece no cartão de perfil) e o selo AO LADO DO NOME, sem repetir no canto do retrato — também
+    # no celular deitado (antes o selo ia para o canto do retrato e o HUD o escondia: sumia).
+    check(top.portrait.avatar_rect.texture != null and frame_style(top.portrait) == "" and top.seal.visible and top.seal.texture != null and not top.portrait.seal_rect.visible, "faixa do adversário: avatar + selo Fundador ao lado do nome (sem moldura na faixa, sem repetir no retrato)")
+    if land: check(top.portrait.visible and top.name.get_line_count() <= 2 and top.name.get_visible_line_count() == top.name.get_line_count(), "celular deitado: retrato visível, selo ao lado do nome e nome inteiro (%s)" % top.name.text)
     check(frame_style(bottom.portrait) == "" and not bottom.seal.visible, "minha faixa (convidado, free): sem moldura premium nem selo")
     await shot("2_partida")
     var pp = stage.profile_popup
