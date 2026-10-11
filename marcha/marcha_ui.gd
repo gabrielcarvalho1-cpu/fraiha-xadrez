@@ -80,6 +80,7 @@ const CARD_FLY := 0.45            # R37.3: a carta jogada voa da mão (ou da pla
 const BOTS := {1: {"name": "ReiDoBlitz", "portrait": "rei_do_blitz"}, 2: {"name": "Lady Torre", "portrait": "lady_torre"}, 3: {"name": "Cavalo_Louco", "portrait": "cavalo_louco"}}
 const PAWN_SCALE := 0.24          # peão PNG (211x279) sobre a casa da arte 1600x1600
 const PAWN_BASE := 11.0           # a base do peão assenta 11 px abaixo do centro da casa
+const DESK_PAWN_H := 80.0         # R66 · altura do peão novo no PC (unidades do tabuleiro de 1600)
 
 var hub = null
 var stage = null
@@ -168,6 +169,7 @@ func _ready():
     for s in 4:
         pawn_tex[s] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + ".png")
         pawn_tex[s + 10] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + "_dama.png")   # R37: no Salão o peão vira DAMA
+        pawn_tex[s + 20] = load("res://marcha/art/pawns/r66/peao_" + PAWN_FILES[s] + ".png")   # R66: peão da referência nova (PC)
     for key in ["lady_torre", "rei_do_blitz", "cavalo_louco", "voce"]: portraits[key] = load("res://marcha/art/portraits/" + key + ".png")
     for pair in [["title", FONT_TITLE, 0], ["bold", FONT_BOLD, 0], ["semi", FONT_SEMI, 0], ["bold_sp", FONT_BOLD, 3], ["semi_sp", FONT_SEMI, 3], ["semi_sp2", FONT_SEMI, 5]]:
         var fv := FontVariation.new()
@@ -1260,10 +1262,10 @@ const TUTORIAL := [
         "text": "Quatro reinos correm com seus peões ao redor da mesa. Você joga com o MARFIM (embaixo) em dupla com o ÔNIX (em cima), contra RUBI e ESMERALDA.\n\nA vez gira no sentido horário e cada jogador tem 15 segundos. Vence a dupla que coroar primeiro os seus 8 peões."},
     {"title": "O CAMINHO", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "marks": true,
         "text": "1 PÁTIO: onde seus 4 peões começam.\n2 PORTÃO: a casa de saída do seu reino.\n3 MURALHA: a trilha de 76 casas, no sentido horário.\n4 ENTRADA DO SALÃO: a casa de onde o peão entra no Salão.\n5 SALÃO DO TRONO: 4 casas; o peão que entra é COROADO."},
-    {"title": "AS CARTAS", "img": "res://marcha/art/tutorial/cartas_todas.png",
-        "text": "Baralho de 52 cartas (4 de cada valor), repartido em rodadas de 4, 4 e 5 cartas. Quem tem peão no Pátio sempre recebe um Ás ou um Rei.\n\nNa sua vez, jogue UMA carta:\nÁs: tira um peão do Pátio, anda 11 ou anda 1.\nRei: só tira um peão do Pátio.\nDama: anda 12.  9, 8, 6, 3 e 2: andam o número."},
-    {"title": "CARTAS ESPECIAIS", "img": "res://marcha/art/simbolos_de_acao.png",
-        "text": "10: anda 10 casas OU faz o próximo jogador descartar 1 carta (sorteada).\nValete: troca um peão SEU de lugar com outra peça.\n7: divide as 7 casas entre até 2 peões seus.\n5: anda 5 com QUALQUER peça da mesa; a do adversário passa direto pela Entrada e dá mais uma volta.\n4: volta 4 casas; saindo do Portão, cai perto da sua Entrada (atalho).\nSem jogada possível: descarte uma carta."},
+    {"title": "AS CARTAS (1/2)", "img": "res://marcha/art/tutorial/cartas_todas.png",
+        "text": "Baralho de 52 cartas (4 de cada), repartido em rodadas de 4, 4 e 5 cartas. Quem tem peão no Pátio sempre recebe um A ou um K. Na sua vez, jogue UMA carta:\n\nA (Ás): VOCÊ ESCOLHE: tira um peão do Pátio, anda 11 casas ou anda 1 casa.\nK (Rei): só tira um peão do Pátio.\nQ (Dama): anda 12 casas.\nJ (Valete): troca de lugar um peão SEU com qualquer outra peça da mesa (amiga ou adversária)."},
+    {"title": "AS CARTAS (2/2)", "img": "res://marcha/art/simbolos_de_acao.png",
+        "text": "10: anda 10 casas OU faz o próximo jogador descartar 1 carta (sorteada).\n9, 8, 6, 3 e 2: andam o número de casas.\n7: divide as 7 casas entre até 2 peões seus (ex.: 4 + 3) ou anda 7 com um só.\n5: anda 5 casas com QUALQUER peça da mesa.\n-4: o peão VOLTA 4 casas. Saindo do Portão, ele cai perto da sua Entrada (atalho).\nSem jogada possível: descarte uma carta."},
     {"title": "CAPTURA E PROTEÇÃO", "img": "res://marcha/art/tutorial/tabuleiro_jogada_em_destaque.png",
         "text": "Cair na casa de outro peão manda ele de volta ao Pátio (vale até para o aliado).\n\nPeão parado no PRÓPRIO Portão bloqueia a casa: ninguém passa por cima, cai nela ou troca com ele.\n\nPeão da outra dupla parado na Entrada de um reino tranca a entrada desse reino até sair; cair nele captura."},
     {"title": "COROAÇÃO E VITÓRIA", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png",
@@ -1658,8 +1660,9 @@ class TableView extends Control:
                 draw_arc(c + Vector2(0, 2), 26.0, 0, TAU, 36, Color(1, 1, 1, 0.95), 5.0)
                 lift = 6.0
             var crowned: bool = g.pawns[w[0]][w[1]].zone == "lane"
-            var tx: Texture2D = ui.pawn_tex[w[0] + (10 if crowned else 0)]
+            var tx: Texture2D = ui.pawn_tex[w[0] + (10 if crowned else (20 if ui.desk else 0))]
             var sz: Vector2 = tx.get_size() * (0.34 if ui.desk else ui.PAWN_SCALE)     # R57: peões do tamanho da arte final
+            if ui.desk and not crowned: sz = tx.get_size() * (ui.DESK_PAWN_H / tx.get_height())   # R66: peão novo, mesma altura em toda cor
             var rr := Rect2(Vector2(c.x - sz.x / 2.0, c.y + ui.PAWN_BASE - sz.y - lift), sz)
             if ui.anim_rot.has(key):
                 # R38.3 · peão abatido girando em volta do próprio centro, a caminho da base
