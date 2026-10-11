@@ -361,7 +361,7 @@ func show_page(id: String):
                 club_row.compact = true
                 club_row.custom_minimum_size.y = 54
                 club_row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-                club_row.pressed.connect(func(): hub.open_club())
+                club_row.pressed.connect(func(): hub.open_premium())   # R63
                 top_row.add_child(club_row)
                 refresh_club(hub.entitlements != null and hub.entitlements.club_active())
                 # Canto superior esquerdo com largura de selo (no paisagem não vira uma faixa de ponta a ponta).

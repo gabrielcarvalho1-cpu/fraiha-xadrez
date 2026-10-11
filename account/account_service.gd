@@ -432,8 +432,10 @@ func set_cosmetics(data: Dictionary) -> bool:
         if data.has(k): msg[k] = String(data[k])
     return _send(msg)
 
-## R55 · STATUS do perfil: até 80 caracteres, limpo igual ao servidor (online_v021/accounts/status.js).
-const STATUS_MAX := 80
+## R55 · STATUS do perfil, limpo igual ao servidor (online_v021/accounts/status.js).
+## R63 · limite do jogo: 30 caracteres (era 80). O servidor continua aceitando até 80, então frases antigas
+## (31–80) seguem salvas e aparecem inteiras; o jogo só não deixa salvar uma frase NOVA acima de 30.
+const STATUS_MAX := 30
 static func clean_status(text: String) -> String:
     var out := ""
     for ch in text:

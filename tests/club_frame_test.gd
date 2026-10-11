@@ -32,11 +32,11 @@ func run():
     for i in 2: await process_frame
     var entry = hub.find_child("ClubHomeEntryMobile" if mobile else "ClubHomeEntry", true, false)
     check(entry != null and entry.is_visible_in_tree(), "Home tem a entrada CLUB FRAIHA (separada do menu)")
-    check(entry != null and not entry.active and entry.text == "CLUB FRAIHA", "inativo: 'CLUB FRAIHA'")
+    check(entry != null and not entry.active and entry.text == "SEJA MEMBRO", "inativo: 'SEJA MEMBRO' (R63)")
     check(frames_on(hub) == 0, "sem Club: nenhuma moldura Club")
     entry.pressed.emit()
     for i in 2: await process_frame
-    check(hub.premium != null and hub.premium.visible and hub.premium.page == "club", "clicar abre direto a página do Club")
+    check(hub.premium != null and hub.premium.visible and hub.premium.page == "hub", "clicar abre a página geral FRAIHA PREMIUM (R63)")
     hub.premium.close()
     # ativa pela simulação (mesmo caminho do botão ATIVAR CLUB)
     state.mock_activate_club()

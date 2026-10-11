@@ -176,7 +176,7 @@ func _build_top():
     club_entry.art_seal = Vector2(318, 37)
     club_entry.position = CLUB_RECT.position
     club_entry.size = CLUB_RECT.size
-    club_entry.pressed.connect(func(): hub.open_club())
+    club_entry.pressed.connect(func(): hub.open_premium())   # R63 · SEJA MEMBRO → FRAIHA PREMIUM
     top.add_child(club_entry)
     sound_button = preload("res://ui_v022/hud_button.gd").make("sound_on")
     sound_button.name = "SoundButtonMobile"

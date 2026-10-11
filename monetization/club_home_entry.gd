@@ -1,7 +1,8 @@
 extends Button
 ## Entrada do CLUB FRAIHA na Home: placa de OURO maciço no canto superior esquerdo do HUD (desktop)
-## ou no topo do menu do celular. Separada dos botões do menu; abre direto a página do Club.
-## Inativo: "CLUB FRAIHA · Jogue. Analise. Evolua."   Ativo: "CLUB ATIVO · Análises ilimitadas".
+## ou no topo do menu do celular. Separada dos botões do menu.
+## R63 · o texto inativo é "SEJA MEMBRO" e a Home abre a página geral FRAIHA PREMIUM (Fundador ou Club).
+## Inativo: "SEJA MEMBRO · Jogue. Analise. Evolua."   Ativo: "CLUB ATIVO · Análises ilimitadas".
 ## Visual: moldura dourada metálica (gradiente + bisel), interior verde profundo, medalhão com
 ## coroa, brilho percorrendo o ouro e, quando ativo, selo dourado com ✓ e faíscas.
 const Art := preload("res://monetization/premium_art.gd")
@@ -21,6 +22,8 @@ var art_sub := true
 var art_sub_y := 50.0
 var art_seal := Vector2(291, 30)
 var t := 0.0
+const TITLE_OFF := "SEJA MEMBRO"   # R63 (antes "CLUB FRAIHA")
+const TITLE_ON := "CLUB ATIVO"
 
 # Gradiente metálico do ouro (de cima para baixo)
 const GOLD_STOPS := [
@@ -29,8 +32,8 @@ const GOLD_STOPS := [
 
 func _init():
     name = "ClubHomeEntry"
-    text = "CLUB FRAIHA"
-    tooltip_text = "Club FRAIHA"
+    text = TITLE_OFF
+    tooltip_text = "FRAIHA PREMIUM"
     focus_mode = Control.FOCUS_ALL
     mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     for s in ["normal", "hover", "pressed", "focus", "disabled"]: add_theme_stylebox_override(s, StyleBoxEmpty.new())
@@ -56,7 +59,7 @@ var _state := []
 func set_active(value: bool):
     if active == value: return
     active = value
-    text = "CLUB ATIVO" if active else "CLUB FRAIHA"
+    text = TITLE_ON if active else TITLE_OFF
     _refresh()
 
 func _ready():
@@ -287,7 +290,7 @@ func _paint_front(l: Node2D):
     var fx := mc.x + ms / 2.0 + 8.0
     var right_pad := notch + border + (h * 0.55 + 10.0 if active else 6.0)
     var room := w - fx - right_pad
-    var title := "CLUB ATIVO" if active else "CLUB FRAIHA"
+    var title := TITLE_ON if active else TITLE_OFF
     var tfs := Art.fit(Art.FONT_BOLD, title, 16 if compact else 18, room, 11)
     var sub := "Jogue. Analise. Evolua." if not active else "Análises ilimitadas · moldura premium"
     var f := get_theme_default_font()
@@ -327,7 +330,7 @@ func _draw_over_art():
     if lit:   # luz quente por dentro da placa
         draw_rect(Rect2(art_tx - 5.0, 7, size.x - art_tx - 3.0, size.y - 12.0), Color(1.0, 0.86, 0.45, 0.07))
     var f := get_theme_default_font()
-    var title := "CLUB ATIVO" if active else "CLUB FRAIHA"
+    var title := TITLE_ON if active else TITLE_OFF
     var sub := "Análises ilimitadas · moldura premium" if active else "Jogue. Analise. Evolua."
     var tx := art_tx
     var dy := 1.0 if down else 0.0

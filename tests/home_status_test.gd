@@ -41,7 +41,7 @@ func run():
 	hub.ref_status_edit.pressed.emit()
 	await frames(2)
 	check(hub.status_editor.visible and hub.status_input.text == "Rumo ao Diamante!" and hub.status_input.editable, "lápis abre o editor com o status atual")
-	check(hub.status_input.max_length == 80 and hub.status_count.text == "17 / 80", "limite de 80 e contador")
+	check(hub.status_input.max_length == 30 and hub.status_count.text == "17 / 30", "limite de 30 e contador (R63)")
 	hub.status_input.text = "  Foco   total\tno Ranked  "
 	hub.save_status()
 	check("conexão" in hub.status_note.text, "sem servidor: o editor avisa e não fecha")

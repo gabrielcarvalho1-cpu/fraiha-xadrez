@@ -2854,7 +2854,10 @@ func refresh_profile_status():
 func open_status_editor():
     if status_editor == null: _build_status_editor()
     var logged: bool = account != null and account.has_profile()
-    status_input.text = profile_status_text()
+    var cur := profile_status_text()
+    # R63 · frase antiga acima do limite novo: aparece inteira (sem corte silencioso); o campo só deixa encurtar
+    status_input.max_length = maxi(_status_max(), cur.length())
+    status_input.text = cur
     status_input.editable = logged
     status_save.disabled = not logged
     status_note.text = "" if logged else "Entre na sua conta para salvar um status."
@@ -2868,14 +2871,35 @@ func open_status_editor():
 func close_status_editor():
     if status_editor != null: status_editor.hide()
 
+## R63 · limite da frase: 30 (account_service.STATUS_MAX).
+func _status_max() -> int:
+    return int(account.STATUS_MAX) if account != null else 30
+
+const STATUS_OVER_NOTE := "Limite agora é %d: encurte para salvar."
+
 func _status_count():
     if status_count == null: return
     var n: int = status_input.text.length()
-    status_count.text = "%d / %d" % [n, account.STATUS_MAX if account != null else 80]
+    var lim := _status_max()
+    if n < status_input.max_length: status_input.max_length = maxi(lim, n)   # frase antiga longa: só encolhe
+    status_count.text = "%d / %d" % [n, lim]
+    var over := n > lim
+    status_count.add_theme_color_override("font_color", Color("ff9d86") if over else MUTED)
+    var logged: bool = account != null and account.has_profile()
+    if status_save != null: status_save.disabled = not logged or over
+    if status_note != null:
+        if over:
+            status_note.text = STATUS_OVER_NOTE % lim
+            status_note.add_theme_color_override("font_color", Color("ff9d86"))
+        elif status_note.text == STATUS_OVER_NOTE % lim:
+            status_note.text = ""
 
 func save_status():
     if account == null or not account.has_profile(): return
     var t: String = account.clean_status(status_input.text)
+    if t.length() > _status_max():
+        _status_count()
+        return
     if account.set_status(t):
         status_save.disabled = true
         status_note.text = "Salvando…"
@@ -2924,7 +2948,7 @@ func _build_status_editor():
     col.add_child(title)
     status_input = LineEdit.new()
     status_input.name = "StatusInput"
-    status_input.max_length = 80
+    status_input.max_length = _status_max()   # R63 · 30 (era 80)
     status_input.placeholder_text = "Escreva uma frase curta (deixe vazio para a frase padrão)"
     status_input.add_theme_font_size_override("font_size", 16)
     status_input.custom_minimum_size = Vector2(0, 38)
@@ -2980,7 +3004,7 @@ func _build_reference_chrome():
     club_entry.over_art = true   # R36: a placa é da arte v7
     club_entry.position = Vector2(22, 16)
     club_entry.size = Vector2(330, 62)
-    club_entry.pressed.connect(open_club)
+    club_entry.pressed.connect(func(): open_premium())   # R63 · SEJA MEMBRO → FRAIHA PREMIUM
     canvas.add_child(club_entry)
     ref_nodes.append(club_entry)
     refresh_club()
