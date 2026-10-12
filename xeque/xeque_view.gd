@@ -61,6 +61,7 @@ var vignette_layout := ""
 # desfocada cobre a tela inteira (janela do navegador mais larga/baixa que 16:9 não mostra faixas pretas).
 const SCENE_SOFT := preload("res://xeque/art/mesa/mesa_cena_soft.png")   # tools/xeque_scene_soft.py
 const SCENE_BLUR := preload("res://xeque/art/mesa/mesa_cena_blur.png")
+const SCENE_FULL := preload("res://xeque/art/mesa/mesa_cena_com_tapete.png")   # R71: celular, cena nítida inteira
 
 func _vignette() -> ImageTexture:
     if vignette != null and vignette_layout == ui.layout: return vignette
@@ -287,8 +288,8 @@ func _draw():
     ui.hits.clear()
     var vs := size
     draw_rect(Rect2(Vector2.ZERO, vs), Color("070b0a"))
-    if ui.mode == "game":
-        # fundo que cobre a janela toda: a própria cena, desfocada e um pouco mais escura
+    if ui.mode == "game" and desk():
+        # fundo que cobre a janela toda: a própria cena, desfocada e um pouco mais escura (no celular: _draw_scene_full)
         var cov := maxf(vs.x / 1672.0, vs.y / 941.0)
         var cs := Vector2(1672, 941) * cov
         draw_texture_rect(SCENE_BLUR, Rect2((vs - cs) / 2.0, cs), false, Color(0.62, 0.6, 0.58))
@@ -319,6 +320,9 @@ func _draw_scene():
     var sc: Array = L().scene
     var s: float = sc[0]
     var o: Vector2 = sc[1]
+    if not desk():
+        _draw_scene_full(Rect2(o, Vector2(1672, 941) * s))
+        return
     draw_texture_rect(SCENE_SOFT, Rect2(o, Vector2(1672, 941) * s), false)
     var d: Vector2 = ui.design
     draw_texture_rect(_vignette(), Rect2(Vector2.ZERO, d), false)
@@ -329,6 +333,41 @@ func _draw_scene():
     draw_polygon(PackedVector2Array([Vector2(-2000, end_y - fade), Vector2(d.x + 2000, end_y - fade), Vector2(d.x + 2000, end_y), Vector2(-2000, end_y)]),
         PackedColorArray([Color(shade, 0.0), Color(shade, 0.0), shade, shade]))
     if end_y < d.y + 600: draw_rect(Rect2(-2000, end_y, d.x + 4000, 600), shade)
+
+## R71 · celular (em pé e deitado): o cenário inteiro, nítido e sem escurecer. A arte fica no mesmo lugar (o tabuleiro
+## dela continua sob o tabuleiro do jogo) e continua para os lados/cima/baixo em espelho, até cobrir a tela toda —
+## sem a cópia desfocada e apagada atrás nem a vinheta/sombra que deixavam as bordas "ofuscadas".
+func _draw_scene_full(a: Rect2):
+    var T: Texture2D = SCENE_FULL
+    var ts := T.get_size()
+    var view := Rect2(-ui.origin / ui.k - Vector2(4, 4), size / ui.k + Vector2(8, 8))
+    var base := Transform2D(0.0, Vector2(ui.k, ui.k), 0.0, ui.origin)
+    # colunas: a arte inteira e, dos lados, ela mesma espelhada (leões, colunas e jardins continuam)
+    for ix in range(-2, 3):
+        var fx := ix % 2 != 0
+        var col := Rect2(a.position + Vector2(ix * a.size.x, 0), a.size)
+        if col.end.x < view.position.x or col.position.x > view.end.x: continue
+        var xf := Transform2D(Vector2(-1.0 if fx else 1.0, 0), Vector2(0, 1), Vector2(col.end.x if fx else col.position.x, col.position.y))
+        draw_set_transform_matrix(base * xf)
+        draw_texture_rect(T, Rect2(Vector2.ZERO, col.size), false)
+        # em cima e embaixo: só uma FAIXA da borda da arte (céu / chão), espelhada em vai-e-vem — nunca o tabuleiro de novo
+        var band := 0.18
+        var bh := col.size.y * band
+        var sh := ts.y * band
+        for side in [-1, 1]:
+            var y0: float = col.position.y if side < 0 else col.end.y
+            var k := 0
+            while k < 12:
+                var yb: float = y0 - (k + 1) * bh if side < 0 else y0 + k * bh
+                if (side < 0 and yb + bh < view.position.y) or (side > 0 and yb > view.end.y): break
+                var mirror := k % 2 == 0          # a 1ª faixa é o espelho da borda; a 2ª volta ao normal…
+                var src := Rect2(0, 0 if side < 0 else ts.y - sh, ts.x, sh)
+                var flip_y: bool = mirror
+                var xf2 := Transform2D(Vector2(-1.0 if fx else 1.0, 0), Vector2(0, -1.0 if flip_y else 1.0), Vector2(col.end.x if fx else col.position.x, yb + (bh if flip_y else 0.0)))
+                draw_set_transform_matrix(base * xf2)
+                draw_texture_rect_region(T, Rect2(Vector2.ZERO, Vector2(col.size.x, bh)), src)
+                k += 1
+    draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
 
 func _draw_game():
     var g = ui.g
@@ -426,7 +465,7 @@ func _draw_mesa_pede():
     var pulse := 0.5 + 0.5 * sin(ui.t * 3.2)
     for i in 6: stair(r.grow(5 + i * 4), 4, Color(1.0, 0.82, 0.3, (0.16 - i * 0.025) * (0.6 + 0.4 * pulse)))
     var landing: float = clampf((ui.mesa_anim - 1.45) / 0.45, 0.0, 1.0) if ui.mesa_anim >= 0.0 else 0.0
-    panel(r, Color("ffd257").lerp(Color("fff3c0"), landing), true)
+    panel(r, Color("ffd257").lerp(Color("fff3c0"), landing), true, NAVY_T, NAVY_B)   # R71: azul do PC
     var compact: bool = ui.layout == "portrait"
     var pad := 18.0 if compact else 20.0
     text("A MESA PEDE", r.position + Vector2(pad, 33 if compact else 35), "ui_sp4", 19 if compact else 21, Color("e8b242"))
@@ -793,7 +832,7 @@ func _draw_meter():
     var r: Rect2 = L().meter
     var who: int = ui.clock_focus()
     var vis: String = ui.clock_visual(who)
-    panel(r)
+    panel(r, Color("e8b242"), false, NAVY_T, NAVY_B)   # R71: azul do PC
     var compact: bool = ui.layout != "desktop"
     text("RELÓGIO DE XEQUE", r.position + Vector2(18, 33 if not compact else 31), "ui_sp4", 21 if not compact else 19, Color("e8b242"))
     var total: int = Rules.CLOCK_SLOTS
