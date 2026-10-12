@@ -8,10 +8,10 @@ from PIL import Image, ImageFilter, ImageEnhance
 
 SRC = "branding/fraiha_loading_splash_r63.png"
 W, H = 1080, 2340
-SCENE = (536, 0, 1136, 705)        # título + peças (arte 1672x941)
+SCENE = (586, 0, 1086, 712)        # título + peças + começo do chão (arte 1672x941)
 BAND = (300, 700, 1372, 900)       # textos + moldura da barra (com chão dos lados, para a emenda sumir)
 BAR = (457, 783, 753, 28)          # miolo da barra na arte (x, y, w, h) — o mesmo do PC
-SCENE_Y, BAND_Y = 250, 1630
+SCENE_Y = 300                      # R74: conteúdo centrado na altura; a faixa da barra encosta na cena
 
 
 def feather_v(img, top, bottom):
@@ -35,7 +35,8 @@ def main(out):
     floor = art.crop((SCENE[0], 600, SCENE[2], 712)).resize((W, H - 1500), Image.LANCZOS)
     floor = ImageEnhance.Brightness(floor.filter(ImageFilter.GaussianBlur(6))).enhance(0.32)
     bg.paste(floor, (0, H - floor.height), feather_v(floor, 160, 0))
-    bg.paste(scene, (0, SCENE_Y), feather_v(scene, 140, 120))
+    bg.paste(scene, (0, SCENE_Y), feather_v(scene, 140, 50))
+    BAND_Y = SCENE_Y + scene.height - 60
     band = art.crop(BAND)
     bs = W / band.width
     band = band.resize((W, int(round(band.height * bs))), Image.LANCZOS)

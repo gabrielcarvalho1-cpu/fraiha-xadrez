@@ -256,7 +256,10 @@ func _relayout():
             fv.base_font = pair[1] if pair[1] is Font else load(pair[1])
             fv.spacing_glyph = pair[2]
             fonts[pair[0]] = fv
-    design = Vector2(1080, 1920) if portrait else Vector2(1920, 1080)
+    design = Vector2(1080, clampf(1080.0 * vs.y / maxf(1.0, vs.x), 1700.0, 2400.0)) if portrait else Vector2(1920, 1080)
+    if portrait:
+        _portrait_layout()
+        _portrait_lobby_layout()
     k = minf(vs.x / design.x, vs.y / design.y)
     origin = (vs - design * k) / 2.0
     _redraw()
@@ -1219,23 +1222,52 @@ func board_rect() -> Rect2:
 ## perfis, tabuleiro, mão, relógio/JOGAR CARTA, ajuda da jogada). Cada bloco = [retângulo na arte, destino].
 ## As placas dos perfis ficam numa faixa "virtual" da arte (x >= 3000), lado a lado, iguais.
 const R57_VSEAT_X := 3000.0
-const PORTRAIT_GAME := [
-    [Rect2(0, 0, 500, 95), Rect2(0, 0, 525, 99.75)],               # título
-    [Rect2(1290, 0, 360, 80), Rect2(694, 8, 378, 84)],              # ícones
-    [Rect2(3000, 0, 740, 108), Rect2(20, 122, 1040, 151.8)],        # placas (faixa virtual)
-    [Rect2(480, 110, 730, 635), Rect2(8, 292, 1064, 925.5)],        # tabuleiro
-    [Rect2(520, 735, 640, 206), Rect2(6, 1262, 720, 231.75)],       # mão
-    [Rect2(30, 640, 330, 280), Rect2(738, 1250, 336, 285.1)],       # relógio + JOGAR CARTA
-    [Rect2(22, 504, 326, 132), Rect2(20, 1556, 1040, 421.1)],       # ajuda da jogada / CANCELAR
-]
+var portrait_game: Array = []
+## R74.1 · em pé a tela usa a ALTURA INTEIRA do aparelho (design 1080 x altura proporcional): tabuleiro de ponta a
+## ponta, cartas maiores logo abaixo e relógio/JOGAR CARTA no fim — sem sobra de cenário embaixo.
+func _portrait_layout():
+    var H: float = design.y
+    var bh: float = 635 * 1080.0 / 730.0
+    var free: float = H - 270.0 - bh          # abaixo das placas, fora o tabuleiro
+    var cs: float = clampf((free - 300.0) * 0.5 / 206.0, 1.35, 1.65)
+    var ts: float = clampf((free - 300.0) * 0.5 / 280.0, 1.0, 1.45)
+    var ch: float = 206.0 * cs
+    var th: float = 280.0 * ts
+    var gap: float = clampf((free - ch - th) / 4.0, 6.0, 90.0)
+    var board := Rect2(0, 270.0 + gap, 1080, bh)
+    var cards := Rect2((1080.0 - 640.0 * cs) / 2.0, board.end.y + gap, 640.0 * cs, ch)
+    var timer := Rect2(1080.0 - 330.0 * ts - 12.0, cards.end.y + gap, 330.0 * ts, th)
+    var rest: float = H - timer.end.y - gap    # sobra (aparelho muito alto): desce tudo por igual
+    if rest > 0.0:
+        board.position.y += rest / 3.0
+        cards.position.y += rest * 2.0 / 3.0
+        timer.position.y += rest
+    portrait_game = [
+        [Rect2(0, 0, 500, 95), Rect2(0, 0, 525, 99.75)],               # título
+        [Rect2(1290, 0, 360, 80), Rect2(694, 8, 378, 84)],              # ícones
+        [Rect2(3000, 0, 740, 108), Rect2(8, 114, 1064, 155.3)],         # placas (faixa virtual)
+        [Rect2(480, 110, 730, 635), board],                             # tabuleiro
+        [Rect2(520, 735, 640, 206), cards],                             # mão
+        [Rect2(30, 640, 330, 280), timer],                              # relógio + JOGAR CARTA
+        [Rect2(22, 504, 326, 132), Rect2(16, timer.position.y, timer.position.x - 32, timer.size.y)],   # ajuda / CANCELAR
+    ]
+
 ## salão (1494x834) em pé: título, ícones, painel do modo, tabuleiro de amostra e botões, um embaixo do outro
-const PORTRAIT_LOBBY := [
-    [Rect2(110, 0, 430, 85), Rect2(0, 4, 473, 93.5)],
-    [Rect2(1158, 6, 310, 62), Rect2(725, 12, 341, 68.2)],
-    [Rect2(180, 135, 660, 440), Rect2(20, 128, 1040, 693.3)],
-    [Rect2(845, 135, 465, 435), Rect2(238, 838, 604.5, 565.5)],
-    [Rect2(440, 575, 615, 235), Rect2(48, 1424, 984, 376)],
-]
+var PORTRAIT_LOBBY: Array = []
+func _portrait_lobby_layout():
+    var H: float = design.y
+    var btn := Rect2(48, H - 376.0 - 40.0, 984, 376)
+    var info := Rect2(20, 128, 1040, 693.3)
+    var room: float = btn.position.y - info.end.y
+    var bs: float = clampf((room - 40.0) / 435.0, 1.1, 1.7)
+    var prev := Rect2((1080.0 - 465.0 * bs) / 2.0, info.end.y + (room - 435.0 * bs) / 2.0, 465.0 * bs, 435.0 * bs)
+    PORTRAIT_LOBBY = [
+        [Rect2(110, 0, 430, 85), Rect2(0, 4, 473, 93.5)],
+        [Rect2(1158, 6, 310, 62), Rect2(725, 12, 341, 68.2)],
+        [Rect2(180, 135, 660, 440), info],
+        [Rect2(845, 135, 465, 435), prev],
+        [Rect2(440, 575, 615, 235), btn],
+    ]
 
 func _block_at(blocks: Array, p: Vector2) -> Array:
     for b in blocks:
@@ -1250,7 +1282,7 @@ func _bmap(blocks: Array, r: Rect2) -> Rect2:
 ## escala da arte no ponto (para o tamanho das letras): no PC é uma só; em pé, a do bloco
 func r57_s_at(p: Vector2, lobby := false) -> float:
     if not portrait: return lobby_s() if lobby else r57_s()
-    var b: Array = _block_at(PORTRAIT_LOBBY if lobby else PORTRAIT_GAME, p)
+    var b: Array = _block_at(PORTRAIT_LOBBY if lobby else portrait_game, p)
     return (b[1] as Rect2).size.x / (b[0] as Rect2).size.x
 
 func r57_s() -> float:
@@ -1258,11 +1290,11 @@ func r57_s() -> float:
     return design.y / R57_SIZE.y
 
 func rp(p: Vector2) -> Vector2:
-    if portrait: return _bmap(PORTRAIT_GAME, Rect2(p, Vector2.ZERO)).position
+    if portrait: return _bmap(portrait_game, Rect2(p, Vector2.ZERO)).position
     return Vector2((design.x - R57_SIZE.x * r57_s()) / 2.0, 0) + p * r57_s()
 
 func rr(r: Rect2) -> Rect2:
-    if portrait: return _bmap(PORTRAIT_GAME, r)
+    if portrait: return _bmap(portrait_game, r)
     return Rect2(rp(r.position), r.size * r57_s())
 
 ## px da referência do salão (1494x834) -> tela de desenho
@@ -1460,13 +1492,10 @@ class TableView extends Control:
     func _portrait_bg(vs: Vector2):
         var wide: Texture2D = ui.r57.mesa_wide
         var src := Rect2(0, 90, 740, 550)
-        var w := vs.x
-        var h := src.size.y * w / src.size.x
-        var y := 0.0
-        while y < vs.y:
-            draw_texture_rect_region(wide, Rect2(0, y, w, h), src)
-            y += h
-        draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.01, 0.05, 0.55))
+        var sc: float = maxf(vs.x / src.size.x, vs.y / src.size.y)
+        var dst := Rect2((vs - src.size * sc) / 2.0, src.size * sc)
+        draw_texture_rect_region(wide, dst, src)    # uma cópia só (sem repetir o cenário)
+        draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.01, 0.05, 0.62))
         draw_rect(Rect2(0, 0, vs.x, ui.origin.y + 104.0 * ui.k), Color(0.05, 0.025, 0.07, 0.92))
 
     ## faixa de cima/baixo: roxo profundo do salão, com uma luz dourada fraca junto da arte
@@ -2152,7 +2181,7 @@ class TableView extends Control:
         var g = ui.g
         var plate: Texture2D = ui.r57.mesa
         if ui.portrait:
-            for i in [0, 1, 3, 5]: draw_texture_rect_region(plate, ui.PORTRAIT_GAME[i][1], ui.PORTRAIT_GAME[i][0])
+            for i in [0, 1, 3, 5]: draw_texture_rect_region(plate, ui.portrait_game[i][1], ui.portrait_game[i][0])
         else: draw_texture_rect(plate, ui.rr(Rect2(Vector2.ZERO, ui.R57_SIZE)), false)
         var sub := "MODO DE CARTAS E CORRIDA"
         if g != null: sub = "RODADA %d - %d X %d PEÕES COROADOS" % [g.round_no, g.team_crowned(0), g.team_crowned(1)]
@@ -2228,7 +2257,7 @@ class TableView extends Control:
         var extra: bool = ui.can_discard_all() or ui.ten_choice() or ui.split_options().size() > 1
         if not choosing and not extra: return
         var pr: Rect2 = ui.rr(Rect2(22, 504, 326, 132))
-        if ui.portrait: pr = Rect2(20, 1556, 1040, 170)
+        if ui.portrait: pr = ui.portrait_game[6][1]
         draw_rect(pr, Color(0.05, 0.02, 0.08, 0.88))
         draw_rect(pr, Color("c99a45"), false, 2.0)
         draw_rect(pr.grow(-5), Color(0.79, 0.6, 0.27, 0.3), false, 1.0)
