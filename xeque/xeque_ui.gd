@@ -742,6 +742,8 @@ func _on_hit(id: String):
         "voice_off":
             var vo = voice()
             if vo != null: vo.leave("user")
+        "voice_info":
+            _flash("A voz funciona nas partidas online com outros jogadores.")
         "voice_ear":
             var vo = voice()
             if vo != null: vo.toggle_speaker()

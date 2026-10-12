@@ -1173,6 +1173,8 @@ func _on_hit(id: String):
         "voice_off":
             var vo = voice()
             if vo != null: vo.leave("user")
+        "voice_info":
+            _flash("A voz funciona nas partidas online com outros jogadores.")
         "voice_ear":
             var vo = voice()
             if vo != null: vo.toggle_speaker()
@@ -2170,7 +2172,16 @@ class TableView extends Control:
                 draw_line(dst.position + Vector2(9, 9), dst.end - Vector2(9, 9), Color("e0503c"), 4.0)
         # FRAIHA Voice (partida online com outro humano): à esquerda dos ícones, no mesmo estilo
         var vo = ui.voice()
-        if not lobby and ui.mode == "game" and vo != null and vo.in_match() and vo.available():
+        var voice_on: bool = vo != null and vo.in_match() and vo.available()
+        if not lobby and ui.mode == "game" and not voice_on:
+            # R77 · o microfone fica SEMPRE no lugar dele na partida; sem voz (bots, navegador sem suporte) fica
+            # apagado e o toque explica onde a voz funciona
+            var dr: Rect2 = ui.rr(Rect2(1230, 12, 54, 53))
+            draw_rect(dr, Color("0a0612"))
+            draw_rect(dr, Color(0.85, 0.66, 0.31, 0.45), false, 2.0)
+            ui.VoiceGlyph.draw_mic(self, dr.grow(-8), "DISCONNECTED", Color(0.85, 0.66, 0.31, 0.45))
+            ui.hits.append({"rect": dr, "id": "voice_info"})
+        if not lobby and ui.mode == "game" and voice_on:
             var vr: Rect2 = ui.rr(Rect2(1230, 12, 54, 53))
             draw_rect(vr, Color("0a0612"))
             draw_rect(vr, ui.GOLD, false, 2.0)

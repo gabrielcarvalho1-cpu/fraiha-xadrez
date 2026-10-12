@@ -8,8 +8,8 @@ extends CanvasLayer
 ## (vencedor comparado com a cor do jogador), nunca só pela cor das peças.
 signal dismissed(result: String)
 
-const VICTORY_ART := preload("res://presentation_v019/results/victory.png")
-const DEFEAT_ART := preload("res://presentation_v019/results/defeat.png")
+const VICTORY_ART := "res://presentation_v019/results/victory.png"   # R77 · só carrega no fim da partida
+const DEFEAT_ART := "res://presentation_v019/results/defeat.png"
 const AUTO_HIDE := 6.0        # segundos até sumir sozinho (0 = só ao clicar)
 const ART_HEIGHT := 0.68      # fração da altura da tela ocupada pela arte
 const ART_MAX_WIDTH := 0.92   # nunca mais largo que isto da tela
@@ -117,7 +117,7 @@ func _layout():
 func show_result(p_result: String):
     if p_result not in ["victory", "defeat"]: return
     result = p_result
-    art.texture = VICTORY_ART if result == "victory" else DEFEAT_ART
+    art.texture = load(VICTORY_ART if result == "victory" else DEFEAT_ART)
     _layout()
     _parts.clear()
     t = 0.0

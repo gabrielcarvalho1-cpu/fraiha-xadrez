@@ -255,7 +255,14 @@ func fullscreen_button(r: Rect2, on: bool):
 ## R45 · FRAIHA Voice: microfone só em partida online com outro humano (no navegador).
 func _draw_voice(lay: Dictionary):
     var vo = ui.voice()
-    if vo == null or not vo.in_match() or not vo.available() or not lay.has("voice"): return
+    if not lay.has("voice"): return
+    if vo == null or not vo.in_match() or not vo.available():
+        # R77 · microfone sempre no lugar; sem voz (bots / navegador sem suporte) fica apagado e o toque explica
+        var dr: Rect2 = lay.voice
+        panel(dr, Color(0.91, 0.70, 0.26, 0.45), false, Color("12382a"), Color("0b2219"))
+        VoiceGlyph.draw_mic(self, dr.grow(-7), "DISCONNECTED", Color(0.96, 0.93, 0.82, 0.45))
+        hit(dr, "voice_info")
+        return
     var r: Rect2 = lay.voice
     var hov: bool = ui.hover_id == "voice"
     panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))

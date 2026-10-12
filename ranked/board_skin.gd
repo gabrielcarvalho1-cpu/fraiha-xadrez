@@ -6,10 +6,11 @@ extends Node
 ## Nenhuma regra muda: os mesmos botões disparam as mesmas ações; o tabuleiro continua sendo o mesmo grid.
 ## Ativa quando: partida RANKED · tema Madeira ("wood") · PC ou celular em pé. Fora disso, tudo volta como era.
 ## Tudo que é alterado fica registrado e é desfeito ao sair (restore) — o layout normal do stage refaz o resto.
-const ART_PC := preload("res://ranked/art/board_pc.png")
-const ART_PC_BOT := preload("res://ranked/art/board_pc_bot.png")
-const ART_MOB_BOT := preload("res://ranked/art/board_mob_bot.png")   # R51 · celular: barra de LANCES no lugar do CHAT, sem voz   # R51 · contra o computador: quadro de lances no lugar do chat
-const ART_MOB := preload("res://ranked/art/board_mob.png")
+## R77 · carregadas só quando o tabuleiro abre (antes eram 4 artes de ~6 MB na memória desde a Home)
+const ART_PC := "res://ranked/art/board_pc.png"
+const ART_PC_BOT := "res://ranked/art/board_pc_bot.png"
+const ART_MOB_BOT := "res://ranked/art/board_mob_bot.png"   # R51 · celular: barra de LANCES no lugar do CHAT, sem voz   # R51 · contra o computador: quadro de lances no lugar do chat
+const ART_MOB := "res://ranked/art/board_mob.png"
 const PC_SIZE := Vector2(1672, 941)
 ## R50 · peças em pixel art do Ranked Madeira (PNGs finais do Aseprite, sem nenhuma alteração).
 ## Rect2 = parte desenhada de cada PNG (o resto é transparente).
@@ -291,7 +292,7 @@ func apply() -> void:
     on = true
     # fundo: a arte; o cenário/tabuleiro pintado do tema e as laterais somem enquanto a pele vale
     var bot_mode: bool = stage.mode == "bot"
-    bg.tex = (ART_MOB_BOT if bot_mode else ART_MOB) if mobile else (ART_PC_BOT if bot_mode else ART_PC)
+    bg.tex = load((ART_MOB_BOT if bot_mode else ART_MOB) if mobile else (ART_PC_BOT if bot_mode else ART_PC))
     bg.rect = Rect2(off, size * k)
     bg.full = Rect2(Vector2.ZERO, vs)
     bg.clean = Rect2() if mobile else PC_CLEAN
