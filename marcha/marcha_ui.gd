@@ -1223,33 +1223,43 @@ func board_rect() -> Rect2:
 ## As placas dos perfis ficam numa faixa "virtual" da arte (x >= 3000), lado a lado, iguais.
 const R57_VSEAT_X := 3000.0
 var portrait_game: Array = []
-## R74.1 · em pé a tela usa a ALTURA INTEIRA do aparelho (design 1080 x altura proporcional): tabuleiro de ponta a
-## ponta, cartas maiores logo abaixo e relógio/JOGAR CARTA no fim — sem sobra de cenário embaixo.
+## R75.1 · em pé a tela usa a ALTURA INTEIRA do aparelho (design 1080 x altura proporcional). De cima para baixo:
+## título/ícones, placas dos perfis, TABULEIRO (centralizado no espaço livre), faixa da ajuda da jogada (só aparece
+## quando há algo a escolher), linha SUA VEZ + JOGAR CARTA (compacta, lado a lado) e as CARTAS rentes ao fim da tela.
 func _portrait_layout():
     var H: float = design.y
-    var bh: float = 635 * 1080.0 / 730.0
-    var free: float = H - 270.0 - bh          # abaixo das placas, fora o tabuleiro
-    var cs: float = clampf((free - 300.0) * 0.5 / 206.0, 1.35, 1.65)
-    var ts: float = clampf((free - 300.0) * 0.5 / 280.0, 1.0, 1.45)
-    var ch: float = 206.0 * cs
-    var th: float = 280.0 * ts
-    var gap: float = clampf((free - ch - th) / 4.0, 6.0, 90.0)
-    var board := Rect2(0, 270.0 + gap, 1080, bh)
-    var cards := Rect2((1080.0 - 640.0 * cs) / 2.0, board.end.y + gap, 640.0 * cs, ch)
-    var timer := Rect2(1080.0 - 330.0 * ts - 12.0, cards.end.y + gap, 330.0 * ts, th)
-    var rest: float = H - timer.end.y - gap    # sobra (aparelho muito alto): desce tudo por igual
-    if rest > 0.0:
-        board.position.y += rest / 3.0
-        cards.position.y += rest * 2.0 / 3.0
-        timer.position.y += rest
+    var top := 270.0
+    var cards_s := 1.62
+    var ch: float = 206.0 * cards_s
+    var row_h := 140.0
+    var bottom_pad := 6.0
+    var bw := 1124.0                             # R75.2 · tabuleiro maior: passa um tiquinho da largura (só a borda da moldura sai)
+    var bh: float = 635.0 * bw / 730.0
+    var maxb: float = H - top - row_h - ch - bottom_pad - 3.0 * 8.0
+    if bh > maxb:                                # aparelho baixo: encolhe para caber
+        bh = maxb
+        bw = 730.0 * bh / 635.0
+    var gap: float = (H - top - bh - row_h - ch - bottom_pad) / 3.0
+    var board := Rect2((1080.0 - bw) / 2.0, top + gap, bw, bh)
+    var row := Rect2(0, board.end.y + gap, 1080, row_h)
+    var cards := Rect2((1080.0 - 640.0 * cards_s) / 2.0, row.end.y + gap, 640.0 * cards_s, ch)
+    # ajuda da jogada: só quando há algo a escolher, por cima do espaço logo acima da linha SUA VEZ
+    var help := Rect2(16, row.position.y - 8.0 - 150.0, 1048, 150)
+    var ss: float = row_h / 122.0               # pergaminho SUA VEZ (arte 280x122)
+    var ps: float = (row_h - 20.0) / 74.0       # botão JOGAR CARTA (arte 290x74)
+    var total: float = 280.0 * ss + 24.0 + 290.0 * ps
+    var x0: float = (1080.0 - total) / 2.0
+    var scroll := Rect2(x0, row.position.y, 280.0 * ss, row_h)
+    var play := Rect2(x0 + 280.0 * ss + 24.0, row.position.y + 10.0, 290.0 * ps, 74.0 * ps)
     portrait_game = [
-        [Rect2(0, 0, 500, 95), Rect2(0, 0, 525, 99.75)],               # título
-        [Rect2(1290, 0, 360, 80), Rect2(694, 8, 378, 84)],              # ícones
-        [Rect2(3000, 0, 740, 108), Rect2(8, 114, 1064, 155.3)],         # placas (faixa virtual)
-        [Rect2(480, 110, 730, 635), board],                             # tabuleiro
-        [Rect2(520, 735, 640, 206), cards],                             # mão
-        [Rect2(30, 640, 330, 280), timer],                              # relógio + JOGAR CARTA
-        [Rect2(22, 504, 326, 132), Rect2(16, timer.position.y, timer.position.x - 32, timer.size.y)],   # ajuda / CANCELAR
+        [Rect2(0, 0, 500, 95), Rect2(0, 0, 525, 99.75)],               # 0 título
+        [Rect2(1150, 0, 500, 80), Rect2(547, 8, 525, 84)],              # 1 ícones (+ microfone/fone da voz, à esquerda)
+        [Rect2(3000, 0, 740, 108), Rect2(8, 114, 1064, 155.3)],         # 2 placas (faixa virtual)
+        [Rect2(480, 110, 730, 635), board],                             # 3 tabuleiro
+        [Rect2(520, 735, 640, 206), cards],                             # 4 mão
+        [Rect2(55, 712, 280, 122), scroll],                             # 5 SUA VEZ / VEZ DE (pergaminho)
+        [Rect2(55, 836, 290, 74), play],                                # 6 JOGAR CARTA
+        [Rect2(22, 504, 326, 132), help],                               # 7 ajuda da jogada / CANCELAR
     ]
 
 ## salão (1494x834) em pé: título, ícones, painel do modo, tabuleiro de amostra e botões, um embaixo do outro
@@ -2175,13 +2185,16 @@ class TableView extends Control:
                 ui.VoiceGlyph.draw_headphones(self, er.grow(-9), vo.speaker_muted, ui.GOLD)
                 ui.hits.append({"rect": er, "id": "voice_ear"})
                 tx = er.position.x - 10
-            ui.VoiceGlyph.draw_status(self, tx, vr.get_center().y, 300, vo.status_text(), 17, Color("e8dcc0"))
+            if not ui.portrait:   # em pé não cabe o texto ao lado (o título está ali); o ícone já mostra o estado
+                ui.VoiceGlyph.draw_status(self, tx, vr.get_center().y, 300, vo.status_text(), 17, Color("e8dcc0"))
 
     func _draw_game_r57():
         var g = ui.g
         var plate: Texture2D = ui.r57.mesa
         if ui.portrait:
-            for i in [0, 1, 3, 5]: draw_texture_rect_region(plate, ui.portrait_game[i][1], ui.portrait_game[i][0])
+            for i in [0, 3, 5, 6]: draw_texture_rect_region(plate, ui.portrait_game[i][1], ui.portrait_game[i][0])
+            var icons_src := Rect2(1290, 0, 360, 80)   # só os ícones da arte; à esquerda fica o lugar do microfone
+            draw_texture_rect_region(plate, ui.rr(icons_src), icons_src)
         else: draw_texture_rect(plate, ui.rr(Rect2(Vector2.ZERO, ui.R57_SIZE)), false)
         var sub := "MODO DE CARTAS E CORRIDA"
         if g != null: sub = "RODADA %d - %d X %d PEÕES COROADOS" % [g.round_no, g.team_crowned(0), g.team_crowned(1)]
@@ -2257,11 +2270,11 @@ class TableView extends Control:
         var extra: bool = ui.can_discard_all() or ui.ten_choice() or ui.split_options().size() > 1
         if not choosing and not extra: return
         var pr: Rect2 = ui.rr(Rect2(22, 504, 326, 132))
-        if ui.portrait: pr = ui.portrait_game[6][1]
+        if ui.portrait: pr = ui.portrait_game[7][1]
         draw_rect(pr, Color(0.05, 0.02, 0.08, 0.88))
         draw_rect(pr, Color("c99a45"), false, 2.0)
         draw_rect(pr.grow(-5), Color(0.79, 0.6, 0.27, 0.3), false, 1.0)
-        var S: float = 1.3 if ui.portrait else ui.r57_s()
+        var S: float = 1.15 if ui.portrait else ui.r57_s()
         var line: String = ui.help_line().to_upper()
         var lines := _wrap(line, "semi_sp", int(15 * S), pr.size.x - 24)
         for li in mini(2, lines.size()):
