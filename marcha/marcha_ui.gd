@@ -247,7 +247,6 @@ func _relayout():
     if root == null: return
     var vs := root.get_viewport_rect().size
     portrait = vs.y > vs.x * 1.15
-    mob_land = not portrait and preload("res://ui_v022/mobile_layout.gd").active(get_viewport())
     desk = not portrait   # R71 · celular deitado usa o visual novo do PC (aprovado); em pé continua o layout próprio
     Layout = LayoutR57 if desk else LayoutStd
     if desk and r57.is_empty():
@@ -1239,18 +1238,16 @@ func lr(r: Rect2) -> Rect2:
 const R57_SEATS := {
     0: {"box": Rect2(1312, 790, 333, 107), "av": Rect2(1342, 807, 78, 79), "x": 1440.0, "base": 855.0, "cap": 20.0, "end": 1628.0},
 }
-## R72 · as três placas dos outros jogadores são iguais (placa_perfil_N.png, 240x108 na escala da arte).
-## PC: lado a lado no topo. Celular deitado: cada um no seu lado (esquerda, topo, direita), um pouco menores.
+## R72 · as três placas dos outros jogadores são iguais (placa_perfil_N.png, 240x108 na escala da arte), cada uma
+## no seu lado da mesa: esquerda (ReiDoBlitz), topo (Lady Torre) e direita (Cavalo_Louco) — no PC e no celular deitado.
 const R57_PLATE := Vector2(240, 108)
-const R57_PLATE_PC := {1: Vector2(657, 58), 2: Vector2(907, 58), 3: Vector2(1157, 58)}       # centros
-const R57_PLATE_MOB := {1: Vector2(374, 433), 2: Vector2(846, 54), 3: Vector2(1335.5, 433)}
-const R57_PLATE_MOB_S := 0.92
-var mob_land := false
+const R57_PLATE_POS := {1: Vector2(374, 433), 2: Vector2(846, 54), 3: Vector2(1335.5, 433)}   # centros
+const R57_PLATE_S := 0.92
 
 func r57_seat(seat: int) -> Dictionary:
     if seat == 0: return R57_SEATS[0]
-    var sc: float = R57_PLATE_MOB_S if mob_land else 1.0
-    var c: Vector2 = (R57_PLATE_MOB if mob_land else R57_PLATE_PC)[seat]
+    var sc: float = R57_PLATE_S
+    var c: Vector2 = R57_PLATE_POS[seat]
     var b := Rect2(c - R57_PLATE * sc / 2.0, R57_PLATE * sc)
     return {"box": b, "av": Rect2(b.position + Vector2(36, 15) * sc, Vector2(81, 75) * sc),
         "x": b.position.x + 128.0 * sc, "base": b.position.y + 63.5 * sc, "cap": 19.0 * sc, "end": b.position.x + 229.0 * sc}

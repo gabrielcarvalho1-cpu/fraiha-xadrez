@@ -223,7 +223,7 @@ PW = 240                               # largura das placas novas (altura = a da
 def seats_top(src, mesa):
     """R72 · a mesa fica sem as placas dos perfis (laterais e topo viram parede) e as três placas, iguais, viram
     imagens próprias (placa_perfil_1/2/3.png, com o retrato do bot) que o jogo desenha onde o layout pedir:
-    PC = lado a lado no topo; celular deitado = esquerda / topo / direita."""
+    PC e celular deitado = esquerda / topo / direita."""
     a = mesa.copy()
     for b in SIDE_BOX: a = fill_from_above(a, b)
     x0, y0, x1, y1 = SRC_TOP
