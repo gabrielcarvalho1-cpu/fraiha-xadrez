@@ -247,7 +247,7 @@ func _relayout():
     if root == null: return
     var vs := root.get_viewport_rect().size
     portrait = vs.y > vs.x * 1.15
-    desk = not portrait and not MobileLayout.active(get_viewport())
+    desk = not portrait   # R71 · celular deitado usa o visual novo do PC (aprovado); em pé continua o layout próprio
     Layout = LayoutR57 if desk else LayoutStd
     if desk and r57.is_empty():
         for key in ["mesa", "salao", "botao_jogar_vazio", "botao_jogar_agora_vazio", "mesa_wide", "salao_wide"]: r57[key] = load("res://marcha/art/r57/%s.png" % key)
