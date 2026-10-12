@@ -35,12 +35,12 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-10", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-11", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
-    check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 1, "10 com todos no Pátio: só a 2ª função (o próximo jogador descarta)")
-    var h1: int = g.hands[1].size()
+    check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 3, "10 com todos no Pátio: só a 2ª função (o próximo jogador, no sentido anti-horário, descarta)")
+    var h1: int = g.hands[3].size()
     var ev10 := g.apply(0, m10[0])
-    check(g.hands[1].size() == h1 - 1 and ev10.size() == 1 and ev10[0].type == "burn" and int(ev10[0].seat) == 1 and g.hands[0].size() == 3, "10: o próximo jogador perde uma carta da mão (sorteada)")
+    check(g.hands[3].size() == h1 - 1 and ev10.size() == 1 and ev10[0].type == "burn" and int(ev10[0].seat) == 3 and g.hands[0].size() == 3, "10: o próximo jogador perde uma carta da mão (sorteada)")
     g.hands[0] = ["A", "10", "4", "J"]
     g.apply(0, mv[0])
     check(g.pawns[0][0].zone == "track" and g.pawns[0][0].pos == 0, "peão sai para o próprio Portão")
@@ -140,10 +140,20 @@ func _initialize():
                 "split":
                     for part in m.parts:
                         if int(part.pawn[0]) != 2: only_ally = false
-                "swap": only_ally = false
+                "swap":
+                    if int(m.pawn[0]) != 2: only_ally = false
     check(only_ally, "fase de ajuda: as cartas movem só o aliado (5 mexe qualquer cor)")
     hp.hands[0] = ["J"]
-    check(hp.legal_moves(0, 0).is_empty(), "R38.3: J nunca troca peça do aliado (sem peão SEU ativo na Muralha, o J não tem jogada)")
+    var jm: Array = hp.legal_moves(0, 0)
+    check(not jm.is_empty() and jm.all(func(m): return int(m.pawn[0]) == 2 and int(m.target[0]) != 2), "R70: depois de coroar os 4, o J troca a partir do peão do ALIADO")
+    var tq = Rules.new()
+    tq.setup(3)
+    tq.turn = 0
+    var seq := []
+    for i in 4:
+        seq.append(tq.turn)
+        tq.next_turn()
+    check(seq == [0, 3, 2, 1], "R70: a vez gira no sentido anti-horário (Marfim → Esmeralda → Ônix → Rubi) %s" % str(seq))
     # ---------- R37 · Ás: sair / 11 / 1;  Rei: só sai da base ----------
     var r7 = Rules.new()
     r7.setup(37)

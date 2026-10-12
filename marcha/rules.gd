@@ -1,7 +1,7 @@
 extends RefCounted
 ## MARCHA REAL — regras (mecânica no estilo Jackaroo, pele FRAIHA). Só lógica: sem desenho, sem rede.
 ##
-## Mesa: 4 reinos em cruz; dupla Marfim(0)+Ônix(2) contra Rubi(1)+Esmeralda(3). Vez no sentido horário 0→1→2→3.
+## Mesa: 4 reinos em cruz; dupla Marfim(0)+Ônix(2) contra Rubi(1)+Esmeralda(3). Vez no sentido ANTI-horário 0→3→2→1 (R70).
 ## Cada reino tem 4 peões: Pátio (casa inicial) → Portão (saída) → Muralha (76 casas, sentido horário)
 ## → Entrada do Salão → Salão do Trono (4 casas). Peão no Salão = coroado.
 ##
@@ -25,7 +25,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-10"  # R51: distribuição garante Ás/Rei para quem tem peão no Pátio
+const RULESET_VERSION := "marcha-real-11"  # R70: J vale para os peões do aliado depois de coroar os 4
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -267,18 +267,18 @@ func legal_moves(seat: int, card_idx: int) -> Array:
                     if pawns[s][i].zone == "track" and (s == who or int(pawns[s][i].pos) != Layout.gate_index(s)) and forward_path(s, i, 5, team_of(s) == team_of(seat)).ok:
                         out.append({"card": card_idx, "rank": rank, "kind": "move", "pawn": [s, i], "steps": 5})
         "J":
-            # R38.4 · a troca sempre parte de um peão SEU na Muralha (nunca do aliado, mesmo depois de coroar
-            # os 4) — inclusive o seu que acabou de sair (no seu Portão). A peça dos OUTROS parada no Portão
-            # dela (acabou de sair) não pode ser trocada.
+            # R38.4 · a troca parte de um peão SEU na Muralha — inclusive o seu que acabou de sair (no seu Portão).
+            # R70 · depois de coroar os 4, o J vale para os peões do ALIADO (como as outras cartas: controlled()).
+            # A peça dos OUTROS parada no Portão dela (acabou de sair) não pode ser trocada.
             for i in 4:
-                var a: Dictionary = pawns[seat][i]
+                var a: Dictionary = pawns[who][i]
                 if a.zone != "track": continue
                 for s in 4:
                     for j in 4:
-                        if s == seat: continue
+                        if s == who: continue
                         var b: Dictionary = pawns[s][j]
                         if b.zone != "track" or Layout.gate_index(s) == b.pos: continue
-                        out.append({"card": card_idx, "rank": rank, "kind": "swap", "pawn": [seat, i], "target": [s, j]})
+                        out.append({"card": card_idx, "rank": rank, "kind": "swap", "pawn": [who, i], "target": [s, j]})
         "7":
             out.append_array(_split_moves(seat, who, card_idx))
         "10":
@@ -368,7 +368,7 @@ static func _ints(a) -> Array:
 ## Próximo jogador (ordem da vez) que ainda tem carta na mão; -1 se ninguém.
 func burn_target(seat: int) -> int:
     for k in range(1, 4):
-        var s := (seat + k) % 4
+        var s := (seat + 4 - k) % 4      # R70: ordem da vez anti-horária
         if not hands[s].is_empty(): return s
     return -1
 
@@ -488,7 +488,7 @@ func _log(text: String):
 
 ## Passa a vez; quando todas as mãos acabam, nova rodada (reparte).
 func next_turn():
-    turn = (turn + 1) % 4
+    turn = (turn + 3) % 4      # R70 · a vez gira no sentido ANTI-horário (Marfim → Esmeralda → Ônix → Rubi); os peões andam no horário
     var empty := true
     for s in 4:
         if not hands[s].is_empty(): empty = false

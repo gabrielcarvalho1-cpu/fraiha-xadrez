@@ -5,7 +5,7 @@
 // Mudou regra no .gd → muda aqui também e regenera o fixture (tools/marcha_parity_fixture.gd).
 const { rngFrom } = require('./rng');
 
-const RULESET_VERSION = 'marcha-real-10';  // R51: distribuição garante Ás/Rei para quem tem peão no Pátio
+const RULESET_VERSION = 'marcha-real-11';  // R70: J vale para os peões do aliado depois de coroar os 4 (R51: Ás/Rei garantido)
 const TRACK = 76;
 const ARM = 19;
 const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -143,13 +143,13 @@ class Marcha {
         break;
       case 'J':
         for (let i = 0; i < 4; i++) {
-          const a = this.pawns[seat][i];      // R38.4: sempre um peão SEU (nunca do aliado), inclusive o que acabou de sair
+          const a = this.pawns[who][i];       // R38.4: um peão SEU, inclusive o que acabou de sair; R70: depois de coroar os 4, do ALIADO
           if (a.zone !== 'track') continue;
           for (let s = 0; s < 4; s++) for (let j = 0; j < 4; j++) {
-            if (s === seat) continue;
+            if (s === who) continue;
             const b = this.pawns[s][j];
             if (b.zone !== 'track' || gateIndex(s) === b.pos) continue;
-            out.push({ card: cardIdx, rank, kind: 'swap', pawn: [seat, i], target: [s, j] });
+            out.push({ card: cardIdx, rank, kind: 'swap', pawn: [who, i], target: [s, j] });
           }
         }
         break;
@@ -234,7 +234,7 @@ class Marcha {
     const ts = mv.target_seat === undefined ? -1 : Math.trunc(Number(mv.target_seat));
     return JSON.stringify([String(mv.kind || ''), Math.trunc(Number(mv.card)), ints(mv.pawn), Math.trunc(Number(mv.steps || 0)), ints(mv.target), parts, ts]);
   }
-  burnTarget(seat) { for (let k = 1; k < 4; k++) { const s = (seat + k) % 4; if (this.hands[s].length) return s; } return -1; }
+  burnTarget(seat) { for (let k = 1; k < 4; k++) { const s = (seat + 4 - k) % 4; if (this.hands[s].length) return s; } return -1; }
   hasAnyMove(seat) { for (let c = 0; c < this.hands[seat].length; c++) if (this.legalMoves(seat, c).length) return true; return false; }
 
   // ---------- aplicar ----------
@@ -314,7 +314,7 @@ class Marcha {
   checkWinner() { for (let t = 0; t < 2; t++) if (this.teamCrowned(t) === 8) this.winner = t; }
   logLine(t) { this.log.unshift(t); if (this.log.length > 8) this.log.length = 8; }
   nextTurn() {
-    this.turn = (this.turn + 1) % 4;
+    this.turn = (this.turn + 3) % 4;   // R70: vez anti-horária (0 → 3 → 2 → 1); os peões andam no horário
     if (this.hands.every(h => !h.length)) { this.round_no += 1; this.deal(); }
   }
   clone() {

@@ -42,13 +42,15 @@ const MOVE_HIT := 0.50       # R50: o toc do movimento.mp3 acontece aos 0,5 s do
 const SFX_R50 := {
     "capture": preload("res://marcha/audio/r50/captura.mp3"),
     "swap": preload("res://marcha/audio/r50/troca.mp3"),
-    "arrive": preload("res://marcha/audio/r50/chegada.mp3"),         # chegada ao Salão (vira DAMA)
+    "arrive": preload("res://marcha/audio/r70/coroacao_do_peao.mp3"),   # R70: coroação do peão (áudio do dono)
+    "exit": preload("res://marcha/audio/r70/saida_do_peao.mp3"),         # R70: saída do peão da base (áudio do dono)
 }
-const SFX_DB := {"promote": -3.0, "arrive": -6.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
+const SFX_DB := {"exit": -6.0, "promote": -3.0, "arrive": -5.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
 
 const BOARD := preload("res://marcha/art/board.png")
 const BG := preload("res://marcha/art/table_bg.png")
 const SYMBOLS := preload("res://marcha/art/simbolos_de_acao.png")
+const CROWN_TEX := preload("res://marcha/art/coroa_coroacao.png")   # R70: coroa da coroação (arte do dono)
 const FONT_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")
 const FONT_BOLD := preload("res://marcha/art/fonts/oswald-latin-700-normal.woff")
 const FONT_SEMI := preload("res://marcha/art/fonts/oswald-latin-600-normal.woff")
@@ -727,7 +729,7 @@ func pick_pawn(w: Array):
     if card_mode == "move" and g.pawns[w[0]][w[1]].zone == "home": return
     var rank: String = g.hands[0][sel_card]
     var mv := my_moves()
-    if rank == "J" and not sel_pawn.is_empty() and sel_pawn != w and int(w[0]) != 0:
+    if rank == "J" and not sel_pawn.is_empty() and sel_pawn != w and int(w[0]) != int(sel_pawn[0]):   # R70: o 1º pode ser do aliado
         for m in mv:
             if m.pawn == sel_pawn and m.target == w:
                 sel_target = w
@@ -1276,7 +1278,7 @@ const TUTORIAL := [
         "intro": "Quatro reinos correm com seus peões ao redor da mesa.",
         "rows": [["SUA DUPLA", "Você é o MARFIM (embaixo) e joga junto com o ÔNIX (em cima)."],
             ["ADVERSÁRIOS", "RUBI e ESMERALDA, também em dupla."],
-            ["A VEZ", "Gira no sentido horário. Cada jogador tem 15 segundos."],
+            ["A VEZ", "Gira no sentido ANTI-horário (os peões andam no horário). Cada jogador tem 15 segundos."],
             ["OBJETIVO", "Coroar os 8 peões da sua dupla antes da outra dupla."]]},
     {"title": "O CAMINHO", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "kind": "steps", "marks": true,
         "rows": [["PÁTIO", "Onde seus 4 peões começam."],
@@ -1289,7 +1291,7 @@ const TUTORIAL := [
         "rows": [["A", "ÁS", "Você escolhe: tira um peão do Pátio, anda 11 casas ou anda 1 casa."],
             ["K", "REI", "Só tira um peão do Pátio."],
             ["Q", "DAMA", "Anda 12 casas."],
-            ["J", "VALETE", "Troca um peão SEU de lugar com qualquer outra peça da mesa (amiga ou adversária)."]]},
+            ["J", "VALETE", "Troca um peão SEU de lugar com qualquer outra peça da mesa. Depois de coroar os 4, vale para os peões do aliado."]]},
     {"title": "AS CARTAS (2/2)", "img": "res://marcha/art/simbolos_de_acao.png", "kind": "cards",
         "rows": [["10", "DEZ", "Anda 10 casas OU faz o próximo jogador descartar 1 carta (sorteada)."],
             ["9 8 6 3 2", "NÚMEROS", "9, 8, 6, 3 e 2: andam o número de casas da carta."],
@@ -1673,26 +1675,26 @@ class TableView extends Control:
         var pd: Dictionary = ui.pending
         if not pd.is_empty() and not ui.busy and g.turn == 0:
             _collect_path(g, pd, dots, dest)
-        # R37 · todas as casas que a peça vai andar ficam coloridas (numeradas) e o destino brilha;
+        # R37 · todas as casas que a peça vai andar ficam acesas e o destino brilha;
         # se o destino tem peão adversário: ABATER (vermelho); peão do aliado: CUIDADO.
         var caps: Dictionary = ui.captures_of(pd) if not pd.is_empty() and not ui.busy and g.turn == 0 else {"enemy": [], "ally": [], "crown": []}
         var pul2 := 0.5 + 0.5 * sin(ui.t * 6.0)
+        # R70 · sem números: as casas do caminho ACENDEM (luz dourada suave) e a casa onde o peão cai acende forte
         for j in dots.size():
             var p: Vector2 = dots[j]
-            draw_circle(p, 19.0, Color(1.0, 0.8, 0.28, 0.42))
-            draw_arc(p, 19.0, 0, TAU, 28, Color(1.0, 0.92, 0.6, 0.9), 2.0)
-            text(str(j + 1), Vector2(p.x - 20, p.y + 8), "bold", 22, Color("3a2404"), 40, HORIZONTAL_ALIGNMENT_CENTER)
+            var pz := 0.85 + 0.15 * sin(ui.t * 5.0 - j * 0.5)          # acende em onda, do peão até o destino
+            draw_circle(p, 25.0, Color(1.0, 0.72, 0.15, 0.30 * pz))
+            draw_circle(p, 19.0, Color(1.0, 0.76, 0.22, 0.62 * pz))
+            draw_arc(p, 19.5, 0, TAU, 28, Color(1.0, 0.95, 0.68, 0.95), 2.5)
         for p in dest:
             var hit_enemy := false
             var hit_ally := false
             for w in caps.enemy: if ui.pawn_point(w[0], w[1]).distance_to(p) < 6.0: hit_enemy = true
             for w in caps.ally: if ui.pawn_point(w[0], w[1]).distance_to(p) < 6.0: hit_ally = true
-            var col := Color("e8323a") if hit_enemy else (Color("ff9a2e") if hit_ally else Color("f3c757"))
-            draw_circle(p, 30.0 + 4.0 * pul2, Color(col.r, col.g, col.b, 0.30))
-            draw_circle(p, 23.0, Color(col.r, col.g, col.b, 0.85))
-            draw_arc(p, 23.0, 0, TAU, 36, Color("fff2c2"), 3.0)
-            if dots.size() > 0 and not hit_enemy and not hit_ally:
-                text(str(dots.size() + 1), Vector2(p.x - 22, p.y + 9), "bold", 26, Color("3a2404"), 44, HORIZONTAL_ALIGNMENT_CENTER)
+            var col := Color("e8323a") if hit_enemy else (Color("ff9a2e") if hit_ally else Color("ffd660"))
+            for gl in 4: draw_circle(p, 26.0 + gl * 7.0 + 4.0 * pul2, Color(col.r, col.g, col.b, 0.22 - gl * 0.05))
+            draw_circle(p, 21.0, Color(col.r, col.g, col.b, 0.62))
+            draw_arc(p, 22.0, 0, TAU, 36, Color("fff2c2"), 3.0)
             if hit_enemy or hit_ally: _tag(p + Vector2(0, -118), "ABATER!" if hit_enemy else "CUIDADO: ALIADO", col)
             elif not caps.crown.is_empty() and p == dest[dest.size() - 1]: _tag(p + Vector2(0, -118), "CHEGADA!", Color("2f9e57"))
         # peões (de cima para baixo, para a base de baixo ficar na frente)
@@ -1718,9 +1720,9 @@ class TableView extends Control:
                 draw_arc(c + Vector2(0, 2), 26.0, 0, TAU, 36, Color(1, 1, 1, 0.95), 5.0)
                 lift = 6.0
             var crowned: bool = g.pawns[w[0]][w[1]].zone == "lane"
-            var tx: Texture2D = ui.pawn_tex[w[0] + (10 if crowned else 0)]
+            var tx: Texture2D = ui.pawn_tex[w[0]]      # R70: coroado continua peão, com a COROA na cabeça (arte do dono)
             var sz: Vector2 = tx.get_size() * (0.34 if ui.desk else ui.PAWN_SCALE)     # R57: peões do tamanho da arte final
-            if ui.desk and not crowned:   # R66/R68: no Pátio do tamanho da casa; na Muralha menor, do tamanho da conta
+            if ui.desk:   # R66/R68: no Pátio do tamanho da casa; na Muralha e no Salão menor, do tamanho da conta
                 var hp: float = ui.DESK_PAWN_H if g.pawns[w[0]][w[1]].zone == "home" else ui.DESK_PAWN_H_TRACK
                 sz = tx.get_size() * (hp / tx.get_height())
             var rr := Rect2(Vector2(c.x - sz.x / 2.0, c.y + ui.PAWN_BASE - sz.y - lift), sz)
@@ -1739,6 +1741,10 @@ class TableView extends Control:
                 draw_texture_rect(tx, rr, false, Color(1, 1, 1, alpha))
                 draw_set_transform(o0, 0.0, Vector2(sc0, sc0))
             else: draw_texture_rect(tx, rr, false, Color(1, 1, 1, alpha))
+            if crowned and not ui.anim_rot.has(key):
+                var cw: float = rr.size.x * 1.05
+                var crr := Rect2(Vector2(rr.get_center().x - cw / 2.0, rr.position.y - cw * 0.62), Vector2(cw, cw))
+                draw_texture_rect(Crisp.at(ui.CROWN_TEX, crr.size * ui.k * s) if ui.desk else ui.CROWN_TEX, crr, false, Color(1, 1, 1, alpha))
             var pw: Dictionary = g.pawns[w[0]][w[1]]
             if pw.zone == "track" and int(pw.pos) == ui.Layout.gate_index(w[0]) and not ui.anim.has(key):
                 # R37 · peão no PRÓPRIO Portão: escudo — bloqueia a casa (ninguém passa nem cai nela)
@@ -1786,11 +1792,19 @@ class TableView extends Control:
                 var d := (24.0 + 110.0 * ease) * z
                 var q := p + Vector2.from_angle(a2) * d + Vector2(0, 60.0 * k * k * z)
                 draw_circle(q, (5.0 * fade + 1.0) * z, Color(1.0, 0.95, 0.7, fade))
+            # R70 · a COROA (arte do dono) desce grande sobre o peão, encolhe e assenta na cabeça dele
+            var ck := clampf(k * 1.25, 0.0, 1.0)
+            var ce := 1.0 - pow(1.0 - ck, 3.0)
+            var cs: float = lerpf(280.0, 60.0, ce) * z * 0.5
+            var cpos := p + Vector2(0, lerpf(-160.0, -34.0, ce) * z * 0.5)
+            var ca := clampf(1.0 - maxf(0.0, k - 0.75) * 4.0, 0.0, 1.0)
+            for gl in 3: draw_circle(cpos, cs * (0.55 + gl * 0.18), Color(1.0, 0.85, 0.4, (0.20 - gl * 0.05) * ca))
+            draw_texture_rect(ui.CROWN_TEX, Rect2(cpos - Vector2(cs, cs) / 2.0, Vector2(cs, cs)), false, Color(1, 1, 1, ca))
             # texto subindo
-            var ty := p.y - (70.0 + 50.0 * ease) * z
+            var ty := p.y - (70.0 + 50.0 * ease) * z - 40.0
             var ta := clampf(fade * 1.6, 0.0, 1.0)
-            text("VIROU DAMA!", Vector2(p.x - 300 + 4, ty + 4), "title", 76, Color(0.1, 0.05, 0.0, 0.7 * ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
-            text("VIROU DAMA!", Vector2(p.x - 300, ty), "title", 76, Color(1.0, 0.86, 0.36, ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
+            text("COROADO!", Vector2(p.x - 300 + 4, ty + 4), "title", 76, Color(0.1, 0.05, 0.0, 0.7 * ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
+            text("COROADO!", Vector2(p.x - 300, ty), "title", 76, Color(1.0, 0.86, 0.36, ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
 
     ## Etiqueta (ABATER / CUIDADO) presa acima de uma casa do tabuleiro, pulsando.
     ## R37.3 · cartas voando da mão / da placa até o monte (arco, giro e encolhendo).
