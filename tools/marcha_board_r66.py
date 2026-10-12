@@ -202,6 +202,65 @@ def remove_panel(a, box):
     return np.clip(res + 0.5, 0, 255).astype(np.uint8)
 
 
+# ---------- R72 · perfis no topo ----------
+def fill_from_above(a, box, pad=6, feather=None, shift=None):
+    """Tira a placa: a parede logo acima desce para o lugar dela (colunas são verticais) e a emenda é resolvida
+    por clonagem de Poisson (as bordas casam com o que está em volta)."""
+    x0,y0,x1,y1 = box; x0-=pad; y0-=pad; x1+=pad; y1+=pad
+    h = y1-y0; sh = shift or h
+    m = 14
+    src = a.copy()
+    src[y0-m:y1+m, x0-m:x1+m] = a[y0-m-sh:y1+m-sh, x0-m:x1+m]
+    mask = np.zeros(a.shape[:2], np.uint8); mask[y0-m//2:y1+m//2, x0-m//2:x1+m//2] = 255
+    c = ((x0+x1)//2, (y0+y1)//2)
+    return cv2.seamlessClone(src, a, mask, c, cv2.NORMAL_CLONE)
+
+SRC_TOP = (645, 4, 1047, 112)          # placa do topo na arte original
+AV_TOP = (681, 19, 762, 94)            # moldura do retrato dentro dela
+SIDE_AV = {1: (279, 385, 355, 474), 3: (1222, 385, 1306, 474)}
+SIDE_BOX = [(262, 371, 486, 495), (1206, 371, 1465, 495)]
+PW = 240                               # largura das placas novas (altura = a da original, 108)
+def seats_top(src, mesa):
+    """R72 · a mesa fica sem as placas dos perfis (laterais e topo viram parede) e as três placas, iguais, viram
+    imagens próprias (placa_perfil_1/2/3.png, com o retrato do bot) que o jogo desenha onde o layout pedir:
+    PC = lado a lado no topo; celular deitado = esquerda / topo / direita."""
+    a = mesa.copy()
+    for b in SIDE_BOX: a = fill_from_above(a, b)
+    x0, y0, x1, y1 = SRC_TOP
+    # topo: a parede à direita da placa (vela, hera) se repete no lugar dela; emenda por Poisson
+    w = x1 - x0
+    srcimg = a.copy()
+    tile = a[0:y1 + 14, x1 + 6:x1 + 6 + w // 2 + 2]
+    for k in range(2):
+        xs = x0 - 10 + k * (w // 2 + 2)
+        srcimg[0:y1 + 14, xs:xs + tile.shape[1]] = tile[:, :min(tile.shape[1], a.shape[1] - xs)]
+    mask = np.zeros(a.shape[:2], np.uint8); mask[1:y1 + 8, x0 - 6:x1 + 6] = 255
+    a = cv2.seamlessClone(srcimg, a, mask, ((x0 + x1) // 2, (y1 + 9) // 2), cv2.NORMAL_CLONE)
+    # placas: corte da placa original com fundo transparente (o que difere da parede refeita é placa)
+    plate = src[y0:y1, x0:x1]
+    diff = np.abs(plate.astype(np.int16) - a[y0:y1, x0:x1].astype(np.int16)).sum(2)
+    # miolo da placa é sempre placa; só na borda (cantos ornamentados) o que é parede fica transparente
+    alpha = np.clip((diff - 50) * 6, 0, 255).astype(np.uint8)
+    alpha[10:-10, 10:-10] = 255
+    alpha = cv2.GaussianBlur(alpha, (0, 0), 0.7)
+    half = PW // 2
+    cut = lambda img: np.concatenate([img[:, :half], img[:, img.shape[1] - (PW - half):]], 1)
+    rgb, al = cut(plate), cut(alpha[..., None])
+    ax0, ay0, ax1, ay1 = [v - o for v, o in zip(AV_TOP, (x0, y0, x0, y0))]
+    for s in (1, 2, 3):
+        p = rgb.copy()
+        if s in SIDE_AV:
+            l, t, r, bb = SIDE_AV[s]
+            por = src[t:bb, l:r]
+            tw, th = ax1 - ax0, ay1 - ay0
+            k = max(tw / por.shape[1], th / por.shape[0])
+            big = cv2.resize(por, (int(np.ceil(por.shape[1] * k)), int(np.ceil(por.shape[0] * k))), interpolation=cv2.INTER_AREA)
+            ox, oy = (big.shape[1] - tw) // 2, (big.shape[0] - th) // 2
+            p[ay0:ay1, ax0:ax1] = big[oy:oy + th, ox:ox + tw]
+        Image.fromarray(np.concatenate([p, al], 2), "RGBA").save(os.path.join(ROOT, "marcha/art/r57/placa_perfil_%d.png" % s), optimize=True)
+    return a
+
+
 def diamond_alpha(w, h, feather=1.5):
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     d = np.abs(xx - (w - 1) / 2.0) / (w / 2.0) + np.abs(yy - (h - 1) / 2.0) / (h / 2.0)
@@ -217,6 +276,8 @@ def main():
         gate_bead(mesa, (g[0] + ox, g[1] + oy), (nb[0] + ox, nb[1] + oy), GATE_TINT[seat])
     # 0b) R69 · sai o painel "Você" do canto de baixo à direita (cenário refeito por textura)
     mesa = remove_panel(mesa, YOU_PANEL)
+    # 0c) R72 · placas dos três perfis: iguais, lado a lado no topo (as laterais voltam a ser parede)
+    mesa = seats_top(load(MESA_R57), mesa)
     # 1) losangos antigos e círculos de silhueta saem da mesa (recomposição a partir da pedra em volta)
     hole = np.zeros(mesa.shape[:2], np.uint8)
     for (cx, cy) in HOMES_R57.values():

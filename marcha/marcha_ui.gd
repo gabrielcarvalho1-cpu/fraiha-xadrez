@@ -247,10 +247,11 @@ func _relayout():
     if root == null: return
     var vs := root.get_viewport_rect().size
     portrait = vs.y > vs.x * 1.15
+    mob_land = not portrait and preload("res://ui_v022/mobile_layout.gd").active(get_viewport())
     desk = not portrait   # R71 · celular deitado usa o visual novo do PC (aprovado); em pé continua o layout próprio
     Layout = LayoutR57 if desk else LayoutStd
     if desk and r57.is_empty():
-        for key in ["mesa", "salao", "botao_jogar_vazio", "botao_jogar_agora_vazio", "mesa_wide", "salao_wide"]: r57[key] = load("res://marcha/art/r57/%s.png" % key)
+        for key in ["mesa", "salao", "botao_jogar_vazio", "botao_jogar_agora_vazio", "mesa_wide", "salao_wide", "placa_perfil_1", "placa_perfil_2", "placa_perfil_3"]: r57[key] = load("res://marcha/art/r57/%s.png" % key)
         for pair in [["r57_name", "res://marcha/art/fonts/oswald-latin-400-normal.woff", 0], ["r57_head", FONT_SEMI, 1], ["r57_bold", FONT_BOLD, 0]]:
             var fv := FontVariation.new()
             fv.base_font = pair[1] if pair[1] is Font else load(pair[1])
@@ -329,7 +330,7 @@ func _snap_origin():
 func seat_card_from(seat: int) -> Rect2:
     var r: Rect2
     if desk:
-        r = rr(Rect2(R57_SEATS[seat].av))
+        r = rr(Rect2(r57_seat(seat).av))
         return Rect2(r.get_center() - Vector2(46, 64), Vector2(92, 128))
     if portrait: r = [Rect2(20, 1563, 130, 130), Rect2(20, 278, 272, 116), Rect2(360, 138, 360, 124), Rect2(788, 278, 272, 116)][seat]
     else: r = [Rect2(40, 898, 390, 124), Rect2(40, 262, 390, 122), Rect2(40, 120, 390, 122), Rect2(40, 404, 390, 122)][seat]
@@ -1237,10 +1238,22 @@ func lr(r: Rect2) -> Rect2:
 ## perfis da referência (só avatar + nome): caixa, retrato, x do nome, linha de base, altura das maiúsculas, fim
 const R57_SEATS := {
     0: {"box": Rect2(1312, 790, 333, 107), "av": Rect2(1342, 807, 78, 79), "x": 1440.0, "base": 855.0, "cap": 20.0, "end": 1628.0},
-    1: {"box": Rect2(262, 371, 224, 124), "av": Rect2(279, 385, 76, 89), "x": 368.5, "base": 434.0, "cap": 18.0, "end": 480.0},
-    2: {"box": Rect2(645, 4, 402, 108), "av": Rect2(681, 19, 81, 75), "x": 790.0, "base": 67.5, "cap": 25.0, "end": 1030.0},
-    3: {"box": Rect2(1206, 371, 259, 124), "av": Rect2(1222, 385, 84, 89), "x": 1317.5, "base": 434.0, "cap": 18.0, "end": 1458.0},
 }
+## R72 · as três placas dos outros jogadores são iguais (placa_perfil_N.png, 240x108 na escala da arte).
+## PC: lado a lado no topo. Celular deitado: cada um no seu lado (esquerda, topo, direita), um pouco menores.
+const R57_PLATE := Vector2(240, 108)
+const R57_PLATE_PC := {1: Vector2(657, 58), 2: Vector2(907, 58), 3: Vector2(1157, 58)}       # centros
+const R57_PLATE_MOB := {1: Vector2(374, 433), 2: Vector2(846, 54), 3: Vector2(1335.5, 433)}
+const R57_PLATE_MOB_S := 0.92
+var mob_land := false
+
+func r57_seat(seat: int) -> Dictionary:
+    if seat == 0: return R57_SEATS[0]
+    var sc: float = R57_PLATE_MOB_S if mob_land else 1.0
+    var c: Vector2 = (R57_PLATE_MOB if mob_land else R57_PLATE_PC)[seat]
+    var b := Rect2(c - R57_PLATE * sc / 2.0, R57_PLATE * sc)
+    return {"box": b, "av": Rect2(b.position + Vector2(36, 15) * sc, Vector2(81, 75) * sc),
+        "x": b.position.x + 128.0 * sc, "base": b.position.y + 63.5 * sc, "cap": 19.0 * sc, "end": b.position.x + 229.0 * sc}
 const R57_ICONS := [["fullscreen", Rect2(1300, 12, 54, 53)], ["mute_music", Rect2(1370, 12, 54, 53)], ["mute_fx", Rect2(1440, 12, 54, 53)], ["help", Rect2(1510, 12, 54, 53)], ["menu", Rect2(1577, 12, 54, 53)]]
 const R57_TIMER := Rect2(62, 720, 265, 107)
 const R57_PLAY := Rect2(62, 840, 273, 62)
@@ -2094,8 +2107,9 @@ class TableView extends Control:
     ## perfil: só avatar + nome (a moldura é da arte); brilho dourado em quem está na vez
     func _r57_seat(seat: int):
         var g = ui.g
-        var d: Dictionary = ui.R57_SEATS[seat]
+        var d: Dictionary = ui.r57_seat(seat)
         var box: Rect2 = ui.rr(Rect2(d.box))
+        if seat > 0: draw_texture_rect(ui.r57["placa_perfil_%d" % seat], box, false)
         ui.hits.append({"rect": box, "id": "seat_%d" % seat})
         if g != null and g.turn == seat and ui.mode == "game":
             var pz := 0.65 + 0.35 * sin(ui.t * 4.0)
@@ -2109,7 +2123,17 @@ class TableView extends Control:
         if ui.online: ui.VoiceGlyph.draw_seat_voice(self, av, ui.voice(), seat)
         var gone: bool = ui.online and seat < ui.players.size() and (bool(ui.players[seat].get("left", false)) or not bool(ui.players[seat].get("connected", true)))
         var nm: String = ui.names[seat]
-        rtext(nm, Vector2(d.x, d.base), "r57_name", float(d.cap) / 0.81, Color("8a8478") if gone else Color("f4efe6"), -1.0, HORIZONTAL_ALIGNMENT_LEFT, float(d.end) - float(d.x))
+        rtext(nm, Vector2(d.x, d.base), "r57_name", _seat_name_fs(), Color("8a8478") if gone else Color("f4efe6"), -1.0, HORIZONTAL_ALIGNMENT_LEFT, float(d.end) - float(d.x))
+
+    ## R72 · as três placas do topo são iguais: o nome usa o MESMO tamanho nas três (o maior que cabe em todas)
+    func _seat_name_fs() -> float:
+        var S: float = ui.r57_s()
+        var fs: float = float(ui.r57_seat(1).cap) / 0.81
+        for seat in [1, 2, 3]:
+            var d: Dictionary = ui.r57_seat(seat)
+            var room: float = (float(d.end) - float(d.x)) * S
+            while fs > 10.0 and text_w(String(ui.names[seat]), "r57_name", int(round(fs * S))) > room: fs -= 0.5
+        return fs
 
     ## SUA VEZ + tempo (a ampulheta e o pergaminho são da arte)
     func _r57_timer():
