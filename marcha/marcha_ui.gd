@@ -247,7 +247,7 @@ func _relayout():
     if root == null: return
     var vs := root.get_viewport_rect().size
     portrait = vs.y > vs.x * 1.15
-    desk = not portrait   # R71 · celular deitado usa o visual novo do PC (aprovado); em pé continua o layout próprio
+    desk = true   # R71 deitado / R74 em pé: o visual novo do PC em todo lugar (em pé, por blocos: PORTRAIT_GAME/LOBBY)
     Layout = LayoutR57 if desk else LayoutStd
     if desk and r57.is_empty():
         for key in ["mesa", "salao", "botao_jogar_vazio", "botao_jogar_agora_vazio", "mesa_wide", "salao_wide", "placa_perfil_1", "placa_perfil_2", "placa_perfil_3"]: r57[key] = load("res://marcha/art/r57/%s.png" % key)
@@ -1215,23 +1215,67 @@ func board_rect() -> Rect2:
 
 # ---------------------------------------------------------------- R57 · coordenadas das referências finais
 ## px da referência da partida (1672x941) -> tela de desenho (1920x1080)
+## R74 · celular EM PÉ (tela 1080x1920): a mesma arte, em BLOCOS reposicionados (título, ícones, placas dos
+## perfis, tabuleiro, mão, relógio/JOGAR CARTA, ajuda da jogada). Cada bloco = [retângulo na arte, destino].
+## As placas dos perfis ficam numa faixa "virtual" da arte (x >= 3000), lado a lado, iguais.
+const R57_VSEAT_X := 3000.0
+const PORTRAIT_GAME := [
+    [Rect2(0, 0, 500, 95), Rect2(0, 0, 525, 99.75)],               # título
+    [Rect2(1290, 0, 360, 80), Rect2(694, 8, 378, 84)],              # ícones
+    [Rect2(3000, 0, 740, 108), Rect2(20, 122, 1040, 151.8)],        # placas (faixa virtual)
+    [Rect2(480, 110, 730, 635), Rect2(8, 292, 1064, 925.5)],        # tabuleiro
+    [Rect2(520, 735, 640, 206), Rect2(6, 1262, 720, 231.75)],       # mão
+    [Rect2(30, 640, 330, 280), Rect2(738, 1250, 336, 285.1)],       # relógio + JOGAR CARTA
+    [Rect2(22, 504, 326, 132), Rect2(20, 1556, 1040, 421.1)],       # ajuda da jogada / CANCELAR
+]
+## salão (1494x834) em pé: título, ícones, painel do modo, tabuleiro de amostra e botões, um embaixo do outro
+const PORTRAIT_LOBBY := [
+    [Rect2(110, 0, 430, 85), Rect2(0, 4, 473, 93.5)],
+    [Rect2(1158, 6, 310, 62), Rect2(725, 12, 341, 68.2)],
+    [Rect2(180, 135, 660, 440), Rect2(20, 128, 1040, 693.3)],
+    [Rect2(845, 135, 465, 435), Rect2(238, 838, 604.5, 565.5)],
+    [Rect2(440, 575, 615, 235), Rect2(48, 1424, 984, 376)],
+]
+
+func _block_at(blocks: Array, p: Vector2) -> Array:
+    for b in blocks:
+        if (b[0] as Rect2).grow(1.0).has_point(p): return b
+    return blocks[3] if blocks.size() > 3 else blocks[0]
+
+func _bmap(blocks: Array, r: Rect2) -> Rect2:
+    var b: Array = _block_at(blocks, r.get_center() if r.size != Vector2.ZERO else r.position)
+    var sc: float = (b[1] as Rect2).size.x / (b[0] as Rect2).size.x
+    return Rect2((b[1] as Rect2).position + (r.position - (b[0] as Rect2).position) * sc, r.size * sc)
+
+## escala da arte no ponto (para o tamanho das letras): no PC é uma só; em pé, a do bloco
+func r57_s_at(p: Vector2, lobby := false) -> float:
+    if not portrait: return lobby_s() if lobby else r57_s()
+    var b: Array = _block_at(PORTRAIT_LOBBY if lobby else PORTRAIT_GAME, p)
+    return (b[1] as Rect2).size.x / (b[0] as Rect2).size.x
+
 func r57_s() -> float:
+    if portrait: return r57_s_at(Vector2(845, 400))
     return design.y / R57_SIZE.y
 
 func rp(p: Vector2) -> Vector2:
+    if portrait: return _bmap(PORTRAIT_GAME, Rect2(p, Vector2.ZERO)).position
     return Vector2((design.x - R57_SIZE.x * r57_s()) / 2.0, 0) + p * r57_s()
 
 func rr(r: Rect2) -> Rect2:
+    if portrait: return _bmap(PORTRAIT_GAME, r)
     return Rect2(rp(r.position), r.size * r57_s())
 
 ## px da referência do salão (1494x834) -> tela de desenho
 func lobby_s() -> float:
+    if portrait: return r57_s_at(Vector2(500, 300), true)
     return design.y / R57_LOBBY.y
 
 func lp(p: Vector2) -> Vector2:
+    if portrait: return _bmap(PORTRAIT_LOBBY, Rect2(p, Vector2.ZERO)).position
     return Vector2((design.x - R57_LOBBY.x * lobby_s()) / 2.0, 0) + p * lobby_s()
 
 func lr(r: Rect2) -> Rect2:
+    if portrait: return _bmap(PORTRAIT_LOBBY, r)
     return Rect2(lp(r.position), r.size * lobby_s())
 
 ## perfis da referência (só avatar + nome): caixa, retrato, x do nome, linha de base, altura das maiúsculas, fim
@@ -1248,6 +1292,9 @@ func r57_seat(seat: int) -> Dictionary:
     if seat == 0: return R57_SEATS[0]
     var sc: float = R57_PLATE_S
     var c: Vector2 = R57_PLATE_POS[seat]
+    if portrait:   # R74 · em pé: as três lado a lado no topo (faixa virtual da arte → bloco das placas)
+        sc = 1.0
+        c = Vector2(R57_VSEAT_X + 120.0 + (seat - 1) * 250.0, 54.0)
     var b := Rect2(c - R57_PLATE * sc / 2.0, R57_PLATE * sc)
     return {"box": b, "av": Rect2(b.position + Vector2(36, 15) * sc, Vector2(81, 75) * sc),
         "x": b.position.x + 128.0 * sc, "base": b.position.y + 63.5 * sc, "cap": 19.0 * sc, "end": b.position.x + 229.0 * sc}
@@ -1365,7 +1412,9 @@ class TableView extends Control:
         if ui == null: return
         ui.hits.clear()
         var vs := size
-        if ui.desk:
+        if ui.desk and ui.portrait:
+            _portrait_bg(vs)
+        elif ui.desk:
             # R65 · janela fora de 16:9: a arte CONTINUA nas sobras (as bordas dela, espelhadas, coladas na própria
             # arte) — antes uma cópia inteira escurecida e ampliada ficava atrás e parecia um fundo duplicado.
             var lob: bool = ui.mode == "lobby"
@@ -1405,6 +1454,20 @@ class TableView extends Control:
         var deep := Color(0.055, 0.03, 0.07)
         if a.position.y > 0.5: _band_v(Rect2(0, 0, vs.x, a.position.y), deep, true)
         if vs.y - a.end.y > 0.5: _band_v(Rect2(0, a.end.y, vs.x, vs.y - a.end.y), deep, false)
+
+    ## R74 · fundo do celular em pé: a parede do salão (lado esquerdo da mesa larga, sem painéis) repetida na
+    ## altura da tela e escurecida, com a faixa escura do topo atrás do título e dos ícones
+    func _portrait_bg(vs: Vector2):
+        var wide: Texture2D = ui.r57.mesa_wide
+        var src := Rect2(0, 90, 740, 550)
+        var w := vs.x
+        var h := src.size.y * w / src.size.x
+        var y := 0.0
+        while y < vs.y:
+            draw_texture_rect_region(wide, Rect2(0, y, w, h), src)
+            y += h
+        draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.01, 0.05, 0.55))
+        draw_rect(Rect2(0, 0, vs.x, ui.origin.y + 104.0 * ui.k), Color(0.05, 0.025, 0.07, 0.92))
 
     ## faixa de cima/baixo: roxo profundo do salão, com uma luz dourada fraca junto da arte
     func _band_v(r: Rect2, deep: Color, toward_bottom: bool):
@@ -2023,7 +2086,7 @@ class TableView extends Control:
     # ------------------------------------------------------------ R57 · PC: partida e salão das referências finais
     ## texto em px da referência da partida (pos = linha de base; fs = tamanho na referência)
     func rtext(s: String, pos: Vector2, fk: String, fs: float, col: Color, width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT, room := -1.0, outline := 0, ocol := Color.BLACK, lobby := false):
-        var S: float = ui.lobby_s() if lobby else ui.r57_s()
+        var S: float = ui.r57_s_at(pos, lobby)
         var size := int(round(fs * S))
         if room > 0.0:
             while size > 9 and text_w(s, fk, size) > room * S: size -= 1
@@ -2088,7 +2151,9 @@ class TableView extends Control:
     func _draw_game_r57():
         var g = ui.g
         var plate: Texture2D = ui.r57.mesa
-        draw_texture_rect(plate, ui.rr(Rect2(Vector2.ZERO, ui.R57_SIZE)), false)
+        if ui.portrait:
+            for i in [0, 1, 3, 5]: draw_texture_rect_region(plate, ui.PORTRAIT_GAME[i][1], ui.PORTRAIT_GAME[i][0])
+        else: draw_texture_rect(plate, ui.rr(Rect2(Vector2.ZERO, ui.R57_SIZE)), false)
         var sub := "MODO DE CARTAS E CORRIDA"
         if g != null: sub = "RODADA %d - %d X %d PEÕES COROADOS" % [g.round_no, g.team_crowned(0), g.team_crowned(1)]
         rtext(sub, Vector2(187, 64), "r57_head", 17.6, Color("f2c94c"), -1.0, HORIZONTAL_ALIGNMENT_LEFT, 305.0)
@@ -2124,7 +2189,7 @@ class TableView extends Control:
 
     ## R72 · as três placas do topo são iguais: o nome usa o MESMO tamanho nas três (o maior que cabe em todas)
     func _seat_name_fs() -> float:
-        var S: float = ui.r57_s()
+        var S: float = ui.r57_s_at(Vector2(ui.r57_seat(1).x, ui.r57_seat(1).base))
         var fs: float = float(ui.r57_seat(1).cap) / 0.81
         for seat in [1, 2, 3]:
             var d: Dictionary = ui.r57_seat(seat)
@@ -2163,10 +2228,11 @@ class TableView extends Control:
         var extra: bool = ui.can_discard_all() or ui.ten_choice() or ui.split_options().size() > 1
         if not choosing and not extra: return
         var pr: Rect2 = ui.rr(Rect2(22, 504, 326, 132))
+        if ui.portrait: pr = Rect2(20, 1556, 1040, 170)
         draw_rect(pr, Color(0.05, 0.02, 0.08, 0.88))
         draw_rect(pr, Color("c99a45"), false, 2.0)
         draw_rect(pr.grow(-5), Color(0.79, 0.6, 0.27, 0.3), false, 1.0)
-        var S: float = ui.r57_s()
+        var S: float = 1.3 if ui.portrait else ui.r57_s()
         var line: String = ui.help_line().to_upper()
         var lines := _wrap(line, "semi_sp", int(15 * S), pr.size.x - 24)
         for li in mini(2, lines.size()):
@@ -2183,7 +2249,9 @@ class TableView extends Control:
 
     func _draw_lobby_r57():
         var plate: Texture2D = ui.r57.salao
-        draw_texture_rect(plate, ui.lr(Rect2(Vector2.ZERO, ui.R57_LOBBY)), false)
+        if ui.portrait:
+            for b in ui.PORTRAIT_LOBBY: draw_texture_rect_region(plate, b[1], b[0])
+        else: draw_texture_rect(plate, ui.lr(Rect2(Vector2.ZERO, ui.R57_LOBBY)), false)
         _r57_icons(plate, [["fullscreen", Rect2(1165, 12, 50, 50)], ["mute_music", Rect2(1222, 12, 50, 50)], ["mute_fx", Rect2(1282, 12, 50, 50)], ["lobby_tutorial", Rect2(1342, 12, 50, 50)], ["lobby_back", Rect2(1409, 12, 51, 50)]], true)
         # acesso (Club / partida grátis do dia): uma linha discreta no rodapé do painel
         var info: Dictionary = ui.gate_info
