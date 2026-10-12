@@ -632,8 +632,8 @@ func _draw_plate(s: int):
     var elim: bool = st.id == "eliminado"
     var border: Color = STATUS_COLOR.get(st.id, Color("e8b242"))
     var glow: bool = st.id in ["xeque_mate", "com_o_relogio"]
-    var fill_t := Color("1f2322") if elim else Color("154031")
-    var fill_b := Color("141716") if elim else Color("0f2a1e")
+    var fill_t := Color("1f2322") if elim else NAVY_T      # R71: celular no mesmo azul das placas do PC (era verde)
+    var fill_b := Color("141716") if elim else NAVY_B
     var name: String = g.names[s]
     var bot := s != 0
     var tag: String = ui.seat_tag(s)           # R35: "BOT" ou "AMIGO" (online)
