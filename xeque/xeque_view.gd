@@ -924,26 +924,37 @@ func hand_layout() -> Array:
     if desk(): return _desk_hand_layout()
     var g = ui.g
     var hd: Array = L().hand
-    var sc: float = hd[1]
-    var cw := 720.0 * sc
     var n: int = g.hands[0].size()
+    # R80 · celular em pé: na SUA VEZ a mão cresce (zoom suave) e sobe um pouco, para escolher as cartas com folga
+    var z: float = hand_zoom if ui.layout == "portrait" else 0.0
+    var sc: float = hd[1] * lerpf(1.0, 1.75, z)
+    var cw := 720.0 * sc
+    var step := cw * lerpf(0.737, 0.70, z)
+    if n > 1: step = minf(step, (1060.0 - cw * 0.5) / float(n - 1))     # nunca sai da tela
+    var base: Vector2 = Vector2(hd[0]) + Vector2(0, -95.0 * z)
     var out := []
-    var step := cw * 0.737
     var mid := (n - 1) / 2.0
     for i in n:
         var off := i - mid
         var rot := deg_to_rad(4.0 * off) if n > 1 else 0.0
-        var c: Vector2 = hd[0] + Vector2(off * step, absf(off) * absf(off) * cw * 0.024 + absf(off) * cw * 0.026)
+        var c: Vector2 = base + Vector2(off * step, absf(off) * absf(off) * cw * 0.024 + absf(off) * cw * 0.026)
         if i in ui.selected: c.y -= cw * 0.15
         out.append({"c": c, "rot": rot, "sc": sc * 2.0})     # versões do jogo: metade do tamanho do arquivo aprovado
     return out
 
+var hand_zoom := 0.0
+var _zoom_ms := 0
 func _draw_hand():
     if desk(): return _desk_hand()
     var g = ui.g
     var hand: Array = g.hands[0]
-    var lay := hand_layout()
     var my_turn: bool = ui.phase == "" and g.turn == 0 and g.state == Rules.TURN_WAITING and not ui.input_locked
+    var now := Time.get_ticks_msec()
+    var dt := clampf((now - _zoom_ms) / 1000.0, 0.0, 0.1) if _zoom_ms > 0 else 0.0
+    _zoom_ms = now
+    hand_zoom = move_toward(hand_zoom, 1.0 if my_turn else 0.0, dt * 4.0)
+    if hand_zoom > 0.0 and hand_zoom < 1.0: queue_redraw()
+    var lay := hand_layout()
     var landed: int = ui.deal_landed(0)
     for i in hand.size():
         if i >= landed: continue            # distribuição: a carta ainda está voando
