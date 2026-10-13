@@ -31,8 +31,10 @@ func _ready():
         var player = AudioStreamPlayer.new()
         player.volume_db = -14
         player.bus = "Effects"
-        # Web: efeitos pelo mixer do Godot, para o volume/mudo do bus Effects valer também no celular.
-        if OS.has_feature("web"): player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
+        # R81 · Web: efeitos como SAMPLE (tocados pelo próprio navegador). Antes eram STREAM, pelo mixer do Godot,
+        # que nesta build sem threads roda no mesmo laço do jogo: qualquer quadro pesado (Marcha/Xeque no celular)
+        # deixava o som picotando. O mudo/volume do bus Effects é garantido aqui no código (_fx_ok / _fx_db).
+        if OS.has_feature("web"): player.playback_type = AudioServer.PLAYBACK_TYPE_SAMPLE
         add_child(player)
         players.append(player)
     music = AudioStreamPlayer.new()
@@ -46,8 +48,15 @@ func _ready():
     if web_music: _web_music_init()
     refresh_music()
 
+## Efeitos ligados? (bus Effects e Master sem mudo, volume > 0)
+func _fx_ok() -> bool:
+    var b := AudioServer.get_bus_index("Effects")
+    if AudioServer.is_bus_mute(0) or (b >= 0 and AudioServer.is_bus_mute(b)): return false
+    return true
+
 func play_cue(id: String, from_pos := 0.0):
     if not streams.has(id) or players.is_empty(): return
+    if not _fx_ok(): return
     last_cue = id
     var player = players[slot]
     slot = (slot+1)%players.size()
@@ -85,6 +94,7 @@ func set_music_override(path: String):
 ## R34: efeito sonoro de um modo (mesmo bus "Effects": volume e MUTAR EFEITOS valem para ele).
 func play_stream(stream: AudioStream, db := -8.0, pitch := 1.0, from_pos := 0.0):
     if stream == null or players.is_empty(): return
+    if not _fx_ok(): return
     var player = players[slot]
     slot = (slot+1)%players.size()
     player.stream = stream

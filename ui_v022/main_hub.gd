@@ -2421,6 +2421,8 @@ func open_xeque():
         xeque = load("res://xeque/xeque_ui.gd").new()
         xeque.setup(self, get_parent())
         get_parent().add_child(xeque)
+        xeque.closed.connect(func(): _cover_home(false))
+    _cover_home(true)
     xeque.open()
 
 func open_marcha():
@@ -2428,7 +2430,28 @@ func open_marcha():
         marcha = load("res://marcha/marcha_ui.gd").new()
         marcha.setup(self, get_parent())
         get_parent().add_child(marcha)
+        marcha.closed.connect(func(): _cover_home(false))
+    _cover_home(true)
     marcha.open()
+
+## R81 · com a MARCHA ou o XEQUE aberto (tela cheia por cima), a Home de baixo some de verdade: antes ela continuava
+## sendo desenhada e animada escondida atrás (≈ metade do trabalho de cada quadro), o que pesava no celular.
+var _home_covered := false
+var _home_was_visible := true
+var _forest_was_visible := true
+func _cover_home(on: bool):
+    if on == _home_covered: return
+    _home_covered = on
+    var forest = get_parent().get_node_or_null("ForestExtensions")
+    if on:
+        _home_was_visible = root.visible
+        root.visible = false
+        if forest != null:
+            _forest_was_visible = forest.visible
+            forest.visible = false
+    else:
+        root.visible = _home_was_visible
+        if forest != null: forest.visible = _forest_was_visible
 
 ## Club ativo (real OU simulação) → atualiza a fita da Home e o cartão do jogador.
 ## Selo Fundador: cartão da Home (ao lado do nome), Perfil e cartão do celular.
