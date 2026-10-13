@@ -48,10 +48,16 @@ const SFX_R50 := {
 const SFX_DB := {"exit": -6.0, "promote": -3.0, "arrive": -5.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
 
 ## R78 · arte do layout antigo (sem uso desde o visual novo em todo lugar): só carrega se for desenhada
+var _board_tex: Texture2D = null
+var _bg_tex: Texture2D = null
 var BOARD: Texture2D:
-    get: return load("res://marcha/art/board.png")
+    get:
+        if _board_tex == null: _board_tex = load("res://marcha/art/board.png")
+        return _board_tex
 var BG: Texture2D:
-    get: return load("res://marcha/art/table_bg.png")
+    get:
+        if _bg_tex == null: _bg_tex = load("res://marcha/art/table_bg.png")
+        return _bg_tex
 const SYMBOLS := preload("res://marcha/art/simbolos_de_acao.png")
 const CROWN_TEX := preload("res://marcha/art/coroa_coroacao.png")   # R70: coroa da coroação (arte do dono)
 const FONT_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")

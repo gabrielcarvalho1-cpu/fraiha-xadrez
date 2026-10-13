@@ -252,6 +252,7 @@ func _prewarm_step():
 
 func close():
     _tutorial_bg = null   # R78 · solta a memória das artes grandes
+    if view != null and view.has_method("release_art"): view.release_art()
     _result_bg = null
     Crisp.clear_cache()
     _popup_close()

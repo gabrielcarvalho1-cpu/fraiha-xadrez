@@ -8,8 +8,11 @@ signal play_again
 signal back_to_ranked
 signal analyze
 
-var ART: Texture2D:   # R77 · só carrega quando o modal aparece
-    get: return load("res://ranked/art/promo_modal.png")
+var _art: Texture2D = null
+var ART: Texture2D:   # R77 · só carrega quando o modal aparece (R78.1: uma vez, guardada enquanto o modal existe)
+    get:
+        if _art == null: _art = load("res://ranked/art/promo_modal.png")
+        return _art
 const ORIGIN := Vector2(430, 14)          # canto do recorte na tela de referência
 const SCENE := Vector2(1672, 941)
 const FONT_BOLD := preload("res://account/fonts/Cinzel-Bold.woff")
