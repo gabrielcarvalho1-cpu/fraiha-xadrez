@@ -36,6 +36,7 @@ const SFX := {
     "arrive": preload("res://marcha/audio/chegada.wav"), "victory_final": preload("res://marcha/audio/vitoria_final.wav"),
     # R83 · fim da partida = o XEQUE-MATE do modo XEQUE (estouro + voz "XEQUE-MATE!"), para quem ganhar
     "mate_boom": preload("res://xeque/audio/xeque_mate_boom.wav"), "voice_mate": preload("res://xeque/audio/voz_xeque_mate.wav"),
+    "voice_mate_lost": preload("res://xeque/audio/voz_xeque_mate_derrota.mp3"),
     "promote": preload("res://marcha/audio/promocao_dama.wav"),     # R37: fanfarra da chegada (vira DAMA)
     # R50 · sons enviados pelo dono do projeto
     "move": preload("res://marcha/audio/r50/movimento.mp3"),         # a cada casa (toc quando o peão pousa)
@@ -47,7 +48,7 @@ const SFX_R50 := {
     "arrive": preload("res://marcha/audio/r70/coroacao_do_peao.mp3"),   # R70: coroação do peão (áudio do dono)
     "exit": preload("res://marcha/audio/r70/saida_do_peao.mp3"),         # R70: saída do peão da base (áudio do dono)
 }
-const SFX_DB := {"mate_boom": 0.0, "voice_mate": 0.0, "exit": -6.0, "promote": -3.0, "arrive": -5.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
+const SFX_DB := {"mate_boom": 0.0, "voice_mate": 0.0, "voice_mate_lost": -1.0, "exit": -6.0, "promote": -3.0, "arrive": -5.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
 
 ## R78 · arte do layout antigo (sem uso desde o visual novo em todo lugar): só carrega se for desenhada
 var _board_tex: Texture2D = null
@@ -451,9 +452,10 @@ func _finish():
     over_t = 0.0
     # R83 · XEQUE-MATE (o mesmo do modo XEQUE): estouro e, logo depois, a voz; a fanfarra/derrota vem em seguida
     _cue("mate_boom")
-    get_tree().create_timer(0.45).timeout.connect(func(): if mode == "over": _cue("voice_mate"))
     var won: bool = g.winner == 0
-    get_tree().create_timer(2.6).timeout.connect(func(): if mode == "over": _cue("victory_final" if won else "defeat"))
+    # R85 · a sua dupla perdeu: voz sombria "checkmate" com a espada (4,8 s); a derrota toca depois dela
+    get_tree().create_timer(0.45).timeout.connect(func(): if mode == "over": _cue("voice_mate" if won else "voice_mate_lost"))
+    get_tree().create_timer(2.6 if won else 5.4).timeout.connect(func(): if mode == "over": _cue("victory_final" if won else "defeat"))
     _record_history("win" if g.winner == 0 else "loss")
     _show_result_overlay(g.winner == 0)
     _redraw()

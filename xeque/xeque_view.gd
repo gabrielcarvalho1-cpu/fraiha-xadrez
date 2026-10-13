@@ -393,7 +393,6 @@ func _draw_game():
     var mate: bool = ui.phase in ["mate", "elim"]
     # relógio do centro (o de quem está em foco)
     # R35.1 · a torre-relógio só aparece quando alguém errou (o relógio é acionado); fora disso a mesa fica livre
-    if not mate and ui.phase in ["clock", "safe"]: _draw_center_clock()
     _draw_pile()
     for s in 4:
         if mate and s == int(ui.result.loser): continue
@@ -414,6 +413,8 @@ func _draw_game():
     if not mate: _draw_hand()
     _draw_fly()
     if ui.phase in ["reveal", "clock", "safe"]: _draw_reveal(false)
+    # R85 · o relógio acionado aparece sozinho: tela escurece em fade e ele surge grande no centro, POR CIMA das cartas
+    if not mate and ui.phase in ["clock", "safe"]: _draw_center_clock()
     if ui.deal_anim >= 0.0 and ui.intro_anim < 0.0: _draw_deal()
     if ui.mesa_anim >= 0.0 and ui.phase == "": _draw_mesa_anim()
     if ui.phase == "safe": _draw_safe()
@@ -525,19 +526,32 @@ func _draw_como_jogar(r: Rect2):
         y += 9
 
 func _draw_center_clock():
+    var d: Vector2 = ui.design
     var c: Array = L().clock
-    var pos: Vector2 = c[0]
     var vis: String = ui.clock_visual(ui.clock_focus())
     var tex: Texture2D = ui.clock_tex[vis]
+    var pt: float = ui.phase_t
+    # fade: entra escurecendo na fase do relógio; na fase "safe" (não disparou) some aos poucos
+    var a := 1.0
+    if ui.phase == "clock": a = clampf(pt / 0.35, 0.0, 1.0)
+    else: a = 1.0 - clampf((pt - 0.5) / 0.5, 0.0, 1.0)
+    if a <= 0.0: return
+    draw_rect(Rect2(Vector2(-4000, -4000), Vector2(12000, 12000)), Color(0.02, 0.0, 0.01, 0.76 * a))
     var shake := Vector2.ZERO
     if ui.phase == "clock":
-        shake = Vector2(sin(ui.t * 61.0), cos(ui.t * 47.0)) * 3.0
+        shake = Vector2(sin(ui.t * 61.0), cos(ui.t * 47.0)) * 5.0
     elif vis == "quase":
-        shake = Vector2(sin(ui.t * 40.0), 0) * 1.2
-    var pulse := 1.0 + (0.02 * sin(ui.t * 9.0) if vis in ["pulsando", "quase"] or ui.phase == "clock" else 0.0)
+        shake = Vector2(sin(ui.t * 40.0), 0) * 1.5
+    var pulse := 1.0 + (0.03 * sin(ui.t * 9.0) if vis in ["pulsando", "quase"] or ui.phase == "clock" else 0.0)
     var grow := 1.0
-    if ui.phase == "clock": grow = 0.55 + 0.45 * ease(clampf(ui.phase_t / 0.3, 0.0, 1.0), -2.0)   # entra crescendo
-    tex_center(tex, pos + shake, c[1] * 2.0 * pulse * grow)      # versões do jogo têm metade do tamanho do arquivo aprovado
+    if ui.phase == "clock": grow = 0.6 + 0.4 * ease(clampf(pt / 0.35, 0.0, 1.0), -2.0)   # entra crescendo
+    var sc: float = c[1] * 2.0 * (2.2 if ui.layout != "portrait" else 1.8)   # bem maior que o antigo
+    var pos := d / 2.0 + shake
+    # halo vermelho batendo junto
+    var hb := pow(maxf(0.0, sin(ui.t * TAU / 0.62)), 6.0) if ui.phase == "clock" else 0.0
+    var rad := tex.get_size().y * sc * grow * 0.42
+    for i in 6: draw_circle(pos, rad + i * 18, Color(0.85, 0.08, 0.06, (0.05 + 0.05 * hb) * a * (1.0 - i / 6.0)))
+    tex_center(tex, pos, sc * pulse * grow, 0.0, Color(1, 1, 1, a))
 
 func _draw_pile():
     var g = ui.g
@@ -1118,19 +1132,16 @@ func _draw_mate():
 # ---------------------------------------------------------------- tutorial (salão do modo)
 func _draw_tutorial(d: Vector2):
     var portrait: bool = ui.layout == "portrait"
-    if portrait:
-        nine(ui.TUTORIAL_BG, Rect2(Vector2.ZERO, d), 120, 0.55)
-    else:
-        draw_texture_rect(ui.TUTORIAL_BG, Rect2(Vector2.ZERO, d), false)
-    var maroon := Color("7d0f1c")
-    var ink := Color("2a1a10")
+    _tutorial_bg(d, portrait)   # R85 · tema vermelho e branco do tabuleiro (sem a imagem de pergaminho)
+    var maroon := Color("ffd257")
+    var ink := Color("f6ecd2")
     var title_pos := Vector2(150, 150) if not portrait else Vector2(86, 168)
-    text("Como jogar", title_pos, "title", 104 if not portrait else 96, maroon, -1, HORIZONTAL_ALIGNMENT_LEFT, 6, Color("f6ecd2"))
+    text("Como jogar", title_pos, "title", 104 if not portrait else 96, Color("f6ecd2"), -1, HORIZONTAL_ALIGNMENT_LEFT, 8, Color("2a0508"))
     if not portrait:
-        text("Xeque", Vector2(0, 124), "ui_sp", 30, Color("5a3a22"), 1768, HORIZONTAL_ALIGNMENT_RIGHT)
-        text("blefe de cartas no reino do xadrez", Vector2(0, 157), "ui_sp", 30, Color("5a3a22"), 1768, HORIZONTAL_ALIGNMENT_RIGHT)
+        text("Xeque", Vector2(0, 124), "ui_sp", 30, Color("ffd257"), 1768, HORIZONTAL_ALIGNMENT_RIGHT, 4, Color("2a0508"))
+        text("blefe de cartas no reino do xadrez", Vector2(0, 157), "ui_sp", 30, Color("f6ecd2"), 1768, HORIZONTAL_ALIGNMENT_RIGHT, 4, Color("2a0508"))
     else:
-        text("Xeque · blefe de cartas no reino do xadrez", Vector2(90, 222), "ui_sp", 28, Color("5a3a22"))
+        text("Xeque · blefe de cartas no reino do xadrez", Vector2(90, 222), "ui_sp", 28, Color("f6ecd2"), -1, HORIZONTAL_ALIGNMENT_LEFT, 4, Color("2a0508"))
     var panels := _tutorial_panels()
     var rects := []
     if not portrait:
@@ -1144,7 +1155,7 @@ func _draw_tutorial(d: Vector2):
     var x := fx
     var ffs := 38 if not portrait else 34
     for j in 3:
-        text(parts[j], Vector2(x, foot_y), "ui_sp", ffs, maroon if j == 1 else ink)
+        text(parts[j], Vector2(x, foot_y), "ui_sp", ffs, maroon if j == 1 else ink, -1, HORIZONTAL_ALIGNMENT_LEFT, 4, Color("2a0508"))
         x += tw(parts[j], "ui_sp", ffs)
     if ui.tutorial_from_game:
         if not portrait: button_dark(Rect2(1400, 912, 368, 94), "VOLTAR", "tut_back", 48)
@@ -1158,6 +1169,29 @@ func _draw_tutorial(d: Vector2):
             button_dark(Rect2(90, 1752, 250, 96), "VOLTAR", "tut_back", 44)
             button_dark(Rect2(356, 1752, 290, 96), "CONVIDAR", "tut_invite", 44)
             button_gold(Rect2(662, 1750, 328, 100), "JOGAR", "tut_play", true, 50)
+
+## R85 · fundo do tutorial: vermelho do tabuleiro com casas vermelho/creme nas faixas de cima e de baixo.
+func _tutorial_bg(d: Vector2, portrait: bool):
+    var deep := Color("5e0a14")
+    var red := Color("8e1420")
+    draw_rect(Rect2(Vector2(-4000, -4000), Vector2(12000, 12000)), deep)
+    # xadrez grande e discreto em dois vermelhos
+    var q := 120.0
+    for yy in int(ceil(d.y / q)) + 1:
+        for xx in int(ceil(d.x / q)) + 1:
+            if (xx + yy) % 2 == 0: draw_rect(Rect2(xx * q, yy * q, q, q), Color(red.r, red.g, red.b, 0.55))
+    # faixas de casas vermelho/creme (como a borda do tabuleiro)
+    var band := 36.0
+    var bq := 36.0
+    for side in 2:
+        var y0 := 0.0 if side == 0 else d.y - band
+        for i in int(ceil(d.x / bq)) + 1:
+            draw_rect(Rect2(i * bq, y0, bq, band), Color("f2e6cf") if (i + side) % 2 == 0 else Color("b3192a"))
+        draw_rect(Rect2(0, (band if side == 0 else d.y - band - 6), d.x, 6), Color("2a0508"))
+    # vinheta suave
+    for i in 10:
+        var g := 40.0 + i * 30.0
+        draw_rect(Rect2(Vector2(-g, -g) + Vector2(0, band), d + Vector2(g * 2, g * 2 - band * 2)), Color(0.08, 0.0, 0.02, 0.05), false, 60.0)
 
 func _tutorial_panels() -> Array:
     return [
@@ -1183,7 +1217,8 @@ func _tutorial_panel(r: Rect2, n: int, p: Dictionary, portrait: bool):
     text(p.title, Vector2(nb.end.x + 12, nb.position.y + 40), "ui_sp4", tfs, ink)
     var art := Rect2(r.position.x + 18, nb.end.y + 8, r.size.x - 36, 146 if not portrait else 170)
     draw_rect(art.grow(4), Color("2b1a0e"))
-    draw_rect(art, Color("17372a"))
+    draw_rect(art, NAVY_B)   # R85 · azul do jogo no lugar do verde
+    draw_rect(Rect2(art.position, Vector2(art.size.x, art.size.y * 0.55)), NAVY_T)
     draw_rect(art.grow(-3), Color("e8b242"), false, 1.0)
     _tutorial_art(art.grow(-6), String(p.art))
     # texto com destaques

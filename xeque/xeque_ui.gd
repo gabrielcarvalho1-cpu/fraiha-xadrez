@@ -25,13 +25,14 @@ const SFX := {
     "victory": preload("res://xeque/audio/vitoria.wav"), "defeat": preload("res://xeque/audio/derrota.wav"),
     # R35.1 · vozes (tools/xeque_voice.py): "XEQUE!" a cada desafio, "XEQUE-MATE!" quando alguém cai
     "voice_xeque": preload("res://xeque/audio/voz_xeque.wav"), "voice_mate": preload("res://xeque/audio/voz_xeque_mate.wav"),
+    "voice_mate_lost": preload("res://xeque/audio/voz_xeque_mate_derrota.mp3"),   # R85 · voz + espada quando VOCÊ toma xeque-mate
     # R36 · efeitos mais fortes (tools/xeque_sfx_r36.py)
     "xeque_hit": preload("res://xeque/audio/xeque_impacto.wav"), "flip": preload("res://xeque/audio/virar_carta.wav"),
     "clock_tension": preload("res://xeque/audio/relogio_tensao.wav"), "relief": preload("res://xeque/audio/seguro_alivio.wav"),
     "mate_boom": preload("res://xeque/audio/xeque_mate_boom.wav"), "defeat_final": preload("res://xeque/audio/derrota_final.wav"),
     "victory_final": preload("res://marcha/audio/vitoria_final.wav"), "deck_intro": preload("res://xeque/audio/baralho_intro.wav"),
 }
-const SFX_DB := {"xeque_hit": -2.0, "mate_boom": 0.0, "clock_tension": -4.0, "relief": -5.0, "victory_final": -4.0, "defeat_final": -4.0, "deck_intro": -6.0, "flip": -6.0, "voice_xeque": -1.0, "voice_mate": 0.0, "your_turn": -9.0, "xeque": -6.0, "mate": -3.0, "victory": -7.0, "defeat": -7.0, "elim": -6.0}
+const SFX_DB := {"xeque_hit": -2.0, "mate_boom": 0.0, "clock_tension": -4.0, "relief": -5.0, "victory_final": -4.0, "defeat_final": -4.0, "deck_intro": -6.0, "flip": -6.0, "voice_xeque": -1.0, "voice_mate": 0.0, "voice_mate_lost": -1.0, "your_turn": -9.0, "xeque": -6.0, "mate": -3.0, "victory": -7.0, "defeat": -7.0, "elim": -6.0}
 const FONT_UI := preload("res://xeque/art/fontes/Jersey20-Regular.woff2")
 const FONT_TITLE := preload("res://xeque/art/fontes/Jacquard24-Regular.woff2")
 const FONT_OS7 := preload("res://marcha/art/fonts/oswald-latin-700-normal.woff")   # R55
@@ -584,7 +585,7 @@ func _advance_phase():
                 fx_burst(mc, 90, [Color("2a2420"), Color("6b5a44"), Color("e8b242"), Color("ff5a3a"), Color("ffd257")], 1300.0, 10.0, 1100.0, "shard", 1.8)
                 fx_burst(mc, 26, [Color(0.25, 0.22, 0.2, 0.7), Color(0.4, 0.33, 0.28, 0.6)], 420.0, 60.0, -60.0, "smoke", 2.2)
                 fx_burst(mc, 40, [Color("fff1a8"), Color("ffb347")], 900.0, 5.0, 300.0, "spark", 0.9)
-                get_tree().create_timer(FX_DELAY.voice_mate).timeout.connect(func(): if phase == "mate": _cue("voice_mate"))
+                get_tree().create_timer(FX_DELAY.voice_mate).timeout.connect(func(): if phase == "mate": _cue(_mate_voice()))
                 get_tree().create_timer(FX_DELAY.mate_red_flash).timeout.connect(func(): if phase == "mate": fx_flash(Color(1.0, 0.12, 0.06, 0.75)))
             else:
                 _cue("relief")
@@ -784,6 +785,10 @@ func _on_hit(id: String):
 func _flash(text: String):
     flash = text
     flash_t = 3.0
+
+## R85 · quem tomou o xeque-mate foi você (lugar 0)? Então toca a voz sombria com a espada.
+func _mate_voice() -> String:
+    return "voice_mate_lost" if int(result.get("loser", -1)) == 0 else "voice_mate"
 
 var cues_played: Array = []      # testes: últimos efeitos pedidos
 func _cue(kind: String):
