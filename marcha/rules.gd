@@ -25,7 +25,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-11"  # R70: J vale para os peões do aliado depois de coroar os 4
+const RULESET_VERSION := "marcha-real-12"  # R83: Ás/Rei com mais chance (ajuda em 40%), não garantido · R70: J do aliado
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -107,6 +107,9 @@ func deal():
 ## primeiro do monte (a do topo mais próxima), senão de um reino que tenha 2+ cartas de saída ou que não precise
 ## (sem peão no Pátio). O baralho continua com 52 cartas, 4 de cada valor — só muda quem recebe.
 const STARTERS := ["A", "K"]
+## R83 · não é mais garantido (o dono pediu): quem precisa de Ás/Rei recebe a ajuda em 40% das vezes. No começo
+## (4 cartas) a chance natural de ter Ás/Rei é ~51%; com a ajuda fica ~71% — uns 20 pontos a mais, sem ser certeza.
+const STARTER_HELP := 0.40
 static func _starter_count(h: Array) -> int:
     var c := 0
     for r in h:
@@ -119,6 +122,7 @@ func _needs_starter(s: int) -> bool:
 func _ensure_starters():
     for s in 4:
         if not _needs_starter(s): continue
+        if rng.randf() >= STARTER_HELP: continue
         var give: String = hands[s][hands[s].size() - 1]
         var got := false
         for d in range(deck.size() - 1, -1, -1):

@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-11", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-12", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 3, "10 com todos no Pátio: só a 2ª função (o próximo jogador, no sentido anti-horário, descarta)")
     var h1: int = g.hands[3].size()
@@ -277,14 +277,17 @@ func _initialize():
     check(size_ok, "R38.3: cada ciclo dá 4, 4 e 5 cartas para cada jogador")
     check(cyc_ok, "R38.3: cada ciclo usa as 52 cartas, exatamente 4 de cada valor; depois embaralha de novo")
     check(fd.deck_cycle() == 4 and fd.round_no == 10, "R38.3: ciclo do baralho conta certo (rodada 10 = ciclo 4)")
-    # ---------- R51 · distribuição: quem tem peão no Pátio recebe Ás ou Rei ----------
-    var sem_saida := 0
-    for sd in range(1, 301):
+    # ---------- R51/R83 · distribuição: quem tem peão no Pátio tem MAIS chance de Ás ou Rei (não é garantido) ----------
+    var com_saida := 0
+    var total := 0
+    for sd in range(1, 1501):
         var gs = Rules.new()
         gs.setup(sd)
         for st in 4:
-            if Rules._starter_count(gs.hands[st]) == 0: sem_saida += 1
-    check(sem_saida == 0, "R51: 1ª rodada — todo reino (com peões no Pátio) começa com Ás ou Rei (%d mãos sem)" % sem_saida)
+            total += 1
+            if Rules._starter_count(gs.hands[st]) > 0: com_saida += 1
+    var pct := 100.0 * com_saida / total
+    check(pct > 64.0 and pct < 78.0, "R83: 1ª rodada — ~71%% das mãos começam com Ás ou Rei (natural ~51%%; deu %.1f%%), sem ser garantido" % pct)
     var gt = Rules.new()
     gt.setup(77)
     var all_cards: Array = gt.deck.duplicate()

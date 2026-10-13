@@ -34,6 +34,8 @@ const SFX := {
     "crown": preload("res://marcha/audio/coroa.wav"), "your_turn": preload("res://marcha/audio/sua_vez.wav"),
     "victory": preload("res://marcha/audio/vitoria.wav"), "defeat": preload("res://marcha/audio/derrota.wav"),
     "arrive": preload("res://marcha/audio/chegada.wav"), "victory_final": preload("res://marcha/audio/vitoria_final.wav"),
+    # R83 · fim da partida = o XEQUE-MATE do modo XEQUE (estouro + voz "XEQUE-MATE!"), para quem ganhar
+    "mate_boom": preload("res://xeque/audio/xeque_mate_boom.wav"), "voice_mate": preload("res://xeque/audio/voz_xeque_mate.wav"),
     "promote": preload("res://marcha/audio/promocao_dama.wav"),     # R37: fanfarra da chegada (vira DAMA)
     # R50 · sons enviados pelo dono do projeto
     "move": preload("res://marcha/audio/r50/movimento.mp3"),         # a cada casa (toc quando o peão pousa)
@@ -45,7 +47,7 @@ const SFX_R50 := {
     "arrive": preload("res://marcha/audio/r70/coroacao_do_peao.mp3"),   # R70: coroação do peão (áudio do dono)
     "exit": preload("res://marcha/audio/r70/saida_do_peao.mp3"),         # R70: saída do peão da base (áudio do dono)
 }
-const SFX_DB := {"exit": -6.0, "promote": -3.0, "arrive": -5.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
+const SFX_DB := {"mate_boom": 0.0, "voice_mate": 0.0, "exit": -6.0, "promote": -3.0, "arrive": -5.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
 
 ## R78 · arte do layout antigo (sem uso desde o visual novo em todo lugar): só carrega se for desenhada
 var _board_tex: Texture2D = null
@@ -60,6 +62,8 @@ var BG: Texture2D:
         return _bg_tex
 const SYMBOLS := preload("res://marcha/art/simbolos_de_acao.png")
 const CROWN_TEX := preload("res://marcha/art/coroa_coroacao.png")   # R70: coroa da coroação (arte do dono)
+const CROWN_TITLE := preload("res://marcha/art/coroado_pixel.png")   # R83.3: letreiro COROADO (arte de referência do dono)
+const CROWN_EMBLEM := preload("res://marcha/art/coroacao_emblema.png")   # R83.3: escudo + coroa + brilho roxo (tools/coroacao_arte_r83.py)
 const FONT_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")
 const FONT_BOLD := preload("res://marcha/art/fonts/oswald-latin-700-normal.woff")
 const FONT_SEMI := preload("res://marcha/art/fonts/oswald-latin-600-normal.woff")
@@ -84,7 +88,7 @@ const HOP_H := 22.0               # R37: altura do pulinho entre casas (coordena
 const EXIT_TIME := 0.55           # R37: saída da base em arco
 const CAPTURE_TIME := 1.3         # R38.3: o peão abatido volta para a base girando, sem pressa (antes sumia em 0,5 s)
 const CAPTURE_SPINS := 2.0        # R38.3: voltas completas no caminho até a base
-const CROWN_WAIT := 1.2           # R37: chegada ao Salão (vira DAMA + fanfarra)
+const CROWN_WAIT := 1.9           # R37: chegada ao Salão · R83: tempo do brasão chegar ao peão
 const CARD_FLY := 0.45            # R37.3: a carta jogada voa da mão (ou da placa do bot) até o centro da mesa
 ## Espelho no servidor: online_v021/modes/party.js (T.stepMs/exitMs/captureMs/crownMs/cardFlyMs) — conferido em tests/server/marcha_sync_test.cjs
 ## Bots da mesa (nomes e retratos da tela de referência).
@@ -445,7 +449,11 @@ func _finish():
     mode = "over"
     busy = false
     over_t = 0.0
-    _cue("victory_final" if g.winner == 0 else "defeat")
+    # R83 · XEQUE-MATE (o mesmo do modo XEQUE): estouro e, logo depois, a voz; a fanfarra/derrota vem em seguida
+    _cue("mate_boom")
+    get_tree().create_timer(0.45).timeout.connect(func(): if mode == "over": _cue("voice_mate"))
+    var won: bool = g.winner == 0
+    get_tree().create_timer(2.6).timeout.connect(func(): if mode == "over": _cue("victory_final" if won else "defeat"))
     _record_history("win" if g.winner == 0 else "loss")
     _show_result_overlay(g.winner == 0)
     _redraw()
@@ -912,6 +920,12 @@ func help_line() -> String:
 
 # ---------------------------------------------------------------- animação
 func _animate(events: Array):
+    # R83 · todo peão que vai ANDAR nesta jogada fica parado na casa de onde sai até chegar a vez dele (no 7
+    # dividido o 2º peão aparecia já no destino e depois "voltava" para andar: parecia teletransporte)
+    for e in events:
+        if String(e.type) == "move":
+            var mk := _key(e.pawn)
+            if _origin.has(mk) and String(_origin[mk].zone) != "home": anim[mk] = _cell_of(int(e.pawn[0]), _origin[mk])
     # R37 · peão que vai ser ABATIDO fica na casa dele até o atacante chegar (só então some)
     for e in events:
         if String(e.type) == "capture":
@@ -1987,16 +2001,16 @@ class TableView extends Control:
             for gl in 5: draw_rect(lr.grow(4 + gl * 5), Color(1.0, 0.82, 0.3, (0.30 - gl * 0.05) * (0.6 + 0.4 * pz)), false, 5.0)
             draw_texture_rect(Crisp.at(ui.cards[String(g.hands[0][ui.sel_card])], cs2 * s * ui.k), lr, false)
         draw_set_transform(ui.origin + br.position * ui.k, 0.0, Vector2(ui.k * s, ui.k * s))
-        # R82 · Entrada do Salão TRANCADA: peão da outra dupla parado nela → a casa fica vermelha (pulsando)
-        var pb := 0.55 + 0.45 * sin(ui.t * 4.0)
-        for seat in 4:
-            var ei: int = ui.Layout.entrance_index(seat)
-            var o: Array = g.occupant(ei)
-            if o.is_empty() or g.team_of(o[0]) == g.team_of(seat): continue
-            var ec: Vector2 = ui.Layout.track_cell(ei)
-            draw_circle(ec, 38.0, Color(0.85, 0.05, 0.08, 0.30 + 0.20 * pb))
-            draw_circle(ec, 30.0, Color(0.95, 0.10, 0.12, 0.55))
-            draw_arc(ec, 34.0, 0.0, TAU, 32, Color(1.0, 0.35, 0.3, 0.9), 4.0)
+        # R82/R83 · Entrada do Salão TRANCADA: peão da outra dupla PARADO nela → a casa fica vermelha (só depois que
+        # ele pousa: enquanto anda, nada) e ganha um X preto ao lado do peão (desenhado com os peões, mais abaixo)
+        var blocked := _blocked_entries(g)
+        for ec in blocked:
+            # casa escurecida em vermelho e um X VERMELHO dentro do círculo (fica embaixo do peão)
+            draw_circle(ec, 29.0, Color(0.30, 0.02, 0.03, 0.85))
+            draw_arc(ec, 27.5, 0.0, TAU, 40, Color(0.85, 0.08, 0.10), 3.0)
+            for d in [Vector2(1, 1), Vector2(1, -1)]:
+                draw_line(ec - d * 19.0, ec + d * 19.0, Color(0.95, 0.12, 0.14, 0.9), 11.0)   # contorno vermelho
+                draw_line(ec - d * 18.0, ec + d * 18.0, Color(0.02, 0.01, 0.01), 7.0)           # X PRETO
         # caminho da jogada escolhida
         var dots: Array = []
         var dest: Array = []
@@ -2091,48 +2105,73 @@ class TableView extends Control:
         _draw_celebs()
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
 
-    ## R35 · peão chegou ao Salão: anel dourado que se abre, raios girando, faíscas e "COROADO!" subindo.
+    ## Casas de Entrada trancadas agora (peão da outra dupla parado nela, sem estar andando)
+    func _blocked_entries(g) -> Array:
+        var out := []
+        for seat in 4:
+            var ei: int = ui.Layout.entrance_index(seat)
+            var o: Array = g.occupant(ei)
+            if o.is_empty() or g.team_of(o[0]) == g.team_of(seat): continue
+            if ui.anim.has("%d_%d" % [o[0], o[1]]): continue
+            out.append(ui.Layout.track_cell(ei))
+        return out
+
+    ## R83 · COROAÇÃO (opção D aprovada): o BRASÃO do reino surge grande no centro do tabuleiro girando como uma
+    ## moeda, assenta com a coroa e "COROADO" em ouro, depois encolhe e voa em arco até o peão (brilho ao pousar).
     func _draw_celebs():
+        if ui.celebs.is_empty(): return
+        var br: Rect2 = ui.board_rect()
+        var bs: float = br.size.x / ui.BOARD_UNITS
+        var o0: Vector2 = ui.origin + br.position * ui.k
+        var sc: float = ui.k * bs
+        var center: Vector2 = ui.pile_center()
         for c in ui.celebs:
             var k: float = clampf(c.t / ui.CELEB_T, 0.0, 1.0)
-            var p: Vector2 = c.p + Vector2(0, -18)
-            var z := 1.9                 # tamanho (coordenadas da arte do tabuleiro)
-            var fade := 1.0 - k
             var col: Color = ui.KINGDOM_COLOR[int(c.seat)]
-            var ease := 1.0 - pow(1.0 - minf(1.0, k * 2.2), 3.0)
-            # clarão
-            draw_circle(p, (34.0 + 30.0 * ease) * z, Color(1.0, 0.85, 0.4, 0.28 * fade))
-            # anéis
-            for ring in 2:
-                var rk := clampf(k * 1.6 - ring * 0.25, 0.0, 1.0)
-                if rk <= 0.0: continue
-                draw_arc(p, (20.0 + 95.0 * rk) * z, 0, TAU, 48, Color(1.0, 0.86, 0.38, (1.0 - rk) * 0.95), (6.0 * (1.0 - rk) + 1.5) * z)
-            draw_arc(p, (30.0 + 40.0 * ease) * z, 0, TAU, 40, Color(col.r, col.g, col.b, 0.8 * fade), 3.0 * z)
-            # raios
-            for i in 12:
-                var a: float = ui.t * 1.6 + TAU * i / 12.0
-                var r0 := (28.0 + 20.0 * ease) * z
-                var r1 := r0 + (38.0 if i % 2 == 0 else 22.0) * fade * z
-                draw_line(p + Vector2.from_angle(a) * r0, p + Vector2.from_angle(a) * r1, Color(1.0, 0.92, 0.55, 0.85 * fade), 4.0 * z)
-            # faíscas
-            for i in 10:
-                var a2 := TAU * i / 10.0 + 0.3
-                var d := (24.0 + 110.0 * ease) * z
-                var q := p + Vector2.from_angle(a2) * d + Vector2(0, 60.0 * k * k * z)
-                draw_circle(q, (5.0 * fade + 1.0) * z, Color(1.0, 0.95, 0.7, fade))
-            # R70 · a COROA (arte do dono) desce grande sobre o peão, encolhe e assenta na cabeça dele
-            var ck := clampf(k * 1.25, 0.0, 1.0)
-            var ce := 1.0 - pow(1.0 - ck, 3.0)
-            var cs: float = lerpf(280.0, 60.0, ce) * z * 0.5
-            var cpos := p + Vector2(0, lerpf(-160.0, -34.0, ce) * z * 0.5)
-            var ca := clampf(1.0 - maxf(0.0, k - 0.75) * 4.0, 0.0, 1.0)
-            for gl in 3: draw_circle(cpos, cs * (0.55 + gl * 0.18), Color(1.0, 0.85, 0.4, (0.20 - gl * 0.05) * ca))
-            draw_texture_rect(ui.CROWN_TEX, Rect2(cpos - Vector2(cs, cs) / 2.0, Vector2(cs, cs)), false, Color(1, 1, 1, ca))
-            # texto subindo
-            var ty := p.y - (70.0 + 50.0 * ease) * z - 40.0
-            var ta := clampf(fade * 1.6, 0.0, 1.0)
-            text("COROADO!", Vector2(p.x - 300 + 4, ty + 4), "title", 76, Color(0.1, 0.05, 0.0, 0.7 * ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
-            text("COROADO!", Vector2(p.x - 300, ty), "title", 76, Color(1.0, 0.86, 0.36, ta), 600, HORIZONTAL_ALIGNMENT_CENTER)
+            var dest: Vector2 = c.p + Vector2(0, -60)
+            # fases: surge girando (0–.30) · fica (.30–.70) · voa até o peão (.70–.92) · brilho no peão (.92–1)
+            var appear := clampf(k / 0.30, 0.0, 1.0)
+            var fly := clampf((k - 0.70) / 0.22, 0.0, 1.0)
+            var fe := fly * fly * (3.0 - 2.0 * fly)
+            var pop := 1.0 + 0.12 * sin(PI * clampf(appear * 1.3, 0.0, 1.0)) if appear < 1.0 else 1.0
+            var size := lerpf(1.8, 0.16, fe) * (1.0 - pow(1.0 - appear, 3.0)) * pop
+            var pos := center.lerp(dest, fe) + Vector2(0, -260.0 * sin(PI * fe))
+            var spin := (1.0 - appear) * (1.0 - appear) * TAU * 2.5      # gira rápido e freia até parar de frente
+            var fx := cos(spin)
+            if size <= 0.01: continue
+            # R83.3 · EMBLEMA da arte de referência do dono (escudo, coroa e o brilho roxo já vêm na arte)
+            var et: Texture2D = ui.CROWN_EMBLEM
+            var ew: float = 600.0 * size
+            var eh: float = ew * et.get_height() / et.get_width()
+            var hold := clampf(appear * 3.0, 0.0, 1.0) * (1.0 - fe)
+            if hold > 0.0:
+                # cinema: o tabuleiro escurece enquanto o emblema está no centro
+                draw_set_transform(o0, 0.0, Vector2(sc, sc))
+                draw_rect(Rect2(Vector2.ZERO, br.size / bs), Color(0.02, 0.0, 0.05, 0.55 * hold))
+                draw_set_transform(o0 + pos * sc, 0.0, Vector2(sc, sc))
+                for gl in 4: draw_circle(Vector2.ZERO, (eh * 0.42 + gl * 40.0), Color(0.45, 0.12, 0.75, (0.10 - gl * 0.022) * hold))
+            draw_set_transform(o0 + pos * sc, 0.0, Vector2(sc * maxf(absf(fx), 0.04), sc))
+            draw_texture_rect(et, Rect2(Vector2(-ew, -eh) / 2.0, Vector2(ew, eh)), false, Color(1, 1, 1) if fx >= 0.0 else Color(0.45, 0.35, 0.5))
+            draw_set_transform(o0, 0.0, Vector2(sc, sc))
+            # COROADO em ouro sob o brasão
+            var ta := clampf((k - 0.22) / 0.10, 0.0, 1.0) * (1.0 - clampf((k - 0.66) / 0.08, 0.0, 1.0))
+            if ta > 0.0:
+                # R83.2 · letreiro em PIXEL ART (tools/coroado_pixel_r83.py): entra batendo (grande → tamanho certo,
+                # com um tremor curto) e fica pulsando de leve
+                var tin := clampf((k - 0.22) / 0.07, 0.0, 1.0)
+                var slam: float = lerpf(1.7, 1.0, 1.0 - pow(1.0 - tin, 3.0))
+                var shake := Vector2(sin(ui.t * 70.0), cos(ui.t * 63.0)) * 6.0 * clampf(1.0 - (k - 0.29) / 0.06, 0.0, 1.0) if k > 0.29 else Vector2.ZERO
+                var bob := 1.0 + 0.025 * sin(ui.t * 6.0)
+                var lt: Texture2D = ui.CROWN_TITLE
+                var lw: float = 800.0 * slam * bob
+                var lh: float = lw * lt.get_height() / lt.get_width()
+                var lc := Vector2(pos.x, pos.y + eh * 0.47 + lw * 0.09) + shake
+                draw_texture_rect(lt, Rect2(lc - Vector2(lw, lh) / 2.0, Vector2(lw, lh)), false, Color(1, 1, 1, ta))
+            # brilho ao pousar no peão
+            var land := clampf((k - 0.90) / 0.10, 0.0, 1.0)
+            if land > 0.0:
+                for gl in 3: draw_arc(dest + Vector2(0, 40), (30.0 + 70.0 * land + gl * 10.0), 0, TAU, 40, Color(0.75, 0.45, 1.0, (1.0 - land) * (0.8 - gl * 0.2)), 4.0)
+        draw_set_transform(o0, 0.0, Vector2(sc, sc))
 
     ## Etiqueta (ABATER / CUIDADO) presa acima de uma casa do tabuleiro, pulsando.
     ## R37.3 · cartas voando da mão / da placa até o monte (arco, giro e encolhendo).
