@@ -453,9 +453,9 @@ func _finish():
     # R83 · XEQUE-MATE (o mesmo do modo XEQUE): estouro e, logo depois, a voz; a fanfarra/derrota vem em seguida
     _cue("mate_boom")
     var won: bool = g.winner == 0
-    # R85 · a sua dupla perdeu: voz sombria "checkmate" com a espada (4,8 s); a derrota toca depois dela
-    get_tree().create_timer(0.45).timeout.connect(func(): if mode == "over": _cue("voice_mate" if won else "voice_mate_lost"))
-    get_tree().create_timer(2.6 if won else 5.4).timeout.connect(func(): if mode == "over": _cue("victory_final" if won else "defeat"))
+    # R86 · a voz sombria "checkmate" com a espada toca para todos (ganhando ou perdendo); a fanfarra/derrota vem depois dela
+    get_tree().create_timer(0.45).timeout.connect(func(): if mode == "over": _cue("voice_mate_lost"))
+    get_tree().create_timer(5.4).timeout.connect(func(): if mode == "over": _cue("victory_final" if won else "defeat"))
     _record_history("win" if g.winner == 0 else "loss")
     _show_result_overlay(g.winner == 0)
     _redraw()
@@ -1271,40 +1271,46 @@ var portrait_game: Array = []
 ## título/ícones, placas dos perfis, TABULEIRO (centralizado no espaço livre), faixa da ajuda da jogada (só aparece
 ## quando há algo a escolher), linha SUA VEZ + JOGAR CARTA (compacta, lado a lado) e as CARTAS rentes ao fim da tela.
 func _portrait_layout():
+    # R86 · em pé INTEGRADO: tabuleiro recortado justo na moldura dourada (sem pedaços da arte do PC em volta),
+    # painel SUA VEZ + JOGAR CARTA inteiro com a moldura da arte (como no celular deitado) e as cartas embaixo.
     var H: float = design.y
-    var top := 270.0
+    var top := 274.0
     var cards_s := 1.62
     var ch: float = 206.0 * cards_s
-    var row_h := 140.0
-    var bottom_pad := 6.0
-    var bw := 1124.0                             # R75.2 · tabuleiro maior: passa um tiquinho da largura (só a borda da moldura sai)
-    var bh: float = 657.0 * bw / 730.0
-    var maxb: float = H - top - row_h - ch - bottom_pad - 3.0 * 8.0
-    if bh > maxb:                                # aparelho baixo: encolhe para caber
-        bh = maxb
-        bw = 730.0 * bh / 657.0
-    var gap: float = (H - top - bh - row_h - ch - bottom_pad) / 3.0
+    var ph := 300.0                              # painel SUA VEZ + JOGAR CARTA (arte 330x280)
+    var bottom_pad := 10.0
+    var min_gap := 14.0
+    var bw := 1044.0
+    var bh: float = BOARD_SRC.size.y * bw / BOARD_SRC.size.x
+    var maxb: float = H - top - ph - ch - bottom_pad - 4.0 * min_gap
+    if bh > maxb:                                # aparelho baixo: encolhe o tabuleiro e o painel para caber
+        ph = maxf(220.0, ph - (bh - maxb))
+        maxb = H - top - ph - ch - bottom_pad - 4.0 * min_gap
+        if bh > maxb:
+            bh = maxb
+            bw = BOARD_SRC.size.x * bh / BOARD_SRC.size.y
+    # sobrou altura (celular alto): o painel cresce até 400 antes de abrir espaços vazios
+    ph = clampf(H - top - bh - ch - bottom_pad - 4.0 * 26.0, ph, 400.0)
+    var gap: float = (H - top - bh - ph - ch - bottom_pad) / 4.0
     var board := Rect2((1080.0 - bw) / 2.0, top + gap, bw, bh)
-    var row := Rect2(0, board.end.y + gap, 1080, row_h)
-    var cards := Rect2((1080.0 - 640.0 * cards_s) / 2.0, row.end.y + gap, 640.0 * cards_s, ch)
-    # ajuda da jogada: só quando há algo a escolher, por cima do espaço logo acima da linha SUA VEZ
-    var help := Rect2(8, 140, 1064, 104)   # R78 · controles (7/10/descartar) por cima das placas, longe do tabuleiro
-    var ss: float = row_h / 122.0               # pergaminho SUA VEZ (arte 280x122)
-    var ps: float = (row_h - 20.0) / 74.0       # botão JOGAR CARTA (arte 290x74)
-    var total: float = 280.0 * ss + 24.0 + 290.0 * ps
-    var x0: float = (1080.0 - total) / 2.0
-    var scroll := Rect2(x0, row.position.y, 280.0 * ss, row_h)
-    var play := Rect2(x0 + 280.0 * ss + 24.0, row.position.y + 10.0, 290.0 * ps, 74.0 * ps)
+    var pw: float = ph * 330.0 / 280.0
+    var panel := Rect2((1080.0 - pw) / 2.0, board.end.y + gap, pw, ph)
+    var cards := Rect2((1080.0 - 640.0 * cards_s) / 2.0, panel.end.y + gap, 640.0 * cards_s, ch)
+    # ajuda da jogada: só quando há algo a escolher, por cima das placas, longe do tabuleiro
+    var help := Rect2(8, 140, 1064, 104)
     portrait_game = [
         [Rect2(0, 0, 500, 95), Rect2(0, 0, 525, 99.75)],               # 0 título
         [Rect2(1150, 0, 500, 80), Rect2(547, 8, 525, 84)],              # 1 ícones (+ microfone/fone da voz, à esquerda)
         [Rect2(3000, 0, 740, 108), Rect2(8, 114, 1064, 155.3)],         # 2 placas (faixa virtual)
-        [Rect2(480, 110, 730, 657), board],                             # 3 tabuleiro
+        [BOARD_SRC, board],                                             # 3 tabuleiro (justo na moldura)
         [Rect2(520, 735, 640, 206), cards],                             # 4 mão
-        [Rect2(55, 712, 280, 122), scroll],                             # 5 SUA VEZ / VEZ DE (pergaminho)
-        [Rect2(55, 836, 290, 74), play],                                # 6 JOGAR CARTA
+        [Rect2(30, 640, 330, 280), panel],                              # 5 SUA VEZ + JOGAR CARTA (moldura da arte)
+        [Rect2(30, 640, 330, 280), panel],                              # 6
         [Rect2(22, 504, 326, 132), help],                               # 7 ajuda da jogada / CANCELAR
     ]
+
+## R86 · moldura dourada do tabuleiro na arte da mesa (medida no PNG): só ela entra no celular em pé
+const BOARD_SRC := Rect2(486, 117, 711, 637)
 
 ## salão (1494x834) em pé: título, ícones, painel do modo, tabuleiro de amostra e botões, um embaixo do outro
 ## R82 · celular DEITADO (tela larga): tabuleiro no meio com a altura toda; à esquerda título, perfis (em coluna)
@@ -1727,8 +1733,32 @@ class TableView extends Control:
             draw_set_transform(Vector2(vs.x, 0), 0.0, Vector2(-1, 1))     # espelho: a mesma parede do lado direito
             draw_texture_rect_region(wide, Rect2(Vector2(half.x - sz.x, (vs.y - sz.y) / 2.0), sz), src)
             draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-        draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.01, 0.05, 0.62))
-        if ui.portrait: draw_rect(Rect2(0, 0, vs.x, ui.origin.y + 104.0 * ui.k), Color(0.05, 0.025, 0.07, 0.92))
+        if not ui.portrait:
+            draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.01, 0.05, 0.62))
+            return
+        # R86 · em pé: a cena aparece mais (menos escura) e escurece aos poucos para cima e para baixo,
+        # sem a faixa preta reta no topo — os painéis ficam "dentro" do salão
+        draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.01, 0.05, 0.42))
+        var tb: float = ui.origin.y + 280.0 * ui.k
+        var n := 24
+        for i in n:
+            var f := float(i) / n
+            draw_rect(Rect2(0, tb * f, vs.x, tb / n + 1.0), Color(0.04, 0.02, 0.06, 0.88 * (1.0 - f * f)))
+        var bb: float = vs.y * 0.22
+        for i in n:
+            var f := float(i) / n
+            draw_rect(Rect2(0, vs.y - bb * (1.0 - f) - bb / n, vs.x, bb / n + 1.0), Color(0.03, 0.01, 0.05, 0.55 * (1.0 - f) * (1.0 - f)))
+        # vinheta nas laterais
+        for i in 10:
+            var w: float = 6.0 * ui.k * (i + 1)
+            draw_rect(Rect2(0, 0, w, vs.y), Color(0, 0, 0, 0.035))
+            draw_rect(Rect2(vs.x - w, 0, w, vs.y), Color(0, 0, 0, 0.035))
+
+    ## R86 · sombra suave em volta de um bloco (tabuleiro/painel), para ele assentar no cenário em vez de parecer colado
+    func _soft_shadow(r: Rect2):
+        for i in 7:
+            draw_rect(r.grow(4.0 + i * 7.0), Color(0.0, 0.0, 0.0, 0.10 - i * 0.012), false, 7.0)
+        draw_rect(r.grow(2.0), Color(0.95, 0.72, 0.3, 0.12), false, 3.0)
 
     ## faixa de cima/baixo: roxo profundo do salão, com uma luz dourada fraca junto da arte
     func _band_v(r: Rect2, deep: Color, toward_bottom: bool):
@@ -2458,7 +2488,16 @@ class TableView extends Control:
         var g = ui.g
         var plate: Texture2D = ui.r57.mesa
         if ui.blk:
-            for i in [0, 3, 5, 6]: draw_texture_rect_region(plate, ui.portrait_game[i][1], ui.portrait_game[i][0])
+            for i in [0, 3, 5, 6]:
+                if i == 6 and ui.portrait_game[6][0] == ui.portrait_game[5][0]: continue
+                if ui.portrait and i == 3: _soft_shadow(ui.portrait_game[i][1])   # R86 · assenta no cenário
+                if ui.portrait and i == 5:
+                    # R86 · painel SUA VEZ recortado da arte com fundo transparente (sem pedaço de parede em volta)
+                    var pr: Rect2 = ui.portrait_game[5][1]
+                    _soft_shadow(pr.grow(-pr.size.x * 0.03))
+                    draw_texture_rect(tex("res://marcha/art/r86/painel_vez.png"), pr, false)
+                    continue
+                draw_texture_rect_region(plate, ui.portrait_game[i][1], ui.portrait_game[i][0])
             var icons_src := Rect2(1290, 0, 360, 80)   # só os ícones da arte; à esquerda fica o lugar do microfone
             draw_texture_rect_region(plate, ui.rr(icons_src), icons_src)
         else:

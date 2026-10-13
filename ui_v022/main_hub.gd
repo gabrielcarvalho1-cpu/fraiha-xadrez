@@ -2049,10 +2049,15 @@ func _preview_league():
 
 func _layout():
     if is_instance_valid(mobile_ui):
-        canvas.hide()
-        presentation_frame.hide()
-        mobile_ui.layout()
-        return
+        # R86 · celular DEITADO na Home: a mesma Home nova do PC (arte, botões e perfil); em pé e nas
+        # outras páginas continua a tela do celular.
+        var desk_home: bool = mobile_ui.desk_home_on()
+        mobile_ui.visible = not desk_home
+        canvas.visible = desk_home
+        presentation_frame.visible = desk_home
+        if not desk_home:
+            mobile_ui.layout()
+            return
     var dimensions = get_viewport().get_visible_rect().size
     # Fit the intact composition and its frame together, using all available space.
     var framed_size = DESIGN + Vector2.ONE * FRAME_MARGIN * 2.0

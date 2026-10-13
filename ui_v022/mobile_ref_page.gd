@@ -97,7 +97,7 @@ func layout(full: Rect2):
 	dim.size = full.size
 	scroll.size = full.size
 	if not visible or page_id.is_empty(): return
-	var w := minf(full.size.x, MAX_W)
+	var w := minf(full.size.x, MAX_W) * (MAIS_SCALE if page_id == "mais" else 1.0)   # R86 · MAIS menor
 	if absf(w - _w) > 0.5:
 		_w = w
 		s = w / REF_W
@@ -304,9 +304,37 @@ func _wrap(parent: Control, text: String, px: float, color: Color, font: Font, a
 
 # ------------------------------------------------------------------ MAIS (ref3)
 const MAIS_Y0 := 30.0   # a peça começa na linha 30 da referência
+const MAIS_SCALE := 0.9   # R86 · o painel MAIS ocupa menos da tela
 func _build_mais():
+	# R86 · brilho dourado pulsando atrás do painel
+	var glow := TextureRect.new()
+	glow.name = "MaisGlow"
+	var gt := GradientTexture2D.new()
+	gt.width = 256
+	gt.height = 256
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(0.5, 0.0)
+	var gr := Gradient.new()
+	gr.set_color(0, Color(1.0, 0.8, 0.35, 0.95))
+	gr.set_color(1, Color(1.0, 0.75, 0.3, 0.0))
+	gr.add_point(0.55, Color(1.0, 0.75, 0.3, 0.45))
+	gt.gradient = gr
+	glow.texture = gt
+	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	glow.material = add
+	panel.add_child(glow)
 	var art := _band(panel, "mais_panel", 0)
 	panel.size.y = art.size.y
+	var gsz := Vector2(_w * 1.7, art.size.y * 1.35)
+	glow.size = gsz
+	glow.position = (Vector2(_w, art.size.y) - gsz) / 2.0
+	var tw := glow.create_tween().set_loops()
+	tw.tween_property(glow, "modulate:a", 0.55, 1.6).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(glow, "modulate:a", 1.0, 1.6).set_trans(Tween.TRANS_SINE)
 	var rows := [["VOLTAR", 612.0, 770.0], ["CONFIGURAÇÕES", 806.0, 962.0], ["CONHEÇA O FRAIHA", 1000.0, 1157.0], ["SAIR", 1194.0, 1350.0]]
 	for row in rows:
 		var title: String = row[0]

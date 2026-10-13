@@ -786,9 +786,9 @@ func _flash(text: String):
     flash = text
     flash_t = 3.0
 
-## R85 · quem tomou o xeque-mate foi você (lugar 0)? Então toca a voz sombria com a espada.
+## R86 · voz sombria "checkmate" com a espada em TODO xeque-mate (seu ou de qualquer jogador eliminado).
 func _mate_voice() -> String:
-    return "voice_mate_lost" if int(result.get("loser", -1)) == 0 else "voice_mate"
+    return "voice_mate_lost"
 
 var cues_played: Array = []      # testes: últimos efeitos pedidos
 func _cue(kind: String):

@@ -39,6 +39,17 @@ const SOUND_RECT := Rect2(730, 45, 82, 75)
 const CARD_RECT := Rect2(108, 495, 637, 173)
 const PORTRAIT := Rect2(150, 524, 116, 118)
 const SHIELD := Rect2(620, 515, 90, 133)
+## R86 · cor do brilho atrás do elo, por liga
+const GLOW_COLORS := {"ferro": Color(0.75, 0.8, 0.9), "bronze": Color(1.0, 0.65, 0.35), "prata": Color(0.85, 0.9, 1.0), "ouro": Color(1.0, 0.8, 0.3), "platina": Color(0.5, 0.9, 1.0), "esmeralda": Color(0.35, 1.0, 0.55), "diamante": Color(0.4, 0.65, 1.0), "mestre": Color(0.8, 0.45, 1.0), "grande_mestre": Color(1.0, 0.35, 0.3), "challenger": Color(0.55, 0.75, 1.0)}
+
+## o elo recortado (atlas sem o fundo escuro), na mesma grade 4x3 do atlas original
+static func _badge_cut(league_id: String) -> Texture2D:
+    var src: Texture2D = ThemeCatalog.badge_texture(league_id)
+    if not (src is AtlasTexture): return src
+    var t := AtlasTexture.new()
+    t.atlas = load("res://ui_v022/assets/r86/insignias_recorte.png")
+    t.region = (src as AtlasTexture).region
+    return t
 const BAR := Rect2(300, 604, 291, 14)
 
 var hub
@@ -55,7 +66,8 @@ var name_text
 var league_text
 var bar_fill: ColorRect
 var badge: TextureRect
-var badge_plate: Panel
+var badge_plate: TextureRect
+var badge_glow: TextureRect
 var seal: TextureRect
 var buttons := {}              # título → Button (área de toque)
 var _shown := ""
@@ -230,22 +242,45 @@ func _build_top():
     bar_fill.size = Vector2(0, BAR.size.y)
     bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
     top.add_child(bar_fill)
-    badge_plate = Panel.new()
-    var plate := StyleBoxFlat.new()
-    plate.bg_color = Color(0.0, 0.13, 0.07)
-    plate.set_corner_radius_all(8)
-    badge_plate.add_theme_stylebox_override("panel", plate)
+    # R86 · sem placa lisa: o pedaço do cartão com o escudo de madeira apagado cobre a arte, e o elo recortado
+    # (sem o quadrado escuro) fica por cima com um brilho suave pulsando atrás
+    badge_plate = TextureRect.new()
+    badge_plate.texture = load("res://ui_v022/assets/r86/escudo_vazio.png")
+    badge_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     badge_plate.position = SHIELD.position
     badge_plate.size = SHIELD.size
     badge_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
     top.add_child(badge_plate)
+    badge_glow = TextureRect.new()
+    var gt := GradientTexture2D.new()
+    gt.width = 128
+    gt.height = 128
+    gt.fill = GradientTexture2D.FILL_RADIAL
+    gt.fill_from = Vector2(0.5, 0.5)
+    gt.fill_to = Vector2(0.5, 0.0)
+    var gr := Gradient.new()
+    gr.set_color(0, Color(1, 1, 1, 0.95))
+    gr.set_color(1, Color(1, 1, 1, 0.0))
+    gt.gradient = gr
+    badge_glow.texture = gt
+    badge_glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    badge_glow.position = SHIELD.position + SHIELD.size / 2.0 - Vector2(70, 70)
+    badge_glow.size = Vector2(140, 140)
+    badge_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var add := CanvasItemMaterial.new()
+    add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+    badge_glow.material = add
+    top.add_child(badge_glow)
     badge = TextureRect.new()
     badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    badge.position = SHIELD.position + Vector2(2, 4)
-    badge.size = SHIELD.size - Vector2(4, 8)
+    badge.position = SHIELD.position + Vector2(-20, -6)
+    badge.size = SHIELD.size + Vector2(40, 12)
     badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
     top.add_child(badge)
+    var tw := create_tween().set_loops()
+    tw.tween_property(badge_glow, "modulate:a", 0.35, 1.4).set_trans(Tween.TRANS_SINE)
+    tw.tween_property(badge_glow, "modulate:a", 1.0, 1.4).set_trans(Tween.TRANS_SINE)
     # botões do menu
     for row in MENU:
         var src := _source(row[0])
@@ -326,9 +361,11 @@ func refresh():
     hub.attach_club_frame(club_host)
     var league_id := String(data.current_league)
     var madeira := league_id in ["madeira", "wood"]
-    badge.texture = null if madeira else ThemeCatalog.badge_texture(league_id)
+    badge.texture = null if madeira else _badge_cut(league_id)
     badge.visible = not madeira
     badge_plate.visible = not madeira
+    badge_glow.visible = not madeira
+    badge_glow.self_modulate = GLOW_COLORS.get(league_id, Color(1.0, 0.82, 0.45))
     var st: Texture2D = hub.current_badge_texture()
     seal.texture = st
     seal.visible = st != null

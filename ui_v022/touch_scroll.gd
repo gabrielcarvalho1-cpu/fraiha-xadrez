@@ -10,6 +10,14 @@ var _start := Vector2.ZERO
 var _start_v := 0
 var _start_h := 0
 var _dragging := false
+# R86 · rolagem com inércia: soltou o dedo rápido, a lista continua deslizando e vai parando (como no celular)
+const FRICTION := 3.2          # quanto maior, mais rápido para
+const MIN_SPEED := 30.0        # px/s (do conteúdo) abaixo disso para
+const MAX_SPEED := 6000.0
+var _vel := Vector2.ZERO       # velocidade do conteúdo (px/s)
+var _pos := Vector2.ZERO       # posição em float (scroll_* é inteiro)
+var _last_t := 0
+var _last_p := Vector2.ZERO
 
 static func attach(target: ScrollContainer) -> Node:
     var helper = load("res://ui_v022/touch_scroll.gd").new()
@@ -37,13 +45,23 @@ func _input(event):
     if event is InputEventScreenTouch:
         if event.pressed:
             if _index == -1 and _rect().has_point(event.position):
+                _vel = Vector2.ZERO
                 _index = event.index
+                _last_t = Time.get_ticks_usec()
+                _last_p = event.position
                 _start = event.position
                 _start_v = scroll.scroll_vertical
                 _start_h = scroll.scroll_horizontal
                 _dragging = false
         elif event.index == _index:
             _index = -1
+            # dedo parado antes de soltar (mais de 0,1 s): sem inércia
+            if _dragging and Time.get_ticks_usec() - _last_t < 100000 and _vel.length() > MIN_SPEED:
+                _pos = Vector2(scroll.scroll_horizontal, scroll.scroll_vertical)
+                if scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED: _vel.y = 0.0
+                if scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED: _vel.x = 0.0
+            else:
+                _vel = Vector2.ZERO
             _dragging = false
     elif event is InputEventScreenDrag and event.index == _index:
         var delta: Vector2 = event.position - _start
@@ -56,11 +74,33 @@ func _input(event):
             _cancel_press()
         if _dragging:
             var s := scroll.get_global_transform_with_canvas().get_scale()
+            var now := Time.get_ticks_usec()
+            var dt := float(now - _last_t) / 1000000.0
+            if dt > 0.001:
+                var v: Vector2 = -(event.position - _last_p) / dt / Vector2(maxf(0.01, s.x), maxf(0.01, s.y))
+                _vel = (_vel * 0.35 + v * 0.65).clamp(Vector2(-MAX_SPEED, -MAX_SPEED), Vector2(MAX_SPEED, MAX_SPEED))
+                _last_t = now
+                _last_p = event.position
             if scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED:
                 scroll.scroll_vertical = _start_v - int(delta.y / maxf(0.01, s.y))
             if scroll.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED:
                 scroll.scroll_horizontal = _start_h - int(delta.x / maxf(0.01, s.x))
             get_viewport().set_input_as_handled()
+
+func _process(delta: float):
+    if _vel == Vector2.ZERO or _index != -1: return
+    if not is_instance_valid(scroll) or not scroll.is_visible_in_tree():
+        _vel = Vector2.ZERO
+        return
+    _pos += _vel * delta
+    _vel *= exp(-FRICTION * delta)
+    var before := Vector2(scroll.scroll_horizontal, scroll.scroll_vertical)
+    if scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED: scroll.scroll_vertical = int(round(_pos.y))
+    if scroll.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED: scroll.scroll_horizontal = int(round(_pos.x))
+    var after := Vector2(scroll.scroll_horizontal, scroll.scroll_vertical)
+    # chegou no começo/fim (o Godot segurou o valor) ou ficou lento: para
+    if _vel.length() < MIN_SPEED or (after == before and (absf(_pos.y - after.y) > 2.0 or absf(_pos.x - after.x) > 2.0)):
+        _vel = Vector2.ZERO
 
 func _rect() -> Rect2:
     var xf := scroll.get_global_transform_with_canvas()

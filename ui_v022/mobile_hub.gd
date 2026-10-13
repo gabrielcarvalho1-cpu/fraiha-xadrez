@@ -293,6 +293,10 @@ var side_modal_on := false   # R52f · ESCOLHA SEU LADO aberto no painel da arte
 const RefPageScript = preload("res://ui_v022/mobile_ref_page.gd")
 var ref_page = null          # R53 · MAIS / CONHEÇA / HISTÓRICO no visual das referências do celular
 
+## R86 · Home com o celular deitado = Home do PC (main_hub mostra o canvas dela e esconde esta tela).
+func desk_home_on() -> bool:
+    return current_page == "main" and not use_ref_home() and not side_modal_on
+
 func ref_page_on() -> bool:
     return is_instance_valid(ref_page) and ref_page.visible
 
@@ -433,7 +437,7 @@ func show_page(id: String):
             "settings": _settings(content)
     scroll.scroll_vertical = 0
     _fit_width.call_deferred(size.x < 560.0)
-    layout()
+    hub._layout()   # R86 · decide entre a Home do PC (deitado) e esta tela
 
 var club_row = null
 var fullscreen_button
