@@ -33,6 +33,11 @@ static func at(tex: Texture2D, px: Vector2) -> Texture2D:
     _cache[key] = out
     return out
 
+## R78 · solta tudo (reduções prontas + fontes): chamado ao fechar o XEQUE / a MARCHA, para a memória voltar
+static func clear_cache() -> void:
+    _cache.clear()
+    _src.clear()
+
 ## Solta as imagens de origem guardadas (as reduções prontas continuam). Chamado quando o preparo prévio acaba.
 static func release_sources() -> void:
     _src.clear()

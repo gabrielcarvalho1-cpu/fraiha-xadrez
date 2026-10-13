@@ -47,8 +47,11 @@ const SFX_R50 := {
 }
 const SFX_DB := {"exit": -6.0, "promote": -3.0, "arrive": -5.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
 
-const BOARD := preload("res://marcha/art/board.png")
-const BG := preload("res://marcha/art/table_bg.png")
+## R78 · arte do layout antigo (sem uso desde o visual novo em todo lugar): só carrega se for desenhada
+var BOARD: Texture2D:
+    get: return load("res://marcha/art/board.png")
+var BG: Texture2D:
+    get: return load("res://marcha/art/table_bg.png")
 const SYMBOLS := preload("res://marcha/art/simbolos_de_acao.png")
 const CROWN_TEX := preload("res://marcha/art/coroa_coroacao.png")   # R70: coroa da coroação (arte do dono)
 const FONT_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")
@@ -114,6 +117,7 @@ var ev_queue: Array = []
 var ev_running := false
 var waiting_server := false
 var cards := {}
+var peek_card := -1      # R78 · carta segurada (aparece grande)
 var card_back: Texture2D
 var pawn_tex := {}
 var portraits := {}
@@ -167,7 +171,7 @@ func setup(p_hub, p_stage):
 
 func _ready():
     # R37.2 · as cartas são reduzidas na hora de desenhar (ui_v022/crisp_tex.gd) — legíveis com filtro NEAREST
-    for r in CARD_FILES: cards[r] = load("res://marcha/art/cards/" + CARD_FILES[r] + ".png")
+    _load_cards()
     card_back = load("res://marcha/art/cards/carta_verso.png")
     for s in 4:
         pawn_tex[s] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + ".png")
@@ -200,7 +204,11 @@ func _ready():
     _relayout()
 
 # ---------------------------------------------------------------- abrir / fechar
+func _load_cards():
+    for r in CARD_FILES: cards[r] = load("res://marcha/art/cards/" + CARD_FILES[r] + ".png")
+
 func open():
+    if cards.is_empty(): _load_cards()
     visible = true
     root.visible = true
     Sound.music_on(stage, MUSIC)
@@ -222,6 +230,11 @@ func close():
     Sound.music_off(stage)
     mode = "lobby"
     g = null
+    # R78 · solta a memória das artes grandes (mesa, salão, cartas); voltam a carregar ao abrir de novo
+    r57.clear()
+    cards.clear()
+    if view != null: view.tex_cache.clear()
+    preload("res://ui_v022/crisp_tex.gd").clear_cache()
     closed.emit()
 
 func is_open() -> bool:
@@ -1246,7 +1259,7 @@ func _portrait_layout():
     var row := Rect2(0, board.end.y + gap, 1080, row_h)
     var cards := Rect2((1080.0 - 640.0 * cards_s) / 2.0, row.end.y + gap, 640.0 * cards_s, ch)
     # ajuda da jogada: só quando há algo a escolher, por cima do espaço logo acima da linha SUA VEZ
-    var help := Rect2(16, row.position.y - 8.0 - 150.0, 1048, 150)
+    var help := Rect2(8, 140, 1064, 104)   # R78 · controles (7/10/descartar) por cima das placas, longe do tabuleiro
     var ss: float = row_h / 122.0               # pergaminho SUA VEZ (arte 280x122)
     var ps: float = (row_h - 20.0) / 74.0       # botão JOGAR CARTA (arte 290x74)
     var total: float = 280.0 * ss + 24.0 + 290.0 * ps
@@ -1439,16 +1452,57 @@ class TableView extends Control:
         mouse_filter = Control.MOUSE_FILTER_STOP
         # R69 · filtro linear: as cartas (giradas e reduzidas) e os peões ficavam serrilhados com o NEAREST do projeto
         texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+    # R78 · SEGURAR a carta = ela aparece grande no meio da tela (para ler a função); soltar = some
+    const HOLD_MS := 380
+    var _hold_card := -1
+    var _hold_t0 := 0
+    var _hold_pos := Vector2.ZERO
+    func _process(_d):
+        if ui == null or _hold_card < 0 or ui.peek_card >= 0: return
+        if Time.get_ticks_msec() - _hold_t0 >= HOLD_MS:
+            ui.peek_card = _hold_card
+            queue_redraw()
+    func _hold_end():
+        _hold_card = -1
+        if ui.peek_card >= 0:
+            ui.peek_card = -1
+            queue_redraw()
     func _gui_input(event):
-        if event is InputEventMouseMotion:
-            ui.on_hover((event.position - ui.origin) / ui.k)
+        if event is InputEventMouseMotion or event is InputEventScreenDrag:
+            var mp: Vector2 = (event.position - ui.origin) / ui.k
+            if _hold_card >= 0 and ui.peek_card < 0 and mp.distance_to(_hold_pos) > 30.0: _hold_card = -1
+            if event is InputEventMouseMotion: ui.on_hover(mp)
+            return
+        var released: bool = (event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
+            or (event is InputEventScreenTouch and not event.pressed and not EMULATED_MOUSE)
+        if released:
+            _hold_end()
             return
         var pos := Vector2.INF
         if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT: pos = event.position
         elif event is InputEventScreenTouch and event.pressed and not EMULATED_MOUSE: pos = event.position
         if pos == Vector2.INF: return
         accept_event()
-        ui.on_press((pos - ui.origin) / ui.k)
+        var dp: Vector2 = (pos - ui.origin) / ui.k
+        _hold_card = -1
+        for h in range(ui.hits.size() - 1, -1, -1):
+            if Rect2(ui.hits[h].rect).has_point(dp):
+                var hid := String(ui.hits[h].id)
+                if hid.begins_with("card_") and ui.tut_page < 0 and not ui.menu_open:
+                    _hold_card = int(hid.substr(5)); _hold_t0 = Time.get_ticks_msec(); _hold_pos = dp
+                break
+        ui.on_press(dp)
+
+    func _draw_peek():
+        var g = ui.g
+        if g == null or ui.peek_card < 0 or ui.peek_card >= g.hands[0].size(): return
+        draw_rect(Rect2(-ui.origin / ui.k, size / ui.k), Color(0.02, 0.01, 0.04, 0.72))
+        var d: Vector2 = ui.design
+        var h: float = minf(d.y * 0.62, d.x * 0.72 * 1.4)
+        var sz := Vector2(h / 1.4, h)
+        var r := Rect2((d - sz) / 2.0, sz)
+        for gl in 6: draw_rect(r.grow(4 + gl * 4), Color(1.0, 0.8, 0.3, 0.2 - gl * 0.03), false, 4.0)
+        draw_texture_rect(Crisp.at(ui.cards[g.hands[0][ui.peek_card]], sz * ui.k), r, false)
     func tex(path: String) -> Texture2D:
         if not tex_cache.has(path): tex_cache[path] = load(path)
         return tex_cache[path]
@@ -1482,6 +1536,7 @@ class TableView extends Control:
         if ui.choice_open and ui.mode == "game" and not ui.menu_open: _draw_choice()
         if ui.menu_open: _draw_menu()
         if ui.tut_page >= 0: _draw_tutorial()
+        if ui.peek_card >= 0 and ui.mode == "game": _draw_peek()
         if not ui.flash.is_empty(): _draw_flash()
         draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
@@ -2274,23 +2329,22 @@ class TableView extends Control:
         art_button(plate, rref, dst, "play", ui.mode == "game" and ui.can_play())
 
     ## ajuda da carta escolhida, divisão do 7, opções do 10, descartar todas e CANCELAR — só quando há algo a fazer
+    ## R78 · sem o texto de ajuda da carta (o COMO JOGAR explica; ele cobria o tabuleiro no celular). O painel só
+    ## aparece quando há um controle a usar: dividir o 7, escolher o 10 ou descartar todas (+ CANCELAR). Para trocar
+    ## de carta, basta tocar em outra.
     func _r57_context():
         var g = ui.g
         if g == null or ui.mode != "game": return
         var choosing: bool = ui.sel_card >= 0 or not ui.pending.is_empty()
         var extra: bool = ui.can_discard_all() or ui.ten_choice() or ui.split_options().size() > 1
-        if not choosing and not extra: return
-        var pr: Rect2 = ui.rr(Rect2(22, 504, 326, 132))
+        if not extra: return
+        var S: float = 1.15 if ui.portrait else ui.r57_s()
+        var pr: Rect2 = ui.rr(Rect2(22, 560, 326, 70))
         if ui.portrait: pr = ui.portrait_game[7][1]
-        draw_rect(pr, Color(0.05, 0.02, 0.08, 0.88))
+        draw_rect(pr, Color(0.05, 0.02, 0.08, 0.92))
         draw_rect(pr, Color("c99a45"), false, 2.0)
         draw_rect(pr.grow(-5), Color(0.79, 0.6, 0.27, 0.3), false, 1.0)
-        var S: float = 1.15 if ui.portrait else ui.r57_s()
-        var line: String = ui.help_line().to_upper()
-        var lines := _wrap(line, "semi_sp", int(15 * S), pr.size.x - 24)
-        for li in mini(2, lines.size()):
-            text(lines[li], Vector2(pr.position.x + 12, pr.position.y + 26 * S + li * 20 * S), "semi_sp", int(15 * S), Color("e9c46e"))
-        var row_y: float = pr.position.y + 84 * S
+        var row_y: float = pr.get_center().y - 19 * S
         if ui.can_discard_all():
             dark_button(Rect2(pr.position.x + 10, row_y, 210 * S, 38 * S), "DESCARTAR TODAS (%d)" % g.hands[0].size(), int(15 * S), "discard_all")
         elif ui.ten_choice():

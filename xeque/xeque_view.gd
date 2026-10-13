@@ -59,7 +59,7 @@ var vignette: ImageTexture = null
 var vignette_layout := ""
 # R35.1 · cenário sem "caixa preta": a cena nítida tem as bordas esfumadas e, por trás, a MESMA cena
 # desfocada cobre a tela inteira (janela do navegador mais larga/baixa que 16:9 não mostra faixas pretas).
-const SCENE_SOFT := preload("res://xeque/art/mesa/mesa_cena_soft.png")   # tools/xeque_scene_soft.py
+const SCENE_SOFT_PATH := "res://xeque/art/mesa/mesa_cena_soft.png"   # tools/xeque_scene_soft.py · R78: só no PC, carrega quando desenha
 const SCENE_BLUR := preload("res://xeque/art/mesa/mesa_cena_blur.png")
 const SCENE_FULL := preload("res://xeque/art/mesa/mesa_cena_com_tapete.png")   # R71: celular, cena nítida inteira
 
@@ -330,7 +330,7 @@ func _draw_scene():
     if not desk():
         _draw_scene_full(Rect2(o, Vector2(1672, 941) * s))
         return
-    draw_texture_rect(SCENE_SOFT, Rect2(o, Vector2(1672, 941) * s), false)
+    draw_texture_rect(load(SCENE_SOFT_PATH), Rect2(o, Vector2(1672, 941) * s), false)
     var d: Vector2 = ui.design
     draw_texture_rect(_vignette(), Rect2(Vector2.ZERO, d), false)
     var end_y: float = minf(o.y + 941 * s, d.y)

@@ -9,7 +9,6 @@ signal closed
 
 const Rules := preload("res://xeque/rules.gd")
 const AI := preload("res://xeque/ai.gd")
-const SCENE := preload("res://xeque/art/mesa/mesa_cena_com_tapete.png")
 const CARD_BACK := preload("res://xeque/art/cartas/carta_verso.png")
 const CROWN := preload("res://xeque/art/interface/coroa.png")
 const CROWN_LOST := preload("res://xeque/art/interface/coroa_perdida.png")
@@ -40,8 +39,17 @@ const FONT_OS7 := preload("res://marcha/art/fonts/oswald-latin-700-normal.woff")
 const FONT_OS6 := preload("res://marcha/art/fonts/oswald-latin-600-normal.woff")
 const LOGO_R55_PATH := "res://xeque/art/interface/logo_r55.png"   # R55.4 · só no layout do PC
 var LOGO_R55: Texture2D = null
-const TUTORIAL_BG := preload("res://xeque/art/telas/tutorial_fundo.png")
-const RESULT_BG := preload("res://xeque/art/telas/resultado_fundo.png")
+## R78 · fundos grandes (8 MB cada na memória) só carregam quando a tela aparece e saem ao fechar o XEQUE
+var _tutorial_bg: Texture2D = null
+var _result_bg: Texture2D = null
+var TUTORIAL_BG: Texture2D:
+    get:
+        if _tutorial_bg == null: _tutorial_bg = load("res://xeque/art/telas/tutorial_fundo.png")
+        return _tutorial_bg
+var RESULT_BG: Texture2D:
+    get:
+        if _result_bg == null: _result_bg = load("res://xeque/art/telas/resultado_fundo.png")
+        return _result_bg
 ## peças douradas do conjunto Ouro do jogo (as mesmas desenhadas nas cartas)
 const PIECE_REGION := {"rei": Rect2(1524, 15, 197, 399), "rainha": Rect2(1227, 59, 198, 354), "cavalo": Rect2(623, 69, 220, 345), "peao": Rect2(63, 148, 170, 265)}
 
@@ -243,6 +251,9 @@ func _prewarm_step():
     if _prewarm.is_empty(): Crisp.release_sources()   # R61: memória — fontes na CPU só durante o preparo
 
 func close():
+    _tutorial_bg = null   # R78 · solta a memória das artes grandes
+    _result_bg = null
+    Crisp.clear_cache()
     _popup_close()
     if online:
         if mode == "game" and g != null and g.state != Rules.MATCH_END: _record_history("abandon")
