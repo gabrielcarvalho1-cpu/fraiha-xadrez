@@ -18,7 +18,7 @@ var subtitle: Label
 const Art = preload("res://account/login_art.gd")
 const ROW_RECTS = [Rect2(615,338,444,58), Rect2(615,398,444,59), Rect2(568,443,534,103), Rect2(615,534,444,60), Rect2(615,596,444,60), Rect2(615,659,444,61), Rect2(615,723,444,61), Rect2(615,787,444,61)]
 const CARD_ART = preload("res://ui_v022/assets/home_profile_card.png")
-const MENU_ART = preload("res://ui_v022/assets/home_forest_v2.png")   # recortes das 8 linhas originais (a Home do PC usa a v3)
+const MENU_ART_PATH := "res://ui_v022/assets/home_forest_v2.png"   # R87 · carregada só se a lista antiga for montada   # recortes das 8 linhas originais (a Home do PC usa a v3)
 const Widgets = preload("res://account/login_widgets.gd")
 
 func setup(owner_hub):
@@ -41,7 +41,7 @@ func setup(owner_hub):
     background.add_child(leaves)
     # Topo da Home: rei e rainha dourados (arte da abertura) com o título por cima.
     hero = TextureRect.new()
-    hero.texture = preload("res://branding/fraiha_loading_splash.png")
+    # R87 · memória: o hero nunca aparece (Home em pé = arte; deitado = Home do PC) → sem a arte de 6 MB
     hero.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     hero.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     hero.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -421,7 +421,7 @@ func show_page(id: String):
                         row.glyph = "hourglass" if row.text == "HISTÓRICO DE PARTIDAS" else ""
                     else:
                         var atlas = AtlasTexture.new()
-                        atlas.atlas = MENU_ART
+                        atlas.atlas = load(MENU_ART_PATH)
                         atlas.region = r
                         row.art = atlas
                     if row.text == "SAIR" and OS.has_feature("web"): row.subtitle_override = "Voltar para o site"

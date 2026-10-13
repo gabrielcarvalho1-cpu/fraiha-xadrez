@@ -156,7 +156,8 @@ func _build_backdrop():
     layer.layer = -5
     add_child(layer)
     var rect := TextureRect.new()
-    rect.texture = preload("res://ui_v022/assets/home_side_foliage.png")
+    # R87 · memória: no celular as telas cobrem tudo; a folhagem (6 MB) só no PC
+    if not MobileLayout.active(get_viewport()): rect.texture = load("res://ui_v022/assets/home_side_foliage.png")
     rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

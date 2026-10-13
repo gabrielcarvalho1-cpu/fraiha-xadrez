@@ -1271,31 +1271,35 @@ var portrait_game: Array = []
 ## título/ícones, placas dos perfis, TABULEIRO (centralizado no espaço livre), faixa da ajuda da jogada (só aparece
 ## quando há algo a escolher), linha SUA VEZ + JOGAR CARTA (compacta, lado a lado) e as CARTAS rentes ao fim da tela.
 func _portrait_layout():
-    # R86 · em pé INTEGRADO: tabuleiro recortado justo na moldura dourada (sem pedaços da arte do PC em volta),
-    # painel SUA VEZ + JOGAR CARTA inteiro com a moldura da arte (como no celular deitado) e as cartas embaixo.
+    # R87 · em pé como a referência do dono: tabuleiro quase na largura toda, painel SUA VEZ grande logo abaixo
+    # e as cartas RETAS e grandes lado a lado; espaços curtos entre os blocos (o que sobrar fica dividido em volta).
     var H: float = design.y
-    var top := 274.0
-    var cards_s := 1.62
-    var ch: float = 206.0 * cards_s
+    var top := 262.0
+    var ch := 352.0                              # cartas (4 lado a lado, ~248 de largura)
     var ph := 300.0                              # painel SUA VEZ + JOGAR CARTA (arte 330x280)
-    var bottom_pad := 10.0
+    var bottom_pad := 12.0
     var min_gap := 14.0
-    var bw := 1044.0
+    var bw := 1060.0
     var bh: float = BOARD_SRC.size.y * bw / BOARD_SRC.size.x
     var maxb: float = H - top - ph - ch - bottom_pad - 4.0 * min_gap
-    if bh > maxb:                                # aparelho baixo: encolhe o tabuleiro e o painel para caber
-        ph = maxf(220.0, ph - (bh - maxb))
+    if bh > maxb:                                # aparelho baixo: encolhe painel, cartas e só então o tabuleiro
+        ph = maxf(230.0, ph - (bh - maxb))
         maxb = H - top - ph - ch - bottom_pad - 4.0 * min_gap
+        if bh > maxb:
+            ch = maxf(280.0, ch - (bh - maxb))
+            maxb = H - top - ph - ch - bottom_pad - 4.0 * min_gap
         if bh > maxb:
             bh = maxb
             bw = BOARD_SRC.size.x * bh / BOARD_SRC.size.y
-    # sobrou altura (celular alto): o painel cresce até 400 antes de abrir espaços vazios
-    ph = clampf(H - top - bh - ch - bottom_pad - 4.0 * 26.0, ph, 400.0)
-    var gap: float = (H - top - bh - ph - ch - bottom_pad) / 4.0
-    var board := Rect2((1080.0 - bw) / 2.0, top + gap, bw, bh)
+    # sobrou altura (celular alto): o painel cresce até 440; espaços entre blocos no máximo 46
+    ph = clampf(H - top - bh - ch - bottom_pad - 4.0 * 46.0, ph, 440.0)
+    var gap: float = clampf((H - top - bh - ph - ch - bottom_pad) / 4.0, min_gap, 46.0)
+    var extra: float = maxf(0.0, H - top - bh - ph - ch - bottom_pad - 4.0 * gap)
+    var y0: float = top + gap + extra * 0.5
+    var board := Rect2((1080.0 - bw) / 2.0, y0, bw, bh)
     var pw: float = ph * 330.0 / 280.0
     var panel := Rect2((1080.0 - pw) / 2.0, board.end.y + gap, pw, ph)
-    var cards := Rect2((1080.0 - 640.0 * cards_s) / 2.0, panel.end.y + gap, 640.0 * cards_s, ch)
+    var cards := Rect2(20.0, panel.end.y + gap, 1040.0, ch)
     # ajuda da jogada: só quando há algo a escolher, por cima das placas, longe do tabuleiro
     var help := Rect2(8, 140, 1064, 104)
     portrait_game = [
@@ -1452,6 +1456,14 @@ const R57_PLAY := Rect2(62, 840, 273, 62)
 const R57_CARD := Vector2(138, 195)
 
 func card_rect(i: int, n: int) -> Rect2:
+    if desk and portrait and not portrait_game.is_empty():
+        # R87 · em pé: cartas retas, grandes e lado a lado (como na referência)
+        var cb: Rect2 = portrait_game[4][1]
+        var gp := 14.0
+        var cw: float = minf((cb.size.x - (n - 1) * gp) / maxf(1.0, n), cb.size.y * R57_CARD.x / R57_CARD.y)
+        var chh: float = cw * R57_CARD.y / R57_CARD.x
+        var tot: float = n * cw + (n - 1) * gp
+        return Rect2(cb.position.x + (cb.size.x - tot) / 2.0 + i * (cw + gp), cb.end.y - chh, cw, chh)
     if desk:
         # R57 · mão aberta embaixo do tabuleiro, como na referência — cartas inteiras à vista
         var gap := 147.0 if n <= 4 else 128.0
@@ -2265,7 +2277,7 @@ class TableView extends Control:
             var r: Rect2 = ui.card_rect(i, n)
             var selected: bool = i == ui.sel_card
             var rot := 0.0
-            if ui.portrait: rot = [-0.05, 0.03, 0.03, 0.06][mini(i, 3)]
+            if ui.portrait: rot = 0.0   # R87 · cartas retas em pé
             elif ui.desk: rot = lerpf(-0.07, 0.085, float(i) / maxf(1.0, n - 1.0)) if n > 1 else 0.0     # leque da referência
             if selected:
                 # R57 · no PC a carta sobe pouco: não pode cobrir as casas de baixo do tabuleiro

@@ -294,7 +294,7 @@ func _build_search_art():
     add_child(search_art)
     var bg := TextureRect.new()
     bg.name = "SearchBg"
-    bg.texture = load("res://ui_kit/pages/buscando_bg.png")
+    bg.texture = null   # R87 · carregada só quando a busca aparece (_show_search_bg)
     bg.size = SEARCH_REF
     bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     bg.stretch_mode = TextureRect.STRETCH_SCALE
@@ -535,6 +535,7 @@ func _show(which: String):
     # Desktop: escolha de ritmo com a arte da referência (a lista acima continua sendo a fonte das ações).
     var was_search := search_art.visible
     search_art.visible = which == "searching"
+    _show_search_bg(search_art.visible)
     if search_art.visible:
         var mi = _mode_info(controller_mode_or_last())
         _set_search_mode("%s · %d min" % [mi[1], mi[2]] if rated() else "CASUAL · %s · %d min" % [mi[1], mi[2]])
@@ -1080,3 +1081,11 @@ func _analyze_button():
         stage.open_analysis(), true)
     b.name = "AnalyzeMatch"
     if not line.is_empty(): _label(line, 13, GOLD if (access != null and access.club_unlimited()) else Color("c4cbbd"), true)
+
+
+## R87 · memória: o fundo do BUSCANDO ADVERSÁRIO (6 MB) só fica carregado enquanto a busca está na tela
+func _show_search_bg(on: bool):
+    var bg = search_art.get_node_or_null("SearchBg") if is_instance_valid(search_art) else null
+    if bg == null: return
+    if on and bg.texture == null: bg.texture = load("res://ui_kit/pages/buscando_bg.png")
+    elif not on: bg.texture = null

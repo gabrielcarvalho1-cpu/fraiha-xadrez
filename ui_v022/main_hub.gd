@@ -2094,7 +2094,7 @@ func _draw_presentation_frame():
         presentation_frame.draw_texture_rect(FOREST_WIDE, Rect2(artwork.position - Vector2(WIDE_PAD * u, 0), FOREST_WIDE.get_size() * u), false)
         return
     # Sobras da tela (fora da tela cheia): panorama de folhagem em pixel art, levemente escurecido.
-    var foliage: Texture2D = preload("res://ui_v022/assets/home_side_foliage.png")
+    var foliage: Texture2D = load("res://ui_v022/assets/home_side_foliage.png")   # R87 · não fica presa na memória do celular
     var fs = maxf(full.size.x / foliage.get_width(), full.size.y / foliage.get_height())
     var fr = Rect2((full.size - foliage.get_size() * fs) / 2.0, foliage.get_size() * fs)
     # Quase sem escurecer: com a barra do navegador visível (antes da tela cheia) a folhagem continua a cena

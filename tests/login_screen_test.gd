@@ -22,7 +22,7 @@ func run():
     ui.open("login")
     for i in range(4): await process_frame
     check(ui.is_open() and ui.page == "login", "abre em ENTRAR")
-    check(ui.art.texture == ui.ART_FULL and not ui.title_label.visible, "ENTRAR usa a arte completa (título pintado)")
+    check(ui.art.texture != null and ui.art.texture.resource_path == ui.ART_FULL_PATH and not ui.title_label.visible, "ENTRAR usa a arte completa (título pintado)")
     check(ui.fields.has("email") and ui.fields.has("password"), "campos e-mail e senha")
     var fe = ui.panel.get_node_or_null("Field_email")
     var fp = ui.panel.get_node_or_null("Field_password")
@@ -42,7 +42,7 @@ func run():
     for c in ui.panel.get_children():
         if c is Button and c.text == "Criar conta": c.pressed.emit()
     for i in range(2): await process_frame
-    check(ui.page == "signup" and ui.art.texture == ui.ART_BLANK and ui.title_label.visible and ui.title_label.text == "CRIAR CONTA", "Criar conta → página com moldura vazia e título")
+    check(ui.page == "signup" and ui.art.texture != null and ui.art.texture.resource_path == ui.ART_BLANK_PATH and ui.title_label.visible and ui.title_label.text == "CRIAR CONTA", "Criar conta → página com moldura vazia e título")
     check(ui.fields.has("nickname") and ui.fields.has("email") and ui.fields.has("password"), "campos de criar conta")
     var kinds := []
     for c in ui.box.find_children("*", "Button", true, false): kinds.append(c.text)

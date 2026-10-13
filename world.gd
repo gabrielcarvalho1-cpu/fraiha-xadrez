@@ -491,6 +491,11 @@ func _draw():
             var c=Vector2i(x,y)
             var r=Rect2(ORIGIN+Vector2(display_cell(c))*TILE,Vector2(TILE,TILE))
             var sq=Color("#cbb273") if (x+y)%2==0 else Color("#557a3e")
+            if visual_theme == "wood" and mobile_presentation:
+                # R87 · celular: as casas da arte, recortadas e desenhadas exatamente na grade (sem riscos e
+                # com os destaques encaixados na casa) — a arte de fundo fica só como moldura
+                var dc := display_cell(c)
+                draw_texture_rect_region(_casas_madeira(), r, Rect2(Vector2(dc) * 80.0, Vector2(80, 80)))
             if visual_theme != "wood":
                 # Cosmetic steel tiles share the exact existing input grid.
                 draw_rect(r,board_palette[(x+y)%2])
@@ -514,6 +519,9 @@ func _draw():
             if c==selected:
                 draw_rect(r.grow(-4),Color("#f3d25c"),false,5)
 
+    if visual_theme == "wood" and mobile_presentation:
+        # R87 · fio escuro na borda da grade: esconde a sobra da arte entre as casas e a moldura
+        draw_rect(Rect2(ORIGIN, Vector2(BOARD, BOARD)).grow(2.0), Color("3a2412"), false, 5.0)
     # Sem letras/números: arena limpa como a referência (exceto no LABORATÓRIO, opcional).
     if show_coordinates: _draw_coordinates()
 
@@ -870,6 +878,11 @@ func _draw_coordinates():
         var rr := Rect2(ORIGIN + Vector2(display_cell(rank_cell)) * TILE, Vector2(TILE, TILE))
         var ink2: Color = board_palette[(rank_cell.x + rank_cell.y) % 2 ^ 1] if visual_theme != "wood" else Color(0.1, 0.12, 0.08, 0.85)
         draw_string(font, rr.position + Vector2(TILE * 0.06, TILE * 0.24), str(8 - rank_cell.y), HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(ink2, 0.9))
+
+var _casas_tex: Texture2D = null
+func _casas_madeira() -> Texture2D:
+    if _casas_tex == null: _casas_tex = load("res://visual_v018/casas_madeira.png")
+    return _casas_tex
 
 func _draw_last_move(r: Rect2, dest: bool):
     var base := 0.20 if dest else 0.15

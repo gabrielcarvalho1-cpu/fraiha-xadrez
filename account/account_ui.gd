@@ -12,8 +12,9 @@ const GOLD = Color("f4ce7f")
 const Art = preload("res://account/login_art.gd")
 const LoginSkin = preload("res://account/login_skin.gd")
 const WebTextField = preload("res://ui_v022/web_text_field.gd")
-const ART_FULL := preload("res://account/art/login_art.png")
-const ART_BLANK := preload("res://account/art/login_art_blank.png")
+## R87 · memória: as duas artes do login (6 MB cada) só ficam carregadas enquanto a tela de conta está aberta
+const ART_FULL_PATH := "res://account/art/login_art.png"
+const ART_BLANK_PATH := "res://account/art/login_art_blank.png"
 const REF := Vector2(1122, 1402)            # tamanho da arte de referência
 const INNER := Rect2(196, 430, 738, 825)    # interior útil (abaixo da faixa do título)
 const TITLE_BAND := Rect2(222, 300, 678, 90)
@@ -66,7 +67,7 @@ func setup(service):
     holder.add_child(panel)
     art = TextureRect.new()
     art.name = "LoginArt"
-    art.texture = ART_FULL
+    art.texture = null
     art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     art.stretch_mode = TextureRect.STRETCH_SCALE
     art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
@@ -116,6 +117,7 @@ func open(target := "", info := "", for_ranked := false):
 
 func hide_ui():
     dim.hide(); scroll.hide()
+    if is_instance_valid(art): art.texture = null   # R87 · solta a arte do login
 
 func close():
     hide_ui()
@@ -294,7 +296,7 @@ func _show(target: String):
         "new_password":"NOVA SENHA", "set_password":"SENHA DA CONTA", "nickname":"ESCOLHA SEU NOME", "account":"SUA CONTA",
         "waiting":"CONECTANDO…", "unavailable":"CONTAS"}
     var baked := target == "login"
-    art.texture = ART_FULL if baked else ART_BLANK
+    art.texture = load(ART_FULL_PATH if baked else ART_BLANK_PATH)
     title_label.text = String(titles.get(target, "CONTA"))
     title_label.visible = not baked    # na arte de ENTRAR o título já está pintado
     box.visible = not baked

@@ -1043,11 +1043,18 @@ class BgArt extends Node2D:
 	var full := Rect2()
 	var top_rect := Rect2()
 	var frame_rect := Rect2()
-	var _fill: Texture2D = load("res://ranked/art/mob_hud_fill.png")
-	var _top: Texture2D = load("res://ranked/art/mob_hud_p_top.png")
-	var _land: Texture2D = load("res://ranked/art/mob_hud_l_art.png")
-	var _frame: Texture2D = load("res://ranked/art/mob_hud_frame.png")
+	# R87 · memória: as artes do HUD (~13 MB) carregam no primeiro desenho, não ao montar a tela
+	var _fill: Texture2D
+	var _top: Texture2D
+	var _land: Texture2D
+	var _frame: Texture2D
 	func _draw():
+		if mode == "p" and _fill == null:
+			_fill = load("res://ranked/art/mob_hud_fill.png")
+			_top = load("res://ranked/art/mob_hud_p_top.png")
+		elif mode != "p" and _land == null:
+			_land = load("res://ranked/art/mob_hud_l_art.png")
+			_frame = load("res://ranked/art/mob_hud_frame.png")
 		if mode == "p":
 			if wood:
 				var ts := _fill.get_size()

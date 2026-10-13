@@ -48,7 +48,8 @@ var TUTORIAL_BG: Texture2D:
         return _tutorial_bg
 var RESULT_BG: Texture2D:
     get:
-        if _result_bg == null: _result_bg = load("res://xeque/art/telas/resultado_fundo.png")
+        # R87 · celular: fundo do resultado em meia resolução (2 MB em vez de 8 MB) — a tela de derrota recarregava o Safari
+        if _result_bg == null: _result_bg = load("res://xeque/art/telas/resultado_fundo.png" if layout == "desktop" else "res://xeque/art/telas/resultado_fundo_cel.png")
         return _result_bg
 ## peças douradas do conjunto Ouro do jogo (as mesmas desenhadas nas cartas)
 const PIECE_REGION := {"rei": Rect2(1524, 15, 197, 399), "rainha": Rect2(1227, 59, 198, 354), "cavalo": Rect2(623, 69, 220, 345), "peao": Rect2(63, 148, 170, 265)}
