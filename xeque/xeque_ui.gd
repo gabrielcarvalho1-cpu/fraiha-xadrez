@@ -9,28 +9,34 @@ signal closed
 
 const Rules := preload("res://xeque/rules.gd")
 const AI := preload("res://xeque/ai.gd")
-const CARD_BACK := preload("res://xeque/art/cartas/carta_verso.png")
+const CARD_BACK_PATH := "res://xeque/art/cartas/carta_verso.png"
+var _card_back: Texture2D = null
+var CARD_BACK: Texture2D:
+    get:
+        if _card_back == null: _card_back = load(CARD_BACK_PATH)
+        return _card_back
 const CROWN := preload("res://xeque/art/interface/coroa.png")
 const CROWN_LOST := preload("res://xeque/art/interface/coroa_perdida.png")
 const BTN_GOLD := preload("res://xeque/art/interface/botao_dourado.png")
 const BTN_DARK := preload("res://xeque/art/interface/botao_escuro.png")
 const Sound := preload("res://ui_v022/mode_sound.gd")
 const MUSIC := "res://xeque/audio/musica_xeque.mp3"      # música enviada pelo dono do projeto (loop)
+## R89 · caminhos (antes preload: todos os sons ficavam na memória desde a abertura do jogo)
 const SFX := {
-    "card_1": preload("res://xeque/audio/carta_baixar_1.wav"), "card_2": preload("res://xeque/audio/carta_baixar_2.wav"),
-    "card_3": preload("res://xeque/audio/carta_baixar_3.wav"), "your_turn": preload("res://xeque/audio/sua_vez.wav"),
-    "xeque": preload("res://xeque/audio/xeque.wav"), "reveal": preload("res://xeque/audio/revelar.wav"),
-    "clock": preload("res://xeque/audio/relogio.wav"), "safe": preload("res://xeque/audio/seguro.wav"),
-    "mate": preload("res://xeque/audio/xeque_mate.wav"), "elim": preload("res://xeque/audio/eliminado.wav"),
-    "victory": preload("res://xeque/audio/vitoria.wav"), "defeat": preload("res://xeque/audio/derrota.wav"),
+    "card_1": "res://xeque/audio/carta_baixar_1.wav", "card_2": "res://xeque/audio/carta_baixar_2.wav",
+    "card_3": "res://xeque/audio/carta_baixar_3.wav", "your_turn": "res://xeque/audio/sua_vez.wav",
+    "xeque": "res://xeque/audio/xeque.wav", "reveal": "res://xeque/audio/revelar.wav",
+    "clock": "res://xeque/audio/relogio.wav", "safe": "res://xeque/audio/seguro.wav",
+    "mate": "res://xeque/audio/xeque_mate.wav", "elim": "res://xeque/audio/eliminado.wav",
+    "victory": "res://xeque/audio/vitoria.wav", "defeat": "res://xeque/audio/derrota.wav",
     # R35.1 · vozes (tools/xeque_voice.py): "XEQUE!" a cada desafio, "XEQUE-MATE!" quando alguém cai
-    "voice_xeque": preload("res://xeque/audio/voz_xeque.wav"), "voice_mate": preload("res://xeque/audio/voz_xeque_mate.wav"),
-    "voice_mate_lost": preload("res://xeque/audio/voz_xeque_mate_derrota.mp3"),   # R85 · voz + espada quando VOCÊ toma xeque-mate
+    "voice_xeque": "res://xeque/audio/voz_xeque.wav", "voice_mate": "res://xeque/audio/voz_xeque_mate.wav",
+    "voice_mate_lost": "res://xeque/audio/voz_xeque_mate_derrota.mp3",   # R85 · voz + espada quando VOCÊ toma xeque-mate
     # R36 · efeitos mais fortes (tools/xeque_sfx_r36.py)
-    "xeque_hit": preload("res://xeque/audio/xeque_impacto.wav"), "flip": preload("res://xeque/audio/virar_carta.wav"),
-    "clock_tension": preload("res://xeque/audio/relogio_tensao.wav"), "relief": preload("res://xeque/audio/seguro_alivio.wav"),
-    "mate_boom": preload("res://xeque/audio/xeque_mate_boom.wav"), "defeat_final": preload("res://xeque/audio/derrota_final.wav"),
-    "victory_final": preload("res://marcha/audio/vitoria_final.wav"), "deck_intro": preload("res://xeque/audio/baralho_intro.wav"),
+    "xeque_hit": "res://xeque/audio/xeque_impacto.wav", "flip": "res://xeque/audio/virar_carta.wav",
+    "clock_tension": "res://xeque/audio/relogio_tensao.wav", "relief": "res://xeque/audio/seguro_alivio.wav",
+    "mate_boom": "res://xeque/audio/xeque_mate_boom.wav", "defeat_final": "res://xeque/audio/derrota_final.wav",
+    "victory_final": "res://marcha/audio/vitoria_final.wav", "deck_intro": "res://xeque/audio/baralho_intro.wav",
 }
 const SFX_DB := {"xeque_hit": -2.0, "mate_boom": 0.0, "clock_tension": -4.0, "relief": -5.0, "victory_final": -4.0, "defeat_final": -4.0, "deck_intro": -6.0, "flip": -6.0, "voice_xeque": -1.0, "voice_mate": 0.0, "voice_mate_lost": -1.0, "your_turn": -9.0, "xeque": -6.0, "mate": -3.0, "victory": -7.0, "defeat": -7.0, "elim": -6.0}
 const FONT_UI := preload("res://xeque/art/fontes/Jersey20-Regular.woff2")
@@ -193,10 +199,20 @@ func setup(p_hub, p_stage):
     hub = p_hub
     stage = p_stage
 
-func _ready():
+## R89 · artes do modo carregadas ao ABRIR e soltas ao FECHAR (antes: no início do jogo, para sempre)
+func _load_art():
+    if not cards.is_empty(): return
     for n in ["rei", "rainha", "cavalo", "peao"]: cards[n] = load("res://xeque/art/cartas/carta_%s.png" % n)
     for s in ["neutro", "pulsando", "perigo", "quase", "disparado"]: clock_tex[s] = load("res://xeque/art/relogio/relogio_%s.png" % s)
     for s in ["normal", "hover", "pressionado", "desabilitado", "ativado"]: xeque_tex[s] = load("res://xeque/art/interface/botao_xeque_%s.png" % s)
+
+func _release_art():
+    cards.clear(); clock_tex.clear(); xeque_tex.clear(); cards_clean.clear(); _sfx.clear()
+    _card_back = null
+    LOGO_R55 = null
+    avatars = []
+
+func _ready():
     # R84 · as peças de ouro (atlas de 6 MB) não eram desenhadas em lugar nenhum: não são mais carregadas
     # R55 · PC (referência nova): Oswald 700/600, a fonte das placas e cartas da referência
     for pair in [["ui", FONT_UI, 0], ["ui_sp", FONT_UI, 2], ["ui_sp4", FONT_UI, 4], ["title", FONT_TITLE, 0],
@@ -221,6 +237,7 @@ func _ready():
 
 # ---------------------------------------------------------------- abrir / fechar
 func open():
+    _load_art()
     visible = true
     root.visible = true
     Sound.music_on(stage, MUSIC)
@@ -248,6 +265,7 @@ func _prewarm_step():
     if _prewarm.is_empty(): Crisp.release_sources()   # R61: memória — fontes na CPU só durante o preparo
 
 func close():
+    Sound.close_popup(hub)   # R88
     _tutorial_bg = null   # R78 · solta a memória das artes grandes
     if view != null and view.has_method("release_art"): view.release_art()
     _result_bg = null
@@ -262,6 +280,8 @@ func close():
     mode = "tutorial"
     g = null
     phase = ""
+    _release_art()   # R89
+    Sound.release_fonts()   # R89
     closed.emit()
 
 func is_open() -> bool:
@@ -488,6 +508,10 @@ func _timeout():
     if input_locked or g.turn != 0: return
     input_locked = true
     var pub := g.timeout_action(0)
+    if pub.has("accept"):   # R88 · último com cartas: tempo esgotado = ACEITAR
+        _flash("Tempo esgotado: você aceitou e ficou com as cartas.")
+        _on_challenge(pub.accept, 0)
+        return
     _flash("Tempo esgotado: uma carta foi jogada por você.")
     _after_play(0, pub)
 
@@ -496,6 +520,9 @@ func _bot_act():
     var d := AI.decide(g.public_state(s), g.private_hand(s), SEAT_PROFILE[s], rng)
     if d.action == "challenge" and g.can_challenge(s):
         _on_challenge(g.challenge(s), s)
+        return
+    if g.can_accept(s):   # R88 · último com cartas que não desafia: ACEITAR
+        _on_challenge(g.accept(s), s)
         return
     var pub := g.play(s, d.get("idx", [0]))
     if pub.is_empty(): pub = g.timeout_action(s)   # nunca deve acontecer: o motor recusou; joga 1 carta
@@ -538,6 +565,18 @@ func human_play():
         return
     _after_play(0, g.play(0, idx))
 
+func can_human_accept() -> bool:
+    return mode == "game" and g != null and phase == "" and not input_locked and g.can_accept(0)
+
+## R88 · ACEITAR: o último com cartas não desafia e aciona o próprio relógio
+func human_accept():
+    if not can_human_accept(): return
+    input_locked = true
+    if online:
+        _online_send({"kind": "accept"})
+        return
+    _on_challenge(g.accept(0), 0)
+
 func human_challenge():
     if not can_human_challenge(): return
     input_locked = true
@@ -555,6 +594,16 @@ func _on_challenge(r: Dictionary, caller: int):
     xeque_caller = caller
     input_locked = true
     selected = []
+    if bool(r.get("accept", false)):
+        # R88 · ACEITAR: nada é revelado; direto para o relógio de quem ficou com as cartas
+        phase = "clock"
+        phase_t = 0.0
+        _cue("clock_tension")
+        fx_shake(FX_SHAKE.clock)
+        fx_slam("ACEITOU", ("%s FICOU COM AS CARTAS" % String(g.names[caller]).to_upper()) if g != null and caller >= 0 and caller < g.names.size() else "", Color("ffd257"))
+        last_tick_s = -1
+        _redraw()
+        return
     phase = "reveal"
     for ci in int(r.get("cards", []).size()):   # um "flip" por carta, no meio da virada dela
         get_tree().create_timer(FX_DELAY.flip + ci * FLIP_STAGGER).timeout.connect(func(): if phase == "reveal": _cue("flip"))
@@ -666,6 +715,24 @@ func _resume_from_tutorial():
     _redraw()
 
 # ---------------------------------------------------------------- toques
+## R88 · CHAT da mesa no lugar reservado pelo layout (celular em pé); senão, a posição padrão
+func _sync_chat_dock():
+    var pc = stage.get("party_chat") if stage != null else null
+    if pc == null or not pc.has_method("set_dock"): return
+    var lay: Dictionary = view.L() if view != null else {}
+    var d: Rect2 = lay.get("chat", Rect2()) if (online and mode == "game" and visible) else Rect2()
+    if d.size.x > 0.0 and layout == "portrait":
+        # celular alto: sobra faixa embaixo dos botões XEQUE / JOGAR CARTAS → CHAT grande ali, no canto direito
+        var bottom: float = (get_viewport().get_visible_rect().size.y - origin.y) / k
+        if bottom - 1900.0 >= 96.0: d = Rect2(680, 1900, 360, minf(100.0, bottom - 1912.0))
+    pc.set_dock(Rect2(origin + d.position * k, d.size * k) if d.size.x > 0.0 else Rect2())
+
+## R88 · retângulo (em pixels de tela) da área de toque com este id — para abrir o volume junto do ícone
+func _hit_screen_rect(id: String) -> Rect2:
+    for h in hits:
+        if String(h.id) == id: return Rect2(origin + Rect2(h.rect).position * k, Rect2(h.rect).size * k)
+    return Rect2(get_viewport().get_visible_rect().size.x - 80, 10, 60, 60)
+
 func on_press(p: Vector2):
     for h in range(hits.size() - 1, -1, -1):
         var hit: Dictionary = hits[h]
@@ -740,8 +807,9 @@ func _on_hit(id: String):
         "play": human_play()
         "play_empty": _flash("Escolha de 1 a 3 cartas da sua mão.")
         "xeque": human_challenge()
-        "mute_music": Sound.toggle_music(hub)
-        "mute_fx": Sound.toggle_effects(hub)
+        "accept": human_accept()
+        "mute_music": Sound.volume_popup(hub, "music", _hit_screen_rect("mute_music"))   # R88 · controle de volume
+        "mute_fx": Sound.volume_popup(hub, "fx", _hit_screen_rect("mute_fx"))
         "fullscreen":
             var sm = screen_mode()
             if sm != null: sm.toggle()
@@ -792,11 +860,13 @@ func _mate_voice() -> String:
     return "voice_mate_lost"
 
 var cues_played: Array = []      # testes: últimos efeitos pedidos
+var _sfx := {}
 func _cue(kind: String):
     cues_played.append(kind)
     if cues_played.size() > 40: cues_played.pop_front()
     if SFX.has(kind):
-        Sound.play(stage, SFX[kind], float(SFX_DB.get(kind, -8.0)))
+        if not _sfx.has(kind): _sfx[kind] = load(String(SFX[kind]))
+        Sound.play(stage, _sfx[kind], float(SFX_DB.get(kind, -8.0)))
         return
     var audio = stage.get_node_or_null("GameAudio") if stage != null else null
     if audio != null and audio.has_method("play_cue"): audio.play_cue("ui")
@@ -859,6 +929,7 @@ func help_text() -> Array:
     if g == null or mode != "game": return ["", ""]
     if phase != "": return ["", ""]
     if g.turn == 0:
+        if g.can_accept(0): return ["Só você tem cartas: *XEQUE* na última jogada", "ou *ACEITAR* (aciona o seu relógio)"]   # R88
         if selected.is_empty():
             return ["Escolha de *1 a 3* cartas", "ou duvide com *XEQUE*"] if g.can_challenge(0) else ["Escolha de *1 a 3* cartas", "e baixe viradas para baixo"]
         return ["Você vai dizer: *%s*" % g.declared_text(selected.size()), "toque em *JOGAR CARTAS*"]
@@ -871,6 +942,7 @@ var online_turn_ms := TURN_MS
 ## O espelho local (g) só guarda o que é PÚBLICO + a sua mão; as mãos dos outros e a ordem dos
 ## relógios nunca chegam aqui.
 func start_online(msg: Dictionary):
+    _load_art()   # R89 · pode chegar sem passar pelo open()
     var resumed := bool(msg.get("resumed", false)) and online and room_id == String(msg.get("room_id", "")) and g != null
     online = true
     room_id = String(msg.get("room_id", ""))

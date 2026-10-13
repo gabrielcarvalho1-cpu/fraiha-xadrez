@@ -30,8 +30,10 @@ const LAYOUTS := {
         "plates": {0: ["h", Rect2(62, 1444, 356, 136)], 1: ["v", Vector2(190, 330), 214], 2: ["v", Vector2(540, 330), 214], 3: ["v", Vector2(890, 330), 214]},
         "turn": Rect2(350, 1361, 380, 62), "meter": Rect2(708, 1452, 300, 120),
         "xeque": [Vector2(184, 1846), 0.768], "play": Rect2(405, 1805, 630, 82),
-        "hint": null, "help": Rect2(470, 22, 60, 60), "menu": Rect2(540, 22, 60, 60),
-        "music": Rect2(330, 22, 60, 60), "fx": Rect2(400, 22, 60, 60), "full": Rect2(260, 22, 60, 60), "voice": Rect2(620, 22, 60, 60), "voice_ear": Rect2(620, 92, 60, 60),
+        # R88 · ícones maiores no celular em pé (84 em vez de 60) e o CHAT num lugar próprio, fora do tabuleiro
+        "hint": null, "help": Rect2(296, 12, 84, 84), "menu": Rect2(388, 12, 84, 84),
+        "music": Rect2(112, 12, 84, 84), "fx": Rect2(204, 12, 84, 84), "full": Rect2(20, 12, 84, 84), "voice": Rect2(500, 12, 84, 84), "voice_ear": Rect2(592, 12, 84, 84),
+        "chat": Rect2(250, 102, 300, 58),     # topo (aparelho baixo); em celular alto vai para baixo dos botões
         "hand": [Vector2(540, 1664), 0.167], "pile": [Vector2(540, 912), 0.18], "clock": [Vector2(540, 703), 0.32],
         "reveal": [Vector2(540, 884), 0.25], "mate_clock": [Vector2(540, 690), 0.48], "mate_title": [Vector2(540, 1252), 128],
         "mate_line": [Vector2(540, 1326), 27],
@@ -65,8 +67,21 @@ const SCENE_SOFT_PATH := "res://xeque/art/mesa/mesa_cena_soft.png"   # tools/xeq
 var _scene_soft: Texture2D = null
 func release_art():
     _scene_soft = null
-const SCENE_BLUR := preload("res://xeque/art/mesa/mesa_cena_blur.png")
-const SCENE_FULL := preload("res://xeque/art/mesa/mesa_cena_com_tapete.png")   # R71: celular, cena nítida inteira
+    _scene_full = null
+    _scene_blur = null
+    vignette = null
+    vignette_layout = ""
+## R89 · cenas da mesa só enquanto o XEQUE está aberto (antes eram constantes: 6 MB para sempre)
+var _scene_blur: Texture2D = null
+var _scene_full: Texture2D = null
+var SCENE_BLUR: Texture2D:
+    get:
+        if _scene_blur == null: _scene_blur = load("res://xeque/art/mesa/mesa_cena_blur.png")
+        return _scene_blur
+var SCENE_FULL: Texture2D:
+    get:
+        if _scene_full == null: _scene_full = load("res://xeque/art/mesa/mesa_cena_com_tapete.png")   # R71: celular, cena nítida inteira
+        return _scene_full
 
 func _vignette() -> ImageTexture:
     if vignette != null and vignette_layout == ui.layout: return vignette
@@ -385,6 +400,7 @@ func _draw_scene_full(a: Rect2):
 func _draw_game():
     var g = ui.g
     if g == null: return
+    ui._sync_chat_dock()   # R88
     var lay := L()
     _draw_scene()
     _draw_title()
@@ -412,7 +428,7 @@ func _draw_game():
     _draw_voice(lay)
     if not mate: _draw_hand()
     _draw_fly()
-    if ui.phase in ["reveal", "clock", "safe"]: _draw_reveal(false)
+    if ui.phase in ["reveal", "clock", "safe"] and not bool(ui.result.get("accept", false)): _draw_reveal(false)   # R88: ACEITAR não revela
     # R85 · o relógio acionado aparece sozinho: tela escurece em fade e ele surge grande no centro, POR CIMA das cartas
     if not mate and ui.phase in ["clock", "safe"]: _draw_center_clock()
     if ui.deal_anim >= 0.0 and ui.intro_anim < 0.0: _draw_deal()
@@ -464,6 +480,10 @@ func _draw_mesa_anim():
 func _draw_title():
     if desk(): return _desk_title()
     var lay := L()
+    if ui.layout == "portrait":
+        # R88 · em pé os ícones (maiores) ocupam o topo: fica só a RODADA, embaixo deles
+        text("RODADA %d" % ui.g.round_no, Vector2(24, 136), "ui_sp4", 30, Color("caa14a"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3, Color(0.07, 0.04, 0.02, 0.85))
+        return
     var tp: Array = lay.title
     text("Xeque", tp[0], "title", tp[1], Color("f2c050"), -1, HORIZONTAL_ALIGNMENT_LEFT, 8, Color("2a1206"))
     draw_string(font("title"), tp[0] + Vector2(0, -2), "Xeque", HORIZONTAL_ALIGNMENT_LEFT, -1, tp[1], Color(1, 0.93, 0.62, 0.35))
@@ -916,6 +936,9 @@ func _draw_play_button():
     var r: Rect2 = L().play
     var g = ui.g
     var my_turn: bool = ui.phase == "" and g.state == Rules.TURN_WAITING and g.turn == 0 and not ui.input_locked
+    if ui.can_human_accept():
+        button_gold(r, "ACEITAR", "accept", true, int(r.size.y * 0.66))   # R88 · último com cartas
+        return
     if my_turn and not ui.can_human_play():
         # sua vez sem carta escolhida: o botão aparece dourado como na referência, mas o toque só
         # mostra o aviso (o motor só aceita 1 a 3 cartas)
@@ -1100,7 +1123,7 @@ func _draw_mate():
         for gl in 6: draw_circle(mc[0], (90.0 + gl * 60.0) * (0.6 + pt), Color(1.0, 0.85, 0.5, (0.5 - pt) * (0.28 - gl * 0.04)))
     var pop := 1.0 + 0.55 * maxf(0.0, 1.0 - pt / 0.25)
     tex_center(ui.clock_tex["disparado"], mc[0] + shake, mc[1] * 2.0 * pop)
-    if ui.phase == "mate": _draw_reveal(true)
+    if ui.phase == "mate" and not bool(ui.result.get("accept", false)): _draw_reveal(true)
     var mt: Array = L().mate_title
     var title := "Xeque-Mate" if ui.phase == "mate" else "Eliminado"
     var tfs: int = mt[1]
@@ -1296,7 +1319,7 @@ func _tutorial_art(a: Rect2, kind: String):
 func _draw_result(d: Vector2):
     var g = ui.g
     if g == null: return
-    if ui.layout == "desktop":
+    if true:   # R88 · arte nova do resultado também no celular (em pé por blocos)
         _draw_result_r57(d)
         return
     var portrait: bool = ui.layout == "portrait"
@@ -1936,7 +1959,11 @@ func _desk_play_button():
     var my_turn: bool = ui.phase == "" and g.state == Rules.TURN_WAITING and g.turn == 0 and not ui.input_locked
     var id := "play"
     var enabled: bool = ui.can_human_play()
-    if my_turn and not enabled:
+    var accept_now: bool = ui.can_human_accept()   # R88 · último com cartas: ACEITAR no lugar de JOGAR CARTAS
+    if accept_now:
+        id = "accept"
+        enabled = true
+    elif my_turn and not enabled:
         id = "play_empty"
         enabled = true
     var hov: bool = ui.hover_id == id and enabled
@@ -1947,7 +1974,7 @@ func _desk_play_button():
     if hov: top = top.lightened(0.12)
     npanel(rr, 0.0, FRAME_GOLD if enabled else Color("7a6440"), false, false, top, bot)
     draw_rect(Rect2(rr.position.x + 5, rr.position.y + 5, rr.size.x - 10, 3), Color(1, 1, 1, 0.12))
-    var label := "JOGAR CARTAS"
+    var label := "ACEITAR" if accept_now else "JOGAR CARTAS"
     var f := fit(label, "o7_sp", 42, rr.size.x - 50)
     otext(label, Vector2(rr.position.x, rr.get_center().y + f * 0.405), "o7_sp", f, Color("f8dc8e") if enabled else Color(0.9, 0.82, 0.7, 0.5), rr.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4)
     if enabled: hit(r, id)
@@ -2107,12 +2134,63 @@ func r57_tex(key: String) -> Texture2D:
 func r57_scale(d: Vector2) -> float:
     return d.y / R57_SIZE.y
 
+## R88 · resultado no celular EM PÉ: a arte do PC em blocos (título, retrato, classificação, botões),
+## um embaixo do outro. Cada bloco: {src (coords da arte), dst (tela), s (escala)}. Vazio = layout do PC.
+var _pblocks: Array = []
+func _r57_block(p: Vector2):
+    for b in _pblocks:
+        if (b.src as Rect2).grow(2.0).has_point(p): return b
+    return null
+
+func r57_sc_at(d: Vector2, p: Vector2) -> float:
+    var b = _r57_block(p)
+    return float(b.s) if b != null else r57_scale(d)
+
 func r57_p(d: Vector2, p: Vector2) -> Vector2:
+    var b = _r57_block(p)
+    if b != null: return (b.dst as Rect2).position + (p - (b.src as Rect2).position) * float(b.s)
     var sc := r57_scale(d)
     return Vector2((d.x - R57_SIZE.x * sc) / 2.0, 0) + p * sc
 
 func r57_r(d: Vector2, r: Rect2) -> Rect2:
-    return Rect2(r57_p(d, r.position), r.size * r57_scale(d))
+    return Rect2(r57_p(d, r.position), r.size * r57_sc_at(d, r.position))
+
+## blocos do resultado em pé (design 1080 x H)
+## escurece as bordas de um bloco aos poucos até a cor do fundo (o bloco "assenta" sem borda reta)
+func _fade_edges(r: Rect2, w: float):
+    var n := 12
+    var col := Color(0.075, 0.055, 0.05)
+    for i in n:
+        var a: float = pow(1.0 - float(i) / n, 1.6) * 0.95
+        var t: float = w / n
+        var c := Color(col.r, col.g, col.b, a)
+        draw_rect(Rect2(r.position.x + i * t, r.position.y, t + 0.5, r.size.y), c)
+        draw_rect(Rect2(r.end.x - (i + 1) * t, r.position.y, t + 0.5, r.size.y), c)
+        draw_rect(Rect2(r.position.x, r.position.y + i * t, r.size.x, t + 0.5), c)
+        draw_rect(Rect2(r.position.x, r.end.y - (i + 1) * t, r.size.x, t + 0.5), c)
+
+func _r57_portrait_blocks(area: Rect2) -> Array:
+    var d := area.size
+    var srcs := [Rect2(330, 8, 1010, 222), Rect2(280, 226, 440, 520), Rect2(748, 232, 736, 522), Rect2(222, 772, 1222, 132)]
+    var widths := [1000.0, 560.0, 1050.0, 1050.0]
+    var hs := []
+    var total := 0.0
+    for i in 4:
+        var h: float = srcs[i].size.y * widths[i] / srcs[i].size.x
+        hs.append(h)
+        total += h
+    var room: float = d.y - 60.0
+    var f: float = minf(1.0, room / (total + 3.0 * 24.0))
+    var gap: float = clampf((d.y - total * f) / 5.0, 12.0, 80.0)
+    var y: float = area.position.y + (d.y - total * f - gap * 3.0) / 2.0
+    var out := []
+    for i in 4:
+        var w: float = widths[i] * f
+        var sc: float = w / srcs[i].size.x
+        var dst := Rect2((d.x - w) / 2.0, y, w, srcs[i].size.y * sc)
+        out.append({"src": srcs[i], "dst": dst, "s": sc})
+        y = dst.end.y + gap
+    return out
 
 ## fontes das referências finais: "name" = Grenze Bold (nomes), "mono" = VT323 (faixa, lugar, legendas),
 ## "ui" = Jersey 20 (selo BOT). sp = espaço extra entre letras (px na tela).
@@ -2128,7 +2206,7 @@ func r57_f(key: String, sp: int) -> Font:
 
 ## texto em coordenadas da referência: pos = linha de base; fs = tamanho na referência; encolhe se passar de room
 func r57_text(d: Vector2, s: String, pos: Vector2, fkey: String, fs: float, col: Color, sp := 0.0, room := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT, width := -1.0, outline := 0, ocol := Color("120a06"), bold := false):
-    var sc := r57_scale(d)
+    var sc := r57_sc_at(d, pos)
     var f := r57_f(fkey, int(round(sp * sc)))
     var size := int(round(fs * sc))
     if room > 0.0:
@@ -2155,7 +2233,22 @@ func _draw_result_r57(d: Vector2):
     var won: bool = g.winner == 0
     var key := "vitoria" if won else "derrota"
     var plate := r57_tex(key)
-    draw_texture_rect(plate, r57_r(d, Rect2(Vector2.ZERO, R57_SIZE)), false)
+    _pblocks = []
+    if ui.layout == "portrait":
+        # fundo: a própria arte cobrindo a tela, escurecida; por cima, os blocos nítidos
+        # área VISÍVEL inteira (o celular é mais alto que o design): cenário lateral da arte, bem escuro
+        var vis := Rect2(-ui.origin / ui.k, size / ui.k)
+        var scene_src := Rect2(0, 110, 300, 720)
+        var cov := maxf(vis.size.x / scene_src.size.x, vis.size.y / scene_src.size.y)
+        var cs := scene_src.size * cov
+        draw_texture_rect_region(plate, Rect2(vis.position + (vis.size - cs) / 2.0, cs), scene_src, Color(0.3, 0.27, 0.27))
+        _pblocks = _r57_portrait_blocks(Rect2(Vector2(0, vis.position.y), Vector2(d.x, vis.size.y)))
+        for i in _pblocks.size():
+            var b = _pblocks[i]
+            draw_texture_rect_region(plate, b.dst, b.src)
+            if i < 2: _fade_edges(b.dst, 46.0)   # título e retrato: bordas somem no fundo (sem recorte)
+    else:
+        draw_texture_rect(plate, r57_r(d, Rect2(Vector2.ZERO, R57_SIZE)), false)
     # botões da arte: hover = a própria arte um pouco mais clara
     for b in R57_BUTTONS:
         var br: Rect2 = b[1]

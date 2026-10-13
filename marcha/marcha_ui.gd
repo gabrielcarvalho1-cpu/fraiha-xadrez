@@ -28,25 +28,25 @@ const Cosmetics := preload("res://profile/premium_cosmetics.gd")
 const PlayerPortrait := preload("res://profile/player_portrait.gd")
 const MUSIC := "res://marcha/audio/musica_marcha.mp3"    # música enviada pelo dono do projeto (loop)
 const SFX := {
-    "card": preload("res://marcha/audio/carta.wav"), "discard": preload("res://marcha/audio/descarte.wav"),
-    "step": preload("res://marcha/audio/passo.wav"), "exit": preload("res://marcha/audio/saida.wav"),
-    "capture": preload("res://marcha/audio/captura.wav"), "swap": preload("res://marcha/audio/troca.wav"),
-    "crown": preload("res://marcha/audio/coroa.wav"), "your_turn": preload("res://marcha/audio/sua_vez.wav"),
-    "victory": preload("res://marcha/audio/vitoria.wav"), "defeat": preload("res://marcha/audio/derrota.wav"),
-    "arrive": preload("res://marcha/audio/chegada.wav"), "victory_final": preload("res://marcha/audio/vitoria_final.wav"),
+    "card": "res://marcha/audio/carta.wav", "discard": "res://marcha/audio/descarte.wav",
+    "step": "res://marcha/audio/passo.wav", "exit": "res://marcha/audio/saida.wav",
+    "capture": "res://marcha/audio/captura.wav", "swap": "res://marcha/audio/troca.wav",
+    "crown": "res://marcha/audio/coroa.wav", "your_turn": "res://marcha/audio/sua_vez.wav",
+    "victory": "res://marcha/audio/vitoria.wav", "defeat": "res://marcha/audio/derrota.wav",
+    "arrive": "res://marcha/audio/chegada.wav", "victory_final": "res://marcha/audio/vitoria_final.wav",
     # R83 · fim da partida = o XEQUE-MATE do modo XEQUE (estouro + voz "XEQUE-MATE!"), para quem ganhar
-    "mate_boom": preload("res://xeque/audio/xeque_mate_boom.wav"), "voice_mate": preload("res://xeque/audio/voz_xeque_mate.wav"),
-    "voice_mate_lost": preload("res://xeque/audio/voz_xeque_mate_derrota.mp3"),
-    "promote": preload("res://marcha/audio/promocao_dama.wav"),     # R37: fanfarra da chegada (vira DAMA)
+    "mate_boom": "res://xeque/audio/xeque_mate_boom.wav", "voice_mate": "res://xeque/audio/voz_xeque_mate.wav",
+    "voice_mate_lost": "res://xeque/audio/voz_xeque_mate_derrota.mp3",
+    "promote": "res://marcha/audio/promocao_dama.wav",     # R37: fanfarra da chegada (vira DAMA)
     # R50 · sons enviados pelo dono do projeto
-    "move": preload("res://marcha/audio/r50/movimento.mp3"),         # a cada casa (toc quando o peão pousa)
+    "move": "res://marcha/audio/r50/movimento.mp3",         # a cada casa (toc quando o peão pousa)
 }
 const MOVE_HIT := 0.50       # R50: o toc do movimento.mp3 acontece aos 0,5 s do arquivo
 const SFX_R50 := {
-    "capture": preload("res://marcha/audio/r50/captura.mp3"),
-    "swap": preload("res://marcha/audio/r50/troca.mp3"),
-    "arrive": preload("res://marcha/audio/r70/coroacao_do_peao.mp3"),   # R70: coroação do peão (áudio do dono)
-    "exit": preload("res://marcha/audio/r70/saida_do_peao.mp3"),         # R70: saída do peão da base (áudio do dono)
+    "capture": "res://marcha/audio/r50/captura.mp3",
+    "swap": "res://marcha/audio/r50/troca.mp3",
+    "arrive": "res://marcha/audio/r70/coroacao_do_peao.mp3",   # R70: coroação do peão (áudio do dono)
+    "exit": "res://marcha/audio/r70/saida_do_peao.mp3",         # R70: saída do peão da base (áudio do dono)
 }
 const SFX_DB := {"mate_boom": 0.0, "voice_mate": 0.0, "voice_mate_lost": -1.0, "exit": -6.0, "promote": -3.0, "arrive": -5.0, "victory_final": -5.0, "step": -12.0, "your_turn": -9.0, "crown": -7.0, "victory": -7.0, "defeat": -7.0, "capture": -6.0, "move": -8.0}
 
@@ -61,10 +61,19 @@ var BG: Texture2D:
     get:
         if _bg_tex == null: _bg_tex = load("res://marcha/art/table_bg.png")
         return _bg_tex
-const SYMBOLS := preload("res://marcha/art/simbolos_de_acao.png")
-const CROWN_TEX := preload("res://marcha/art/coroa_coroacao.png")   # R70: coroa da coroação (arte do dono)
-const CROWN_TITLE := preload("res://marcha/art/coroado_pixel.png")   # R83.3: letreiro COROADO (arte de referência do dono)
-const CROWN_EMBLEM := preload("res://marcha/art/coroacao_emblema.png")   # R83.3: escudo + coroa + brilho roxo (tools/coroacao_arte_r83.py)
+## R89 · artes da coroação só enquanto a MARCHA está aberta (antes: constantes, ~7 MB para sempre)
+var _mtex := {}
+func _mt(path: String) -> Texture2D:
+    if not _mtex.has(path): _mtex[path] = load(path)
+    return _mtex[path]
+var SYMBOLS: Texture2D:
+    get: return _mt("res://marcha/art/simbolos_de_acao.png")
+var CROWN_TEX: Texture2D:
+    get: return _mt("res://marcha/art/coroa_coroacao.png")   # R70: coroa da coroação (arte do dono)
+var CROWN_TITLE: Texture2D:
+    get: return _mt("res://marcha/art/coroado_pixel.png")   # R83.3: letreiro COROADO (arte de referência do dono)
+var CROWN_EMBLEM: Texture2D:
+    get: return _mt("res://marcha/art/coroacao_emblema.png")   # R83.3: escudo + coroa + brilho roxo
 const FONT_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")
 const FONT_BOLD := preload("res://marcha/art/fonts/oswald-latin-700-normal.woff")
 const FONT_SEMI := preload("res://marcha/art/fonts/oswald-latin-600-normal.woff")
@@ -182,14 +191,22 @@ func setup(p_hub, p_stage):
     hub = p_hub
     stage = p_stage
 
-func _ready():
-    # R37.2 · as cartas são reduzidas na hora de desenhar (ui_v022/crisp_tex.gd) — legíveis com filtro NEAREST
+## R89 · cartas, peões e retratos: carregados ao ABRIR a Marcha e soltos ao FECHAR (antes: no início do jogo)
+func _load_art():
+    if not cards.is_empty(): return
     _load_cards()
     card_back = load("res://marcha/art/cards/carta_verso.png")
     for s in 4:
         pawn_tex[s] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + ".png")
         pawn_tex[s + 10] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + "_dama.png")   # R37: no Salão o peão vira DAMA
     for key in ["lady_torre", "rei_do_blitz", "cavalo_louco", "voce"]: portraits[key] = load("res://marcha/art/portraits/" + key + ".png")
+
+func _release_art():
+    cards.clear(); pawn_tex.clear(); portraits.clear(); _mtex.clear(); _sfx.clear()
+    card_back = null
+    my_portrait = null
+
+func _ready():
     for pair in [["title", FONT_TITLE, 0], ["bold", FONT_BOLD, 0], ["semi", FONT_SEMI, 0], ["bold_sp", FONT_BOLD, 3], ["semi_sp", FONT_SEMI, 3], ["semi_sp2", FONT_SEMI, 5]]:
         var fv := FontVariation.new()
         fv.base_font = pair[1]
@@ -221,7 +238,7 @@ func _load_cards():
     for r in CARD_FILES: cards[r] = load("res://marcha/art/cards/" + CARD_FILES[r] + ".png")
 
 func open():
-    if cards.is_empty(): _load_cards()
+    _load_art()
     visible = true
     root.visible = true
     Sound.music_on(stage, MUSIC)
@@ -234,6 +251,7 @@ func open():
     _relayout()
 
 func close():
+    Sound.close_popup(hub)   # R88
     _popup_close()
     if online:
         if mode == "game": _record_history("abandon")
@@ -245,7 +263,8 @@ func close():
     g = null
     # R78 · solta a memória das artes grandes (mesa, salão, cartas); voltam a carregar ao abrir de novo
     r57.clear()
-    cards.clear()
+    _release_art()   # R89
+    Sound.release_fonts()   # R89
     if view != null: view.tex_cache.clear()
     preload("res://ui_v022/crisp_tex.gd").clear_cache()
     closed.emit()
@@ -1139,6 +1158,40 @@ func on_hover(p: Vector2):
     _hover_seat = seat
     if seat >= 0: pp.hover("marcha_seat_%d" % seat, seat_info(seat), _seat_screen_rect(seat))
 
+## R88 · celular em pé: microfone e fone GRANDES à esquerda do painel SUA VEZ; CHAT à direita dele.
+func mic_rect() -> Rect2:
+    if portrait and not portrait_game.is_empty():
+        var pr: Rect2 = portrait_game[5][1]
+        var w: float = clampf(pr.position.x - 48.0, 90.0, 150.0)
+        return Rect2((pr.position.x - w) / 2.0, pr.get_center().y - w - 10.0, w, w)
+    return rr(Rect2(1230, 12, 54, 53))
+
+func ear_rect() -> Rect2:
+    if portrait and not portrait_game.is_empty():
+        var m := mic_rect()
+        return Rect2(m.position.x, m.end.y + 20.0, m.size.x, m.size.y)
+    return rr(Rect2(1162, 12, 54, 53))
+
+func chat_dock() -> Rect2:
+    if not (portrait and not portrait_game.is_empty()): return Rect2()
+    var pr: Rect2 = portrait_game[5][1]
+    var x0: float = pr.end.x + 24.0
+    var w: float = 1080.0 - x0 - 24.0
+    if w < 120.0: return Rect2()
+    return Rect2(x0, pr.get_center().y - 55.0, w, 110.0)
+
+func _sync_chat_dock():
+    var pc = stage.get("party_chat") if stage != null else null
+    if pc == null or not pc.has_method("set_dock"): return
+    var d := chat_dock() if (online and mode == "game" and visible) else Rect2()
+    pc.set_dock(Rect2(origin + d.position * k, d.size * k) if d.size.x > 0.0 else Rect2())
+
+## R88 · retângulo (em pixels de tela) da área de toque com este id — para abrir o volume junto do ícone
+func _hit_screen_rect(id: String) -> Rect2:
+    for h in hits:
+        if String(h.id) == id: return Rect2(origin + Rect2(h.rect).position * k, Rect2(h.rect).size * k)
+    return Rect2(get_viewport().get_visible_rect().size.x - 80, 10, 60, 60)
+
 func on_press(p: Vector2):
     # tutorial e menu ficam por cima de tudo
     for h in range(hits.size() - 1, -1, -1):
@@ -1161,10 +1214,15 @@ func on_press(p: Vector2):
         if not best.is_empty(): pick_pawn(best)
 
 var cues_played: Array = []      # testes: últimos efeitos pedidos
+var _sfx := {}
 func _cue(kind: String, pitch := 1.0, from_pos := 0.0):
     cues_played.append(kind)
     if cues_played.size() > 60: cues_played.pop_front()
-    var st: AudioStream = SFX_R50.get(kind, SFX.get(kind))
+    var path = SFX_R50.get(kind, SFX.get(kind))   # R89 · sons carregados na 1ª vez e soltos ao fechar
+    var st: AudioStream = null
+    if path != null:
+        if not _sfx.has(kind): _sfx[kind] = load(String(path))
+        st = _sfx[kind]
     if st != null: Sound.play(stage, st, float(SFX_DB.get(kind, -8.0)), pitch, from_pos)
 
 const DOUBLE_CLICK_MS := 450
@@ -1204,8 +1262,8 @@ func _on_hit(id: String):
         "discard_all": discard_all()
         "cancel": cancel()
         "help": tut_page = 0
-        "mute_music": Sound.toggle_music(hub)
-        "mute_fx": Sound.toggle_effects(hub)
+        "mute_music": Sound.volume_popup(hub, "music", _hit_screen_rect("mute_music"))   # R88 · controle de volume
+        "mute_fx": Sound.volume_popup(hub, "fx", _hit_screen_rect("mute_fx"))
         "fullscreen":
             var sm = screen_mode()
             if sm != null: sm.toggle()
@@ -2358,6 +2416,41 @@ class TableView extends Control:
             text(items[i][1], Vector2(r.position.x, r.position.y + 28), "bold", f, Color("1c1405") if on else ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
             ui.hits.append({"rect": r, "id": items[i][0]})
 
+    ## R88 · celular: DIVIDIR O 7 com botões grandes (o toque acerta fácil) e CANCELAR na mesma faixa
+    func _draw_split_big(area: Rect2, choosing: bool):
+        var opts: Array = ui.split_options()
+        var pr := area
+        if ui.portrait: pr = Rect2(8, 104, 1064, 196)
+        draw_rect(pr.grow(6), Color(0, 0, 0, 0.45))
+        draw_rect(pr, Color(0.05, 0.02, 0.08, 0.95))
+        draw_rect(pr, Color("c99a45"), false, 3.0)
+        draw_rect(pr.grow(-6), Color(0.79, 0.6, 0.27, 0.35), false, 1.5)
+        var head_h: float = clampf(pr.size.y * 0.24, 28.0, 46.0)
+        text("DIVIDIR O 7 — casas do 1º peão + do 2º", Vector2(pr.position.x, pr.position.y + head_h * 0.95), "semi_sp", int(head_h * 0.62), Color("e9c46e"), pr.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+        var n: int = opts.size() + (1 if choosing else 0)
+        var gap := 10.0
+        var top: float = pr.position.y + head_h + 10.0
+        var h: float = pr.end.y - top - 12.0
+        var w: float = (pr.size.x - 24.0 - gap * (n - 1)) / n
+        var x: float = pr.position.x + 12.0
+        for a in opts:
+            var cap := "7" if a == 7 else "%d+%d" % [a, 7 - a]
+            var r := Rect2(x, top, w, h)
+            var on: bool = ui.split_first == a
+            draw_rect(r, Color("f0c44c") if on else Color("10261c"))
+            draw_rect(r, ui.GOLD, false, 3.0)
+            var fs := fit(cap, "bold", int(h * 0.5), r.size.x - 10)
+            text(cap, Vector2(r.position.x, r.get_center().y + fs * 0.36), "bold", fs, Color("1c1405") if on else ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+            ui.hits.append({"rect": r, "id": "split_%d" % a})
+            x += w + gap
+        if choosing:
+            var cr := Rect2(x, top, w, h)
+            draw_rect(cr, Color("3a0d12"))
+            draw_rect(cr, Color("c99a45"), false, 2.0)
+            var fs2 := fit("CANCELAR", "bold", int(h * 0.3), cr.size.x - 8)
+            text("CANCELAR", Vector2(cr.position.x, cr.get_center().y + fs2 * 0.36), "bold", fs2, ui.CREAM, cr.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+            ui.hits.append({"rect": cr, "id": "cancel"})
+
     func _draw_split(at: Vector2, chip := 66.0):
         if ui.ten_choice():
             _draw_ten(at, 800.0 if chip > 60 else 394.0)
@@ -2473,13 +2566,13 @@ class TableView extends Control:
         if not lobby and ui.mode == "game" and not voice_on:
             # R77 · o microfone fica SEMPRE no lugar dele na partida; sem voz (bots, navegador sem suporte) fica
             # apagado e o toque explica onde a voz funciona
-            var dr: Rect2 = ui.rr(Rect2(1230, 12, 54, 53))
+            var dr: Rect2 = ui.mic_rect()
             draw_rect(dr, Color("0a0612"))
             draw_rect(dr, Color(0.85, 0.66, 0.31, 0.45), false, 2.0)
             ui.VoiceGlyph.draw_mic(self, dr.grow(-8), "DISCONNECTED", Color(0.85, 0.66, 0.31, 0.45))
             ui.hits.append({"rect": dr, "id": "voice_info"})
         if not lobby and ui.mode == "game" and voice_on:
-            var vr: Rect2 = ui.rr(Rect2(1230, 12, 54, 53))
+            var vr: Rect2 = ui.mic_rect()
             draw_rect(vr, Color("0a0612"))
             draw_rect(vr, ui.GOLD, false, 2.0)
             ui.VoiceGlyph.draw_mic(self, vr.grow(-8), vo.state, ui.GOLD, vo.is_speaking(vo.my_uid))
@@ -2487,7 +2580,7 @@ class TableView extends Control:
             if vo.active() or vo.state == "ERROR": ui.hits.append({"rect": ui.VoiceGlyph.draw_leave_badge(self, vr), "id": "voice_off"})
             var tx := vr.position.x - 10
             if vo.active():
-                var er: Rect2 = ui.rr(Rect2(1162, 12, 54, 53))
+                var er: Rect2 = ui.ear_rect()
                 draw_rect(er, Color("0a0612"))
                 draw_rect(er, ui.GOLD, false, 2.0)
                 ui.VoiceGlyph.draw_headphones(self, er.grow(-9), vo.speaker_muted, ui.GOLD)
@@ -2497,6 +2590,7 @@ class TableView extends Control:
                 ui.VoiceGlyph.draw_status(self, tx, vr.get_center().y, 300, vo.status_text(), 17, Color("e8dcc0"))
 
     func _draw_game_r57():
+        ui._sync_chat_dock()   # R88 · CHAT no lugar reservado (celular em pé)
         var g = ui.g
         var plate: Texture2D = ui.r57.mesa
         if ui.blk:
@@ -2608,6 +2702,9 @@ class TableView extends Control:
         var S: float = 1.15 if ui.blk else ui.r57_s()
         var pr: Rect2 = ui.rr(Rect2(22, 560, 326, 70))
         if ui.blk: pr = ui.portrait_game[7][1]
+        if ui.blk and ui.split_options().size() > 1 and not ui.ten_choice():
+            _draw_split_big(pr, choosing)   # R88 · celular: botões grandes para dividir o 7
+            return
         draw_rect(pr, Color(0.05, 0.02, 0.08, 0.92))
         draw_rect(pr, Color("c99a45"), false, 2.0)
         draw_rect(pr.grow(-5), Color(0.79, 0.6, 0.27, 0.3), false, 1.0)
@@ -2971,6 +3068,7 @@ class TableView extends Control:
 ## para você ficar no lugar 0 (embaixo). As regras locais servem só para mostrar as jogadas
 ## possíveis; quem valida e aplica é o servidor.
 func start_online(msg: Dictionary):
+    _load_art()   # R89
     var resumed := bool(msg.get("resumed", false)) and online and room_id == String(msg.get("room_id", ""))
     online = true
     room_id = String(msg.get("room_id", ""))

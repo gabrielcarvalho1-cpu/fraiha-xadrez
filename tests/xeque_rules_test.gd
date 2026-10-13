@@ -95,7 +95,7 @@ func run():
     check(g.hands[3].is_empty() and g.eliminated_round[3] == g.round_no and g.finish_order == [3], "eliminado sai da mesa e entra na ordem de eliminação")
     # ---------- relógio (ruleset 2): chance crescente por nível ----------
     g = new_game(9)
-    check(Rules.LIVES == 1 and Rules.CLOCK_SLOTS == 6 and Rules.RULESET_VERSION == "2", "1 vida, relógio de 6 níveis, ruleset 2")
+    check(Rules.LIVES == 1 and Rules.CLOCK_SLOTS == 6 and Rules.RULESET_VERSION == "3", "1 vida, relógio de 6 níveis, ruleset 3 (R88)")
     check(g.clocks.all(func(c): return c.size() == 6 and c.all(func(x): return x == Rules.PENDING)), "relógio começa no 1º nível (nada sorteado antes da hora)")
     check(is_equal_approx(g.clock_chance(1), 0.12), "1º acionamento: 12% (raro, mas pode estourar)")
     var chances := []
@@ -167,12 +167,24 @@ func run():
     check(g.turn == 3, "jogador sem cartas é pulado")
     g.play(3, [0])
     check(g.turn == 0 or g.turn == 2, "segue para quem tem cartas")
-    # todos sem carta menos um → XEQUE automático
+    # R88 · esvaziou a mão: sem XEQUE automático; o último com cartas escolhe XEQUE ou ACEITAR
     g = new_game(23)
     force(g, 0, "rainha", [["rei"], [], ["rainha", "rainha"], []])
     var pp := g.play(0, [0])
-    check(pp.has("forced") and int(pp.forced.caller) == 1 and int(pp.forced.accused) == 0, "só 1 jogador com cartas: XEQUE automático na última jogada (sem travar)")
-    check(g.state == Rules.ROUND_END or g.state == Rules.MATCH_END, "rodada resolvida pelo XEQUE automático")
+    check(not pp.has("forced") and g.state == Rules.TURN_WAITING and g.turn == 2, "esvaziou a mão: nada automático, a vez é do último com cartas")
+    check(g.last_holder(2) and g.can_challenge(2) and g.can_accept(2) and not g.can_play(2, [0]), "último com cartas: pode XEQUE ou ACEITAR, não joga mais")
+    var racc := g.accept(2)
+    check(not racc.is_empty() and bool(racc.accept) and int(racc.loser) == 2 and racc.cards.is_empty() and (g.state == Rules.ROUND_END or g.state == Rules.MATCH_END), "ACEITAR: o último com cartas aciona o próprio relógio e a rodada acaba")
+    g = new_game(24)
+    force(g, 0, "rainha", [["rei"], [], ["rainha", "rainha"], []])
+    g.play(0, [0])
+    var rc := g.challenge(2)
+    check(not rc.truthful and int(rc.loser) == 0 and int(rc.caller) == 2, "último com cartas dá XEQUE: quem esvaziou a mão blefando aciona o relógio")
+    g = new_game(25)
+    force(g, 0, "rainha", [["rei"], [], ["rainha", "rainha"], []])
+    g.play(0, [0])
+    var to := g.timeout_action(2)
+    check(to.has("accept") and int(to.accept.loser) == 2, "tempo esgotado do último com cartas = ACEITAR (nunca XEQUE automático)")
     # vitória
     g = new_game(24)
     g.lives = [0, 1, 0, 1]

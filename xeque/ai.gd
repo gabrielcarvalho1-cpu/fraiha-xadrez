@@ -61,6 +61,9 @@ static func decide(pub: Dictionary, hand: Array, profile: String, rng: RandomNum
     var me := int(pub.viewer)
     var lp: Dictionary = pub.get("last_play", {})
     var may_challenge := bool(pub.get("can_challenge", false))
+    # R88 · último com cartas: XEQUE nunca é pior que ACEITAR (aceitar aciona o relógio com certeza)
+    if bool(pub.get("can_accept", false)):
+        return {"action": "challenge"} if may_challenge else {"action": "accept"}
     if may_challenge and not lp.is_empty():
         var suspicion := 1.0 - p_last_play_true(pub, hand)
         # relógio do jogador perto do fim (1/2 ou pior): errar o XEQUE pode eliminar → mais cautela

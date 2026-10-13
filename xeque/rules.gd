@@ -18,12 +18,14 @@ extends RefCounted
 ##     O relógio guarda o nível entre as rodadas e volta ao 1º depois de estourar. XEQUE-MATE =
 ##     eliminado na hora (LIVES = 1).
 ##   • Próxima rodada começa por quem acionou o relógio (ou o próximo vivo, se ele foi eliminado).
-##   • Sem cartas: fica fora dos turnos até o fim da rodada. Se só 1 jogador (ou nenhum) ainda tem
-##     cartas, a última jogada é resolvida por XEQUE automático do próximo jogador vivo.
+##   • R88 · Esvaziou a mão: está a salvo e fica fora dos turnos (não joga nem dá XEQUE) até o fim da
+##     rodada; o único risco é o próximo jogador dar XEQUE na última jogada dele. Quando só 1 jogador
+##     ainda tem cartas, é a vez dele e ele escolhe: XEQUE na última jogada ou ACEITAR (fica com as
+##     cartas e aciona o próprio relógio). Nada é automático.
 ##   • Último jogador vivo vence.
 
 const MODE_ID := "xeque"
-const RULESET_VERSION := "2"      # R36: relógio com chance crescente por nível (12% → 100%)
+const RULESET_VERSION := "3"      # R88: sem XEQUE automático; o último com cartas escolhe XEQUE ou ACEITAR
 const KING := "rei"
 const QUEEN := "rainha"
 const KNIGHT := "cavalo"
@@ -170,8 +172,17 @@ func next_seat(seat: int, need_cards := false) -> int:
 func can_challenge(seat: int) -> bool:
     return state == TURN_WAITING and seat == turn and not last_play.is_empty() and int(last_play.seat) != seat
 
+## R88 · só ESTE jogador ainda tem cartas e é a vez dele: escolhe XEQUE ou ACEITAR (não joga mais cartas).
+func last_holder(seat: int) -> bool:
+    var wc := with_cards()
+    return state == TURN_WAITING and seat == turn and wc.size() == 1 and int(wc[0]) == seat
+
+func can_accept(seat: int) -> bool:
+    return last_holder(seat)
+
 func can_play(seat: int, idx: Array) -> bool:
     if state != TURN_WAITING or seat != turn or not alive(seat): return false
+    if last_holder(seat): return false
     if idx.size() < 1 or idx.size() > MAX_PLAY: return false
     var seen := {}
     for i in idx:
@@ -230,8 +241,14 @@ func play(seat: int, idx: Array) -> Dictionary:
     _set_state(CARDS_PLAYED)
     public_log.append("%s disse %s" % [names[seat], declared_text(cards.size()).capitalize()])
     var pub := {"seat": seat, "count": cards.size(), "declared": declared_text(cards.size())}
-    if with_cards().size() <= 1:
-        # ninguém mais pode continuar a rodada: o próximo jogador vivo dá XEQUE automático
+    var holders := with_cards()
+    if holders.size() == 1 and int(holders[0]) != seat:
+        # R88 · só um jogador ainda tem cartas: a vez é dele (XEQUE na última jogada ou ACEITAR)
+        turn = int(holders[0])
+        _set_state(TURN_WAITING)
+        return pub
+    if holders.size() <= 1:
+        # (não acontece pelas regras: o último com cartas não joga) — segurança: XEQUE do próximo vivo
         var caller := next_seat(seat)
         _set_state(TURN_WAITING)
         turn = caller
@@ -245,6 +262,7 @@ func play(seat: int, idx: Array) -> Dictionary:
 ## Nunca chama XEQUE.
 func timeout_action(seat: int) -> Dictionary:
     if state != TURN_WAITING or seat != turn or hands[seat].is_empty(): return {}
+    if last_holder(seat): return {"accept": accept(seat)}   # R88 · tempo esgotado do último com cartas = ACEITAR
     var i := rng.randi_range(0, hands[seat].size() - 1)
     return play(seat, [i])
 
@@ -253,6 +271,14 @@ func timeout_action(seat: int) -> Dictionary:
 func challenge(seat: int) -> Dictionary:
     if not can_challenge(seat): return {}
     return _resolve_challenge(seat, false)
+
+## R88 · ACEITAR: o último jogador com cartas não desafia; fica com as cartas e aciona o próprio relógio.
+## Nada é revelado. Devolve o mesmo formato do XEQUE (accept = true, cards vazio).
+func accept(seat: int) -> Dictionary:
+    if not can_accept(seat): return {}
+    public_log.append("%s aceitou e ficou com as cartas" % names[seat])
+    var accused := int(last_play.seat) if not last_play.is_empty() else seat
+    return _apply_clock(seat, seat, accused, [], true, [], false, true)
 
 func _resolve_challenge(caller: int, forced: bool) -> Dictionary:
     _set_state(CHALLENGE)
@@ -268,6 +294,9 @@ func _resolve_challenge(caller: int, forced: bool) -> Dictionary:
     var loser := caller if truthful else accused
     reveals.append({"seat": accused, "cards": cards, "target": target, "truthful": truthful, "round": round_no})
     public_log.append("XEQUE de %s: %s" % [names[caller], "VERDADE" if truthful else "BLEFE"])
+    return _apply_clock(loser, caller, accused, cards, truthful, false_cards, forced, false)
+
+func _apply_clock(loser: int, caller: int, accused: int, cards: Array, truthful: bool, false_cards: Array, forced: bool, accepted: bool) -> Dictionary:
     _set_state(CLOCK_RESOLUTION)
     var left_before := clock_left(loser)
     var chance_before := clock_chance(loser)
@@ -298,7 +327,7 @@ func _resolve_challenge(caller: int, forced: bool) -> Dictionary:
         _set_state(ROUND_END)
     last_result = {
         "caller": caller, "accused": accused, "cards": cards, "target": target,
-        "truthful": truthful, "false_cards": false_cards, "loser": loser, "forced": forced,
+        "truthful": truthful, "false_cards": false_cards, "loser": loser, "forced": forced, "accept": accepted,
         "clock_left_before": left_before, "chance": chance_before, "roll": last_roll, "clock": pulled, "mate": mate, "lost_crown": lost_crown,
         "lives_after": lives[loser], "eliminated": eliminated, "winner": winner,
         "next_starter": next_starter, "round": round_no,
@@ -325,6 +354,7 @@ func public_state(viewer: int = -1) -> Dictionary:
         "reveals": reveal_pub, "names": names.duplicate(), "winner": winner,
         "eliminated_round": eliminated_round.duplicate(), "deck_counts": DECK_COUNTS.duplicate(),
         "can_challenge": viewer >= 0 and can_challenge(viewer),
+        "can_accept": viewer >= 0 and can_accept(viewer),
     }
 
 func private_hand(seat: int) -> Array:

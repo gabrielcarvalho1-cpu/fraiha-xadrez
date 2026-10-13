@@ -24,6 +24,25 @@ static func music_muted(hub) -> bool:
 static func effects_muted(hub) -> bool:
     return hub != null and bool(hub.get("effects_muted"))
 
+## R88 · abre o controle deslizante de volume (MÚSICA ou EFEITOS) junto do ícone tocado (rect em pixels de tela).
+## Tocar de novo no mesmo ícone com o painel aberto fecha.
+static func volume_popup(hub, kind: String, screen_rect: Rect2):
+    if hub == null: return
+    var pop = hub.get_meta("volume_popover") if hub.has_meta("volume_popover") else null
+    if not is_instance_valid(pop):
+        pop = load("res://ui_v022/volume_popover.gd").new()
+        hub.add_child(pop)
+        hub.set_meta("volume_popover", pop)
+    if pop.visible and pop.kind == kind:
+        pop.close()
+        return
+    pop.open(hub, kind, screen_rect)
+
+static func close_popup(hub):
+    if hub != null and hub.has_meta("volume_popover"):
+        var pop = hub.get_meta("volume_popover")
+        if is_instance_valid(pop): pop.close()
+
 static func toggle_music(hub):
     if hub != null and hub.has_method("set_music_muted"): hub.set_music_muted(not music_muted(hub))
 
@@ -50,3 +69,16 @@ static func glyph(ci: CanvasItem, r: Rect2, kind: String, off: bool, col: Color)
     if off:
         ci.draw_line(c + Vector2(-15, 15) * u, c + Vector2(15, -15) * u, Color("120a06"), 7.0 * u)
         ci.draw_line(c + Vector2(-15, 15) * u, c + Vector2(15, -15) * u, Color("e02a36"), 4.0 * u)
+
+## R89 · ao fechar um modo, solta os glifos já rasterizados das fontes dele (cada tamanho de fonte vira
+## textura na GPU + cópia na RAM; no celular eram ~33 MB que ficavam presos na Home). Se a fonte for
+## usada de novo, o Godot redesenha os glifos sob demanda.
+const MODE_FONTS := ["res://xeque/art/fontes/Jersey20-Regular.woff2", "res://xeque/art/fontes/Jacquard24-Regular.woff2",
+    "res://marcha/art/fonts/oswald-latin-700-normal.woff", "res://marcha/art/fonts/oswald-latin-600-normal.woff",
+    "res://marcha/art/fonts/oswald-latin-400-normal.woff", "res://xeque/art/fontes/Grenze-Bold.woff",
+    "res://xeque/art/fontes/VT323-Regular.woff"]
+static func release_fonts():
+    for p in MODE_FONTS:
+        if ResourceLoader.has_cached(p):
+            var f = load(p)
+            if f is FontFile: f.clear_cache()

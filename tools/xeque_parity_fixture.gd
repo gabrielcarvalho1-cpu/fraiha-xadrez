@@ -36,7 +36,10 @@ func run():
             var before := snap(g)
             var res := {}
             var act := {}
-            if d.action == "challenge" and g.can_challenge(s):
+            if g.can_accept(s) and (d.action == "accept" or game % 3 == 0):
+                act = {"action": "accept"}   # R88 · último com cartas: ACEITAR
+                res = g.accept(s)
+            elif d.action == "challenge" and g.can_challenge(s):
                 act = {"action": "challenge"}
                 res = g.challenge(s)
             else:

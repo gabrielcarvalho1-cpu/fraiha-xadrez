@@ -23,19 +23,42 @@ static func at(tex: Texture2D, px: Vector2) -> Texture2D:
     w = int(round(w / 4.0)) * 4                                # degraus de 4 px (cache pequeno ao redimensionar)
     var h := int(round(w * src.y / src.x))
     var key := "%d_%d" % [tex.get_rid().get_id(), w]
-    if _cache.has(key): return _cache[key]
+    if _cache.has(key):
+        # R89 · LRU: o usado agora vai para o fim (os mais antigos saem primeiro)
+        var hit = _cache[key]
+        _cache.erase(key)
+        _cache[key] = hit
+        return hit
     var base := source_image(tex)
     if base == null: return tex
     var img := base.duplicate()
     img.resize(w, h, Image.INTERPOLATE_LANCZOS)
     var out := ImageTexture.create_from_image(img)
-    if _cache.size() > 160: _cache.clear()
+    # R89 · limite em BYTES (antes: 160 texturas — até ~140 MB com cartas grandes animando no celular)
+    _bytes += w * h * 4
     _cache[key] = out
+    _sizes[key] = w * h * 4
+    while _bytes > _budget() and _cache.size() > 1:
+        var old_key = _cache.keys()[0]
+        _bytes -= int(_sizes.get(old_key, 0))
+        _cache.erase(old_key)
+        _sizes.erase(old_key)
     return out
+
+static var _bytes := 0
+static var _sizes := {}
+static var _budget_cache := -1
+static func _budget() -> int:
+    if _budget_cache < 0:
+        var mobile: bool = preload("res://ui_v022/mobile_layout.gd").active(Engine.get_main_loop().root if Engine.get_main_loop() is SceneTree else null)
+        _budget_cache = (20 if mobile else 64) * 1048576
+    return _budget_cache
 
 ## R78 · solta tudo (reduções prontas + fontes): chamado ao fechar o XEQUE / a MARCHA, para a memória voltar
 static func clear_cache() -> void:
     _cache.clear()
+    _sizes.clear()
+    _bytes = 0
     _src.clear()
 
 ## Solta as imagens de origem guardadas (as reduções prontas continuam). Chamado quando o preparo prévio acaba.

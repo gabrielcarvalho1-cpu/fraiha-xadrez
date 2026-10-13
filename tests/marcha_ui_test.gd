@@ -70,6 +70,7 @@ func run():
     check(ui.mode == "game" and ui.g != null and ui.g.hands[0].size() == 4, "partida começa com 4 cartas na mão")
     check(not Access.local_played_today(), "R44 fase de testes: nada é descontado no aparelho")
     ui._on_hit("mute_fx")
+    hub.set_mode_volume("fx", 0.0)   # R88: o toque abre o volume; no zero = mudo
     check(hub.effects_muted and AudioServer.is_bus_mute(AudioServer.get_bus_index("Effects")) and not AudioServer.is_bus_mute(AudioServer.get_bus_index("Music")), "EFEITOS desliga só os efeitos")
     ui._on_hit("mute_fx")
     # celular: o mesmo toque chega 2× (toque + clique emulado) → o 2º não pode voltar ao lobby

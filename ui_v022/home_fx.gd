@@ -4,7 +4,7 @@ extends Control
 ## (só a barriga: cabeça, orelhas, patas e contorno ficam parados).
 ## Tudo em coordenadas do canvas 1672 x 941, por cima da arte e por baixo dos painéis/botões.
 ## Só recortes da PRÓPRIA arte animados por shader (nada redesenhado) + luz aditiva discreta.
-const FOREST := preload("res://ui_v022/assets/home_forest_v9.png")   # R64: arte v9 (R47: v8)
+const FOREST_PATH := "res://ui_v022/assets/home_forest_v9.png"   # R64: arte v9 · R89: carregada só para montar os efeitos
 
 ## [centro da chama, tamanho do recorte, raio da luz]
 const TORCHES := [
@@ -99,8 +99,19 @@ func _init():
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     size = Vector2(1672, 941)
 
+var _built := false
+## R89 · no celular a Home do PC só existe deitada: os efeitos são montados na 1ª vez que ela aparece
+## (antes: no _ready, também no celular em pé — leitura da GPU + 6 MB de imagem guardados para sempre).
 func _ready():
-    _src = FOREST.get_image()
+    if not preload("res://ui_v022/mobile_layout.gd").active(get_viewport()): _build()
+
+func set_awake(on: bool):
+    if on and not _built: _build()
+
+func _build():
+    if _built: return
+    _built = true
+    _src = (load(FOREST_PATH) as Texture2D).get_image()
     if _src.is_compressed(): _src.decompress()
     _add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
     var g := Gradient.new()
@@ -141,6 +152,7 @@ func _ready():
         d.modulate.a = 0.0   # R52f · escondido por alfa: visible redesenharia o disco ao reaparecer (buffers novos na Web)
         add_child(d)
         _puff_discs.append(d)
+    _src = null   # R89 · os recortes já viraram texturas; a imagem inteira não fica na memória
 
 func _piece(r: Rect2, code: String) -> ShaderMaterial:
     var rr := Rect2i(r)
@@ -161,7 +173,7 @@ func _piece(r: Rect2, code: String) -> ShaderMaterial:
     return mat
 
 func _process(delta):
-    if not is_visible_in_tree(): return
+    if not _built or not is_visible_in_tree(): return
     t += delta
     for gl in _glows:
         var s: float = gl[1]

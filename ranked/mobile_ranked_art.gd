@@ -35,10 +35,7 @@ func setup(owner):
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 	scenery = TextureRect.new()
-	var t := AtlasTexture.new()
-	t.atlas = RefPage.SCENE
-	t.region = RefPage.SCENE_REGION
-	scenery.texture = t
+	scenery.texture = load(RefPage.SCENE_PATH)   # R89 · recorte pequeno (antes: atlas de 6 MB)
 	scenery.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	scenery.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	scenery.mouse_filter = Control.MOUSE_FILTER_IGNORE

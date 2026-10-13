@@ -17,7 +17,18 @@ const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
 const APP_VERSION = "0.37"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
-const FOREST = preload("res://ui_v022/assets/home_forest_v9.png")   # R64: botões do menu (ícones e textos) da nova referência do dono (tools/home_ref_v9.py)
+## R89 · as artes da Home do PC (≈30 MB de textura) não são mais constantes: no celular em pé elas nem são
+## carregadas (e são soltas quando a Home deitada sai da tela). Os nomes continuam os mesmos para o resto do código.
+const FOREST_PATH := "res://ui_v022/assets/home_forest_v9.png"
+const FOREST_WIDE_PATH := "res://ui_v022/assets/home_forest_v9_wide.png"
+const FOREST_LEGACY_PATH := "res://ui_v022/assets/home_forest.png"
+const BUTTON_ATLAS_PATH := "res://ui_v022/assets/menu_atlas.png"
+var _desk_tex := {}
+func _desk(path: String) -> Texture2D:
+    if not _desk_tex.has(path): _desk_tex[path] = load(path)
+    return _desk_tex[path]
+var FOREST: Texture2D:
+    get: return _desk(FOREST_PATH)   # R64: botões do menu (ícones e textos) da nova referência do dono (tools/home_ref_v9.py)
 #   # R47: arte de REFERÊNCIA do dono (tools/home_ref_v8.py): menu em 3 linhas grandes + grade 2×3 + CONFIGURAÇÕES/SAIR; só o que é vivo foi apagado   # R36: arte de REFERÊNCIA aprovada pelo dono (tools/home_ref_v7.py): menu com pilares e tochas, 11 linhas com textos; só o que é vivo foi apagado
 ## R32 · linhas do menu na arte v3 (y, altura da moldura) — saída de tools/home_menu_10rows.py
 ## R36 · linhas do menu na arte v7 (y da borda dourada de cima, altura até a de baixo) — medidas na referência
@@ -37,12 +48,16 @@ const REF_TEXT_IN_ART := true
 const PC_TITLE := [Rect2(699,358,296,15), Rect2(700,431,149,15), Rect2(707,505,232,19), Rect2(661,678,120,13), Rect2(661,618,97,13), Rect2(899,619,46,13), Rect2(671,742,55,13), Rect2(674,824,114,13), Rect2(899,742,131,13), Rect2(899,678,133,13), Rect2(903,824,32,13)]
 const PC_SUB := {0: ["Treine e evolua seu jogo", Rect2(700,381,184,0)], 1: ["Partida casual · fila automática", Rect2(702,455,220,0)], 2: ["Compita e conquiste seu lugar", Rect2(707,532,239,0)]}
 const PC_COVER := Rect2(598,322,452,548)   # miolo do menu entre os pilares (páginas internas)
-const FOREST_V2 = FOREST
-const FOREST_WIDE = preload("res://ui_v022/assets/home_forest_v9_wide.png")   # R64   # R43: laterais completadas (tools/home_wide_r43.py)
+var FOREST_V2: Texture2D:
+    get: return _desk(FOREST_PATH)
+var FOREST_WIDE: Texture2D:
+    get: return _desk(FOREST_WIDE_PATH)   # R64   # R43: laterais completadas (tools/home_wide_r43.py)
 const WIDE_PAD := 84.0
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
-const FOREST_LEGACY = preload("res://ui_v022/assets/home_forest.png")
-const BUTTON_ATLAS = preload("res://ui_v022/assets/menu_atlas.png")
+var FOREST_LEGACY: Texture2D:
+    get: return _desk(FOREST_LEGACY_PATH)
+var BUTTON_ATLAS: Texture2D:
+    get: return _desk(BUTTON_ATLAS_PATH)
 const AVATAR = preload("res://ui_v022/assets/profile_avatar.png")
 const ROWS = [Rect2(23,53,1116,147), Rect2(23,220,1116,149), Rect2(23,388,1116,153), Rect2(23,560,1116,156), Rect2(23,736,1116,161), Rect2(23,920,1116,165), Rect2(23,1104,1116,161)]
 const GOLD = Color("f4ce7f")
@@ -176,8 +191,34 @@ func _ready():
     show_page("main")
     # Fullscreen is set by project.godot before the first window is created.
 
+## R89 · recortes das artes do PC (molduras, botões, brilho dos botões): lembrados para soltar/voltar a arte
+var _desk_atlases := {}       # AtlasTexture -> caminho da arte
+var desk_art_awake := true
+func _track_desk(t: AtlasTexture, texture: Texture2D):
+    if texture != null and texture.resource_path in [FOREST_PATH, FOREST_WIDE_PATH, FOREST_LEGACY_PATH, BUTTON_ATLAS_PATH]:
+        _desk_atlases[t] = texture.resource_path
+
+## R89 · celular: solta as artes da Home do PC quando ela não está na tela (em pé, páginas, partidas) e
+## carrega de novo quando a Home deitada aparece. No PC fica sempre acordada.
+func set_desk_art(on: bool):
+    if on == desk_art_awake: return
+    desk_art_awake = on
+    var art = canvas.get_node_or_null("ForestArtwork") if is_instance_valid(canvas) else null
+    if not on:
+        if art != null: art.texture = null
+        for t in _desk_atlases: (t as AtlasTexture).atlas = null
+        _desk_tex.clear()
+    else:
+        for t in _desk_atlases: (t as AtlasTexture).atlas = _desk(String(_desk_atlases[t]))
+        if art != null: art.texture = _desk_theme_tex if _desk_theme_tex != null else FOREST
+    if is_instance_valid(presentation_frame): presentation_frame.queue_redraw()
+    var fx = canvas.get_node_or_null("HomeFx") if is_instance_valid(canvas) else null
+    if fx != null and fx.has_method("set_awake"): fx.set_awake(on)
+var _desk_theme_tex: Texture2D = null
+
 func _slice(texture: Texture2D, region: Rect2) -> AtlasTexture:
     var t = AtlasTexture.new()
+    _track_desk(t, texture)
     t.atlas = texture
     t.region = region
     t.filter_clip = true
@@ -2052,6 +2093,7 @@ func _layout():
         # R86 · celular DEITADO na Home: a mesma Home nova do PC (arte, botões e perfil); em pé e nas
         # outras páginas continua a tela do celular.
         var desk_home: bool = mobile_ui.desk_home_on()
+        set_desk_art(desk_home)   # R89 · artes do PC só quando a Home deitada está na tela
         mobile_ui.visible = not desk_home
         canvas.visible = desk_home
         presentation_frame.visible = desk_home
@@ -2071,6 +2113,7 @@ func _layout():
     presentation_frame.queue_redraw()
 
 func _draw_presentation_frame():
+    if not desk_art_awake: return   # R89
     # Sobras fora da composição: a própria arte, ampliada para cobrir a tela e escurecida
     # (cor sempre derivada da arte atual, nunca cinza neutro). Nada disso recebe clique.
     var artwork = Rect2(canvas.position, DESIGN * canvas.scale)
@@ -2087,11 +2130,27 @@ func _draw_presentation_frame():
         # R43 · modo janela: a cena continua dos dois lados (home_forest_v7_wide.png = 84 px de cada
         # lado completados + o meio idêntico à arte oficial), alinhada pixel a pixel com a arte.
         # Se a janela for ainda mais larga, o resto é a mesma cena ampliada e escurecida.
-        var ws = maxf(full.size.x / FOREST_WIDE.get_width(), full.size.y / FOREST_WIDE.get_height()) * 1.04
-        var wsize = FOREST_WIDE.get_size() * ws
-        presentation_frame.draw_texture_rect(FOREST_WIDE, Rect2((full.size - wsize) / 2.0, wsize), false, Color(0.5, 0.52, 0.48))
+        # R88 · tela mais larga ainda (celular deitado): em vez de uma cópia ampliada da cena atrás (aparecia
+        # tudo duplicado), a borda da própria arte continua ESPELHADA e escurece para fora.
         var u = canvas.scale.x
-        presentation_frame.draw_texture_rect(FOREST_WIDE, Rect2(artwork.position - Vector2(WIDE_PAD * u, 0), FOREST_WIDE.get_size() * u), false)
+        var wr := Rect2(artwork.position - Vector2(WIDE_PAD * u, 0), FOREST_WIDE.get_size() * u)
+        presentation_frame.draw_rect(full, Color("0b1a10"))
+        presentation_frame.draw_texture_rect(FOREST_WIDE, wr, false)
+        var th: float = FOREST_WIDE.get_height()
+        for side in 2:
+            var gap: float = wr.position.x if side == 0 else full.size.x - wr.end.x
+            if gap < 0.5: continue
+            var sw: float = minf(gap / u, FOREST_WIDE.get_width() * 0.45)
+            var src := Rect2(0, 0, sw, th) if side == 0 else Rect2(FOREST_WIDE.get_width() - sw, 0, sw, th)
+            var dst := Rect2(wr.position.x, wr.position.y, -sw * u, wr.size.y) if side == 0 else Rect2(wr.end.x + sw * u, wr.position.y, -sw * u, wr.size.y)
+            presentation_frame.draw_texture_rect_region(FOREST_WIDE, dst, src, Color(0.78, 0.8, 0.76))
+            # escurece aos poucos para fora (a cena some no escuro, sem emenda)
+            var n := 16
+            for i in n:
+                var a := pow(float(i + 1) / n, 1.4) * 0.85
+                var w := gap / n
+                var x := wr.position.x - (i + 1) * w if side == 0 else wr.end.x + i * w
+                presentation_frame.draw_rect(Rect2(x, 0, w + 0.5, full.size.y), Color(0.03, 0.06, 0.04, a))
         return
     # Sobras da tela (fora da tela cheia): panorama de folhagem em pixel art, levemente escurecido.
     var foliage: Texture2D = load("res://ui_v022/assets/home_side_foliage.png")   # R87 · não fica presa na memória do celular
@@ -2203,14 +2262,16 @@ func show_page(id: String):
     if id == "profile":
         _focus_current_look()
         _refresh_avatars()
+    elif avatar_gallery != null and avatar_gallery.has_method("unload_art"): avatar_gallery.unload_art()   # R89
     if id == "history": refresh_history()
     if is_instance_valid(mobile_ui): mobile_ui.show_page(id)
     _sync_side_art(id)
 
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
-    if texture == FOREST_LEGACY: texture = FOREST   # temas que usavam a Home da floresta passam a usar a arte oficial
+    if texture != null and texture.resource_path == FOREST_LEGACY_PATH: texture = FOREST   # temas que usavam a Home da floresta passam a usar a arte oficial
     if texture != null:
-        canvas.get_node("ForestArtwork").texture = texture
+        _desk_theme_tex = texture if texture.resource_path != FOREST_PATH else null
+        canvas.get_node("ForestArtwork").texture = texture if desk_art_awake else null
         var details = canvas.get_node_or_null("ForestDetails")
         if details != null: details.visible = _is_ref_art(texture)
         var spirit = canvas.get_node_or_null("WaterSpirit")
@@ -2320,7 +2381,7 @@ func _set_volume(value: float, save := true):
     var bus = AudioServer.get_bus_index("Effects")
     AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(volume,0.0001)))
     AudioServer.set_bus_mute(bus, volume <= 0.0 or effects_muted)
-    volume_label.text = ("Efeitos Sonoros  •  %d%%" if volume_label.has_meta("ref") or volume_label.get_parent().name == "SettingsPage" else "EFEITOS SONOROS  ·  %d%%") % round(value)
+    if is_instance_valid(volume_label): volume_label.text = ("Efeitos Sonoros  •  %d%%" if volume_label.has_meta("ref") or volume_label.get_parent().name == "SettingsPage" else "EFEITOS SONOROS  ·  %d%%") % round(value)
     if save:
         _save_preferences()
         _osd().show_volume("effects", value)
@@ -2330,7 +2391,7 @@ func _set_music_volume(value: float, save := true):
     var bus = AudioServer.get_bus_index("Music")
     AudioServer.set_bus_volume_db(bus,linear_to_db(maxf(music_volume,0.0001)))
     AudioServer.set_bus_mute(bus,music_volume <= 0.0 or music_muted)
-    music_volume_label.text = ("Música  •  %d%%" if music_volume_label.get_parent().name == "SettingsPage" else "MÚSICA  ·  %d%%") % round(value)
+    if is_instance_valid(music_volume_label): music_volume_label.text = ("Música  •  %d%%" if music_volume_label.get_parent().name == "SettingsPage" else "MÚSICA  ·  %d%%") % round(value)
     if save:
         _save_preferences()
         _osd().show_volume("music", value)
@@ -2342,6 +2403,21 @@ func _osd():
         volume_osd.name = "VolumeOSD"
         add_child(volume_osd)
     return volume_osd
+
+## R88 · volume pelo controle deslizante dos modos (0..1). 0 = mudo; subir tira o mudo. Fica salvo.
+func set_mode_volume(kind: String, v: float):
+    v = clampf(v, 0.0, 1.0)
+    if kind == "music":
+        music_muted = v <= 0.0
+        if v > 0.0: music_volume = v
+        _set_music_volume(v * 100.0 if v > 0.0 else music_volume * 100.0, false)
+        AudioServer.set_bus_mute(AudioServer.get_bus_index("Music"), music_muted)
+    else:
+        effects_muted = v <= 0.0
+        if v > 0.0: volume = v
+        _set_volume(v * 100.0 if v > 0.0 else volume * 100.0, false)
+        AudioServer.set_bus_mute(AudioServer.get_bus_index("Effects"), effects_muted)
+    _save_preferences()
 
 ## R34: liga/desliga só a música ou só os efeitos (os volumes guardados não mudam).
 func set_music_muted(value: bool):
@@ -3048,7 +3124,8 @@ func _unhandled_key_input(e):
         get_viewport().set_input_as_handled()
 
 func _is_ref_art(texture: Texture2D) -> bool:
-    return texture == FOREST_V2
+    if texture == null: return ref_mode    # R89: arte do PC solta (celular) — mantém o estado atual
+    return texture.resource_path == FOREST_PATH
 
 func _build_reference_chrome():
     # Perfil
@@ -3217,6 +3294,7 @@ func _build_reference_chrome():
         var region = Rect2(PC_MENU[i].position + offset, PC_MENU[i].size + Vector2(6, 6))
         var atlas = AtlasTexture.new()
         atlas.atlas = FOREST
+        _track_desk(atlas, FOREST)
         atlas.region = region
         var hover = TextureRect.new()
         hover.name = "RefHover"

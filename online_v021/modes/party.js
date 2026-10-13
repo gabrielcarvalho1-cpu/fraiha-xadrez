@@ -232,11 +232,13 @@ class Party {
     const prof = room.seats[seat].profile || 'equilibrado';
     const d = X.decide(g.publicState(seat), g.hands[seat].slice(), prof, room.rng);
     if (d.action === 'challenge' && g.canChallenge(seat)) return this.xequeChallenge(room, seat);
+    if (g.canAccept(seat)) return this.xequeAccept(room, seat);   // R88
     if (!this.xequePlay(room, seat, d.idx || [0])) this.xequeTimeout(room, seat);
   }
   xequeTimeout(room, seat) {
     const g = room.g;
     if (room.turn_seat !== seat || room.busy) return;
+    if (g.canAccept(seat)) return this.xequeAccept(room, seat, 'timeout');   // R88 · último com cartas
     const i = g.hands[seat].length ? room.rng.int(0, g.hands[seat].length - 1) : -1;
     if (i >= 0) this.xequePlay(room, seat, [i], 'timeout');
     else if (g.canChallenge(seat)) this.xequeChallenge(room, seat);
@@ -261,9 +263,19 @@ class Party {
     this.xequeAfterChallenge(room, r);
     return true;
   }
+  // R88 · ACEITAR (último com cartas): aciona o próprio relógio, sem revelar nada
+  xequeAccept(room, seat, reason) {
+    const g = room.g;
+    if (!g.canAccept(seat)) return false;
+    room.busy = true; room.deadline = 0; clearTimeout(room.timer);
+    const r = g.accept(seat);
+    this.broadcast(room, { ev: 'challenge', result: r, reason });
+    this.xequeAfterChallenge(room, r);
+    return true;
+  }
   // a apresentação (revelar → relógio → seguro/xeque-mate) roda no cliente; o servidor espera o mesmo tempo
   xequeAfterChallenge(room, r) {
-    const present = T.revealMs + T.clockMs + (r.mate ? T.mateMs : T.safeMs) + 300;
+    const present = (r.accept ? 0 : T.revealMs) + T.clockMs + (r.mate ? T.mateMs : T.safeMs) + 300;
     this.later(room, present, () => {
       const g = room.g;
       if (g.state === X.S.MATCH_END) return this.finish(room);
@@ -362,6 +374,7 @@ class Party {
       return;
     }
     if (act.kind === 'challenge') { if (!this.xequeChallenge(room, seat)) return reject('illegal', 'Não dá para dar XEQUE agora.'); return; }
+    if (act.kind === 'accept') { if (!this.xequeAccept(room, seat, 'player')) return reject('illegal', 'Não dá para ACEITAR agora.'); return; }
     const idx = Array.isArray(act.idx) ? act.idx.slice(0, X.MAX_PLAY).map(x => Math.trunc(Number(x))) : [];
     if (!this.xequePlay(room, seat, idx, 'player')) return reject('illegal', 'Jogada inválida.');
   }

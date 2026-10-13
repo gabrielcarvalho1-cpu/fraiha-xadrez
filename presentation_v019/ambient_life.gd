@@ -3,7 +3,7 @@ extends Node2D
 ## tremulante, reflexos na água, vaga-lumes e, de vez em quando, um bando de pássaros.
 ## Filho do sprite do cenário: coordenadas em pixels da textura (origem no centro).
 ## Nada aqui recebe clique nem toca na partida; fica fora da área do tabuleiro.
-const WOOD_ART := preload("res://presentation_v019/forest_wide.png")
+const WOOD_ART_PATH := "res://presentation_v019/forest_wide.png"   # R89: sem preload (comparado pelo caminho)
 const TORCHES := [Vector2(0.288, 0.042), Vector2(0.276, 0.551), Vector2(0.693, 0.426), Vector2(0.697, 0.835)]
 const BOARD := Rect2(0.300, 0.165, 0.360, 0.615)   # área do tabuleiro (UV) com folga: sem efeitos
 var tex_size := Vector2(1672, 941)
@@ -26,7 +26,6 @@ var _fly_discs: Array = []
 
 func _ready():
     rng.randomize()
-    tex_size = WOOD_ART.get_size()
     z_index = 12
     # Brilhos somam luz (fogo, água, vaga-lumes); pássaros ficam numa camada normal.
     glow_layer = Node2D.new()
@@ -61,16 +60,10 @@ func _uv(p: Vector2) -> Vector2:
     return p * tex_size - tex_size / 2.0
 
 func _sample_water():
-    var img := WOOD_ART.get_image()
-    if img == null: return
-    if img.is_compressed(): img.decompress()
-    var w := img.get_width()
-    var h := img.get_height()
-    for y in range(int(h * 0.46), h, 4):
-        for x in range(0, int(w * 0.33), 4):
-            var c := img.get_pixel(x, y)
-            if c.b > c.r * 1.4 and c.b > c.g * 0.95 and c.b > 0.35:
-                water_spots.append(Vector2(x, y) - tex_size / 2.0)
+    # R89 · pontos já calculados (antes: get_image() = leitura da GPU + 6 MB na CPU a cada abertura)
+    var sp: Array = preload("res://presentation_v019/water_spots.gd").SPOTS
+    for i in range(0, sp.size(), 2):
+        water_spots.append(Vector2(sp[i], sp[i + 1]) - tex_size / 2.0)
 
 func _new_fly() -> Dictionary:
     var p := Vector2.ZERO
@@ -80,7 +73,7 @@ func _new_fly() -> Dictionary:
     return {"home": _uv(p), "phase": rng.randf() * TAU, "speed": rng.randf_range(0.35, 0.7), "life": rng.randf_range(5.0, 11.0), "age": 0.0}
 
 func _process(delta):
-    var art_ok := get_parent() is Sprite2D and (get_parent() as Sprite2D).texture == WOOD_ART
+    var art_ok := get_parent() is Sprite2D and (get_parent() as Sprite2D).texture != null and (get_parent() as Sprite2D).texture.resource_path == WOOD_ART_PATH
     visible = art_ok
     if not art_ok or not is_visible_in_tree(): return
     time += delta

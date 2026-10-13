@@ -2,7 +2,12 @@ extends Control
 ## Tela de escolha de ritmo (JOGAR ONLINE / JOGAR RANQUEADO) no desktop, com a arte da
 ## referência. Os textos são desenhados por cima; os cliques repassam para os botões reais
 ## da ranked_ui (mesmas ações, mesmas regras). Coordenadas em pixels da arte.
-const ART := preload("res://ui_v022/assets/online_panel.png")
+## R89 · arte do painel (PC) carregada só quando o painel é desenhado
+var _art: Texture2D = null
+var ART: Texture2D:
+    get:
+        if _art == null: _art = load("res://ui_v022/assets/online_panel.png")
+        return _art
 const TITLE_FONT := preload("res://account/fonts/Cinzel-Bold.woff")
 const BG_TAB := Color("001b0f")
 const TAB_ART := preload("res://ui_v022/assets/online_tab.png")
@@ -27,7 +32,7 @@ var invite_hit: Button
 func setup(owner):
     ui = owner
     mouse_filter = Control.MOUSE_FILTER_STOP
-    size = ART.get_size()
+    size = Vector2(1122, 965)   # tamanho da arte online_panel.png (sem carregar)
     for i in 4:
         var r := _card_button(i)
         queue_hits.append(_hit(r, "q%d" % i, func(): _queue(i)))

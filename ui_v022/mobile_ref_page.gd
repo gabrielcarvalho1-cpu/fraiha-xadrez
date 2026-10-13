@@ -9,7 +9,7 @@ const Mobile = preload("res://ui_v022/mobile_layout.gd")
 const Kit = preload("res://ui_kit/kit.gd")
 # cenário: o lado direito da Home (castelo, cachoeira, placas) — só cena, sem nenhuma moldura de menu atrás
 # do painel; a textura já está carregada pela Home (main_hub.FOREST), nada novo é lido do disco.
-const SCENE = preload("res://ui_v022/assets/home_forest_v8.png")
+const SCENE_PATH := "res://ui_v022/assets/r86/paginas_cenario.png"   # R89 · só o recorte usado (1,6 MB), carregado ao abrir a página
 const SCENE_REGION := Rect2(1100, 250, 572, 691)
 const GLOW = preload("res://ui_v022/home_button_glow.gdshader")
 const REF_W := 900.0
@@ -48,10 +48,7 @@ func setup(owner_hub, owner_mobile):
 	visible = false
 	scenery = TextureRect.new()
 	scenery.name = "RefScenery"
-	var t := AtlasTexture.new()
-	t.atlas = SCENE
-	t.region = SCENE_REGION
-	scenery.texture = t
+	scenery.texture = null
 	scenery.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	scenery.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	scenery.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -80,6 +77,7 @@ static func handles(id: String) -> bool:
 func open(id: String):
 	page_id = id
 	_w = -1.0
+	if scenery.texture == null: scenery.texture = load(SCENE_PATH)
 	visible = true
 	if _full.size.x > 0.0: layout(_full)
 
@@ -87,6 +85,7 @@ func close():
 	visible = false
 	page_id = ""
 	_clear()
+	scenery.texture = null   # R89 · solta o cenário
 
 ## full = a tela inteira, nas coordenadas do pai (a Home do celular).
 func layout(full: Rect2):
@@ -668,10 +667,22 @@ func _piece(parent: Control, n: String, rect_ref: Rect2) -> TextureRect:
 	return r
 
 # ------------------------------------------------------------------ PERFIL (ref5)
+## R88 · botões não crescem pelo texto (o próprio botão desenha o rótulo) e textos quebram linha.
+func _fit_inside(node: Node):
+	for c in node.get_children():
+		if c is Button:
+			(c as Button).clip_text = true
+		elif c is Label:
+			var l := c as Label
+			if l.autowrap_mode == TextServer.AUTOWRAP_OFF: l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.custom_minimum_size.x = 0.0
+		if c is Control and not (c is Button) and c.get_child_count() > 0: _fit_inside(c)
+
 func _build_profile():
 	var content := _content_box(92, 448, 716, 14)
 	content.name = "ProfileContentMobile"
 	mobile._profile(content, 716.0 * s)
+	_fit_inside(content)   # R88 · nada passa da largura do painel (botões e linhas do Ranked saíam para fora)
 	var count: Label = content.get_node_or_null("GalleryCountMobile")
 	var gallery = content.get_node_or_null("AvatarGalleryMobile")
 	if count != null: count.hide()   # o número vai na faixa COLEÇÃO DE AVATARES da arte

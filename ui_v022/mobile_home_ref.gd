@@ -7,7 +7,7 @@ extends Control
 ## Telas de outra proporção: a arte encaixa pela largura (corte de no máx. ~3% de cada lado em telas mais
 ## estreitas); a barra de baixo fica sempre colada no fim da tela — em telas mais baixas ela cobre parte da
 ## cena (gata/mochila), em telas mais altas o chão da cena se estende até ela.
-const ART := preload("res://ui_v022/assets/home_mobile_v8.png")
+const ART_PATH := "res://ui_v022/assets/home_mobile_v8.png"   # R89 · solta quando a Home some (partidas, páginas)
 const DESIGN := Vector2(854, 1842)
 const NAV_TOP := 1655.0        # topo do recorte da barra (inclui a pedra azul de cima)
 const NAV_FADE := 34.0         # fileiras de cima do recorte que se misturam com a cena
@@ -127,9 +127,26 @@ func setup(owner_hub, owner_mobile):
     _build_nav()
     refresh()
 
+var _atlases: Array = []
+var _art: Texture2D = null
+func _art_tex() -> Texture2D:
+    if _art == null: _art = load(ART_PATH)
+    return _art
+
+## R89 · a arte (6 MB) só fica na memória enquanto a Home em pé aparece
+func _notification(what):
+    if what == NOTIFICATION_VISIBILITY_CHANGED and not _atlases.is_empty():
+        var on := is_visible_in_tree()
+        if not on:
+            for t in _atlases: (t as AtlasTexture).atlas = null
+            _art = null
+        elif (_atlases[0] as AtlasTexture).atlas == null:
+            for t in _atlases: (t as AtlasTexture).atlas = _art_tex()
+
 func _region(r: Rect2) -> AtlasTexture:
     var t := AtlasTexture.new()
-    t.atlas = ART
+    t.atlas = _art_tex()
+    _atlases.append(t)
     t.region = r
     t.filter_clip = true
     return t

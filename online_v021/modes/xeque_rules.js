@@ -3,7 +3,7 @@
 // de xeque/ai.gd. A IA recebe só o estado público + a própria mão (igual ao Godot).
 const { rngFrom } = require('./rng');
 
-const MODE_ID = 'xeque', RULESET_VERSION = '2';   // R36: relógio com chance crescente por nível
+const MODE_ID = 'xeque', RULESET_VERSION = '3';   // R88: sem XEQUE automático; o último com cartas escolhe XEQUE ou ACEITAR
 const KING = 'rei', QUEEN = 'rainha', KNIGHT = 'cavalo', JOKER = 'peao';
 const TARGETS = [KING, QUEEN, KNIGHT];
 const DECK_COUNTS = { [KING]: 6, [QUEEN]: 6, [KNIGHT]: 6, [JOKER]: 2 };
@@ -51,8 +51,12 @@ class Xeque {
     return -1;
   }
   canChallenge(seat) { return this.state === S.TURN_WAITING && seat === this.turn && !!this.last_play && this.last_play.seat !== seat; }
+  // R88 · só ESTE jogador ainda tem cartas e é a vez dele: XEQUE na última jogada ou ACEITAR
+  lastHolder(seat) { const wc = this.withCards(); return this.state === S.TURN_WAITING && seat === this.turn && wc.length === 1 && wc[0] === seat; }
+  canAccept(seat) { return this.lastHolder(seat); }
   canPlay(seat, idx) {
     if (this.state !== S.TURN_WAITING || seat !== this.turn || !this.alive(seat)) return false;
+    if (this.lastHolder(seat)) return false;
     if (!Array.isArray(idx) || idx.length < 1 || idx.length > MAX_PLAY) return false;
     const seen = new Set();
     for (const i of idx) { const n = Number(i); if (!Number.isInteger(n) || n < 0 || n >= this.hands[seat].length || seen.has(n)) return false; seen.add(n); }
@@ -83,7 +87,13 @@ class Xeque {
     this.state = S.CARDS_PLAYED;
     this.public_log.push(`${this.names[seat]} disse ${cap(this.declaredText(cards.length))}`);
     const pub = { seat, count: cards.length, declared: this.declaredText(cards.length) };
-    if (this.withCards().length <= 1) {
+    const holders = this.withCards();
+    if (holders.length === 1 && holders[0] !== seat) {
+      // R88 · só um jogador ainda tem cartas: a vez é dele (XEQUE na última jogada ou ACEITAR)
+      this.turn = holders[0]; this.state = S.TURN_WAITING;
+      return pub;
+    }
+    if (holders.length <= 1) {
       const caller = this.nextSeat(seat);
       this.state = S.TURN_WAITING; this.turn = caller;
       pub.forced = this.resolveChallenge(caller, true);
@@ -95,9 +105,17 @@ class Xeque {
   }
   timeoutAction(seat) {
     if (this.state !== S.TURN_WAITING || seat !== this.turn || !this.hands[seat].length) return null;
+    if (this.lastHolder(seat)) return { accept: this.accept(seat) };   // R88 · tempo esgotado do último com cartas = ACEITAR
     return this.play(seat, [this.rng.int(0, this.hands[seat].length - 1)]);
   }
   challenge(seat) { if (!this.canChallenge(seat)) return null; return this.resolveChallenge(seat, false); }
+  // R88 · ACEITAR: não desafia; fica com as cartas e aciona o próprio relógio (nada é revelado)
+  accept(seat) {
+    if (!this.canAccept(seat)) return null;
+    this.public_log.push(`${this.names[seat]} aceitou e ficou com as cartas`);
+    const accused = this.last_play ? this.last_play.seat : seat;
+    return this.applyClock(seat, seat, accused, [], true, [], false, true);
+  }
   resolveChallenge(caller, forced) {
     this.state = S.CHALLENGE;
     const accused = this.last_play.seat, cards = this.last_play.cards.slice();
@@ -107,6 +125,9 @@ class Xeque {
     const loser = truthful ? caller : accused;
     this.reveals.push({ seat: accused, cards, target: this.target, truthful, round: this.round_no });
     this.public_log.push(`XEQUE de ${this.names[caller]}: ${truthful ? 'VERDADE' : 'BLEFE'}`);
+    return this.applyClock(loser, caller, accused, cards, truthful, falseCards, forced, false);
+  }
+  applyClock(loser, caller, accused, cards, truthful, falseCards, forced, accepted) {
     this.state = S.CLOCK_RESOLUTION;
     const leftBefore = this.clockLeft(loser);
     const chanceBefore = this.clockChance(loser);
@@ -122,7 +143,7 @@ class Xeque {
     const aliveNow = this.aliveSeats();
     if (aliveNow.length === 1) { this.winner = aliveNow[0]; this.next_starter = -1; this.state = S.MATCH_END; }
     else { this.next_starter = this.alive(loser) ? loser : this.nextSeat(loser); this.state = S.ROUND_END; }
-    this.last_result = { caller, accused, cards, target: this.target, truthful, false_cards: falseCards, loser, forced, clock_left_before: leftBefore, chance: chanceBefore, roll: this.last_roll, clock: pulled, mate, lost_crown: lostCrown, lives_after: this.lives[loser], eliminated, winner: this.winner, next_starter: this.next_starter, round: this.round_no };
+    this.last_result = { caller, accused, cards, target: this.target, truthful, false_cards: falseCards, loser, forced, accept: accepted, clock_left_before: leftBefore, chance: chanceBefore, roll: this.last_roll, clock: pulled, mate, lost_crown: lostCrown, lives_after: this.lives[loser], eliminated, winner: this.winner, next_starter: this.next_starter, round: this.round_no };
     return this.last_result;
   }
   publicState(viewer = -1) {
@@ -134,6 +155,7 @@ class Xeque {
       reveals: this.reveals.map(r => ({ ...r, cards: r.cards.slice() })), names: this.names.slice(), winner: this.winner,
       eliminated_round: this.eliminated_round.slice(), deck_counts: { ...DECK_COUNTS },
       can_challenge: viewer >= 0 && this.canChallenge(viewer),
+      can_accept: viewer >= 0 && this.canAccept(viewer),
     };
   }
   placement(seat) { if (seat === this.winner) return 1; const i = this.finish_order.indexOf(seat); return i < 0 ? 0 : SEATS - i; }
@@ -172,6 +194,8 @@ function pLastPlayTrue(pub, hand) {
 function decide(pub, hand, profile, rng) {
   const pr = PROFILES[profile] || PROFILES.equilibrado;
   const me = pub.viewer, lp = pub.last_play || {};
+  // R88 · último com cartas: XEQUE nunca é pior que ACEITAR (aceitar aciona o relógio com certeza)
+  if (pub.can_accept) return pub.can_challenge ? { action: 'challenge' } : { action: 'accept' };
   if (pub.can_challenge && lp.seat !== undefined) {
     const suspicion = 1.0 - pLastPlayTrue(pub, hand);
     const myLeft = pub.clock_left[me], theirLeft = pub.clock_left[lp.seat];

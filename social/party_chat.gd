@@ -148,6 +148,7 @@ func bind(p_room: String, p_game: String, p_names: Array):
     if account != null: account.send_server({"type": "party_chat_sync", "room_id": room_id})
 
 func unbind():
+    dock_rect = Rect2()
     room_id = ""
     visible = false
     opened = false
@@ -219,6 +220,16 @@ static func _esc(s: String) -> String:
 func _scroll_end():
     if scroll != null: scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value)
 
+## R88 · lugar do botão CHAT escolhido pelo modo (pixels de tela); Rect2() = posição padrão (borda direita)
+var dock_rect := Rect2()
+func set_dock(r: Rect2):
+    if r == dock_rect: return
+    dock_rect = r
+    if r.size.x <= 1.0 and toggle != null:
+        toggle.custom_minimum_size = Vector2.ZERO
+        toggle.remove_theme_font_size_override("font_size")
+    _layout()
+
 func _layout():
     if toggle == null: return
     var vs: Vector2 = get_viewport().get_visible_rect().size
@@ -229,6 +240,14 @@ func _layout():
     toggle.reset_size()
     var tsz := toggle.size * s
     toggle.position = Vector2(vs.x - tsz.x - 10, vs.y * (0.30 if portrait else 0.46))
+    if dock_rect.size.x > 1.0:
+        # R88 · o modo (XEQUE / MARCHA no celular) reservou um lugar para o CHAT: botão grande ali
+        toggle.scale = Vector2.ONE
+        toggle.add_theme_font_size_override("font_size", int(clampf(dock_rect.size.y * 0.42, 14.0, 26.0)))
+        toggle.custom_minimum_size = dock_rect.size
+        toggle.size = dock_rect.size
+        toggle.position = dock_rect.position
+        tsz = dock_rect.size
     panel.visible = opened
     panel.scale = Vector2(s, s)
     panel.reset_size()

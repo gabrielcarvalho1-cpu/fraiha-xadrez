@@ -39,10 +39,14 @@ static func get_theme(id: String) -> Dictionary:
 static var _texture_cache := {}
 ## Mantém as texturas já carregadas: sem isso, trocar de liga na Home recarregava (e
 ## decodificava) as artes grandes a cada clique — na Web isso travava o áudio.
+## R89 · referência FRACA: quem desenha segura a textura; quando ninguém mais usa, ela sai da memória
+## (antes o cache segurava para sempre todo avatar, tema e atlas já mostrados).
 static func texture(path: String) -> Texture2D:
-    if _texture_cache.has(path): return _texture_cache[path]
+    if _texture_cache.has(path):
+        var t = (_texture_cache[path] as WeakRef).get_ref()
+        if t != null: return t
     var tex: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
-    if tex != null: _texture_cache[path] = tex
+    if tex != null: _texture_cache[path] = weakref(tex)
     return tex
 
 static func piece_textures(id: String) -> Dictionary:

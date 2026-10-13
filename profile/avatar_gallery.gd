@@ -55,6 +55,12 @@ func refresh():
 func update_states():
     for id in cards: cards[id].queue_redraw()
 
+## R89 · página do Perfil fechada: solta as artes dos avatares (19 × 1 MB). Voltam ao desenhar de novo.
+func unload_art():
+    for id in cards:
+        var c = cards[id]
+        if c.portrait != null: c.portrait.texture = null
+
 func state_of(id: String) -> String:
     if hub == null: return "locked"
     if not Catalog.has_art(id): return "no_art_unlocked" if unlocked(id) else "locked"

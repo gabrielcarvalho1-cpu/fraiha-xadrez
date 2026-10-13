@@ -61,15 +61,15 @@ for (const st of xf.steps) {
   const seat = int(st.seat), g = xload(st.before);
   const pub = g.publicState(seat);
   const gp = st.pub;
-  const pubSame = JSON.stringify([pub.state, pub.round, pub.target, pub.turn, pub.lives, pub.hand_counts, pub.clock_left, pub.last_play.seat === undefined ? -1 : pub.last_play.seat, pub.can_challenge]) ===
-    JSON.stringify([gp.state, int(gp.round), gp.target, int(gp.turn), ints(gp.lives), ints(gp.hand_counts), ints(gp.clock_left), gp.last_play && gp.last_play.seat !== undefined ? int(gp.last_play.seat) : -1, !!gp.can_challenge]);
+  const pubSame = JSON.stringify([pub.state, pub.round, pub.target, pub.turn, pub.lives, pub.hand_counts, pub.clock_left, pub.last_play.seat === undefined ? -1 : pub.last_play.seat, pub.can_challenge, pub.can_accept]) ===
+    JSON.stringify([gp.state, int(gp.round), gp.target, int(gp.turn), ints(gp.lives), ints(gp.hand_counts), ints(gp.clock_left), gp.last_play && gp.last_play.seat !== undefined ? int(gp.last_play.seat) : -1, !!gp.can_challenge, !!gp.can_accept]);
   if (!pubSame) pubBad++;
   const p = X.pLastPlayTrue(pub, g.hands[seat]);
   if (Math.abs(p - Number(st.p_true)) > 1e-9) { if (pBad++ < 3) console.log('p diff', xn, p, st.p_true); }
   const act = st.action;
   const rr = st.result && (st.result.roll !== undefined ? st.result.roll : (st.result.forced ? st.result.forced.roll : undefined));
   if (rr !== undefined && Number(rr) >= 0) g.nextRoll = Number(rr);       // mesmo sorteio do relógio que o Godot fez
-  const res = act.action === 'challenge' ? g.challenge(seat) : g.play(seat, ints(act.idx));
+  const res = act.action === 'challenge' ? g.challenge(seat) : act.action === 'accept' ? g.accept(seat) : g.play(seat, ints(act.idx));
   const r = st.result;
   const resKey = o => !o ? 'null' : JSON.stringify(o.caller !== undefined
     ? [int(o.caller), int(o.accused), o.cards, !!o.truthful, int(o.loser), o.clock, !!o.mate, !!o.eliminated, int(o.winner), int(o.next_starter), Math.round(Number(o.chance) * 100)]

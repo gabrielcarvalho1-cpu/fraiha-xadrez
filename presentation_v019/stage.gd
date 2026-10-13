@@ -97,6 +97,7 @@ func _ready():
     add_child(voice)
     _build_backdrop()
     _build_navigation()
+    _sleep_scenery.call_deferred()   # R89
     get_viewport().size_changed.connect(_layout)
     hub.play_local_requested.connect(_start_local)
     # JOGAR ONLINE = Casual com fila automática. As salas por código (_open_online) seguem internas.
@@ -1001,6 +1002,18 @@ func open_home():
     _clear_selection()
     hub.open_home()
     _refresh_input()
+    _sleep_scenery()
+
+## R89 · celular: a floresta pintada atrás do tabuleiro nunca aparece na Home (a Home cobre tudo) nem na
+## partida (o painel novo usa a arte da referência). Fica escondida e sem textura na memória (12 MB).
+func _sleep_scenery():
+    var Sleepy = preload("res://ui_v022/sleepy_sprite.gd")
+    Sleepy.attach(forest)
+    var env = game.get_node_or_null("ForestEnvironment")
+    if env != null:
+        for c in env.get_children():
+            if c is Sprite2D: Sleepy.attach(c)
+    if MobileLayout.active(get_viewport()): forest.visible = false
 
 func return_to_home():
     if not pending_navigation.is_empty():
@@ -1179,7 +1192,7 @@ func _layout():
         bot_info.remove_theme_stylebox_override("normal")
         bot_info.vertical_alignment = VERTICAL_ALIGNMENT_TOP
     # The outpaint has its own board center; align its terrain while covering every edge.
-    var texture_size = forest.texture.get_size()
+    var texture_size = forest.texture.get_size() if forest.texture != null else Vector2(1672, 941)   # R89: floresta solta (celular)
     var art_center = texture_size * Vector2(802.0/1672.0, 445.5/941.0)
     var cover = max(max(size.x/2.0/art_center.x, size.x/2.0/(texture_size.x-art_center.x)), max(size.y/2.0/art_center.y, size.y/2.0/(texture_size.y-art_center.y)))
     forest.scale = Vector2.ONE * cover
