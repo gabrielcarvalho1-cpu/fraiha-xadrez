@@ -261,6 +261,39 @@ def seats_top(src, mesa):
     return a
 
 
+# ---------- R82 · moldura de baixo abaixo das contas ----------
+FRAME_D = 20
+def bottom_frame(src, D=20):
+    """R82 · a moldura de baixo do tabuleiro passava POR BAIXO da fileira de contas de baixo; desce D px (barra,
+    cantos e laterais), o lugar dela vira pedra e o quadro do meio (portão de baixo) fica inteiro acima da barra."""
+    o = src.copy(); n = src.copy()
+    BX0, BX1 = 768, 924                      # quadro do portão de baixo (contas)
+    # 1) onde era a barra (linhas 700..742 perto dos cantos, 718..742 no resto): pedra de cima
+    for (x0, x1, sy) in [(572, BX0, 694), (BX1, 1120, 694)]:
+        n[718:742, x0:x1] = o[sy:sy + 24, x0:x1]
+    for (x0, x1, dx) in [(500, 572, 80), (1120, 1192, -80)]:      # perto dos losangos: pedra do lado
+        n[716:742, x0:x1] = o[692:718, x0 + dx:x1 + dx]
+    # dentro do quadro: as laterais do quadro continuam (copiadas de cima) onde a barra cruzava
+    for (x0, x1) in [(BX0, BX0 + 10), (BX1 - 10, BX1)]:
+        n[718:736, x0:x1] = o[700:718, x0:x1]
+    # 2) barra nova D px abaixo (barra + sombra); no trecho do quadro usa colunas de barra pura à direita
+    band = o[718:750].copy()
+    band[:, BX0 - 4:BX1 + 4] = o[718:750, BX0 - 4 + 200:BX1 + 4 + 200]
+    n[718 + D:750 + D, 470:1222] = band[:, 470:1222]
+    # 3) cantos: o bloco do chanfro (retângulo, abaixo do losango) desce junto; a lateral é completada com ela
+    #    mesma e o lugar antigo do chanfro vira pedra
+    for (x0, x1, bx0, bx1, sx0, sx1, dx) in [(470, 522, 470, 506, 506, 522, 80), (1170, 1222, 1186, 1222, 1170, 1186, -80)]:
+        n[704 + D:746 + D, x0:x1] = o[704:746, x0:x1]
+        n[704:704 + D, sx0:sx1] = o[684:684 + D, sx0 + dx:sx1 + dx]
+        n[700:704 + D, bx0:bx1] = o[676:680 + D, bx0:bx1]
+    # 5) emenda suave entre a pedra original e a faixa nova
+    for k, y in enumerate(range(714, 722)):
+        al = (k + 1) / 9.0
+        for (x0, x1) in [(524, 768), (924, 1168)]:
+            n[y, x0:x1] = (o[y, x0:x1] * (1 - al) + n[y, x0:x1] * al).astype(np.uint8)
+    return n
+
+
 def diamond_alpha(w, h, feather=1.5):
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     d = np.abs(xx - (w - 1) / 2.0) / (w / 2.0) + np.abs(yy - (h - 1) / 2.0) / (h / 2.0)
@@ -278,6 +311,8 @@ def main():
     mesa = remove_panel(mesa, YOU_PANEL)
     # 0c) R72 · placas dos três perfis: iguais, lado a lado no topo (as laterais voltam a ser parede)
     mesa = seats_top(load(MESA_R57), mesa)
+    # 0d) R82 · a barra de baixo do tabuleiro desce (passava por baixo da fileira de contas de baixo)
+    mesa = bottom_frame(mesa)
     # 1) losangos antigos e círculos de silhueta saem da mesa (recomposição a partir da pedra em volta)
     hole = np.zeros(mesa.shape[:2], np.uint8)
     for (cx, cy) in HOMES_R57.values():

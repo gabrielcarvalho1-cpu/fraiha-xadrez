@@ -110,6 +110,8 @@ var mode := "lobby"               # lobby | game | over
 var tut_page := -1                # tutorial aberto (página) ou -1
 var menu_open := false
 var portrait := false
+var wide_land := false   # R82 · celular DEITADO: blocos lado a lado, tabuleiro na altura toda
+var blk := false         # layout por blocos (em pé ou celular deitado)
 var design := Vector2(1920, 1080)
 var k := 1.0
 var origin := Vector2.ZERO
@@ -275,10 +277,15 @@ func _relayout():
             fv.base_font = pair[1] if pair[1] is Font else load(pair[1])
             fv.spacing_glyph = pair[2]
             fonts[pair[0]] = fv
+    wide_land = not portrait and MobileLayout.active(get_viewport())
+    blk = portrait or wide_land
     design = Vector2(1080, clampf(1080.0 * vs.y / maxf(1.0, vs.x), 1700.0, 2400.0)) if portrait else Vector2(1920, 1080)
+    if wide_land: design = Vector2(clampf(1080.0 * vs.x / maxf(1.0, vs.y), 1920.0, 3300.0), 1080)
     if portrait:
         _portrait_layout()
         _portrait_lobby_layout()
+    elif wide_land:
+        _wide_layout()
     k = minf(vs.x / design.x, vs.y / design.y)
     origin = (vs - design * k) / 2.0
     _redraw()
@@ -1255,11 +1262,11 @@ func _portrait_layout():
     var row_h := 140.0
     var bottom_pad := 6.0
     var bw := 1124.0                             # R75.2 · tabuleiro maior: passa um tiquinho da largura (só a borda da moldura sai)
-    var bh: float = 635.0 * bw / 730.0
+    var bh: float = 657.0 * bw / 730.0
     var maxb: float = H - top - row_h - ch - bottom_pad - 3.0 * 8.0
     if bh > maxb:                                # aparelho baixo: encolhe para caber
         bh = maxb
-        bw = 730.0 * bh / 635.0
+        bw = 730.0 * bh / 657.0
     var gap: float = (H - top - bh - row_h - ch - bottom_pad) / 3.0
     var board := Rect2((1080.0 - bw) / 2.0, top + gap, bw, bh)
     var row := Rect2(0, board.end.y + gap, 1080, row_h)
@@ -1276,7 +1283,7 @@ func _portrait_layout():
         [Rect2(0, 0, 500, 95), Rect2(0, 0, 525, 99.75)],               # 0 título
         [Rect2(1150, 0, 500, 80), Rect2(547, 8, 525, 84)],              # 1 ícones (+ microfone/fone da voz, à esquerda)
         [Rect2(3000, 0, 740, 108), Rect2(8, 114, 1064, 155.3)],         # 2 placas (faixa virtual)
-        [Rect2(480, 110, 730, 635), board],                             # 3 tabuleiro
+        [Rect2(480, 110, 730, 657), board],                             # 3 tabuleiro
         [Rect2(520, 735, 640, 206), cards],                             # 4 mão
         [Rect2(55, 712, 280, 122), scroll],                             # 5 SUA VEZ / VEZ DE (pergaminho)
         [Rect2(55, 836, 290, 74), play],                                # 6 JOGAR CARTA
@@ -1284,6 +1291,58 @@ func _portrait_layout():
     ]
 
 ## salão (1494x834) em pé: título, ícones, painel do modo, tabuleiro de amostra e botões, um embaixo do outro
+## R82 · celular DEITADO (tela larga): tabuleiro no meio com a altura toda; à esquerda título, perfis (em coluna)
+## e SUA VEZ/JOGAR CARTA; à direita ícones e a mão. Usa a mesma lista de blocos do celular em pé.
+func _wide_layout():
+    var W: float = design.x
+    var H := 1080.0
+    var bh := 1044.0
+    var bw: float = 730.0 * bh / 657.0
+    var side: float = (W - bw) / 2.0
+    if side < 620.0:                                             # colunas com folga para perfis e cartas grandes
+        bw = W - 1240.0
+        bh = 657.0 * bw / 730.0
+        side = 620.0
+    var board := Rect2((W - bw) / 2.0, (H - bh) / 2.0, bw, bh)
+    var lw: float = side - 32.0
+    # ESQUERDA: título e os três perfis ocupando a coluna inteira
+    var tw: float = minf(lw, 500.0)
+    var title := Rect2(16, 8, tw, tw * 95.0 / 500.0)
+    var top_p: float = title.end.y + 20.0
+    var ph: float = H - 20.0 - top_p
+    var pw: float = minf(lw, ph * 240.0 / 344.0)
+    ph = pw * 344.0 / 240.0
+    var plates := Rect2(16 + (lw - pw) / 2.0, top_p + (H - 20.0 - top_p - ph) / 2.0, pw, ph)
+    var help := Rect2(16, H - 16.0 - 150.0, lw, 150)          # controles do 7/10/descartar (só quando há escolha)
+    # DIREITA: ícones; painel SUA VEZ + JOGAR CARTA (a arte inteira, com a moldura); cartas maiores embaixo
+    var rx: float = board.end.x + 16.0
+    var iw: float = minf(lw, 500.0)
+    var icons := Rect2(W - 16.0 - iw, 10, iw, iw * 80.0 / 500.0)
+    var cw: float = minf(lw, 1000.0)
+    var ch: float = cw * 203.0 / 582.0
+    var room: float = H - icons.end.y - 30.0
+    var pnw: float = minf(lw * 0.82, 520.0)
+    var pnh: float = pnw * 280.0 / 330.0
+    if ch + pnh + 30.0 > room:                                   # falta altura: o painel encolhe primeiro (as cartas são o foco)
+        pnh = maxf(room - ch - 30.0, 200.0)
+        pnw = pnh * 330.0 / 280.0
+        if ch + pnh + 30.0 > room:
+            var f: float = room / (ch + pnh + 30.0)
+            cw *= f; ch *= f; pnw *= f; pnh *= f
+    var gap: float = (room - ch - pnh) / 3.0
+    var panel := Rect2(rx + (lw - pnw) / 2.0, icons.end.y + 10.0 + gap, pnw, pnh)
+    var cards := Rect2(rx + (lw - cw) / 2.0, panel.end.y + gap, cw, ch)
+    portrait_game = [
+        [Rect2(0, 0, 500, 95), title],
+        [Rect2(1150, 0, 500, 80), icons],
+        [Rect2(3000, 0, 240, 344), plates],          # placas em coluna (faixa virtual)
+        [Rect2(480, 110, 730, 657), board],
+        [Rect2(548, 738, 582, 203), cards],          # recorte justo nas 4 cartas (ficam maiores)
+        [Rect2(30, 640, 330, 280), panel],           # SUA VEZ + JOGAR CARTA com a moldura da arte (sem recorte)
+        [Rect2(30, 640, 330, 280), panel],
+        [Rect2(22, 504, 326, 132), help],
+    ]
+
 var PORTRAIT_LOBBY: Array = []
 func _portrait_lobby_layout():
     var H: float = design.y
@@ -1312,20 +1371,21 @@ func _bmap(blocks: Array, r: Rect2) -> Rect2:
 
 ## escala da arte no ponto (para o tamanho das letras): no PC é uma só; em pé, a do bloco
 func r57_s_at(p: Vector2, lobby := false) -> float:
-    if not portrait: return lobby_s() if lobby else r57_s()
+    if lobby and not portrait: return lobby_s()
+    if not blk: return lobby_s() if lobby else r57_s()
     var b: Array = _block_at(PORTRAIT_LOBBY if lobby else portrait_game, p)
     return (b[1] as Rect2).size.x / (b[0] as Rect2).size.x
 
 func r57_s() -> float:
-    if portrait: return r57_s_at(Vector2(845, 400))
+    if blk: return r57_s_at(Vector2(845, 400))
     return design.y / R57_SIZE.y
 
 func rp(p: Vector2) -> Vector2:
-    if portrait: return _bmap(portrait_game, Rect2(p, Vector2.ZERO)).position
+    if blk: return _bmap(portrait_game, Rect2(p, Vector2.ZERO)).position
     return Vector2((design.x - R57_SIZE.x * r57_s()) / 2.0, 0) + p * r57_s()
 
 func rr(r: Rect2) -> Rect2:
-    if portrait: return _bmap(portrait_game, r)
+    if blk: return _bmap(portrait_game, r)
     return Rect2(rp(r.position), r.size * r57_s())
 
 ## px da referência do salão (1494x834) -> tela de desenho
@@ -1358,6 +1418,9 @@ func r57_seat(seat: int) -> Dictionary:
     if portrait:   # R74 · em pé: as três lado a lado no topo (faixa virtual da arte → bloco das placas)
         sc = 1.0
         c = Vector2(R57_VSEAT_X + 120.0 + (seat - 1) * 250.0, 54.0)
+    elif wide_land:   # R82 · deitado: as três em coluna, à esquerda
+        sc = 1.0
+        c = Vector2(R57_VSEAT_X + 120.0, 54.0 + (seat - 1) * 118.0)
     var b := Rect2(c - R57_PLATE * sc / 2.0, R57_PLATE * sc)
     return {"box": b, "av": Rect2(b.position + Vector2(36, 15) * sc, Vector2(81, 75) * sc),
         "x": b.position.x + 128.0 * sc, "base": b.position.y + 63.5 * sc, "cap": 19.0 * sc, "end": b.position.x + 229.0 * sc}
@@ -1516,8 +1579,9 @@ class TableView extends Control:
         if ui == null: return
         ui.hits.clear()
         var vs := size
-        if ui.desk and ui.portrait:
+        if ui.desk and (ui.portrait or (ui.wide_land and ui.mode != "lobby")):
             _portrait_bg(vs)
+            if ui.mode != "lobby": _draw_bats([Rect2(Vector2.ZERO, vs)])     # R83 · atrás do tabuleiro e dos painéis
         elif ui.desk:
             # R65 · janela fora de 16:9: a arte CONTINUA nas sobras (as bordas dela, espelhadas, coladas na própria
             # arte) — antes uma cópia inteira escurecida e ampliada ficava atrás e parecia um fundo duplicado.
@@ -1555,21 +1619,100 @@ class TableView extends Control:
         if s <= 0.0: return
         if a.position.x > 0.5 or vs.x - a.end.x > 0.5:
             var pad := (wide.get_width() - ts.x) / 2.0
-            draw_texture_rect(wide, Rect2(a.position.x - pad * s, a.position.y, wide.get_width() * s, a.size.y), false)
+            var wr := Rect2(a.position.x - pad * s, a.position.y, wide.get_width() * s, a.size.y)
+            draw_texture_rect(wide, wr, false)
+            # R82 · tela mais larga que a arte larga (celular deitado com a barra do navegador): espelha a borda
+            var gl: float = wr.position.x
+            var gr: float = vs.x - wr.end.x
+            if gl > 0.5:
+                var sw: float = minf(gl, wr.size.x) / s
+                draw_texture_rect_region(wide, Rect2(wr.position.x, a.position.y, -sw * s, a.size.y), Rect2(0, 0, sw, wide.get_height()))
+            if gr > 0.5:
+                var sw2: float = minf(gr, wr.size.x) / s
+                draw_texture_rect_region(wide, Rect2(wr.end.x + sw2 * s, a.position.y, -sw2 * s, a.size.y), Rect2(wide.get_width() - sw2, 0, sw2, wide.get_height()))
         var deep := Color(0.055, 0.03, 0.07)
         if a.position.y > 0.5: _band_v(Rect2(0, 0, vs.x, a.position.y), deep, true)
         if vs.y - a.end.y > 0.5: _band_v(Rect2(0, a.end.y, vs.x, vs.y - a.end.y), deep, false)
+
+    ## R83 · MORCEGOS: de vez em quando um bando pequeno (1 a 3) atravessa o fundo roxo, batendo as asas.
+    ## Desenhados em coordenadas de tela, dentro das regiões dadas (somem suavemente nas bordas delas).
+    var bats: Array = []
+    var _bat_next := 2.5
+    var _bat_t := -1.0
+    func _draw_bats(regions: Array):
+        if regions.is_empty(): return
+        var now: float = ui.t
+        var dt: float = clampf(now - _bat_t, 0.0, 0.1) if _bat_t >= 0.0 else 0.0
+        _bat_t = now
+        _bat_next -= dt
+        var k: float = ui.k
+        if _bat_next <= 0.0 and bats.size() < 4:
+            _bat_next = randf_range(5.0, 12.0)
+            var reg: Rect2 = regions[randi() % regions.size()]
+            if reg.size.x > 60.0 and reg.size.y > 60.0:
+                var ltr := randf() < 0.5
+                var n := randi_range(1, 3)
+                var y0 := randf_range(reg.position.y + reg.size.y * 0.15, reg.position.y + reg.size.y * 0.8)
+                var sp := randf_range(150.0, 240.0) * maxf(k, 0.4)
+                for i in n:
+                    bats.append({"reg": reg, "p": Vector2((reg.position.x - 40.0 * (i + 1)) if ltr else (reg.end.x + 40.0 * (i + 1)), y0 + randf_range(-30, 30) * k),
+                        "v": Vector2(sp * (1.0 if ltr else -1.0) * randf_range(0.9, 1.1), -sp * randf_range(0.05, 0.25)),
+                        "ph": randf() * TAU, "fr": randf_range(9.0, 13.0), "sz": randf_range(18.0, 28.0) * maxf(k, 0.45), "wob": randf_range(0.8, 1.6)})
+        draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+        var keep := []
+        for b in bats:
+            b.p += b.v * dt
+            b.p.y += sin(now * b.wob * 3.0 + b.ph) * 22.0 * dt * maxf(k, 0.4)
+            var reg2: Rect2 = b.reg
+            if not reg2.grow(80.0).has_point(b.p): continue
+            keep.append(b)
+            var edge := minf(minf(b.p.x - reg2.position.x, reg2.end.x - b.p.x), minf(b.p.y - reg2.position.y, reg2.end.y - b.p.y))
+            var al := clampf(edge / 40.0, 0.0, 1.0)
+            if al <= 0.0: continue
+            _bat_shape(b.p, b.sz, sin(now * b.fr + b.ph), signf(b.v.x), al)
+        bats = keep
+        if not bats.is_empty() or _bat_next < 0.5: queue_redraw()
+
+    func _bat_shape(c: Vector2, s: float, flap: float, dir: float, al: float):
+        var col := Color(0.04, 0.02, 0.06, 0.92 * al)
+        var up := flap * 0.9                      # -1 asas para baixo · +1 asas para cima
+        for side in [-1.0, 1.0]:
+            var tip := c + Vector2(side * s * 1.9, -up * s * 1.1)
+            var mid := c + Vector2(side * s * 1.0, -up * s * 0.55 - s * 0.25)
+            var pts := PackedVector2Array([
+                c + Vector2(side * s * 0.25, -s * 0.15), mid, tip,
+                tip + Vector2(-side * s * 0.35, s * 0.45),
+                c + Vector2(side * s * 1.2, -up * s * 0.35 + s * 0.35),
+                c + Vector2(side * s * 0.85, -up * s * 0.2 + s * 0.15),
+                c + Vector2(side * s * 0.55, s * 0.35),
+                c + Vector2(side * s * 0.2, s * 0.25)])
+            draw_colored_polygon(pts, col)
+        draw_circle(c + Vector2(0, s * 0.05), s * 0.32, col)
+        var hd := c + Vector2(dir * s * 0.12, -s * 0.28)
+        draw_circle(hd, s * 0.22, col)
+        draw_colored_polygon(PackedVector2Array([hd + Vector2(-s * 0.2, -s * 0.05), hd + Vector2(-s * 0.12, -s * 0.38), hd + Vector2(-s * 0.02, -s * 0.12)]), col)
+        draw_colored_polygon(PackedVector2Array([hd + Vector2(s * 0.2, -s * 0.05), hd + Vector2(s * 0.12, -s * 0.38), hd + Vector2(s * 0.02, -s * 0.12)]), col)
 
     ## R74 · fundo do celular em pé: a parede do salão (lado esquerdo da mesa larga, sem painéis) repetida na
     ## altura da tela e escurecida, com a faixa escura do topo atrás do título e dos ícones
     func _portrait_bg(vs: Vector2):
         var wide: Texture2D = ui.r57.mesa_wide
-        var src := Rect2(0, 90, 740, 550)
-        var sc: float = maxf(vs.x / src.size.x, vs.y / src.size.y)
-        var dst := Rect2((vs - src.size * sc) / 2.0, src.size * sc)
-        draw_texture_rect_region(wide, dst, src)    # uma cópia só (sem repetir o cenário)
+        var src := Rect2(0, 90, 740, 550)            # parede do salão sem painéis (lado esquerdo da arte larga)
+        if ui.portrait:
+            var sc: float = maxf(vs.x / src.size.x, vs.y / src.size.y)
+            var dst := Rect2((vs - src.size * sc) / 2.0, src.size * sc)
+            draw_texture_rect_region(wide, dst, src)    # uma cópia só (sem repetir o cenário)
+        else:
+            # R82 · deitado: a mesma parede à esquerda e espelhada à direita (o tabuleiro cobre o meio)
+            var half := Vector2(vs.x / 2.0 + 1.0, vs.y)
+            var sc2: float = maxf(half.x / src.size.x, half.y / src.size.y)
+            var sz: Vector2 = src.size * sc2
+            draw_texture_rect_region(wide, Rect2(Vector2(half.x - sz.x, (vs.y - sz.y) / 2.0), sz), src)
+            draw_set_transform(Vector2(vs.x, 0), 0.0, Vector2(-1, 1))     # espelho: a mesma parede do lado direito
+            draw_texture_rect_region(wide, Rect2(Vector2(half.x - sz.x, (vs.y - sz.y) / 2.0), sz), src)
+            draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
         draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.01, 0.05, 0.62))
-        draw_rect(Rect2(0, 0, vs.x, ui.origin.y + 104.0 * ui.k), Color(0.05, 0.025, 0.07, 0.92))
+        if ui.portrait: draw_rect(Rect2(0, 0, vs.x, ui.origin.y + 104.0 * ui.k), Color(0.05, 0.025, 0.07, 0.92))
 
     ## faixa de cima/baixo: roxo profundo do salão, com uma luz dourada fraca junto da arte
     func _band_v(r: Rect2, deep: Color, toward_bottom: bool):
@@ -1844,6 +1987,16 @@ class TableView extends Control:
             for gl in 5: draw_rect(lr.grow(4 + gl * 5), Color(1.0, 0.82, 0.3, (0.30 - gl * 0.05) * (0.6 + 0.4 * pz)), false, 5.0)
             draw_texture_rect(Crisp.at(ui.cards[String(g.hands[0][ui.sel_card])], cs2 * s * ui.k), lr, false)
         draw_set_transform(ui.origin + br.position * ui.k, 0.0, Vector2(ui.k * s, ui.k * s))
+        # R82 · Entrada do Salão TRANCADA: peão da outra dupla parado nela → a casa fica vermelha (pulsando)
+        var pb := 0.55 + 0.45 * sin(ui.t * 4.0)
+        for seat in 4:
+            var ei: int = ui.Layout.entrance_index(seat)
+            var o: Array = g.occupant(ei)
+            if o.is_empty() or g.team_of(o[0]) == g.team_of(seat): continue
+            var ec: Vector2 = ui.Layout.track_cell(ei)
+            draw_circle(ec, 38.0, Color(0.85, 0.05, 0.08, 0.30 + 0.20 * pb))
+            draw_circle(ec, 30.0, Color(0.95, 0.10, 0.12, 0.55))
+            draw_arc(ec, 34.0, 0.0, TAU, 32, Color(1.0, 0.35, 0.3, 0.9), 4.0)
         # caminho da jogada escolhida
         var dots: Array = []
         var dest: Array = []
@@ -2257,17 +2410,25 @@ class TableView extends Control:
                 ui.VoiceGlyph.draw_headphones(self, er.grow(-9), vo.speaker_muted, ui.GOLD)
                 ui.hits.append({"rect": er, "id": "voice_ear"})
                 tx = er.position.x - 10
-            if not ui.portrait:   # em pé não cabe o texto ao lado (o título está ali); o ícone já mostra o estado
+            if not ui.blk:   # em pé/deitado no celular não cabe o texto ao lado (o título está ali); o ícone já mostra o estado
                 ui.VoiceGlyph.draw_status(self, tx, vr.get_center().y, 300, vo.status_text(), 17, Color("e8dcc0"))
 
     func _draw_game_r57():
         var g = ui.g
         var plate: Texture2D = ui.r57.mesa
-        if ui.portrait:
+        if ui.blk:
             for i in [0, 3, 5, 6]: draw_texture_rect_region(plate, ui.portrait_game[i][1], ui.portrait_game[i][0])
             var icons_src := Rect2(1290, 0, 360, 80)   # só os ícones da arte; à esquerda fica o lugar do microfone
             draw_texture_rect_region(plate, ui.rr(icons_src), icons_src)
-        else: draw_texture_rect(plate, ui.rr(Rect2(Vector2.ZERO, ui.R57_SIZE)), false)
+        else:
+            draw_texture_rect(plate, ui.rr(Rect2(Vector2.ZERO, ui.R57_SIZE)), false)
+            # R83 · PC: os morcegos voam só nas janelas roxas dos lados (o tabuleiro está na própria arte)
+            var bs: Rect2 = ui.rr(ui.LayoutR57.ART_RECT_FULL)
+            var l0: float = ui.origin.x + (bs.position.x - 30.0) * ui.k
+            var r0: float = ui.origin.x + (bs.end.x + 30.0) * ui.k
+            var hh: float = ui.origin.y + ui.rp(Vector2(0, 560)).y * ui.k
+            _draw_bats([Rect2(0, 0, l0, hh), Rect2(r0, 0, size.x - r0, hh)])
+            draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         var sub := "MODO DE CARTAS E CORRIDA"
         if g != null: sub = "RODADA %d - %d X %d PEÕES COROADOS" % [g.round_no, g.team_crowned(0), g.team_crowned(1)]
         rtext(sub, Vector2(187, 64), "r57_head", 17.6, Color("f2c94c"), -1.0, HORIZONTAL_ALIGNMENT_LEFT, 305.0)
@@ -2344,9 +2505,9 @@ class TableView extends Control:
         var choosing: bool = ui.sel_card >= 0 or not ui.pending.is_empty()
         var extra: bool = ui.can_discard_all() or ui.ten_choice() or ui.split_options().size() > 1
         if not extra: return
-        var S: float = 1.15 if ui.portrait else ui.r57_s()
+        var S: float = 1.15 if ui.blk else ui.r57_s()
         var pr: Rect2 = ui.rr(Rect2(22, 560, 326, 70))
-        if ui.portrait: pr = ui.portrait_game[7][1]
+        if ui.blk: pr = ui.portrait_game[7][1]
         draw_rect(pr, Color(0.05, 0.02, 0.08, 0.92))
         draw_rect(pr, Color("c99a45"), false, 2.0)
         draw_rect(pr.grow(-5), Color(0.79, 0.6, 0.27, 0.3), false, 1.0)
@@ -2574,7 +2735,7 @@ class TableView extends Control:
             if _tut_board == null:
                 _tut_board = AtlasTexture.new()
                 _tut_board.atlas = ui.r57.mesa
-                _tut_board.region = ui.LayoutR57.ART_RECT
+                _tut_board.region = ui.LayoutR57.ART_RECT_FULL
             return _tut_board
         return tex(path)
 
