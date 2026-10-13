@@ -109,6 +109,31 @@ func refresh_music():
     var path: String = preload("res://cosmetics/theme_catalog.gd").get_theme(theme).music_path
     if not music_override.is_empty(): path = music_override
     if path == music_path: return
+    if web_music:
+        # R84 · Web: a música vai para o <audio> do navegador em PEDAÇOS (antes ia o arquivo inteiro em base64 numa
+        # string só: no iPhone o MP3 de 4 MB do XEQUE existia 4–5 vezes ao mesmo tempo na memória, ~20–40 MB de pico
+        # bem na entrada do modo) e fica guardada no navegador: voltar ao modo não transfere de novo.
+        music.stop()
+        music.stream = null
+        music_path = path
+        music_starts += 1
+        _web_volume = -1.0
+        var key := path.get_file()
+        if bool(JavaScriptBridge.eval("window.fraihaMusic.use('%s') ? 1 : 0" % key)): return
+        var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path) if FileAccess.file_exists(path) else PackedByteArray()
+        if bytes.is_empty():
+            var tr = load(path) as AudioStreamMP3
+            if tr == null: return
+            bytes = tr.data
+        JavaScriptBridge.eval("window.fraihaMusic.begin()")
+        var CH := 262144
+        var i := 0
+        while i < bytes.size():
+            JavaScriptBridge.eval("window.fraihaMusic.part('" + Marshalls.raw_to_base64(bytes.slice(i, mini(i + CH, bytes.size()))) + "')")
+            i += CH
+        bytes = PackedByteArray()
+        JavaScriptBridge.eval("window.fraihaMusic.finish('%s')" % key)
+        return
     var track = load(path) as AudioStreamMP3
     if track == null: return
     track.loop = true
@@ -117,12 +142,6 @@ func refresh_music():
     music.stream = track
     music_path = path
     music_starts += 1
-    if web_music:
-        # Web: a música toca num <audio> do navegador, fora do laço do jogo — cliques e
-        # carregamentos não engasgam mais o som (na Web sem threads o mixer do Godot para junto).
-        JavaScriptBridge.eval("window.fraihaMusic.load('" + Marshalls.raw_to_base64(track.data) + "')")
-        _web_volume = -1.0
-        return
     music.play()
 
 var web_music := false
@@ -152,13 +171,23 @@ func _web_music_init():
             if (m.ctx && m.ctx.state === 'suspended') m.ctx.resume().catch(() => {});
             if (m.url && m.vol > 0 && !m.hidden) m.el.play().catch(() => {});
         };
-        m.load = (b64) => {
+        // R84 · recebe o MP3 em pedaços e guarda até 3 músicas (Blob URL por nome); a mais antiga sai
+        m.cache = {}; m.order = []; m.parts = [];
+        m.begin = () => { m.parts = []; };
+        m.part = (b64) => {
             const bin = atob(b64); const bytes = new Uint8Array(bin.length);
             for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-            if (m.url) URL.revokeObjectURL(m.url);
-            m.url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
-            m.el.src = m.url; m.el.currentTime = 0; m.tryPlay();
+            m.parts.push(bytes);
         };
+        m.play = (url) => { m.url = url; m.el.src = url; m.el.currentTime = 0; m.tryPlay(); };
+        m.finish = (key) => {
+            const url = URL.createObjectURL(new Blob(m.parts, { type: 'audio/mpeg' }));
+            m.parts = [];
+            m.cache[key] = url; m.order.push(key);
+            while (m.order.length > 3) { const old = m.order.shift(); if (m.cache[old] && m.cache[old] !== url) URL.revokeObjectURL(m.cache[old]); delete m.cache[old]; }
+            m.play(url);
+        };
+        m.use = (key) => { const url = m.cache[key]; if (!url) return false; m.order = m.order.filter(k => k !== key); m.order.push(key); m.play(url); return true; };
         m.setVolume = (v) => {
             m.vol = Math.max(0, Math.min(1, v));
             if (m.gain) m.gain.gain.value = m.vol; else m.el.volume = m.vol;

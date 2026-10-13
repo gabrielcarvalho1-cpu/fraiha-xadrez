@@ -5,7 +5,7 @@
 // Mudou regra no .gd → muda aqui também e regenera o fixture (tools/marcha_parity_fixture.gd).
 const { rngFrom } = require('./rng');
 
-const RULESET_VERSION = 'marcha-real-12';  // R83: Ás/Rei com mais chance (ajuda em 40%), não garantido · R70: J do aliado
+const RULESET_VERSION = 'marcha-real-13';  // R84: Ás/Rei com mais chance (ajuda em 60%), não garantido · R70: J do aliado
 const TRACK = 76;
 const ARM = 19;
 const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -56,7 +56,7 @@ class Marcha {
     const isS = r => r === 'A' || r === 'K';
     for (let s = 0; s < 4; s++) {
       if (!this.needsStarter(s)) continue;
-      if (this.rng.int(0, 99) >= 40) continue;   // R83 · ajuda em 40% das vezes (igual ao .gd: STARTER_HELP)
+      if (this.rng.int(0, 99) >= 60) continue;   // R84 · ajuda em 60% das vezes (igual ao .gd: STARTER_HELP)
       const h = this.hands[s], give = h[h.length - 1];
       let got = false;
       for (let d = this.deck.length - 1; d >= 0; d--) if (isS(this.deck[d])) { h[h.length - 1] = this.deck[d]; this.deck[d] = give; got = true; break; }

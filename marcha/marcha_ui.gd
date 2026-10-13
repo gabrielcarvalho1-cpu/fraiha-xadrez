@@ -2542,7 +2542,15 @@ class TableView extends Control:
         var g = ui.g
         if g == null or ui.mode != "game": return
         var choosing: bool = ui.sel_card >= 0 or not ui.pending.is_empty()
-        var extra: bool = ui.can_discard_all() or ui.ten_choice() or ui.split_options().size() > 1
+        # R84 · sem jogada (sem Ás/Rei e sem peão na pista): botão grande DESCARTAR TODAS — no PC do lado direito,
+        # no celular no lugar do JOGAR CARTA (que fica sem uso nessa hora)
+        if ui.can_discard_all():
+            var dr: Rect2 = ui.rr(ui.R57_PLAY) if ui.blk else ui.rr(Rect2(1335, 600, 300, 76))
+            var pz := 0.5 + 0.5 * sin(ui.t * 4.0)
+            for gl in 4: draw_rect(dr.grow(3 + gl * 4 + pz * 3), Color(1.0, 0.78, 0.3, 0.20 - gl * 0.045), false, 4.0)
+            gold_button(dr, "DESCARTAR TODAS (%d)" % g.hands[0].size(), int(dr.size.y * 0.42), "discard_all")
+            return
+        var extra: bool = ui.ten_choice() or ui.split_options().size() > 1
         if not extra: return
         var S: float = 1.15 if ui.blk else ui.r57_s()
         var pr: Rect2 = ui.rr(Rect2(22, 560, 326, 70))
@@ -2551,9 +2559,7 @@ class TableView extends Control:
         draw_rect(pr, Color("c99a45"), false, 2.0)
         draw_rect(pr.grow(-5), Color(0.79, 0.6, 0.27, 0.3), false, 1.0)
         var row_y: float = pr.get_center().y - 19 * S
-        if ui.can_discard_all():
-            dark_button(Rect2(pr.position.x + 10, row_y, 210 * S, 38 * S), "DESCARTAR TODAS (%d)" % g.hands[0].size(), int(15 * S), "discard_all")
-        elif ui.ten_choice():
+        if ui.ten_choice():
             _draw_ten(Vector2(pr.position.x + 12, row_y + 4 * S), 214.0 * S)
         elif ui.split_options().size() > 1:
             _draw_split(Vector2(pr.position.x + 12, row_y + 4 * S), 46.0 * S)

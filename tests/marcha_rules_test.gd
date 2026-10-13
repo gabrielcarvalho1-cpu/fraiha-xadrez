@@ -35,7 +35,7 @@ func _initialize():
     var bad := {"card": 1, "kind": "move", "pawn": [0, 0], "steps": 10}
     check(not g.is_legal(0, bad) and g.apply(0, bad).is_empty() and g.hands[0].size() == 4, "jogada ilegal (peão no Pátio andando 10) é recusada sem mudar nada")
     check(not g.is_legal(0, {"card": 0, "kind": "discard"}), "descartar só quando não há nenhuma jogada")
-    check(String(g.RULESET_VERSION) == "marcha-real-12", "versão das regras para o histórico")
+    check(String(g.RULESET_VERSION) == "marcha-real-13", "versão das regras para o histórico")
     var m10 := g.legal_moves(0, 1)
     check(m10.size() == 1 and m10[0].kind == "burn" and int(m10[0].target_seat) == 3, "10 com todos no Pátio: só a 2ª função (o próximo jogador, no sentido anti-horário, descarta)")
     var h1: int = g.hands[3].size()
@@ -287,7 +287,7 @@ func _initialize():
             total += 1
             if Rules._starter_count(gs.hands[st]) > 0: com_saida += 1
     var pct := 100.0 * com_saida / total
-    check(pct > 64.0 and pct < 78.0, "R83: 1ª rodada — ~71%% das mãos começam com Ás ou Rei (natural ~51%%; deu %.1f%%), sem ser garantido" % pct)
+    check(pct > 74.0 and pct < 86.0, "R84: 1ª rodada — ~80%% das mãos começam com Ás ou Rei (natural ~51%%; deu %.1f%%), sem ser garantido" % pct)
     var gt = Rules.new()
     gt.setup(77)
     var all_cards: Array = gt.deck.duplicate()

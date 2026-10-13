@@ -14,7 +14,6 @@ const CROWN := preload("res://xeque/art/interface/coroa.png")
 const CROWN_LOST := preload("res://xeque/art/interface/coroa_perdida.png")
 const BTN_GOLD := preload("res://xeque/art/interface/botao_dourado.png")
 const BTN_DARK := preload("res://xeque/art/interface/botao_escuro.png")
-const GOLD_PIECES := preload("res://cosmetics/v025/gold_pieces.png")
 const Sound := preload("res://ui_v022/mode_sound.gd")
 const MUSIC := "res://xeque/audio/musica_xeque.mp3"      # música enviada pelo dono do projeto (loop)
 const SFX := {
@@ -196,11 +195,7 @@ func _ready():
     for n in ["rei", "rainha", "cavalo", "peao"]: cards[n] = load("res://xeque/art/cartas/carta_%s.png" % n)
     for s in ["neutro", "pulsando", "perigo", "quase", "disparado"]: clock_tex[s] = load("res://xeque/art/relogio/relogio_%s.png" % s)
     for s in ["normal", "hover", "pressionado", "desabilitado", "ativado"]: xeque_tex[s] = load("res://xeque/art/interface/botao_xeque_%s.png" % s)
-    for n in PIECE_REGION:
-        var a := AtlasTexture.new()
-        a.atlas = GOLD_PIECES
-        a.region = PIECE_REGION[n]
-        pieces[n] = a
+    # R84 · as peças de ouro (atlas de 6 MB) não eram desenhadas em lugar nenhum: não são mais carregadas
     # R55 · PC (referência nova): Oswald 700/600, a fonte das placas e cartas da referência
     for pair in [["ui", FONT_UI, 0], ["ui_sp", FONT_UI, 2], ["ui_sp4", FONT_UI, 4], ["title", FONT_TITLE, 0],
             ["o7", FONT_OS7, 0], ["o7_sp", FONT_OS7, 1], ["o7_sp3", FONT_OS7, 3], ["o6", FONT_OS6, 0], ["o6_sp", FONT_OS6, 1]]:

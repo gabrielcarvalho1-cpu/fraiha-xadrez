@@ -294,6 +294,33 @@ def bottom_frame(src, D=20):
     return n
 
 
+# ---------- R84 · feltro no lugar da faixa verde lisa atrás da mão ----------
+from scipy import ndimage
+def felt(src):
+    """R84 · a faixa verde LISA atrás da mão (cor chapada, parecia recorte) vira feltro: a trama do tapete roxo em
+    verde, sombra da mesa em cima e emenda suave nas bordas."""
+    a = src.astype(np.float32)
+    y0, y1, x0, x1 = 760, 834, 470, 1222
+    reg = a[y0:y1, x0:x1]
+    flat = (np.abs(reg - np.array([7, 33, 16], np.float32)).max(2) <= 7)
+    flat = ndimage.binary_opening(flat, iterations=1)
+    m = ndimage.gaussian_filter(flat.astype(np.float32), 1.2)
+    # trama: luminância do tapete roxo (mesma perspectiva), repetida
+    rug = a[860:900, 560:1160].mean(2)
+    rug = (rug - rug.mean()) / (rug.std() + 1e-3)
+    ty = np.arange(y1 - y0)[:, None] % rug.shape[0]
+    tx = (np.arange(x1 - x0)[None, :] + 40) % rug.shape[1]
+    pat = rug[ty, tx]
+    base = np.array([9, 38, 20], np.float32)
+    yy = np.linspace(0, 1, y1 - y0)[:, None]
+    shade = 0.55 + 0.55 * yy                        # sombra da mesa em cima, clareia descendo
+    col = base[None, None, :] * shade[..., None] * (1.0 + 0.16 * pat[..., None])
+    col += np.random.default_rng(3).normal(0, 1.2, col.shape)
+    out = reg * (1 - m[..., None]) + col * m[..., None]
+    a[y0:y1, x0:x1] = out
+    return np.clip(a + 0.5, 0, 255).astype(np.uint8)
+
+
 def diamond_alpha(w, h, feather=1.5):
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     d = np.abs(xx - (w - 1) / 2.0) / (w / 2.0) + np.abs(yy - (h - 1) / 2.0) / (h / 2.0)
@@ -313,6 +340,8 @@ def main():
     mesa = seats_top(load(MESA_R57), mesa)
     # 0d) R82 · a barra de baixo do tabuleiro desce (passava por baixo da fileira de contas de baixo)
     mesa = bottom_frame(mesa)
+    # 0e) R84 · faixa verde chapada atrás das cartas (parecia recorte) vira feltro com a trama do tapete
+    mesa = felt(mesa)
     # 1) losangos antigos e círculos de silhueta saem da mesa (recomposição a partir da pedra em volta)
     hole = np.zeros(mesa.shape[:2], np.uint8)
     for (cx, cy) in HOMES_R57.values():
