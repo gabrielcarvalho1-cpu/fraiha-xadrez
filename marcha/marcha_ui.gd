@@ -1180,6 +1180,7 @@ func ear_rect() -> Rect2:
     return rr(Rect2(1162, 12, 54, 53))
 
 func chat_dock() -> Rect2:
+    if wide_land and not portrait: return wide_chat
     if not _row_ok(): return Rect2()
     return portrait_row[2]
 
@@ -1328,6 +1329,7 @@ func board_rect() -> Rect2:
 ## As placas dos perfis ficam numa faixa "virtual" da arte (x >= 3000), lado a lado, iguais.
 const R57_VSEAT_X := 3000.0
 var portrait_game: Array = []
+var wide_chat := Rect2()          # R91.3 · lugar do CHAT no celular deitado
 var portrait_row: Array = []      # R90 · [microfone, SUA VEZ, CHAT] lado a lado (celular em pé)
 ## R75.1 · em pé a tela usa a ALTURA INTEIRA do aparelho (design 1080 x altura proporcional). De cima para baixo:
 ## título/ícones, placas dos perfis, TABULEIRO (centralizado no espaço livre), faixa da ajuda da jogada (só aparece
@@ -1428,6 +1430,9 @@ func _wide_layout():
     var gap: float = (room - ch - pnh) / 3.0
     var panel := Rect2(rx + (lw - pnw) / 2.0, icons.end.y + 10.0 + gap, pnw, pnh)
     var cards := Rect2(rx + (lw - cw) / 2.0, panel.end.y + gap, cw, ch)
+    # R91.3 · celular deitado: CHAT (mesa online) no espaço livre embaixo das cartas, sem cobrir o JOGAR CARTA
+    var chh: float = clampf(H - cards.end.y - 18.0, 0.0, 96.0)
+    wide_chat = Rect2(cards.end.x - 240.0, H - 10.0 - chh, 240.0, chh) if chh >= 54.0 else Rect2()
     portrait_game = [
         [Rect2(0, 0, 500, 95), title],
         [Rect2(1150, 0, 500, 80), icons],
@@ -1548,10 +1553,10 @@ func card_rect(i: int, n: int) -> Rect2:
     if desk:
         # R57 · mão aberta embaixo do tabuleiro, como na referência — cartas inteiras à vista
         # R91.2 · cartas 10% menores e mais baixas: a bandeja não cobre mais a borda de baixo do tabuleiro
-        var gap := 134.0 if n <= 4 else 116.0
-        var sz: Vector2 = R57_CARD * (0.9 if n <= 4 else 0.81)
+        var gap := 126.0 if n <= 4 else 108.0
+        var sz: Vector2 = R57_CARD * (0.83 if n <= 4 else 0.75)
         var cx := 838.5 + (i - (n - 1) / 2.0) * gap
-        return rr(Rect2(cx - sz.x / 2.0, 937.0 - sz.y, sz.x, sz.y))
+        return rr(Rect2(cx - sz.x / 2.0, 931.0 - sz.y, sz.x, sz.y))
     # R38.3 · 3ª rodada do ciclo do baralho: 5 cartas na mão (menores, para caber no mesmo espaço)
     if n >= 5:
         if portrait: return Rect2(238.0 + i * 166.0, 1548.0, 152, 214)
@@ -2352,7 +2357,7 @@ class TableView extends Control:
     ## R91 · PC: bandeja das cartas por cima do tapete roxo/verde da arte (as curvas douradas e as faixas verdes
     ## atrás da mão ficavam estranhas): veludo escuro com moldura dourada dupla e cravos nos cantos.
     func _draw_card_tray():
-        var r: Rect2 = ui.rr(Rect2(430, 760, 812, 210))   # R91.2 · começa abaixo da moldura do tabuleiro (y 754)
+        var r: Rect2 = ui.rr(Rect2(560, 760, 557, 200))   # R91.2 · começa abaixo da moldura do tabuleiro (y 754)
         var s: float = ui.r57_s()
         var sb := StyleBoxFlat.new()
         sb.bg_color = Color("1b0f24")
