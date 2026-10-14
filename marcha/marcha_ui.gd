@@ -197,8 +197,9 @@ func _load_art():
     _load_cards()
     card_back = load("res://marcha/art/cards/carta_verso.png")
     for s in 4:
-        pawn_tex[s] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + ".png")
-        pawn_tex[s + 10] = load("res://marcha/art/pawns/peao_" + PAWN_FILES[s] + "_dama.png")   # R37: no Salão o peão vira DAMA
+        var fc: String = PAWN_FILES[(s + view_seat) % 4]   # R92 · cor real de quem está no lugar s
+        pawn_tex[s] = load("res://marcha/art/pawns/peao_" + fc + ".png")
+        pawn_tex[s + 10] = load("res://marcha/art/pawns/peao_" + fc + "_dama.png")   # R37: no Salão o peão vira DAMA
     for key in ["lady_torre", "rei_do_blitz", "cavalo_louco", "voce"]: portraits[key] = load("res://marcha/art/portraits/" + key + ".png")
 
 func _release_art():
@@ -324,6 +325,7 @@ func _redraw():
 var _starting := false
 func start_game():
     if _starting or mode == "game": return
+    _set_view_seat(0)   # R92 · partida contra os bots: você é sempre o Marfim
     _starting = true
     var ok: bool = await access.request_start()
     _starting = false
@@ -1329,6 +1331,7 @@ func board_rect() -> Rect2:
 ## As placas dos perfis ficam numa faixa "virtual" da arte (x >= 3000), lado a lado, iguais.
 const R57_VSEAT_X := 3000.0
 var portrait_game: Array = []
+var view_seat := 0                # R92 · cor real (reino) de quem está jogando nesta tela: 0 Marfim, 1 Rubi, 2 Ônix, 3 Esmeralda
 var wide_chat := Rect2()          # R91.3 · lugar do CHAT no celular deitado
 var portrait_row: Array = []      # R90 · [microfone, SUA VEZ, CHAT] lado a lado (celular em pé)
 ## R75.1 · em pé a tela usa a ALTURA INTEIRA do aparelho (design 1080 x altura proporcional). De cima para baixo:
@@ -2101,10 +2104,34 @@ class TableView extends Control:
             draw_arc(c, 6.5, 0, TAU, 20, Color("cfd3cf") if d >= home else Color(1, 1, 1, 0.6), 1.5)
 
     # ------------------------------------------------------------ tabuleiro, peões e descarte
+    ## R92 · mesa online: cada jogador se vê no canto de baixo (lugar 0), mas com a SUA cor de verdade. A arte tem as cores
+    ## fixas (Marfim embaixo, Rubi à esquerda, Ônix em cima, Esmeralda à direita); aqui a base, a pista de chegada e a
+    ## marca de saída de cada lugar são trocadas pelas da cor real de quem está ali (recortes em r57/cores).
+    const VIEW_PARTS := {
+        "base": [Vector2(476.4, 1133.2), Vector2(297.2, 383.4), Vector2(1151.5, 251.2), Vector2(1309.3, 1008.2)],
+        "lane": [Vector2(802.2, 1151.4), Vector2(274.0, 692.6), Vector2(801.1, 238.8), Vector2(1326.0, 692.6)],
+        "saida": [Vector2(678.1, 1324.3), Vector2(98.6, 560.0), Vector2(931.5, 84.2), Vector2(1499.2, 816.4)],
+    }
+    func _draw_view_colors(br: Rect2, s: float):
+        var art_k := 730.0 / 1600.0           # px da arte por unidade do tabuleiro
+        for seat in 4:
+            var f: int = (seat + ui.view_seat) % 4
+            if f == seat: continue
+            for kind in ["base", "lane", "saida"]:
+                var tex: Texture2D = ui._mt("res://marcha/art/r57/cores/%s_%d.png" % [kind, f])
+                if tex == null: continue
+                var c: Vector2 = br.position + Vector2(VIEW_PARTS[kind][seat]) * s
+                var ang: float = PI / 2.0 * float(posmod(seat - f, 4)) if kind == "lane" else 0.0   # pista: vertical ↔ horizontal
+                var sc: float = s / art_k
+                draw_set_transform(ui.origin + c * ui.k, ang, Vector2(ui.k * sc, ui.k * sc))
+                draw_texture(tex, -tex.get_size() / 2.0)
+        draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+
     func _draw_board():
         var br: Rect2 = ui.board_rect()
         if not ui.desk: draw_texture_rect(ui.BOARD, br, false)     # R57: no PC o tabuleiro já está na placa da mesa
         var s: float = br.size.x / ui.BOARD_UNITS
+        if ui.view_seat != 0: _draw_view_colors(br, s)
         var g = ui.g
         if g == null: return
         draw_set_transform(ui.origin + br.position * ui.k, 0.0, Vector2(ui.k * s, ui.k * s))
@@ -3197,8 +3224,21 @@ static func _ints(a) -> Array:
         for x in a: out.append(int(x))
     return out
 
+## R92 · troca a cor real de quem está nesta tela (peões; o tabuleiro troca as bases/pistas em _draw_view_colors)
+func _set_view_seat(v: int):
+    v = posmod(v, 4)
+    if v == view_seat: return
+    view_seat = v
+    if not pawn_tex.is_empty():
+        for s in 4:
+            var fc: String = PAWN_FILES[(s + view_seat) % 4]
+            pawn_tex[s] = load("res://marcha/art/pawns/peao_" + fc + ".png")
+            pawn_tex[s + 10] = load("res://marcha/art/pawns/peao_" + fc + "_dama.png")
+    _redraw()
+
 func _apply_snapshot(snap: Dictionary):
     if g == null or snap.is_empty(): return
+    if snap.has("view_seat"): _set_view_seat(int(snap.view_seat))
     var pw: Array = snap.get("pawns", [])
     if pw.size() == 4:
         for s in 4:

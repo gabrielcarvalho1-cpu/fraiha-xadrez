@@ -208,7 +208,16 @@ func _web_music_volume():
         _web_volume = v
         JavaScriptBridge.eval("window.fraihaMusic.setVolume(%f)" % v)
 
+## R92 · nas partidas (xadrez, XEQUE, MARCHA) a música toca 20% mais baixa que na Home: dá para ouvir a voz do
+## parceiro. O volume escolhido pelo jogador (controle/configuração) continua valendo por cima disso.
+const MATCH_MUSIC_GAIN := 0.8
+func _music_db_target() -> float:
+    var in_match: bool = not music_override.is_empty() or stage.mode in ["local", "bot", "online", "casual"]
+    return linear_to_db(MATCH_MUSIC_GAIN) if in_match else 0.0
+
 func _process(_delta):
+    var tdb := _music_db_target()
+    if absf(music.volume_db - tdb) > 0.01: music.volume_db = tdb
     if web_music: _web_music_volume()
     var game = stage.game
     var theme: String = game.visual_theme

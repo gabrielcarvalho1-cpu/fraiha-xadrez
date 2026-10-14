@@ -54,7 +54,9 @@ func _build():
     backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var mat := ShaderMaterial.new()
-    mat.shader = preload("res://presentation_v019/result_backdrop.gdshader")
+    # R92 · Web no celular: fundo só escurecido (sem copiar a tela) — ver result_backdrop_leve.gdshader
+    var leve: bool = OS.has_feature("web") and preload("res://ui_v022/mobile_layout.gd").active(get_viewport())
+    mat.shader = preload("res://presentation_v019/result_backdrop_leve.gdshader") if leve else preload("res://presentation_v019/result_backdrop.gdshader")
     backdrop.material = mat
     root.add_child(backdrop)
     flash = ColorRect.new()

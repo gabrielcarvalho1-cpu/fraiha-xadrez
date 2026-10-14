@@ -91,7 +91,7 @@ class Party {
   // ---------- visão de cada jogador (girada; mãos alheias e relógio escondidos) ----------
   snapshot(room, v) {
     const now = this.now();
-    const base = { ver: room.ver, turn_left_ms: room.deadline ? Math.max(0, room.deadline - now) : 0, my_turn: room.turn_seat === unrot(0, v) && room.deadline > 0,
+    const base = { view_seat: v, ver: room.ver, turn_left_ms: room.deadline ? Math.max(0, room.deadline - now) : 0, my_turn: room.turn_seat === unrot(0, v) && room.deadline > 0,
       players_connected: rotArr(room.seats, v).map(s => s.kind !== 'human' || (s.connected && !s.left)) };
     if (room.game === 'marcha') {
       const g = room.g;
