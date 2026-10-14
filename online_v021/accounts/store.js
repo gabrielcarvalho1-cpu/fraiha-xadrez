@@ -67,11 +67,11 @@ class MemoryStore {
     const row = this.modeStats.get(userId) || {}; const r = row[mode] || { wins: 0, losses: 0, draws: 0 };
     r[result === 'win' ? 'wins' : result === 'loss' ? 'losses' : 'draws'] += 1; row[mode] = r; this.modeStats.set(userId, row);
   }
-  async createProfile(userId, nickname, avatarId) {
+  async createProfile(userId, nickname, avatarId, terms = null) {
     if (this.profiles.has(userId)) return { error: 'Este perfil já existe.' };
     for (const p of this.profiles.values()) if (p.nickname.toLowerCase() === nickname.toLowerCase()) return { error: 'Este nome já está em uso.', code: 'nickname_taken' };
     const now = new Date().toISOString();
-    const profile = { user_id: userId, nickname, avatar_id: AVATARS.includes(avatarId) ? avatarId : 'warrior', profile_frame: 'madeira', account_status: 'active', created_at: now, updated_at: now, last_login_at: now };
+    const profile = { user_id: userId, nickname, avatar_id: AVATARS.includes(avatarId) ? avatarId : 'warrior', profile_frame: 'madeira', account_status: 'active', created_at: now, updated_at: now, last_login_at: now, settings: terms ? { terms } : {} };
     this.profiles.set(userId, profile);
     // FRAIHA_DEV_START_PL: somente testes com armazenamento em memória.
     const startPl = Number(process.env.FRAIHA_DEV_START_PL || 0);
@@ -336,10 +336,12 @@ class SupabaseStore {
     const rows = await this.req('/profiles?user_id=eq.' + encodeURIComponent(userId) + '&select=*');
     return rows[0] || null;
   }
-  async createProfile(userId, nickname, avatarId) {
+  async createProfile(userId, nickname, avatarId, terms = null) {
     try {
+      const row = { user_id: userId, nickname, avatar_id: AVATARS.includes(avatarId) ? avatarId : 'warrior', last_login_at: new Date().toISOString() };
+      if (terms) row.settings = { terms };   // R100 · aceite dos Termos (coluna settings existe desde a 0001)
       const rows = await this.req('/profiles', { method: 'POST', headers: { Prefer: 'return=representation' },
-        body: JSON.stringify({ user_id: userId, nickname, avatar_id: AVATARS.includes(avatarId) ? avatarId : 'warrior', last_login_at: new Date().toISOString() }) });
+        body: JSON.stringify(row) });
       return { profile: rows[0] };
     } catch (e) {
       if (e.code === '23505') return { error: 'Este nome já está em uso.', code: 'nickname_taken' };

@@ -261,6 +261,27 @@ func _link(text: String, action: Callable, slot := Rect2()) -> Button:
 
 var links_box: VBoxContainer = null
 
+## R100 · "Li e aceito os Termos de Uso e a Política de Privacidade" — caixinha obrigatória para criar conta
+## (cadastro por e-mail e escolha do nome, que é o passo de TODA conta nova, inclusive pelo Google).
+var terms_check: Button = null
+func _terms_check() -> Button:
+    var b := TermsCheck.new()
+    b.name = "TermsCheck"
+    b.button_pressed = account.terms_accepted
+    b.toggled.connect(func(on): account.terms_accepted = on)
+    var center := CenterContainer.new()
+    box.add_child(center)
+    center.add_child(b)
+    terms_check = b
+    return b
+
+func _terms_ok() -> bool:
+    if account.terms_accepted: return true
+    _on_notice("Para criar a conta, marque que leu e aceita os Termos de Uso e a Política de Privacidade.", true)
+    if is_instance_valid(terms_check): terms_check.flash()
+    return false
+
+
 func _divider():
     links_box = null
     var d = LoginSkin.Divider.new()
@@ -321,9 +342,9 @@ func _show(target: String):
             _input_field("nickname", "Nome de jogador (3 a 16)")
             _input_field("email", "E-mail")
             _input_field("password", "Senha (mín. 8 caracteres)", true)
-            _button("CRIAR CONTA", func(): account.sign_up(_value("email"), _value("password"), _value("nickname")), true)
-            _button("CONTINUAR COM GOOGLE", func(): account.sign_in_google("ranked" if return_to_ranked else ""))
-            _label("Ao criar a conta, você concorda com os Termos de Uso e a Política de Privacidade.", 15, Color("d8cfb4"))
+            _terms_check()
+            _button("CRIAR CONTA", func(): if _terms_ok(): account.sign_up(_value("email"), _value("password"), _value("nickname")), true)
+            _button("CONTINUAR COM GOOGLE", func(): if _terms_ok(): account.sign_in_google("ranked" if return_to_ranked else ""))
             _link("Ler os Termos e a Privacidade", func(): if open_legal.is_valid(): open_legal.call("termos"))
             _divider()
             _link("Já tenho conta — Entrar", func(): _show("login"))
@@ -351,8 +372,10 @@ func _show(target: String):
             _link("Voltar", func(): _show("account"))
         "nickname":
             _label("É assim que os adversários verão você. Seu e-mail nunca é mostrado.", 15)
-            _input_field("nickname", "Nome de jogador (3 a 16)").text_submitted.connect(func(t): account.create_profile(t))
-            _button("CONFIRMAR NOME", func(): account.create_profile(_value("nickname")), true)
+            _input_field("nickname", "Nome de jogador (3 a 16)").text_submitted.connect(func(t): if _terms_ok(): account.create_profile(t))
+            _terms_check()   # R100 · toda conta nova passa aqui (inclusive pelo Google): aceite obrigatório
+            _button("CONFIRMAR NOME", func(): if _terms_ok(): account.create_profile(_value("nickname")), true)
+            _link("Ler os Termos e a Privacidade", func(): if open_legal.is_valid(): open_legal.call("termos"))
             _divider()
             _link("Sair da conta", account.sign_out)
         "account":
@@ -381,3 +404,53 @@ func _show(target: String):
     if not fields.is_empty() and not Mobile.active(get_viewport()):
         fields.values()[0].grab_focus.call_deferred()
     _layout.call_deferred()
+
+class TermsCheck extends Button:
+    const GOLD := Color("e9c46a")
+    const CREAM := Color("f1e6c8")
+    const WARN := Color("ff9d86")
+    const PX := 34
+    const LINES := ["Li e aceito os Termos de Uso", "e a Política de Privacidade"]
+    var warn := false
+    var _flash := 0.0
+    func _font() -> Font: return preload("res://ui_kit/fonts/Alegreya-Bold.woff")
+    func _init():
+        toggle_mode = true
+        flat = true
+        focus_mode = Control.FOCUS_NONE
+        mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        for st in ["normal", "hover", "pressed", "hover_pressed", "focus"]: add_theme_stylebox_override(st, StyleBoxEmpty.new())
+        var w := 0.0
+        for l in LINES: w = maxf(w, _font().get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, PX).x)
+        custom_minimum_size = Vector2(60 + 22 + w + 8, 128)   # caixa + texto: centralizado de verdade
+        toggled.connect(func(on):
+            if on: warn = false
+            queue_redraw())
+    func flash():
+        warn = true
+        _flash = 1.0
+        queue_redraw()
+    func _process(d):
+        if _flash > 0.0:
+            _flash = maxf(0.0, _flash - d * 1.2)
+            queue_redraw()
+    func _draw():
+        var f := _font()
+        var top := 6.0
+        var box := Rect2(Vector2(4, top + 12), Vector2(56, 56))
+        var border := WARN if warn else GOLD
+        if _flash > 0.0: draw_rect(box.grow(8.0 * _flash), Color(WARN.r, WARN.g, WARN.b, 0.35 * _flash))
+        draw_rect(box, Color(0.04, 0.07, 0.04, 0.95))
+        draw_rect(box, border, false, 4.0)
+        if button_pressed:
+            var a := box.position
+            draw_polyline(PackedVector2Array([a + Vector2(11, 29), a + Vector2(24, 42), a + Vector2(46, 14)]), Color("8fe07a"), 7.0, true)
+        for i in LINES.size():
+            var pos := Vector2(box.end.x + 22, top + PX + 2 + i * (PX + 6))
+            draw_string_outline(f, pos, LINES[i], HORIZONTAL_ALIGNMENT_LEFT, -1, PX, 5, Color(0, 0, 0, 0.8))
+            draw_string(f, pos, LINES[i], HORIZONTAL_ALIGNMENT_LEFT, -1, PX, CREAM)
+        if warn:
+            var t := "Marque para criar a conta"
+            var pos := Vector2(box.end.x + 22, top + PX * 3 + 14)
+            draw_string_outline(f, pos, t, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, 4, Color(0, 0, 0, 0.8))
+            draw_string(f, pos, t, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, WARN)

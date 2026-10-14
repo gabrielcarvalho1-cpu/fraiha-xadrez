@@ -499,7 +499,9 @@ class Backend {
       if (a === 'acct_create_profile') {
         const v = validateNickname(m.nickname);
         if (v.error) return this.fail(ws, v.error, { code: 'nickname_invalid' });
-        const r = await op.wait(() => this.store.createProfile(accountId, v.nickname, String(m.avatar_id || 'warrior')));
+        // R100 · aceite dos Termos/Privacidade (versão = data dos Termos) gravado no perfil
+        const terms = typeof m.terms === 'string' && m.terms.length <= 40 ? { version: m.terms, accepted_at: new Date().toISOString() } : null;
+        const r = await op.wait(() => this.store.createProfile(accountId, v.nickname, String(m.avatar_id || 'warrior'), terms));
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'profile_error' });
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
         return this.presence.snapshot(ws);

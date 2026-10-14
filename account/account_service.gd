@@ -39,6 +39,7 @@ var needs_nickname := false
 var persistent_backend := false
 var server_ready := false
 var pending_nickname := ""
+var terms_accepted := false   # R100 · marcou "Li e aceito" ao criar a conta (vai junto ao criar o perfil)
 var after_login := ""
 var redirect_pending := false
 var busy := false
@@ -405,7 +406,9 @@ func create_profile(nick: String, avatar := "warrior"):
     if not err.is_empty(): 
         notice.emit(err, true)
         return
-    if not _send({"type": "acct_create_profile", "nickname": nick.strip_edges(), "avatar_id": avatar}):
+    var msg := {"type": "acct_create_profile", "nickname": nick.strip_edges(), "avatar_id": avatar}
+    if terms_accepted: msg["terms"] = preload("res://ui_v022/legal_text.gd").ATUALIZADO   # versão aceita (data dos Termos)
+    if not _send(msg):
         notice.emit("Conectando ao servidor… tente novamente em instantes.", true)
 
 ## Limpeza igual à do servidor: remove invisíveis/controle/bidi e espaços nas pontas.
