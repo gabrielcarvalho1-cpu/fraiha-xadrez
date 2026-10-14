@@ -31,20 +31,20 @@ const SFX := {
     "card": "res://marcha/audio/carta.wav", "discard": "res://marcha/audio/descarte.wav",
     "step": "res://marcha/audio/passo.wav", "exit": "res://marcha/audio/saida.wav",
     "capture": "res://marcha/audio/captura.wav", "swap": "res://marcha/audio/troca.wav",
-    "crown": "res://marcha/audio/coroa.wav", "your_turn": "res://marcha/audio/sua_vez.wav",
-    "victory": "res://marcha/audio/vitoria.wav", "defeat": "res://marcha/audio/derrota.wav",
+    "crown": "res://marcha/audio/coroa.wav", "your_turn": "res://xeque/audio/sua_vez.wav",
+    "victory": "res://xeque/audio/vitoria.wav", "defeat": "res://xeque/audio/derrota.wav",
     "arrive": "res://marcha/audio/chegada.wav", "victory_final": "res://marcha/audio/vitoria_final.wav",
     # R83 · fim da partida = o XEQUE-MATE do modo XEQUE (estouro + voz "XEQUE-MATE!"), para quem ganhar
     "mate_boom": "res://xeque/audio/xeque_mate_boom.wav", "voice_mate": "res://xeque/audio/voz_xeque_mate.wav",
     "voice_mate_lost": "res://xeque/audio/voz_xeque_mate_derrota.mp3",
     "promote": "res://marcha/audio/promocao_dama.wav",     # R37: fanfarra da chegada (vira DAMA)
     # R50 · sons enviados pelo dono do projeto
-    "move": "res://marcha/audio/r50/movimento.mp3",         # a cada casa (toc quando o peão pousa)
+    "move": "res://audio_v025/padrao/movimento.mp3",         # a cada casa (toc quando o peão pousa)
 }
 const MOVE_HIT := 0.50       # R50: o toc do movimento.mp3 acontece aos 0,5 s do arquivo
 const SFX_R50 := {
-    "capture": "res://marcha/audio/r50/captura.mp3",
-    "swap": "res://marcha/audio/r50/troca.mp3",
+    "capture": "res://audio_v025/padrao/captura.mp3",
+    "swap": "res://audio_v025/padrao/captura.mp3",
     "arrive": "res://marcha/audio/r70/coroacao_do_peao.mp3",   # R70: coroação do peão (áudio do dono)
     "exit": "res://marcha/audio/r70/saida_do_peao.mp3",         # R70: saída do peão da base (áudio do dono)
 }

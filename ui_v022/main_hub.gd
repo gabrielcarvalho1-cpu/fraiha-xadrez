@@ -1852,7 +1852,7 @@ func _show_about_topic(topics: Array, i: int):
         about_body.add_theme_font_size_override("font_size", px)
         var lines := about_body.get_line_count()
         if lines * (about_body.get_line_height() + 5) <= about_body.size.y: break
-    var big := RefPage.tex("about_ico_projeto_big") if i == 0 else RefPage.tex(ABOUT_ICONS[i])
+    var big := RefPage.tex(ABOUT_ICONS[i])   # R93 · o "_big" era cópia idêntica
     about_icon.texture = big
     about_topic = i
     for k in about_nav_art.size():
