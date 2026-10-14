@@ -18,6 +18,11 @@ static func play(stage, stream: AudioStream, db := -8.0, pitch := 1.0, from_pos 
     var a = audio(stage)
     if a != null and a.has_method("play_stream"): a.play_stream(stream, db, pitch, from_pos)
 
+## R99 · ao fechar o modo: solta as amostras de áudio Web dos efeitos dele (as que ainda tocam saem ao terminar)
+static func release_samples(stage):
+    var a = audio(stage)
+    if a != null and a.has_method("release_mode_samples"): a.release_mode_samples()
+
 static func music_muted(hub) -> bool:
     return hub != null and bool(hub.get("music_muted"))
 

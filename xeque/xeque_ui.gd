@@ -277,6 +277,7 @@ func close():
     visible = false
     root.visible = false
     Sound.music_off(stage)
+    Sound.release_samples(stage)   # R99 · amostras de áudio Web do modo
     mode = "tutorial"
     g = null
     phase = ""

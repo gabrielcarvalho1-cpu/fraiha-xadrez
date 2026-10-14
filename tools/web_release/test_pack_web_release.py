@@ -22,7 +22,9 @@ FAKE_JS = ("var GL={counter:1,buffers:[],textures:[],vaos:[],"
            "getNewId:table=>{var ret=GL.counter++;for(var i=table.length;i<ret;i++){table[i]=null}return ret},};"
            + "".join("function d_%s(id){GL.%s[id]=null}" % (t, t) for t in
                      ["buffers", "framebuffers", "programs", "queries", "renderbuffers", "shaders", "syncs", "textures"])
-           + "var _glDeleteVertexArrays=(n,vaos)=>{for(var i=0;i<n;i++){var id=vaos[i];GLctx.deleteVertexArray(GL.vaos[id]);GL.vaos[id]=null}};")
+           + "var _glDeleteVertexArrays=(n,vaos)=>{for(var i=0;i<n;i++){var id=vaos[i];GLctx.deleteVertexArray(GL.vaos[id]);GL.vaos[id]=null}};"
+           # R99 · trechos do runtime de áudio que a liberação de amostras exige
+           + "".join(__import__("audio_samples_release").DEPENDE) + __import__("audio_samples_release").CREATE_ORIG)
 
 
 def make_pck(features="staging", cfg=CFG, pad=b""):

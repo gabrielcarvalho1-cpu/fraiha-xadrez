@@ -1,0 +1,206 @@
+{
+ "label": "antes",
+ "dir": "/home/claude/exp98",
+ "cycles": 20,
+ "points": [
+  {
+   "ciclo": 0,
+   "samples": 0,
+   "sampleMiB": 0,
+   "sampleNodes": 0,
+   "pending": 0,
+   "released": 0,
+   "releasedMiB": 0,
+   "starts": 0,
+   "missing": 0,
+   "jsMiB": 8.32,
+   "wasmMiB": 115,
+   "rendererMiB": 342.89,
+   "guid": "0x2",
+   "music": {
+    "src": true,
+    "paused": false
+   },
+   "godot": {
+    "ciclo": 0,
+    "godot_static": 0,
+    "godot_texture": 99715836,
+    "mode_ids": -1,
+    "music_override": "",
+    "nodes": 844,
+    "resources": 197
+   },
+   "dumpId": "0x0",
+   "arrayBufferMiB": 67.19,
+   "bufferMiB": 10.64
+  },
+  {
+   "ciclo": 1,
+   "samples": 17,
+   "sampleMiB": 14.91,
+   "sampleNodes": 1,
+   "pending": 0,
+   "released": 0,
+   "releasedMiB": 0,
+   "starts": 18,
+   "missing": 0,
+   "jsMiB": 8.5,
+   "wasmMiB": 198.75,
+   "rendererMiB": 410.26,
+   "guid": "0x3",
+   "music": {
+    "src": true,
+    "paused": false
+   },
+   "godot": {
+    "ciclo": 1,
+    "godot_static": 0,
+    "godot_texture": 131362802,
+    "mode_ids": -1,
+    "music_override": "",
+    "musica_home": "",
+    "musica_marcha": "res://marcha/audio/musica_marcha.mp3",
+    "musica_xeque": "res://xeque/audio/musica_xeque.mp3",
+    "nodes": 852,
+    "resources": 226
+   },
+   "dumpId": "0x1",
+   "arrayBufferMiB": 84.1,
+   "bufferMiB": 24.04
+  },
+  {
+   "ciclo": 5,
+   "samples": 68,
+   "sampleMiB": 57.47,
+   "sampleNodes": 0,
+   "pending": 0,
+   "released": 0,
+   "releasedMiB": 0,
+   "starts": 88,
+   "missing": 0,
+   "jsMiB": 8.64,
+   "wasmMiB": 198.75,
+   "rendererMiB": 507.35,
+   "guid": "0xb",
+   "music": {
+    "src": true,
+    "paused": false
+   },
+   "godot": {
+    "ciclo": 5,
+    "godot_static": 0,
+    "godot_texture": 132935666,
+    "mode_ids": -1,
+    "music_override": "",
+    "musica_home": "",
+    "musica_marcha": "res://marcha/audio/musica_marcha.mp3",
+    "musica_xeque": "res://xeque/audio/musica_xeque.mp3",
+    "nodes": 852,
+    "resources": 226
+   },
+   "dumpId": "0x2",
+   "arrayBufferMiB": 127.93,
+   "bufferMiB": 79.02
+  },
+  {
+   "ciclo": 10,
+   "samples": 141,
+   "sampleMiB": 116.31,
+   "sampleNodes": 0,
+   "pending": 0,
+   "released": 0,
+   "releasedMiB": 0,
+   "starts": 176,
+   "missing": 0,
+   "jsMiB": 8.68,
+   "wasmMiB": 198.75,
+   "rendererMiB": 637.02,
+   "guid": "0x11",
+   "music": {
+    "src": true,
+    "paused": false
+   },
+   "godot": {
+    "ciclo": 10,
+    "godot_static": 0,
+    "godot_texture": 134791421,
+    "mode_ids": -1,
+    "music_override": "",
+    "musica_home": "",
+    "musica_marcha": "res://marcha/audio/musica_marcha.mp3",
+    "musica_xeque": "res://xeque/audio/musica_xeque.mp3",
+    "nodes": 883,
+    "resources": 226
+   },
+   "dumpId": "0x3",
+   "arrayBufferMiB": 190.67,
+   "bufferMiB": 147.19
+  },
+  {
+   "ciclo": 15,
+   "samples": 208,
+   "sampleMiB": 169.16,
+   "sampleNodes": 0,
+   "pending": 0,
+   "released": 0,
+   "releasedMiB": 0,
+   "starts": 265,
+   "missing": 0,
+   "jsMiB": 8.75,
+   "wasmMiB": 198.75,
+   "rendererMiB": 781.59,
+   "guid": null,
+   "music": {
+    "src": true,
+    "paused": false
+   },
+   "godot": {
+    "ciclo": 15,
+    "godot_static": 0,
+    "godot_texture": 133689053,
+    "mode_ids": -1,
+    "music_override": "",
+    "musica_home": "",
+    "musica_marcha": "res://marcha/audio/musica_marcha.mp3",
+    "musica_xeque": "res://xeque/audio/musica_xeque.mp3",
+    "nodes": 883,
+    "resources": 226
+   }
+  },
+  {
+   "ciclo": 20,
+   "samples": 276,
+   "sampleMiB": 222.83,
+   "sampleNodes": 0,
+   "pending": 0,
+   "released": 0,
+   "releasedMiB": 0,
+   "starts": 352,
+   "missing": 0,
+   "jsMiB": 8.81,
+   "wasmMiB": 198.75,
+   "rendererMiB": 794.19,
+   "guid": "0x1e",
+   "music": {
+    "src": true,
+    "paused": false
+   },
+   "godot": {
+    "ciclo": 20,
+    "godot_static": 0,
+    "godot_texture": 134791421,
+    "mode_ids": -1,
+    "music_override": "",
+    "musica_home": "",
+    "musica_marcha": "res://marcha/audio/musica_marcha.mp3",
+    "musica_xeque": "res://xeque/audio/musica_xeque.mp3",
+    "nodes": 883,
+    "resources": 226
+   },
+   "dumpId": "0x4",
+   "arrayBufferMiB": 305.97,
+   "bufferMiB": 194.01
+  }
+ ],
+ "events": []
+}

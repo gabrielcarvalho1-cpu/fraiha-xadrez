@@ -260,6 +260,7 @@ func close():
     visible = false
     root.visible = false
     Sound.music_off(stage)
+    Sound.release_samples(stage)   # R99 · amostras de áudio Web do modo
     mode = "lobby"
     g = null
     # R78 · solta a memória das artes grandes (mesa, salão, cartas); voltam a carregar ao abrir de novo

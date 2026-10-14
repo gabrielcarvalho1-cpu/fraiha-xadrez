@@ -1,0 +1,104 @@
+{
+ "label": "contexto",
+ "dir": "/home/claude/exp99",
+ "cycles": 2,
+ "points": [
+  {
+   "ciclo": 0,
+   "samples": 0,
+   "sampleMiB": 0,
+   "sampleNodes": 0,
+   "pending": 0,
+   "released": 0,
+   "releasedMiB": 0,
+   "starts": 0,
+   "missing": 0,
+   "jsMiB": 8.32,
+   "wasmMiB": 138,
+   "rendererMiB": 343.81,
+   "guid": "0x2",
+   "music": {
+    "src": true,
+    "paused": false
+   },
+   "godot": {
+    "ciclo": 0,
+    "godot_static": 0,
+    "godot_texture": 99715836,
+    "mode_ids": 0,
+    "music_override": "",
+    "nodes": 844,
+    "resources": 197
+   },
+   "dumpId": "0x0",
+   "arrayBufferMiB": 67.2,
+   "bufferMiB": 10.66
+  },
+  {
+   "ciclo": 1,
+   "samples": 3,
+   "sampleMiB": 1.99,
+   "sampleNodes": 1,
+   "pending": 1,
+   "released": 15,
+   "releasedMiB": 13.29,
+   "starts": 19,
+   "missing": 0,
+   "jsMiB": 8.51,
+   "wasmMiB": 198.75,
+   "rendererMiB": 396.33,
+   "guid": "0x3",
+   "music": {
+    "src": true,
+    "paused": false
+   },
+   "godot": {
+    "ciclo": 1,
+    "godot_static": 0,
+    "godot_texture": 131362802,
+    "mode_ids": 0,
+    "music_override": "",
+    "musica_home": "",
+    "musica_marcha": "res://marcha/audio/musica_marcha.mp3",
+    "musica_xeque": "res://xeque/audio/musica_xeque.mp3",
+    "nodes": 852,
+    "resources": 226
+   },
+   "dumpId": "0x1",
+   "arrayBufferMiB": 70.51,
+   "bufferMiB": 24.06
+  },
+  {
+   "ciclo": 102,
+   "samples": 2,
+   "sampleMiB": 0.78,
+   "sampleNodes": 0,
+   "pending": 0,
+   "released": 30,
+   "releasedMiB": 26.75,
+   "starts": 35,
+   "missing": 0,
+   "jsMiB": 8.28,
+   "wasmMiB": 198.75,
+   "rendererMiB": 422.63,
+   "guid": null,
+   "music": {
+    "src": true,
+    "paused": false
+   },
+   "godot": {
+    "ciclo": 2,
+    "godot_static": 0,
+    "godot_texture": 134038034,
+    "mode_ids": 0,
+    "music_override": "",
+    "musica_home": "",
+    "musica_marcha": "res://marcha/audio/musica_marcha.mp3",
+    "musica_xeque": "res://xeque/audio/musica_xeque.mp3",
+    "nodes": 852,
+    "resources": 226
+   }
+  }
+ ],
+ "events": []
+}

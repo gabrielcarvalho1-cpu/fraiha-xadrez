@@ -88,8 +88,30 @@ func toggle_music():
 ## "" = volta à música do tema (Home / partida de xadrez).
 var music_override := ""
 func set_music_override(path: String):
+    if path != music_override: release_mode_samples()   # R99 · troca/saída de modo: solta as amostras do modo anterior
     music_override = path
     refresh_music()
+
+## R99 · Web: cada AudioStream tocado como SAMPLE vira um AudioBuffer PCM no navegador (GodotAudio.samples) e o
+## motor NÃO o remove quando o stream é liberado. Os efeitos do XEQUE/Marcha são recarregados a cada entrada (ID
+## novo) → ~7 MB a mais por volta (Orca, R94). Aqui guardamos os IDs dos streams tocados pelos modos e, ao sair
+## do modo, pedimos ao runtime (tools/web_release/audio_samples_release.py) para liberar essas amostras. O runtime
+## só libera quando nenhuma reprodução ativa usa a amostra (as que ainda tocam saem quando terminam) e o motor
+## registra de novo se o mesmo stream voltar a tocar. Os sons padrão (self.streams) ficam sempre registrados.
+var _mode_sample_ids := {}
+func _track_mode_stream(stream: AudioStream):
+    if not OS.has_feature("web") or stream == null: return
+    for s in streams.values():
+        if s == stream: return
+    _mode_sample_ids[stream.get_instance_id()] = true
+
+func release_mode_samples() -> void:
+    if _mode_sample_ids.is_empty(): return
+    var ids := PackedStringArray()
+    for id in _mode_sample_ids: ids.append("'%d'" % int(id))
+    _mode_sample_ids.clear()
+    if not OS.has_feature("web"): return
+    JavaScriptBridge.eval("(() => { const G = window.fraihaGodotAudio; if (G && G.Sample.fraihaRelease) G.Sample.fraihaRelease([%s]); })()" % ",".join(ids))
 
 ## R34: efeito sonoro de um modo (mesmo bus "Effects": volume e MUTAR EFEITOS valem para ele).
 func play_stream(stream: AudioStream, db := -8.0, pitch := 1.0, from_pos := 0.0):
@@ -101,6 +123,7 @@ func play_stream(stream: AudioStream, db := -8.0, pitch := 1.0, from_pos := 0.0)
     player.volume_db = db
     player.pitch_scale = pitch
     player.play(from_pos)
+    _track_mode_stream(stream)   # R99
     last_cue = String(stream.resource_path).get_file().get_basename()
 
 func refresh_music():
