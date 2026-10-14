@@ -407,6 +407,7 @@ func _begin_turn():
 var last_tick_s := -1
 func _process(delta):
     if not visible: return
+    _sync_chat_block()
     t += delta
     _prewarm_step()
     if flash_t > 0.0:
@@ -715,6 +716,17 @@ func _resume_from_tutorial():
     _redraw()
 
 # ---------------------------------------------------------------- toques
+## R95 · CHAT da mesa escondido enquanto o menu, a confirmação de sair, o tutorial, a tela de VITÓRIA/DERROTA
+## ou o fim da partida estiverem na tela (ele fica numa camada acima do XEQUE e cobria essas telas).
+func chat_blocked() -> bool:
+    if menu_open or confirm_quit or mode != "game": return true
+    var ov = stage.get("result_overlay") if stage != null else null
+    return ov != null and ov.has_method("is_showing") and ov.is_showing()
+
+func _sync_chat_block():
+    var pc = stage.get("party_chat") if stage != null else null
+    if pc != null and pc.has_method("set_blocked"): pc.set_blocked(chat_blocked())
+
 ## R88 · CHAT da mesa no lugar reservado pelo layout (celular em pé); senão, a posição padrão
 func _sync_chat_dock():
     var pc = stage.get("party_chat") if stage != null else null

@@ -512,6 +512,7 @@ func _record_history(result: String) -> Dictionary:
 
 func _process(delta):
     if not visible: return
+    _sync_chat_block()
     t += delta
     for c in celebs: c.t += delta
     celebs = celebs.filter(func(c): return c.t < CELEB_T)
@@ -1191,6 +1192,15 @@ func _sync_chat_dock():
     if pc == null or not pc.has_method("set_dock"): return
     var d := chat_dock() if (online and mode == "game" and visible) else Rect2()
     pc.set_dock(Rect2(origin + d.position * k, d.size * k) if d.size.x > 0.0 else Rect2())
+
+## R95 · CHAT da mesa escondido enquanto o menu, o tutorial, a tela de VITÓRIA/DERROTA ou o painel de fim
+## estiverem abertos (ele fica numa camada acima da Marcha e cobria essas telas).
+func chat_blocked() -> bool:
+    return menu_open or tut_page >= 0 or overlay_wait or mode != "game"
+
+func _sync_chat_block():
+    var pc = stage.get("party_chat") if stage != null else null
+    if pc != null and pc.has_method("set_blocked"): pc.set_blocked(chat_blocked())
 
 ## R88 · retângulo (em pixels de tela) da área de toque com este id — para abrir o volume junto do ícone
 func _hit_screen_rect(id: String) -> Rect2:

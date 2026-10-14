@@ -165,6 +165,7 @@ func bind(p_room: String, p_game: String, p_names: Array):
 
 func unbind():
     dock_rect = Rect2()
+    blocked = false
     room_id = ""
     visible = false
     opened = false
@@ -248,6 +249,14 @@ func _scroll_end():
 
 ## R88 · lugar do botão CHAT escolhido pelo modo (pixels de tela); Rect2() = posição padrão (borda direita)
 var dock_rect := Rect2()
+## R95 · o modo (MARCHA / XEQUE) abriu menu, tutorial, confirmação ou a tela de resultado: o CHAT some
+## (botão e painel) para nunca ficar por cima dessas telas — esta camada fica acima da camada do modo.
+var blocked := false
+
+func set_blocked(v: bool):
+    if v == blocked: return
+    blocked = v
+    _layout()
 func set_dock(r: Rect2):
     if r == dock_rect: return
     dock_rect = r
@@ -274,7 +283,8 @@ func _layout():
         toggle.size = dock_rect.size
         toggle.position = dock_rect.position
         tsz = dock_rect.size
-    panel.visible = opened
+    toggle.visible = not blocked
+    panel.visible = opened and not blocked
     panel.scale = Vector2(s, s)
     panel.reset_size()
     var psz := panel.size * s
