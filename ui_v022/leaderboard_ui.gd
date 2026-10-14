@@ -29,7 +29,7 @@ func setup(p_hub, acc):
 	tabs.add_theme_constant_override("separation", 8)
 	body.add_child(tabs)
 	for t in TABS:
-		var b := button(t[1], 17, t[0] == tab)
+		var b := button(t[1], 13 if narrow() else 17, t[0] == tab)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(func(): set_tab(t[0]))
 		tabs.add_child(b)
@@ -40,6 +40,7 @@ func setup(p_hub, acc):
 	for c in CHESS:
 		var b := button(c[1], 13, c[0] == chess_board)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.size_flags_stretch_ratio = float(String(c[1]).length())   # CONVENCIONAL ganha mais espaço
 		b.clip_text = true
 		b.pressed.connect(func(): set_chess(c[0]))
 		chess_row.add_child(b)
@@ -93,12 +94,12 @@ func _refresh_tabs():
 	var narrow := get_viewport().get_visible_rect().size.x < 520.0
 	for k in chess_buttons:
 		style_button(chess_buttons[k], k == chess_board)
-		chess_buttons[k].add_theme_font_size_override("font_size", 10 if narrow else 13)
+		chess_buttons[k].add_theme_font_size_override("font_size", 9 if narrow else ts(13))
 		if narrow:
 			for st_name in ["normal", "hover", "pressed", "disabled"]:
 				var st: StyleBoxFlat = chess_buttons[k].get_theme_stylebox(st_name)
-				st.content_margin_left = 3
-				st.content_margin_right = 3
+				st.content_margin_left = 1
+				st.content_margin_right = 1
 	chess_row.visible = tab == "xadrez"
 	_fill_head()
 
@@ -157,8 +158,8 @@ func _pct(r: Dictionary) -> String:
 func _cols() -> Array:
 	# [rótulo, largura mínima, alinhamento] — o nome estica
 	var narrow := get_viewport().get_visible_rect().size.x < 520.0
-	var c := [["#", 34 if narrow else 44], ["JOGADOR", 0], ["V", 34 if narrow else 46], ["D", 34 if narrow else 46], ["E", 30 if narrow else 40], ["%", 52 if narrow else 66]]
-	if tab == "xadrez" and not narrow: c.insert(2, ["LIGA", 128])
+	var c := [["#", 34 if narrow else ts(44)], ["JOGADOR", 0], ["V", 34 if narrow else ts(46)], ["D", 34 if narrow else ts(46)], ["E", 30 if narrow else ts(40)], ["%", 52 if narrow else ts(66)]]
+	if tab == "xadrez" and not narrow: c.insert(2, ["LIGA", ts(150)])
 	return c
 
 func _fill_head():

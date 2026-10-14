@@ -24,7 +24,7 @@ func setup(p_hub, acc):
 	if account != null and account.has_signal("server_message"): account.server_message.connect(_on_message)
 	online_label = label("", 13, DIM, true)
 	body.add_child(online_label)
-	body.move_child(online_label, 1)
+	body.move_child(online_label, 0)
 	scroll = ScrollContainer.new()
 	preload("res://ui_v022/touch_scroll.gd").attach(scroll)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -45,7 +45,7 @@ func setup(p_hub, acc):
 	input.max_length = 200
 	input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	input.custom_minimum_size.y = 46
-	input.add_theme_font_size_override("font_size", 17)
+	input.add_theme_font_size_override("font_size", ts(17))
 	var ist := StyleBoxFlat.new()
 	ist.bg_color = Color("1d1510")
 	ist.border_color = Color("84754b")
@@ -138,10 +138,10 @@ func _message_row(m: Dictionary, mine: bool) -> Control:
 	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.add_theme_font_override("normal_font", FONT_SEMI)
-	line.add_theme_font_size_override("normal_font_size", 16)
+	line.add_theme_font_size_override("normal_font_size", ts(16))
 	line.mouse_filter = Control.MOUSE_FILTER_PASS
 	line.push_color(GOLD if mine else Color("8fd1c4"))
-	line.push_font(FONT, 16)
+	line.push_font(FONT, ts(16))
 	line.add_text(String(m.get("nickname", "Jogador")))
 	line.pop()
 	line.pop()
