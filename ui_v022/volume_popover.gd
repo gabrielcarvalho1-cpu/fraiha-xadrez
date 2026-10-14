@@ -11,6 +11,7 @@ var kind := "music"           # "music" | "fx"
 var box := Rect2()            # painel na tela
 var track := Rect2()          # trilho do controle na tela
 var dragging := false
+var opened_ms := 0			# R91 · hora em que abriu (ignora o toque repetido do celular logo depois)
 var canvas: Control
 
 func _init():
@@ -33,6 +34,7 @@ func open(p_hub, p_kind: String, anchor: Rect2):
 	var y := anchor.end.y + 10.0
 	if y + PANEL.y > vs.y - 8.0: y = maxf(8.0, anchor.position.y - PANEL.y - 10.0)
 	box = Rect2(x, y, PANEL.x, PANEL.y)
+	opened_ms = Time.get_ticks_msec()
 	track = Rect2(box.position.x + box.size.x / 2.0 - 7.0, box.position.y + 66.0, 14.0, box.size.y - 120.0)
 	visible = true
 	canvas.modulate.a = 0.0
@@ -71,6 +73,7 @@ func _input_event(e: InputEvent):
 	canvas.accept_event()
 	if pressed:
 		if not box.has_point(pos):
+			if Time.get_ticks_msec() - opened_ms < 400: return   # R91 · eco do toque que abriu (toque + clique emulado)
 			close()
 			return
 		if track.grow_individual(30, 14, 30, 14).has_point(pos):

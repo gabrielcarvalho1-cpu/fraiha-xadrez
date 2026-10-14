@@ -11,11 +11,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 gd = open(os.path.join(HERE, "../../ui_v022/web_text_field.gd"), encoding="utf-8").read()
 js = re.search(r'JavaScriptBridge\.eval\("""(.*?)""" %', gd, re.S).group(1)
 vals = [json.dumps("fraiha-text-1"), "true", json.dumps("text"), "200", json.dumps("Mensagem para todos…")]
-for v in vals: js = js.replace("%s" if "%s" in js[:js.find("%d")] or "%d" not in js else "%d", v, 1) if False else js
-# substitui os %s/%d na ordem em que aparecem
-parts = re.split(r'(%s|%d)', js); out = []; i = 0
+# R91 · o texto passa pelo operador % do GDScript: um "%" solto (ex.: "100%") quebra a formatação no jogo e o
+# campo nunca é criado. Aqui a montagem segue a mesma regra (%s, %d e %% apenas) e reprova qualquer outro.
+bad = re.findall(r'%(?![sd])', js.replace('%%', ''))
+FORMAT_OK = not bad
+parts = re.split(r'(%s|%d|%%)', js); out = []; i = 0
 for p in parts:
     if p in ("%s", "%d"): out.append(vals[i]); i += 1
+    elif p == "%%": out.append("%")
     else: out.append(p)
 js = "".join(out)
 PAGE = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -67,6 +70,7 @@ async def run(p, name, opts):
     await b.close()
 
 async def main():
+    ck(FORMAT_OK, "o JavaScript do campo passa pela formatação % do GDScript (sem '%' solto)")
     async with async_playwright() as p:
         iphone = dict(p.devices["iPhone 13"]); iphone.pop("default_browser_type", None)
         pixel = dict(p.devices["Pixel 7"]); pixel.pop("default_browser_type", None)

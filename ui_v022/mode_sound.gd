@@ -34,6 +34,8 @@ static func volume_popup(hub, kind: String, screen_rect: Rect2):
         hub.add_child(pop)
         hub.set_meta("volume_popover", pop)
     if pop.visible and pop.kind == kind:
+        # R91 · no celular o MESMO toque chega duas vezes (toque + clique emulado): o 2º não pode fechar o que o 1º abriu
+        if Time.get_ticks_msec() - int(pop.opened_ms) < 400: return
         pop.close()
         return
     pop.open(hub, kind, screen_rect)

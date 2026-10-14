@@ -1207,19 +1207,25 @@ func _tutorial_bg(d: Vector2, portrait: bool):
     var deep := Color("5e0a14")
     var red := Color("8e1420")
     draw_rect(Rect2(Vector2(-4000, -4000), Vector2(12000, 12000)), deep)
+    # R91 · a tela inteira (não só a área de desenho 16:9): janela mais larga ou mais alta não deixa faixa lisa
+    var vr := Rect2(-ui.origin / ui.k, get_viewport_rect().size / ui.k)
+    var x0: float = minf(0.0, vr.position.x)
+    var x1: float = maxf(d.x, vr.end.x)
+    var y0v: float = minf(0.0, vr.position.y)
+    var y1v: float = maxf(d.y, vr.end.y)
     # xadrez grande e discreto em dois vermelhos
     var q := 120.0
-    for yy in int(ceil(d.y / q)) + 1:
-        for xx in int(ceil(d.x / q)) + 1:
-            if (xx + yy) % 2 == 0: draw_rect(Rect2(xx * q, yy * q, q, q), Color(red.r, red.g, red.b, 0.55))
-    # faixas de casas vermelho/creme (como a borda do tabuleiro)
+    for yy in range(floori(y0v / q), ceili(y1v / q) + 1):
+        for xx in range(floori(x0 / q), ceili(x1 / q) + 1):
+            if posmod(xx + yy, 2) == 0: draw_rect(Rect2(xx * q, yy * q, q, q), Color(red.r, red.g, red.b, 0.55))
+    # faixas de casas vermelho/creme (como a borda do tabuleiro), de ponta a ponta da janela
     var band := 36.0
     var bq := 36.0
     for side in 2:
-        var y0 := 0.0 if side == 0 else d.y - band
-        for i in int(ceil(d.x / bq)) + 1:
-            draw_rect(Rect2(i * bq, y0, bq, band), Color("f2e6cf") if (i + side) % 2 == 0 else Color("b3192a"))
-        draw_rect(Rect2(0, (band if side == 0 else d.y - band - 6), d.x, 6), Color("2a0508"))
+        var y0 := y0v if side == 0 else y1v - band
+        for i in range(floori(x0 / bq), ceili(x1 / bq) + 1):
+            draw_rect(Rect2(i * bq, y0, bq, band), Color("f2e6cf") if posmod(i + side, 2) == 0 else Color("b3192a"))
+        draw_rect(Rect2(x0, (y0 + band if side == 0 else y0 - 6), x1 - x0, 6), Color("2a0508"))
     # vinheta suave
     for i in 10:
         var g := 40.0 + i * 30.0

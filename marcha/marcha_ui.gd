@@ -2348,10 +2348,48 @@ class TableView extends Control:
                 else: dots.append(c)
 
     # ------------------------------------------------------------ mão e botões
+    ## R91 · PC: bandeja das cartas por cima do tapete roxo/verde da arte (as curvas douradas e as faixas verdes
+    ## atrás da mão ficavam estranhas): veludo escuro com moldura dourada dupla e cravos nos cantos.
+    func _draw_card_tray():
+        var r: Rect2 = ui.rr(Rect2(452, 726, 768, 240))
+        var s: float = ui.r57_s()
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = Color("1b0f24")
+        sb.border_color = Color("3a2412")
+        sb.set_border_width_all(int(maxf(4.0, 9.0 * s)))
+        sb.corner_radius_top_left = int(26.0 * s)
+        sb.corner_radius_top_right = int(26.0 * s)
+        sb.shadow_color = Color(0, 0, 0, 0.55)
+        sb.shadow_size = int(18.0 * s)
+        sb.shadow_offset = Vector2(0, -4.0 * s)
+        draw_style_box(sb, r)
+        # veludo: leve degradê de cima (mais claro) para baixo
+        var inner := r.grow(-9.0 * s)
+        for i in 8:
+            var t := float(i) / 8.0
+            draw_rect(Rect2(inner.position.x, inner.position.y + inner.size.y * t, inner.size.x, inner.size.y / 8.0 + 1.0), Color(0.24, 0.12, 0.30, 0.22 * (1.0 - t)))
+        var gold := Color("d9a441")
+        var line := StyleBoxFlat.new()
+        line.draw_center = false
+        line.border_color = gold
+        line.set_border_width_all(int(maxf(2.0, 3.0 * s)))
+        line.corner_radius_top_left = int(20.0 * s)
+        line.corner_radius_top_right = int(20.0 * s)
+        draw_style_box(line, r.grow(-7.0 * s))
+        var line2: StyleBoxFlat = line.duplicate()
+        line2.border_color = Color(gold.r, gold.g, gold.b, 0.35)
+        line2.set_border_width_all(int(maxf(1.0, 1.5 * s)))
+        draw_style_box(line2, r.grow(-15.0 * s))
+        for c in [Vector2(r.position.x + 24.0 * s, r.position.y + 24.0 * s), Vector2(r.end.x - 24.0 * s, r.position.y + 24.0 * s)]:
+            draw_circle(c, 6.0 * s, Color("6b4a14"))
+            draw_circle(c, 4.5 * s, gold)
+            draw_circle(c - Vector2(1.5, 1.5) * s, 1.6 * s, Color("fff1c2"))
+
     func _draw_hand():
         var g = ui.g
         var hand: Array = g.hands[0] if g != null else []
         var n := hand.size()
+        if ui.desk and not ui.blk and ui.mode == "game": _draw_card_tray()
         for i in n:
             if ui.fly_hide.has(i): continue          # R37.3: esta carta está voando para a mesa
             if ui.card_played and i == ui.sel_card: continue     # R38.2: já foi jogada (está na mesa)

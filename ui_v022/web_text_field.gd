@@ -88,7 +88,7 @@ func _ready():
                 el.dataset.docked = '1';
                 el._geo = {left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height, fontSize: el.style.fontSize};
                 bar.style.display = 'flex';
-                Object.assign(el.style, {left: '10px', width: 'calc(100% - 132px)', height: '46px', fontSize: '16px', zIndex: '31',
+                Object.assign(el.style, {left: '10px', width: 'calc(100%% - 132px)', height: '46px', fontSize: '16px', zIndex: '31',
                     background: '#1d1510', border: '1px solid #84754b'});
                 place();
             };
