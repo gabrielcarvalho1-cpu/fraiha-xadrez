@@ -117,6 +117,7 @@ class Ranked {
     }
     if (a === this.p + 'cancel') { this.invalidateQueue(uid); const e = this.mm.cancel(uid); return this.send(ws, { type: this.p + 'cancelled', was_queued: !!e }); }
     if (a === this.p + 'sync') return this.sync(ws, uid, match, m, now);
+    if (a === this.p + 'rematch' || a === this.p + 'rematch_cancel') return this.rematch(ws, uid, m, a.endsWith('_cancel'), now);
     if (!match || match.id !== String(m.match_id || match.id)) return this.fail(ws, `Nenhuma partida ${this.label} ativa.`, 'no_match');
     const color = match.colorOf(uid);
     if (a === this.p + 'move') {
@@ -125,6 +126,12 @@ class Ranked {
       return this.after(match, now);
     }
     if (a === this.p + 'resign') { match.resign(color, now); return this.after(match, now); }
+    if (a === this.p + 'draw_offer' || a === this.p + 'draw_accept' || a === this.p + 'draw_decline') {
+      const r = a === this.p + 'draw_offer' ? match.offerDraw(color, now) : match.answerDraw(color, a === this.p + 'draw_accept', now);
+      if (r.error) { this.fail(ws, r.error, 'draw_rejected'); return this.pushState(match, now, color); }
+      if (a === this.p + 'draw_decline') { const ows = this.sockets.get(match.players[color === 'w' ? 'b' : 'w'].userId); if (ows) this.send(ows, { type: this.p + 'draw_declined', match_id: match.id }); }
+      return this.after(match, now);
+    }
     return this.fail(ws, `Ação ${this.label} desconhecida.`);
   }
   // R53 · sincronia pedida pelo cliente (ao reconectar no meio de uma partida). A partida pedida pode já ter
@@ -141,6 +148,52 @@ class Ranked {
     this.send(ws, asked.state(c, now));
     // resultado já gravado: manda agora; gravação em andamento: persist() manda quando terminar (conectado de novo)
     if (asked.saved !== undefined) this.send(ws, asked.resultFor(c, asked.saved));
+  }
+  // R98 · REVANCHE: depois do fim, os dois pedem (ou um pede e o outro aceita) → nova partida no mesmo ritmo,
+  // cores trocadas. No Ranked o PL é lido de novo do banco (já com a partida anterior gravada).
+  rematchStatus(old, extra = {}) {
+    for (const c of ['w', 'b']) {
+      const ws = this.sockets.get(old.players[c].userId), o = c === 'w' ? 'b' : 'w';
+      if (ws) this.send(ws, { type: this.p + 'rematch_status', match_id: old.id, mine: old.rematch[c], theirs: old.rematch[o], ...(extra[c] || {}) });
+    }
+  }
+  rematch(ws, uid, m, cancel, now) {
+    const old = this.matches.get(String(m.match_id || '')), c = old ? old.colorOf(uid) : null;
+    const gone = msg => this.send(ws, { type: this.p + 'rematch_status', match_id: String(m.match_id || ''), mine: false, theirs: false, closed: true, message: msg });
+    if (!old || !c || old.status !== 'finished' || old.rematchId) return gone('A revanche não está mais disponível.');
+    const o = c === 'w' ? 'b' : 'w', oppUid = old.players[o].userId;
+    if (cancel) {
+      const declined = old.rematch[o] && !old.rematch[c];
+      old.rematch[c] = false; if (declined) old.rematch[o] = false;
+      return this.rematchStatus(old, declined ? { [o]: { declined: true, message: 'O adversário recusou a revanche.' } } : {});
+    }
+    if (old.rematchStarting) return;
+    if (this.activeMatchOf(uid) || this.busyElsewhere(uid)) return gone('Você já está em outra partida ou fila.');
+    if (!this.sessionLive(this.sockets.get(oppUid), oppUid)) return gone('O adversário saiu.');
+    if (this.activeMatchOf(oppUid) || this.busyElsewhere(oppUid) || this.mm.has(oppUid)) return gone('O adversário já está em outra partida.');
+    if (this.backend && this.backend.modeOpen && !this.backend.modeOpen(this.kind, old.mode)) return gone(require('../admin/controls').CLOSED_MESSAGE);
+    if (this.rated && old.saved === undefined) return this.fail(ws, 'Gravando o resultado da partida. Tente de novo em instantes.', 'result_pending');
+    this.mm.cancel(uid);
+    old.rematch[c] = true;
+    if (!old.rematch[o]) return this.rematchStatus(old);
+    old.rematchStarting = true;
+    const entry = (col, stats) => {
+      const p = old.players[col], pws = this.sockets.get(p.userId);
+      const id = (pws && pws.identity) || p;
+      return { userId: p.userId, nickname: id.nickname || p.nickname, avatar: id.avatar || p.avatar, ...publicLook(id), stats, since: this.now() };
+    };
+    const stats = this.rated ? Promise.all(['w', 'b'].map(col => this.backend.store.getRankedStats(old.players[col].userId).then(all => all[old.mode])))
+      : Promise.resolve([null, null]);
+    return stats.then(([sw, sb]) => {
+      // cores trocadas: quem era Pretas agora joga de Brancas
+      const match = this.startMatch(old.mode, entry('b', sb), entry('w', sw), this.now(), true);
+      old.rematchId = match.id;
+      console.log('[rematch]', old.id, '->', match.id, this.kind);
+    }).catch(error => {
+      old.rematch = { w: false, b: false };
+      const msg = error && error.code === 'player_unavailable' ? 'Um dos jogadores não está mais disponível.' : 'Não foi possível começar a revanche agora.';
+      this.rematchStatus(old, { w: { closed: true, message: msg }, b: { closed: true, message: msg } });
+    }).finally(() => { old.rematchStarting = false; });
   }
   // FRAIHA Admin: modo desativado → quem estava esperando sai da fila com aviso (o cliente já trata *_error na busca).
   purgeQueue(message, onlyMode = null) {
@@ -194,12 +247,12 @@ class Ranked {
     }
   }
   // Cria a partida entre duas entradas {userId,nickname,avatar,stats}. Usado pela fila e pelos convites.
-  startMatch(mode, a, b, now = this.now()) {
+  startMatch(mode, a, b, now = this.now(), aIsWhite = false) {
     if (!this.canStartMatch(a, b)) {
       const error = new Error('Jogador indisponível para iniciar partida.'); error.code = 'player_unavailable'; throw error;
     }
     // Servidor sorteia as cores. FRAIHA_TEST_FIXED_COLORS=1 (só testes): quem entrou primeiro joga de Brancas.
-    const flip = process.env.FRAIHA_TEST_FIXED_COLORS === '1' ? (a.since || 0) <= (b.since || 0) : Math.random() < 0.5;
+    const flip = aIsWhite ? true : process.env.FRAIHA_TEST_FIXED_COLORS === '1' ? (a.since || 0) <= (b.since || 0) : Math.random() < 0.5;
     const [w, bl] = flip ? [a, b] : [b, a];
     const seat = e => ({ userId: e.userId, nickname: e.nickname, avatar: e.avatar, ...publicLook(e), stats: e.stats, connected: true, leftAt: 0 });
     const match = new RankedMatch({ mode, white: seat(w), black: seat(bl), now, cfg: this.cfg, rated: this.rated, prefix: this.kind });

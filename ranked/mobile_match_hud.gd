@@ -734,7 +734,7 @@ func _build_panel() -> void:
 	tiles_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(tiles_box)
 	# ações possíveis; cada uma aparece só quando existe naquela partida (refresh_actions)
-	for id in ["resign", "mark", "analyze", "music", "fx", "mic", "ear", "leave", "full"]:
+	for id in ["resign", "draw", "mark", "analyze", "music", "fx", "mic", "ear", "leave", "full"]:
 		var b := _flat_button("Action_" + id)
 		var t := NinePatchRect.new()
 		t.name = "Tile"
@@ -846,6 +846,7 @@ func _available() -> Dictionary:
 	var voice_on: bool = mv != null and mv.visible
 	return {
 		"resign": st.mobile_restart != null and st.mobile_restart.visible,
+		"draw": st.mode in ["ranked", "casual"] and ui().controller.in_match() and ui().controller.status == "playing",   # R98
 		"mark": st.mobile_mark != null and st.mobile_mark.visible,
 		"analyze": st.mobile_analyze != null and st.mobile_analyze.visible,
 		"music": true, "fx": true,
@@ -861,6 +862,9 @@ func _caption(id: String) -> String:
 		"resign":
 			if st.mode == "bot" and st.game.game_over: return "Jogar de novo"
 			return "Desistir" if st.mode in ["ranked", "casual"] or (st.mode == "bot" and st.bot_controller.in_match()) else "Reiniciar"
+		"draw":
+			var c = ui().controller
+			return "Empate\noferecido" if c.draw_offer == c.human_color else "Oferecer\nempate"
 		"mark": return "Marcar /\nRevisar"
 		"analyze": return "Analisar"
 		"music": return "Música" + (": NÃO" if ModeSound.music_muted(st.hub) else "")
@@ -893,6 +897,11 @@ func _do_action(id: String) -> void:
 		"resign":
 			close_actions()
 			st.mobile_restart.pressed.emit()
+		"draw":   # R98 · sem confirmação: a oferta não encerra nada (o adversário decide)
+			var c = ui().controller
+			close_actions()
+			if c.can_offer_draw(): c.offer_draw()
+			elif c.draw_offer.is_empty() and c.kind == "ranked": ui().draw_ui.say("No Ranked, o empate só vale depois de 10 lances de cada lado.")
 		"mark":
 			st.mobile_mark.pressed.emit()
 		"analyze":
@@ -1088,6 +1097,7 @@ class ActionIcon extends Control:
 				if st.mode == "bot" and st.game.game_over: _restart(r, col)
 				else: _tex_in(_icon("flag"), r)
 			"mark": _tex_in(_icon("mark"), r)
+			"draw": _half(r, col)
 			"analyze": _magnifier(r, col)
 			"music":
 				off = ModeSound.music_muted(st.hub)
@@ -1123,6 +1133,14 @@ class ActionIcon extends Control:
 		draw_arc(c, rad, deg_to_rad(-70), deg_to_rad(220), 24, col, w)
 		var e := c + Vector2(cos(deg_to_rad(-70)), sin(deg_to_rad(-70))) * rad
 		draw_colored_polygon(PackedVector2Array([e + Vector2(-rad * 0.45, -rad * 0.15), e + Vector2(rad * 0.2, -rad * 0.5), e + Vector2(rad * 0.12, rad * 0.3)]), col)
+	## R98 · "½" dourado (oferecer empate)
+	func _half(r: Rect2, col: Color):
+		var f: Font = preload("res://account/fonts/Cinzel-Bold.woff")
+		var px := int(minf(r.size.x, r.size.y) * 0.62)
+		var w := f.get_string_size("½", HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+		var pos := r.get_center() + Vector2(-w / 2.0, px * 0.34)
+		draw_string_outline(f, pos, "½", HORIZONTAL_ALIGNMENT_LEFT, -1, px, maxi(2, px / 8), Color(0.1, 0.06, 0, 0.9))
+		draw_string(f, pos, "½", HORIZONTAL_ALIGNMENT_LEFT, -1, px, col)
 	func _magnifier(r: Rect2, col: Color):
 		var c := r.get_center()
 		var rad := minf(r.size.x, r.size.y) * 0.3

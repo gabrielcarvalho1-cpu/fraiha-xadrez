@@ -83,6 +83,10 @@ func unavailable_title() -> String:
 func all_modes() -> Array:
     return MODES if rated() else CASUAL_MODES
 
+const DrawRematch = preload("res://ranked/draw_rematch_ui.gd")
+var draw_ui
+var rematch_btn: Button
+var rematch_label: Label
 func setup(service, ranked_controller):
     if not preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):   # R55.4 · PC: carrega as artes do PC já no setup
         for k in DESK_ART: desk_tex(k)
@@ -161,6 +165,10 @@ func setup(service, ranked_controller):
     resign_button.add_theme_font_size_override("font_size", 16)
     resign_button.pressed.connect(_confirm_resign)
     hud.add_child(resign_button)
+    draw_ui = DrawRematch.new()   # R98 · EMPATE (botão + faixa de oferta)
+    hud.add_child(draw_ui)
+    draw_ui.setup(self, controller)
+    controller.rematch_changed.connect(func(_m): _sync_rematch())
     link_label = Label.new()
     link_label.add_theme_font_size_override("font_size", 15)
     link_label.add_theme_color_override("font_color", Color("ff9d86"))
@@ -644,6 +652,15 @@ func _desk_art(which: String) -> bool:
             d.button(back, func():
                 play_requested.emit()
                 _show("modes"), "DeskBack", 22)
+            # R98 · REVANCHE: placa verde embaixo da arte (mesmo adversário, cores trocadas)
+            d.below = 250.0
+            rematch_label = d.label("", Rect2(160, 1404, 802, 50), 40, DeskArt.GOLD, DeskArt.FONT_BODY)
+            rematch_label.name = "DeskRematchInfo"
+            rematch_btn = DrawRematch.art_button("green", "PEDIR REVANCHE", 22)
+            rematch_btn.name = "DeskRematch"
+            rematch_btn.pressed.connect(_press_rematch)
+            d.add_item(rematch_btn, Rect2(276, 1458, 570, 167))
+            _sync_rematch()
         _:
             return false
     d.show_modal()
@@ -777,6 +794,7 @@ func _result(r: Dictionary):
             close_panel()
             play_requested.emit()
             controller.queue(String(r.mode)), true)
+        _rematch_row()
         _button(box, "VOLTAR", func():
             play_requested.emit()
             _show("modes"))
@@ -814,6 +832,7 @@ func _result(r: Dictionary):
         close_panel()
         play_requested.emit()
         controller.queue(String(r.mode)), true)
+    _rematch_row()
     _button(box, "VOLTAR AO RANKED", func():
         play_requested.emit()
         _show("modes"))
@@ -863,6 +882,7 @@ func _process(_delta):
     if is_instance_valid(result_bar) and result_bar.value != bar_target:
         result_bar.value = move_toward(result_bar.value, bar_target, 40.0 * _delta)
     if hud.visible: _refresh_strips()
+    if is_instance_valid(rematch_btn): _fit_rematch_caption()
 
 ## R51 · de onde vêm os dados dos cartões: o controlador do Ranked ou, na partida contra o computador, o bot_view
 ## (mesmo layout do Ranked Madeira para todos).
@@ -988,6 +1008,7 @@ func layout_hud(board: Rect2, mobile: bool, portrait: bool, safe: Rect2, top_slo
         strips.bottom.bg.size = bottom_slot.size
         link_label.position = Vector2(safe.position.x, bottom_slot.end.y + 4)
         link_label.size = Vector2(safe.size.x, 40)
+        draw_ui.layout(board, true, null)
         return
     var width = 460.0
     var x = board.end.x + 28.0
@@ -1006,6 +1027,7 @@ func layout_hud(board: Rect2, mobile: bool, portrait: bool, safe: Rect2, top_slo
     resign_button.position = Vector2(x + width - resign_button.size.x, board.end.y - PLAQUE_H - 60 - 126 - (resign_button.size.y - 56.0))     # R38.3: acima da faixa de capturas (stage.MATERIAL_H)
     link_label.position = Vector2(x, board.get_center().y - 30)
     link_label.size = Vector2(width, 60)
+    draw_ui.layout(board, false, resign_button)
 
 ## R54 · DESISTIR: no PC é o botão da arte aprovada (vermelho e ouro, mesmo em bot, Casual e Ranqueada);
 ## no celular continua o botão simples (o HUD do celular tem o próprio DESISTIR no painel AÇÕES).
@@ -1070,6 +1092,56 @@ func _layout_panel():
 
 
 ## ANALISAR PARTIDA na tela de resultado (só aqui, depois do fim — nunca durante a partida).
+## R98 · REVANCHE no painel de resultado (celular, empate): botão + linha de situação.
+func _rematch_row():
+    rematch_btn = _button(box, "PEDIR REVANCHE", _press_rematch, true)
+    rematch_btn.name = "PanelRematch"
+    rematch_label = _label("", 15, GOLD, true)
+    rematch_label.name = "PanelRematchInfo"
+    _sync_rematch()
+
+func _press_rematch():
+    var r: Dictionary = controller.rematch
+    if bool(r.get("mine", false)): controller.cancel_rematch()
+    else: controller.request_rematch()
+
+func _sync_rematch():
+    if not is_instance_valid(rematch_btn) or not is_instance_valid(rematch_label): return
+    var r: Dictionary = controller.rematch
+    var opp := String(controller.opponent.get("nickname", "o adversário"))
+    var cap := "PEDIR REVANCHE"
+    var info := ""
+    var info_color := GOLD
+    if bool(r.get("closed", false)):
+        cap = "REVANCHE"
+        info = String(r.get("message", "A revanche não está mais disponível."))
+        info_color = Color("ff9d86")
+    elif bool(r.get("theirs", false)) and not bool(r.get("mine", false)):
+        cap = "ACEITAR REVANCHE"
+        info = "%s quer revanche!" % opp
+    elif bool(r.get("mine", false)):
+        cap = "CANCELAR PEDIDO"
+        info = "Aguardando %s aceitar a revanche…" % opp
+        info_color = Color("dfe6d6")
+    elif bool(r.get("declined", false)):
+        info = "%s recusou a revanche." % opp
+        info_color = Color("ff9d86")
+    rematch_btn.disabled = bool(r.get("closed", false)) or String(controller.last_result.get("match_id", "")).is_empty()
+    if rematch_btn.has_node("Caption"):
+        rematch_btn.set_meta("cap", cap)
+        _fit_rematch_caption()
+    else: rematch_btn.text = cap
+    rematch_label.text = info
+    rematch_label.add_theme_color_override("font_color", info_color)
+
+## a placa da revanche no PC acompanha a escala da arte: fonte proporcional à altura do botão
+func _fit_rematch_caption():
+    if not is_instance_valid(rematch_btn) or not rematch_btn.has_node("Caption"): return
+    var cap := String(rematch_btn.get_meta("cap", "PEDIR REVANCHE"))
+    var px := int(maxf(12.0, rematch_btn.size.y * (0.19 if cap.length() > 14 else 0.23)))
+    var l: Label = rematch_btn.get_node("Caption")
+    if l.text != cap or l.get_theme_font_size("font_size") != px: DrawRematch.set_caption(rematch_btn, cap, px)
+
 func _analyze_button():
     var stage = get_parent()
     if stage == null or not stage.has_method("analysis_available") or not stage.analysis_available(): return

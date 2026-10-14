@@ -8,6 +8,9 @@ signal found(msg: Dictionary)
 signal state_changed
 signal finished(msg: Dictionary)
 signal problem(text: String)
+signal draw_changed                    # R98 · oferta de empate (minha ou do adversário) mudou
+signal draw_declined                   # R98 · o adversário recusou a minha oferta
+signal rematch_changed(msg: Dictionary)   # R98 · pedidos de revanche depois do fim
 const Rules = preload("res://chess/rules.gd")
 const ClockState = preload("res://ranked/clock_state.gd")
 var account
@@ -38,6 +41,10 @@ var requeue_pending := false
 # R53 · a conexão caiu no meio da partida: ao voltar, pede ao servidor o estado desta partida (que pode ter
 # terminado enquanto o jogador estava fora — o adversário desistiu, o tempo acabou).
 var resync_pending := false
+# R98 · EMPATE e REVANCHE
+var draw_offer := ""          # "" | "w" | "b" (quem ofereceu)
+var draw_min_ply := 2
+var rematch := {"mine": false, "theirs": false, "closed": false, "message": "", "match_id": ""}
 
 func setup(service, world):
     account = service
@@ -74,6 +81,35 @@ func cancel_queue():
 
 func resign():
     if in_match(): account.send_server({"type": kind + "_resign", "match_id": match_id})
+
+func offer_draw():
+    if in_match() and status == "playing": account.send_server({"type": kind + "_draw_offer", "match_id": match_id})
+
+func answer_draw(accept: bool):
+    if in_match(): account.send_server({"type": kind + ("_draw_accept" if accept else "_draw_decline"), "match_id": match_id})
+
+func draw_from_opponent() -> bool:
+    return not draw_offer.is_empty() and draw_offer != human_color
+
+## o botão EMPATE só faz sentido com a partida rolando e depois do mínimo de lances (Ranked: 10 de cada lado)
+func can_offer_draw() -> bool:
+    return in_match() and status == "playing" and draw_offer.is_empty() and rules.ply >= draw_min_ply
+
+func request_rematch():
+    var mid := String(last_result.get("match_id", ""))
+    if mid.is_empty() or bool(rematch.closed): return
+    rematch.mine = true
+    rematch.match_id = mid
+    account.send_server({"type": kind + "_rematch", "match_id": mid})
+    rematch_changed.emit(rematch)
+
+func cancel_rematch():
+    var mid := String(last_result.get("match_id", ""))
+    if mid.is_empty(): return
+    rematch.mine = false
+    if bool(rematch.theirs): rematch.theirs = false   # recusar o pedido do adversário
+    account.send_server({"type": kind + "_rematch_cancel", "match_id": mid})
+    rematch_changed.emit(rematch)
 
 func in_match() -> bool:
     return not match_id.is_empty() and status != "finished"
@@ -165,6 +201,8 @@ func _on_message(msg: Dictionary):
             human_color = String(msg.you)
             opponent = msg.get("opponent", {}) if msg.get("opponent") is Dictionary else {}
             status = "starting"
+            draw_offer = ""
+            rematch = {"mine": false, "theirs": false, "closed": false, "message": "", "match_id": ""}
             found.emit(msg)
         "match_state":
             if String(msg.get("match_id", "")) == match_id: _apply_state(msg)
@@ -188,6 +226,13 @@ func _on_message(msg: Dictionary):
                 game.status = {"win": "VITÓRIA", "loss": "DERROTA", "draw": "EMPATE"}.get(String(msg.get("outcome", "")), "FIM DE JOGO")
                 game.queue_redraw()
                 finished.emit(msg)
+        "match_draw_declined":
+            if String(msg.get("match_id", "")) == match_id: draw_declined.emit()
+        "match_rematch_status":
+            if String(msg.get("match_id", "")) == String(last_result.get("match_id", "")):
+                rematch = {"mine": bool(msg.get("mine", false)), "theirs": bool(msg.get("theirs", false)), "closed": bool(msg.get("closed", false)),
+                    "declined": bool(msg.get("declined", false)), "message": String(msg.get("message", "")), "match_id": String(msg.get("match_id", ""))}
+                rematch_changed.emit(rematch)
         "match_error":
             pending = false
             var code = String(msg.get("code", ""))
@@ -217,6 +262,11 @@ func _apply_state(msg: Dictionary):
     white = msg.white
     black = msg.black
     starts_in_ms = int(msg.get("starts_in_ms", 0))
+    var offer := String(msg.get("draw_offer", ""))
+    draw_min_ply = int(msg.get("draw_min_ply", draw_min_ply))
+    if offer != draw_offer:
+        draw_offer = offer
+        draw_changed.emit()
     state_at = Time.get_ticks_msec()
     clock.apply_snapshot(msg.clock)
     var p: Dictionary = msg.position

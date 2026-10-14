@@ -7,7 +7,10 @@ const { applyResult } = require('./progression');
 
 const REASONS = { checkmate: 'Xeque-mate', timeout: 'Tempo esgotado', timeout_draw: 'Tempo esgotado sem material para mate',
   resign: 'Desistência', abandon: 'Abandono', stalemate: 'Afogamento', insufficient_material: 'Material insuficiente',
-  fifty_moves: 'Regra dos 50 lances', repetition: 'Repetição tripla' };
+  fifty_moves: 'Regra dos 50 lances', repetition: 'Repetição tripla', agreement: 'Empate por acordo' };
+// R98 · oferta de empate: no Ranked só depois de 10 lances de cada lado (evita "combinar" empates para farmar PL);
+// quem ofereceu só oferece de novo depois de fazer mais um lance. Lance do adversário = oferta recusada.
+const DRAW_MIN_PLY = { rated: 20, casual: 2 };
 
 // Partida autoritativa (Ranked e Casual). rated=false: sem PL, sem liga, sem gravação.
 class RankedMatch {
@@ -17,6 +20,26 @@ class RankedMatch {
     this.pos = new Position(); this.clock = new ChessClock(cfg.baseMs(mode));
     this.createdAt = now; this.startsAt = now + cfg.startDelayMs; this.startedAt = null;
     this.status = 'starting'; this.result = null; this.lastMove = null; this.revision = 0;
+    this.drawOffer = null; this.drawOfferPly = { w: -99, b: -99 };   // R98
+    this.rematch = { w: false, b: false }; this.rematchId = null;     // R98 · revanche depois do fim
+  }
+  drawMinPly() { return this.rated ? DRAW_MIN_PLY.rated : DRAW_MIN_PLY.casual; }
+  offerDraw(color, now) {
+    if (this.tick(now) && this.status === 'finished') return { error: 'Partida encerrada.' };
+    if (this.status !== 'playing') return { error: 'A partida ainda não começou.' };
+    if (this.drawOffer && this.drawOffer !== color) { this.finish('draw', 'agreement', now); return { ok: true, accepted: true }; }
+    if (this.drawOffer === color) return { error: 'Você já ofereceu empate. Aguarde a resposta.' };
+    const min = this.drawMinPly();
+    if (this.pos.ply < min) return { error: this.rated ? 'No Ranked, o empate só pode ser oferecido depois de 10 lances de cada lado.' : 'Faça pelo menos um lance antes de oferecer empate.' };
+    if (this.pos.ply <= this.drawOfferPly[color]) return { error: 'Faça mais um lance antes de oferecer empate de novo.' };
+    this.drawOffer = color; this.drawOfferPly[color] = this.pos.ply; this.revision++;
+    return { ok: true };
+  }
+  answerDraw(color, accept, now) {
+    if (this.tick(now) && this.status === 'finished') return { error: 'Partida encerrada.' };
+    if (this.status !== 'playing' || !this.drawOffer || this.drawOffer === color) return { error: 'Não há oferta de empate.' };
+    if (accept) this.finish('draw', 'agreement', now); else { this.drawOffer = null; this.revision++; }
+    return { ok: true };
   }
   colorOf(userId) { return this.players.w.userId === userId ? 'w' : this.players.b.userId === userId ? 'b' : null; }
   // Avança estados dependentes do tempo; devolve true se algo mudou.
@@ -44,6 +67,7 @@ class RankedMatch {
     if (!applied) return { error: 'Movimento não permitido.' };        // relógio intocado
     this.clock.press(color, now);                                     // só jogada legal troca o relógio
     this.lastMove = applied; this.revision++;
+    if (this.drawOffer && this.drawOffer !== color) this.drawOffer = null;   // jogou em vez de responder: recusou
     const out = this.pos.outcome();
     if (out === 'checkmate') this.finish(color, 'checkmate', now);
     else if (out) this.finish('draw', out, now);
@@ -53,7 +77,7 @@ class RankedMatch {
   // winner: 'w' | 'b' | 'draw'. Calcula PL a partir das estatísticas PRÉ-partida.
   finish(winner, reason, now) {
     if (this.status === 'finished') return;
-    this.clock.stop(now); this.status = 'finished'; this.revision++;
+    this.clock.stop(now); this.status = 'finished'; this.revision++; this.drawOffer = null;
     if (!this.rated) { this.result = { winner, reason, finishedAt: now }; return; }
     const outcome = c => (winner === 'draw' ? 'draw' : winner === c ? 'win' : 'loss');
     const w = applyResult(this.players.w.stats, this.players.b.stats, outcome('w'));
@@ -81,7 +105,8 @@ class RankedMatch {
       white: this.publicPlayer('w'), black: this.publicPlayer('b'), position: this.pos.snapshot(),
       in_check: this.status === 'playing' && this.pos.inCheck(this.pos.turn),
       last_move: this.lastMove ? { from: this.lastMove.from, to: this.lastMove.to, captured: this.lastMove.captured } : null,
-      clock: this.clock.snapshot(now) };
+      clock: this.clock.snapshot(now), draw_offer: this.drawOffer || '', draw_min_ply: this.drawMinPly(),
+      rematch: this.status === 'finished' ? { w: this.rematch.w, b: this.rematch.b, match_id: this.rematchId || '' } : null };
   }
   resultFor(c, saved) {
     const r = this.result;

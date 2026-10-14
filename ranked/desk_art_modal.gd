@@ -26,6 +26,7 @@ var _bar_from := 0.0
 var _bar_to := 0.0
 var _bar_t := 1.0
 var kind := ""
+var below := 0.0                # R98 · faixa extra embaixo da arte (em px da referência), ex.: REVANCHE
 
 func _init():
 	name = "DeskArtModal"
@@ -65,6 +66,7 @@ func clear():
 	_bar = null
 	_bar_fill = null
 	kind = ""
+	below = 0.0
 
 func show_modal():
 	visible = true
@@ -135,6 +137,12 @@ func button(r: Rect2, action: Callable, id: String, radius := 18.0) -> Button:
 	_items.append([b, r, 0.0])
 	return b
 
+## R98 · peça pronta (ex.: botão com arte própria) posicionada em px da referência.
+func add_item(c: Control, r: Rect2) -> Control:
+	add_child(c)
+	_items.append([c, r, 0.0])
+	return c
+
 ## Barra de PL viva sobre o trilho vazio da arte; anima de `from` até `to` (0–100).
 func bar(r: Rect2, from: float, to: float):
 	_bar = Control.new()
@@ -171,13 +179,13 @@ func _ease(t: float) -> float:
 # ---------------------------------------------------------------- layout
 func scale_k() -> float:
 	var vp := get_viewport_rect().size
-	return minf(vp.y * frac / ref.y, vp.x * 0.94 / ref.x)
+	return minf(vp.y * frac / (ref.y + below), vp.x * 0.94 / ref.x)
 
 func art_rect() -> Rect2:
 	var vp := get_viewport_rect().size
 	var k := scale_k()
 	var sz := ref * k
-	return Rect2((vp - sz) / 2.0, sz)
+	return Rect2(Vector2((vp.x - sz.x) / 2.0, (vp.y - (ref.y + below) * k) / 2.0), sz)
 
 func _layout():
 	if art == null: return
@@ -202,7 +210,7 @@ func _layout():
 			c.size = r.size * k
 		c.position = ar.position + r.position * k
 		c.size = r.size * k
-		if c is Button:
+		if c is Button and c.get_theme_stylebox("normal") is StyleBoxFlat:
 			for st in ["normal", "hover", "pressed", "focus", "disabled"]:
 				var s: StyleBoxFlat = c.get_theme_stylebox(st)
 				s.set_corner_radius_all(int(float(s.get_meta("radius", 18.0)) * k))
