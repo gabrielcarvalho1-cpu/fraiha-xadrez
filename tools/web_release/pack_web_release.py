@@ -22,12 +22,17 @@ AMBIENTE (QA × produção): --ambiente=staging|producao é OBRIGATÓRIO. O empa
 PARA se divergir (ex.: build de staging pedida como produção). O ambiente vai para o ARQUIVOS-SHA256.txt
 ("# AMBIENTE ...") e para o index.html (<meta name="fraiha-ambiente">); o MONTAR-UPLOAD mostra e confere.
 
+R94 (memória em sessão longa): o index.js do export recebe SEMPRE a correção que reaproveita os IDs WebGL
+(tools/web_release/gl_ids_reuse.py) ANTES dos nomes com SHA-256. Se o runtime mudar e a correção não
+encaixar, o empacotamento PARA — nenhum export sai sem ela.
+
 Uso: pack_web_release.py <export_dir> <web_dir_do_repo> <saida> <TAG> <commit> --ambiente=staging|producao [--legado]
 """
 import base64, hashlib, os, shutil, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fingerprint_web
 import ambiente_web
+import gl_ids_reuse
 
 PART = 19922944
 INDEX = ["index.html", "index.js", "index.wasm", "index.pck", "index.png", "index.icon.png",
@@ -120,6 +125,7 @@ def main(argv):
     if not os.path.isfile(os.path.join(export_dir, "index.pck")):
         raise SystemExit("ERRO: arquivos obrigatórios ausentes (nada foi gerado): index.pck")
     amb = ambiente_web.conferir(os.path.join(export_dir, "index.pck"), ambiente)   # fail-closed, antes de tudo
+    gl = gl_ids_reuse.garantir(export_dir)          # R94 · fail-closed; muda o index.js antes do SHA do nome
     fp = None if legacy else fingerprint_web.plan(export_dir)
     files = files_needed(export_dir, web_dir, fp)
     if fp is not None:
@@ -134,6 +140,7 @@ def main(argv):
     os.makedirs(out, exist_ok=True)
     lines = ["# FRAIHA build Web %s · commit %s" % (tag, commit),
              "# AMBIENTE %s - servidor %s" % (ambiente, amb["servidor"]),
+             "# R94 correcao GL IDs: %s - index.js %s" % (gl["estado"], gl["sha_depois"]),
              "# caminho  tamanho  SHA256 — TODOS obrigatórios no bucket (o MONTAR-UPLOAD confere cada um)"]
     if fp is not None:
         lines.insert(1, "# R55.5 nomes com SHA-256: motor %s · pacote %s · index.html sobe POR ULTIMO" % (fp[2]["executable"], fp[2]["mainPack"]))

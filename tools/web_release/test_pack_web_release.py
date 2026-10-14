@@ -17,6 +17,14 @@ CFG = ('[online]\nserver_url="wss://fraiha-xadrez.onrender.com"\n\n[accounts]\ns
        '[staging]\nserver_url="wss://fraiha-xadrez-staging.onrender.com"\n')
 
 
+# R94 · index.js mínimo com os trechos do runtime Emscripten que a correção dos IDs WebGL troca.
+FAKE_JS = ("var GL={counter:1,buffers:[],textures:[],vaos:[],"
+           "getNewId:table=>{var ret=GL.counter++;for(var i=table.length;i<ret;i++){table[i]=null}return ret},};"
+           + "".join("function d_%s(id){GL.%s[id]=null}" % (t, t) for t in
+                     ["buffers", "framebuffers", "programs", "queries", "renderbuffers", "shaders", "syncs", "textures"])
+           + "var _glDeleteVertexArrays=(n,vaos)=>{for(var i=0;i<n;i++){var id=vaos[i];GLctx.deleteVertexArray(GL.vaos[id]);GL.vaos[id]=null}};")
+
+
 def make_pck(features="staging", cfg=CFG, pad=b""):
     """PCK mínimo do Godot 4 (formato 3) com project.binary (_custom_features) + online.cfg + um arquivo de enchimento."""
     import struct
@@ -46,7 +54,8 @@ def fake_tree(base, with_voice=True, big=False, pck_bytes=None, features="stagin
     pck = make_pck(features, cfg, pck_bytes if pck_bytes is not None else (os.urandom(19922944 * 2 + 5) if big else b"index.pck"))
     for n in INDEX:
         with open(os.path.join(exp, n), "wb") as f:
-            f.write(pck if n == "index.pck" else (HTML % (len(pck), len(b"index.wasm"))).encode() if n == "index.html" else n.encode())
+            f.write(pck if n == "index.pck" else (HTML % (len(pck), len(b"index.wasm"))).encode() if n == "index.html"
+                    else FAKE_JS.encode() if n == "index.js" else n.encode())
     for n in ["stockfish-19-lite-single.js", "stockfish-19-lite-single.wasm", "COPYING-GPLv3.txt"]:
         open(os.path.join(web, "engines", n), "w").write(n)
     os.makedirs(os.path.join(web, "gl_recovery"))
