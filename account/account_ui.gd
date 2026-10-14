@@ -28,6 +28,7 @@ const SLOT_LINKS := [Rect2(290, 993, 550, 72), Rect2(290, 1065, 550, 72), Rect2(
 const SLOT_STATUS := Rect2(230, 1212, 662, 40)
 
 var account
+var open_legal: Callable          # R97 · abre TERMOS E PRIVACIDADE (hub.open_legal)
 var dim: ColorRect
 var scroll: ScrollContainer
 var panel: Control            # escala = k; filhos em coordenadas da referência
@@ -322,6 +323,8 @@ func _show(target: String):
             _input_field("password", "Senha (mín. 8 caracteres)", true)
             _button("CRIAR CONTA", func(): account.sign_up(_value("email"), _value("password"), _value("nickname")), true)
             _button("CONTINUAR COM GOOGLE", func(): account.sign_in_google("ranked" if return_to_ranked else ""))
+            _label("Ao criar a conta, você concorda com os Termos de Uso e a Política de Privacidade.", 15, Color("d8cfb4"))
+            _link("Ler os Termos e a Privacidade", func(): if open_legal.is_valid(): open_legal.call("termos"))
             _divider()
             _link("Já tenho conta — Entrar", func(): _show("login"))
             _link("Jogar como convidado", close)
@@ -360,6 +363,7 @@ func _show(target: String):
             _button("CONTINUAR", close, true)
             _button("DEFINIR SENHA" if account.provider != "email" else "ALTERAR SENHA", func(): _show("set_password"))
             _button("SAIR DA CONTA", account.sign_out)
+            _link("Termos, privacidade e excluir conta", func(): if open_legal.is_valid(): open_legal.call("termos"))
         "waiting":
             _label("Conectando sua conta ao servidor FRAIHA…", 16)
             _divider()

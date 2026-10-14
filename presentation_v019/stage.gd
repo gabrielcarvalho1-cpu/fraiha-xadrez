@@ -481,6 +481,7 @@ func _setup_account():
     account_ui.name = "AccountUI"
     add_child(account_ui)
     account_ui.setup(account)
+    account_ui.open_legal = func(t): hub.open_legal(t)   # R97 · Termos / Privacidade / Excluir conta
     voice.setup(account)
     voice.changed.connect(_on_voice_changed)
     hub.bind_account(account)
@@ -581,7 +582,7 @@ func _refresh_account_chip():
         hub.player_name = account.nickname()
         if is_instance_valid(hub.profile_name): hub.profile_name.text = account.nickname()
     elif account.signed_in():
-        caption = "CONTA: conectando…" if not account.needs_nickname else "CONTA: escolher nome"
+        caption = ("CONTA: acordando o servidor…" if waking_server else "CONTA: conectando…") if not account.needs_nickname else "CONTA: escolher nome"
         # Primeiro login (inclusive Google): pede o nome público antes de tudo.
         if account.needs_nickname and account.server_ready and not account_ui.is_open():
             account_ui.open("nickname")
@@ -590,7 +591,7 @@ func _refresh_account_chip():
     # Desktop: o cartão ornamentado da Home (canto inferior esquerdo) substitui o botão simples.
     account_chip.visible = false
     if account.has_profile(): hub.set_account_card(account.nickname(), "MINHA CONTA", true)
-    elif account.signed_in(): hub.set_account_card("CONTA", "Escolher nome" if account.needs_nickname else "Conectando…", true)
+    elif account.signed_in(): hub.set_account_card("CONTA", "Escolher nome" if account.needs_nickname else ("Acordando…" if waking_server else "Conectando…"), true)
     else: hub.set_account_card("CONVIDADO", "ENTRAR / CRIAR CONTA", false)
     if is_instance_valid(hub.mobile_ui) and hub.mobile_ui.current_page == "main" and hub.is_home_visible():
         hub.mobile_ui.show_page("main")
@@ -779,7 +780,31 @@ func _build_mobile_controls(overlay: CanvasLayer):
         choice.pressed.connect(game._finish_promotion.bind(kinds[index]))
         choices.add_child(choice)
 
+## R97 · servidor no plano gratuito dorme sem uso e leva até ~1 min para acordar: depois de 5 s tentando
+## conectar, o cartão da conta troca "Conectando…" por "Acordando o servidor…" e um aviso explica (1x por sessão).
+var _waking_since := 0
+var waking_server := false
+var _waking_noticed := false
+func _sync_waking():
+    if account == null: return
+    var trying: bool = (account.signed_in() and not account.server_ready) or (bool(account.get("guest_wanted")) and not bool(account.get("guest_ready")) and not account.signed_in())
+    var now := Time.get_ticks_msec()
+    if not trying:
+        _waking_since = 0
+        if waking_server:
+            waking_server = false
+            _refresh_account_chip()
+        return
+    if _waking_since == 0: _waking_since = now
+    if not waking_server and now - _waking_since > 5000:
+        waking_server = true
+        _refresh_account_chip()
+        if not _waking_noticed:
+            _waking_noticed = true
+            account.notice.emit("Acordando o servidor… Na primeira conexão do dia isso pode levar até 1 minuto.", false)
+
 func _process(delta):
+    _sync_waking()
     _voice_poll -= delta
     if _voice_poll <= 0.0:   # R45 · voz segue a partida (entra/sai sozinha do contexto, nunca o contrário)
         _voice_poll = 0.25

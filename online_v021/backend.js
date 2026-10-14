@@ -480,6 +480,10 @@ class Backend {
         ws.profile = renewed ? previous.profile : null;
         const loginOp = this.operation(ws);
         const existing = await this.checked(ws, revision, this.store.getProfile(user.id));
+        if (existing && existing.account_status === 'deleted') {   // R97 · conta excluída não entra mais
+          this.send(ws, { type: 'acct_deleted', message: 'Esta conta foi excluída.' });
+          return this.invalidate(ws);
+        }
         if (existing) await loginOp.wait(() => this.store.touchLogin(user.id));
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
         loginOp.assert();
@@ -614,6 +618,20 @@ class Backend {
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'avatar_error' });
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
         return this.send(ws, { type: 'acct_avatar_saved', avatar_url: null });
+      }
+      // ---------- R97 · EXCLUIR CONTA (confirmação = digitar o próprio nome) ----------
+      if (a === 'acct_delete') {
+        if (!ws.profile) return this.fail(ws, 'Crie seu perfil primeiro.', { code: 'profile_missing' });
+        const fail = (message, code) => this.send(ws, { type: 'acct_delete_error', code, message });
+        if (String(m.confirm || '').trim().toLowerCase() !== String(ws.profile.nickname || '').toLowerCase())
+          return fail('Digite o seu nome exatamente como aparece no perfil para confirmar.', 'confirm_mismatch');
+        if (this.games().some(g => g.activeMatchOf && g.activeMatchOf(accountId)) || (this.party && this.party.roomOf && this.party.roomOf(accountId)))
+          return fail('Termine a partida em andamento antes de excluir a conta.', 'in_match');
+        const r = await op.wait(() => this.store.deleteAccount(accountId));
+        if (r && r.error) return fail(r.error, r.code || 'delete_error');
+        console.log('[acct-delete]', JSON.stringify({ user_id: accountId, at: new Date().toISOString() }));
+        for (const s of this.socketsOf(accountId)) { this.send(s, { type: 'acct_deleted', message: 'Sua conta foi excluída.' }); if (s !== ws) this.invalidate(s); }
+        return this.invalidate(ws);
       }
       return this.fail(ws, 'Ação de conta desconhecida.');
     } catch (e) {

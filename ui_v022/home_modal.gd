@@ -48,6 +48,7 @@ func build(p_hub, p_title: String):
 	title_label = label(p_title, 30, GOLD)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title_label.clip_text = true   # sem largura mínima: o título fica sempre centrado na placa
 	title_label.add_theme_constant_override("outline_size", 6)
 	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(title_label)
@@ -154,6 +155,12 @@ func _process(_d):
 		body.position = _body_rect.position
 		body.size = _body_rect.size
 
+## título longo (ex.: TERMOS E PRIVACIDADE) diminui até caber na placa
+func _fit_title(fs: int, max_w: float) -> int:
+	var f: Font = title_label.get_theme_font("font") if title_label.has_theme_font_override("font") else FONT
+	while fs > 12 and f.get_string_size(title_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > max_w * 0.94: fs -= 1
+	return fs
+
 func _place(n: Control, tex_rect: Rect2, s: float, origin: Vector2):
 	n.position = origin + tex_rect.position * s
 	n.size = tex_rect.size * s
@@ -177,9 +184,9 @@ func _layout():
 		frame.size = Vector2(900.0, h_tex)
 		frame.position = origin
 		_frame_rect = Rect2(origin, Vector2(w, h_tex * s))
+		title_label.add_theme_font_size_override("font_size", _fit_title(int(clampf(CEL_TITLE.size.y * s * 0.62, 18.0, 40.0)), CEL_TITLE.size.x * s * 0.92))
 		_place(title_label, CEL_TITLE, s, origin)
 		_place(close_button, CEL_CLOSE, s, origin)
-		title_label.add_theme_font_size_override("font_size", int(clampf(CEL_TITLE.size.y * s * 0.62, 18.0, 40.0)))
 		_body_rect = Rect2(origin + Vector2(CEL_BODY_X.x, CEL_TOP + 6.0) * s,
 			Vector2((CEL_BODY_X.y - CEL_BODY_X.x) * s, (h_tex - CEL_TOP - CEL_BOTTOM + 24.0) * s))
 	else:
@@ -197,9 +204,9 @@ func _layout():
 		frame.size = Vector2(1672, 941)
 		frame.position = origin
 		_frame_rect = Rect2(origin, Vector2(1672, 941) * s)
+		title_label.add_theme_font_size_override("font_size", _fit_title(int(clampf(PC_TITLE.size.y * s * 0.55, 16.0, 40.0)), PC_TITLE.size.x * s * 0.92))
 		_place(title_label, PC_TITLE, s, origin)
 		_place(close_button, PC_CLOSE, s, origin)
-		title_label.add_theme_font_size_override("font_size", int(clampf(PC_TITLE.size.y * s * 0.55, 16.0, 40.0)))
 		_body_rect = Rect2(origin + PC_BODY.position * s, PC_BODY.size * s)
 	body.position = _body_rect.position
 	body.size = _body_rect.size

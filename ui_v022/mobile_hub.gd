@@ -657,7 +657,11 @@ func _settings(content: VBoxContainer):
         hub._settings_section(content, "TELA")
         var fs := _button(content, "TELA CHEIA", func(): hub.screen_mode.toggle())
         fs.name = "FullscreenToggleMobile"
-    var note := _text(content, "Preferências salvas automaticamente. O botão de som da tela inicial silencia tudo.", 14)
+    # R97 · TERMOS, PRIVACIDADE e EXCLUIR CONTA
+    hub._settings_section(content, "CONTA E PRIVACIDADE")
+    var legal := _button(content, "TERMOS · PRIVACIDADE · EXCLUIR CONTA", func(): hub.open_legal("termos"))
+    legal.name = "LegalMobile"
+    var note := _text(content, "Preferências salvas automaticamente. O botão de som da tela inicial abre o volume.", 14)
     note.name = "SettingsNoteMobile"
     note.add_theme_color_override("font_color", Color("b9b29c"))
     var ver := _text(content, "FRAIHA Xadrez · versão %s" % hub.APP_VERSION, 13)

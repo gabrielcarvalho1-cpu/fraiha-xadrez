@@ -79,6 +79,16 @@ class MemoryStore {
     return { profile };
   }
   async touchLogin(userId) { const p = this.profiles.get(userId); if (p) p.last_login_at = new Date().toISOString(); }
+  // R97 · EXCLUIR CONTA (anonimiza; ver SupabaseStore.deleteAccount)
+  async deleteAccount(userId) {
+    const p = this.profiles.get(userId);
+    if (!p) return { error: 'Conta não encontrada.', code: 'profile_missing' };
+    Object.assign(p, { nickname: anonNick(userId), avatar_id: 'warrior', avatar_url: null, profile_frame: 'madeira', profile_badge: '', profile_title: '', settings: {}, account_status: 'deleted', updated_at: new Date().toISOString() });
+    if (this.avatars) this.avatars.delete(userId);
+    for (const set of [this.social.requests, this.social.friends, this.social.blocks]) for (const k of [...set]) if (k.split('|').includes(userId)) set.delete(k);
+    this.dms = this.dms.filter(d => d.sender_id !== userId && d.recipient_id !== userId);
+    return { ok: true };
+  }
   // ---------- Nome público (0004) ----------
   async nicknameAvailable(nick, exceptUserId = null) {
     for (const p of this.profiles.values()) if (p.user_id !== exceptUserId && p.nickname.toLowerCase() === nick.toLowerCase()) return false;
@@ -305,6 +315,9 @@ class MemoryStore {
   }
 }
 
+// R97 · nome público da conta excluída: "excluido_" + 7 caracteres do id (cabe nos 16 do banco e é único na prática)
+const anonNick = uid => 'excluido_' + String(uid).replace(/[^0-9a-f]/gi, '').slice(0, 7).toLowerCase();
+
 class SupabaseStore {
   constructor({ url, serviceKey, fetchImpl = fetch }) {
     this.url = url.replace(/\/+$/, '') + '/rest/v1'; this.fetch = fetchImpl; this.persistent = true;
@@ -372,6 +385,38 @@ class SupabaseStore {
     const rows = await this.req('/profiles?user_id=eq.' + encodeURIComponent(userId) + '&select=*', { method: 'PATCH', headers: { Prefer: 'return=representation' },
       body: JSON.stringify({ avatar_url: null, avatar_updated_at: new Date().toISOString() }) });
     return { profile: rows[0] };
+  }
+  // R97 · EXCLUIR CONTA — decisão do dono: ANONIMIZAR E BLOQUEAR (sem migration).
+  // Apaga: foto, amizades/pedidos/bloqueios, mensagens privadas, análises, progresso dos bots, personalização,
+  // status e o e-mail (troca por um endereço inválido) e bane o login no Supabase Auth.
+  // Fica (sem nada que identifique a pessoa): partidas Ranked e placares (o adversário não perde o histórico,
+  // aparece "excluido_xxxxxxx") e pagamentos/direitos (guardados pelo prazo legal).
+  async deleteAccount(userId) {
+    if (!UUID_RE.test(String(userId))) return { error: 'Conta inválida.', code: 'invalid' };
+    const u = encodeURIComponent(userId);
+    await this.clearAvatar(userId).catch(() => {});
+    const del = async path => { try { await this.req(path, { method: 'DELETE' }); } catch (e) { if (!SCHEMA_MISSING(e)) throw e; } };
+    await del('/friend_requests?or=(from_user.eq.' + u + ',to_user.eq.' + u + ')');
+    await del('/friendships?or=(user_a.eq.' + u + ',user_b.eq.' + u + ')');
+    await del('/blocks?or=(blocker.eq.' + u + ',blocked.eq.' + u + ')');
+    await del('/direct_messages?or=(sender_id.eq.' + u + ',recipient_id.eq.' + u + ')');
+    await del('/analysis_history?user_id=eq.' + u);
+    await del('/bot_progress?user_id=eq.' + u);
+    const full = { nickname: anonNick(userId), avatar_id: 'warrior', avatar_url: null, profile_frame: 'madeira', profile_badge: '', profile_title: '', settings: {}, account_status: 'deleted' };
+    try { await this.req('/profiles?user_id=eq.' + u, { method: 'PATCH', body: JSON.stringify(full) }); }
+    catch (e) {
+      if (!SCHEMA_MISSING(e)) throw e;   // banco sem a 0007: sem selo/título
+      const { profile_badge, profile_title, ...min } = full;
+      await this.req('/profiles?user_id=eq.' + u, { method: 'PATCH', body: JSON.stringify(min) });
+    }
+    // Auth: e-mail apagado + login bloqueado. Se falhar, o servidor ainda recusa a conta (account_status = deleted).
+    try {
+      const authUrl = this.url.replace(/\/rest\/v1$/, '') + '/auth/v1/admin/users/' + u;
+      const res = await this.fetch(authUrl, { method: 'PUT', headers: this.headers,
+        body: JSON.stringify({ email: 'excluido+' + userId + '@fraihaxadrez.invalid', email_confirm: true, ban_duration: '876000h', user_metadata: {} }) });
+      if (!res.ok) console.error('acct delete auth', res.status, (await res.text()).slice(0, 200));
+    } catch (e) { console.error('acct delete auth', e && e.message); }
+    return { ok: true };
   }
   async getRankedStats(userId) {
     const rows = await this.req('/ranked_stats?user_id=eq.' + encodeURIComponent(userId) + '&select=mode,league,pl,matches,wins,losses,draws,highest_league');

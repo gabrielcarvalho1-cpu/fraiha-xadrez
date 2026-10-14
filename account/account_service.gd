@@ -295,6 +295,11 @@ func update_password(password: String, confirm: Variant = null):
             notice.emit("Resposta inesperada do serviço de contas. A senha não foi confirmada.", true)
         else: notice.emit(auth_error_text(code, body), true), access_token)
 
+## R97 · pede ao servidor para excluir a conta (confirm = o nome de jogador digitado). false = sem conexão.
+func delete_account(confirm: String) -> bool:
+    if not signed_in() or not has_profile(): return false
+    return _send({"type": "acct_delete", "confirm": confirm})
+
 func sign_out():
     var token = access_token
     if not token.is_empty() and configured():
@@ -616,6 +621,16 @@ func _receive(msg: Dictionary):
         bot_progress_failed.emit(String(msg.get("code", "")), String(msg.get("message", "")), String(msg.get("bot_id", "")))
     elif type == "acct_logged_out":
         pass
+    elif type == "acct_delete_error":
+        server_message.emit(msg)
+    elif type == "acct_deleted":
+        # R97 · conta excluída (agora ou num login antigo): sai da conta neste aparelho
+        server_message.emit(msg)
+        if not access_token.is_empty() and configured():
+            _auth_request(HTTPClient.METHOD_POST, "/auth/v1/logout", {}, func(_c, _b): pass, access_token)
+        _clear_session()
+        notice.emit(String(msg.get("message", "Conta excluída.")) + " Você pode continuar jogando como convidado.", false)
+        changed.emit()
     elif type == "guest_state":
         if msg.has("casual_modes"): _set_casual_modes(msg.get("casual_modes"))
         if not bool(msg.get("account", false)):

@@ -155,6 +155,7 @@ var sound_button: Button
 var trophy_button: Button        # R96 · RANKING
 var gchat_button: Button         # R96 · CHAT GLOBAL
 var leaderboard_ui
+var legal_ui                      # R97 · TERMOS E PRIVACIDADE / EXCLUIR CONTA
 var global_chat_ui
 var volume_label: Label
 var music_volume_label: Label
@@ -965,6 +966,27 @@ func _build_settings_page():
     note.visible = false
     panel.add_child(note)
     RefPage.hotspot(panel, Rect2(132, 932, 668, 98), back, "SettingsBack")
+    # R97 · TERMOS, PRIVACIDADE e EXCLUIR CONTA (placa pequena no canto da moldura, acima da versão)
+    var legal_btn := Button.new()
+    legal_btn.name = "SettingsLegal"
+    legal_btn.text = "TERMOS · PRIVACIDADE · CONTA"
+    legal_btn.focus_mode = Control.FOCUS_NONE
+    legal_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    legal_btn.add_theme_font_override("font", FONT_CINZEL)
+    legal_btn.add_theme_font_size_override("font_size", 22)
+    for pair in [["normal", Color("0f2a1f")], ["hover", Color("174030")], ["pressed", Color("0a1f16")]]:
+        var st := StyleBoxFlat.new()
+        st.bg_color = pair[1]
+        st.border_color = Color("c99a45")
+        st.set_border_width_all(2)
+        st.set_corner_radius_all(3)
+        legal_btn.add_theme_stylebox_override(pair[0], st)
+    legal_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+    for k in ["font_color", "font_hover_color", "font_pressed_color"]: legal_btn.add_theme_color_override(k, Color("f4ce7f"))
+    legal_btn.position = Vector2(880, 930)
+    legal_btn.size = Vector2(442, 50)
+    legal_btn.pressed.connect(func(): open_legal("termos"))
+    panel.add_child(legal_btn)
     var ver := RefPage.text(panel, "FRAIHA Xadrez · versão %s" % APP_VERSION, Rect2(900, 980, 422, 40), 21, Color("e3dccb"), false, HORIZONTAL_ALIGNMENT_RIGHT)
     ver.name = "SettingsVersion"
     pages["settings"] = panel
@@ -2503,6 +2525,14 @@ func open_leaderboard():
         leaderboard_ui.setup(self, account)
     if is_instance_valid(global_chat_ui): global_chat_ui.close()
     leaderboard_ui.show_ranking()
+
+## R97 · TERMOS DE USO, PRIVACIDADE e EXCLUIR CONTA (aba inicial: "termos" | "privacidade" | "excluir").
+func open_legal(tab := "termos"):
+    if not is_instance_valid(legal_ui):
+        legal_ui = load("res://ui_v022/legal_ui.gd").new()
+        add_child(legal_ui)
+        legal_ui.setup(self, account)
+    legal_ui.show_legal(tab)
 
 func open_global_chat():
     if not is_instance_valid(global_chat_ui):
