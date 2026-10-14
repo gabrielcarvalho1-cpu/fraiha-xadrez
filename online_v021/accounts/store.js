@@ -386,7 +386,7 @@ class SupabaseStore {
       body: JSON.stringify({ avatar_url: null, avatar_updated_at: new Date().toISOString() }) });
     return { profile: rows[0] };
   }
-  // R97 · EXCLUIR CONTA — decisão do dono: ANONIMIZAR E BLOQUEAR (sem migration).
+  // R97 · EXCLUIR CONTA — decisão do dono: ANONIMIZAR E BLOQUEAR. R100: e libera o login (migration 0011).
   // Apaga: foto, amizades/pedidos/bloqueios, mensagens privadas, análises, progresso dos bots, personalização,
   // status e o e-mail (troca por um endereço inválido) e bane o login no Supabase Auth.
   // Fica (sem nada que identifique a pessoa): partidas Ranked e placares (o adversário não perde o histórico,
@@ -416,6 +416,12 @@ class SupabaseStore {
         body: JSON.stringify({ email: 'excluido+' + userId + '@fraihaxadrez.invalid', email_confirm: true, ban_duration: '876000h', user_metadata: {} }) });
       if (!res.ok) console.error('acct delete auth', res.status, (await res.text()).slice(0, 200));
     } catch (e) { console.error('acct delete auth', e && e.message); }
+    // R100 · solta a identidade do Google/e-mail e limpa os dados do Google (migration 0011): quem excluiu pode voltar
+    // do zero com o mesmo e-mail ou o mesmo Google (cria um usuário novo). Banco sem a 0011: só avisa no log.
+    try {
+      const r = await this.req('/rpc/fraiha_release_deleted_auth', { method: 'POST', body: JSON.stringify({ p_user: userId }) });
+      console.log('[acct-delete] login liberado', JSON.stringify(r));
+    } catch (e) { console.error('[acct-delete] liberar login falhou (migration 0011 aplicada?)', e && (e.code || ''), e && e.message); }
     return { ok: true };
   }
   async getRankedStats(userId) {
