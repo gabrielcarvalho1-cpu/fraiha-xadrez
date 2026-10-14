@@ -1547,10 +1547,11 @@ func card_rect(i: int, n: int) -> Rect2:
         return Rect2(cb.position.x + (cb.size.x - tot) / 2.0 + i * (cw + gp), cb.end.y - chh, cw, chh)
     if desk:
         # R57 · mão aberta embaixo do tabuleiro, como na referência — cartas inteiras à vista
-        var gap := 147.0 if n <= 4 else 128.0
-        var sz: Vector2 = R57_CARD if n <= 4 else R57_CARD * 0.9
+        # R91.2 · cartas 10% menores e mais baixas: a bandeja não cobre mais a borda de baixo do tabuleiro
+        var gap := 134.0 if n <= 4 else 116.0
+        var sz: Vector2 = R57_CARD * (0.9 if n <= 4 else 0.81)
         var cx := 838.5 + (i - (n - 1) / 2.0) * gap
-        return rr(Rect2(cx - sz.x / 2.0, 742.0 + (R57_CARD.y - sz.y), sz.x, sz.y))
+        return rr(Rect2(cx - sz.x / 2.0, 937.0 - sz.y, sz.x, sz.y))
     # R38.3 · 3ª rodada do ciclo do baralho: 5 cartas na mão (menores, para caber no mesmo espaço)
     if n >= 5:
         if portrait: return Rect2(238.0 + i * 166.0, 1548.0, 152, 214)
@@ -2351,7 +2352,7 @@ class TableView extends Control:
     ## R91 · PC: bandeja das cartas por cima do tapete roxo/verde da arte (as curvas douradas e as faixas verdes
     ## atrás da mão ficavam estranhas): veludo escuro com moldura dourada dupla e cravos nos cantos.
     func _draw_card_tray():
-        var r: Rect2 = ui.rr(Rect2(452, 726, 768, 240))
+        var r: Rect2 = ui.rr(Rect2(430, 760, 812, 210))   # R91.2 · começa abaixo da moldura do tabuleiro (y 754)
         var s: float = ui.r57_s()
         var sb := StyleBoxFlat.new()
         sb.bg_color = Color("1b0f24")
