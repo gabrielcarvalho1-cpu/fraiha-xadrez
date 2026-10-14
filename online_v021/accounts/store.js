@@ -54,6 +54,13 @@ class MemoryStore {
   constructor() { this.profiles = new Map(); this.stats = new Map(); this.matches = []; this.persistent = false; this.social = { requests: new Set(), friends: new Set(), blocks: new Set() }; this.dms = []; this.dmSeq = 0; }
   async getProfile(userId) { return this.profiles.get(userId) || null; }
   async getModeStats(userId) { const o = emptyModeStats(); const m = (this.modeStats || new Map()).get(userId) || {}; for (const k of STAT_MODES) Object.assign(o[k], m[k] || {}); return o; }
+  // R96 · RANKING: linhas brutas de um placar (o Leaderboard ordena). kind: 'ranked' | 'mode'.
+  async leaderboardRows(board, kind) {
+    const out = [];
+    if (kind === 'ranked') { for (const [uid, s] of this.stats) if (s[board]) out.push({ user_id: uid, ...s[board] }); }
+    else for (const [uid, row] of (this.modeStats || new Map())) if (row[board]) out.push({ user_id: uid, ...row[board] });
+    return out;
+  }
   async recordModeResult(userId, mode, result) {
     if (!STAT_MODES.includes(mode) || !['win', 'loss', 'draw'].includes(result)) return;
     this.modeStats = this.modeStats || new Map();
@@ -501,6 +508,14 @@ class SupabaseStore {
       const o = emptyModeStats();
       for (const r of rows) if (o[r.mode_id]) o[r.mode_id] = { wins: Number(r.wins) || 0, losses: Number(r.losses) || 0, draws: Number(r.draws) || 0 };
       return o;
+    } catch (e) { if (SCHEMA_MISSING(e)) return { not_configured: true }; throw e; }
+  }
+  // R96 · RANKING: lê o placar inteiro de uma fila/modo (até 5000 contas; o servidor guarda em cache por 1 min).
+  async leaderboardRows(board, kind, minMatches = 0) {
+    try {
+      if (kind === 'ranked') return await this.req('/ranked_stats?mode=eq.' + encodeURIComponent(board) + '&matches=gte.' + (minMatches | 0) +
+        '&select=user_id,league,pl,wins,losses,draws,matches&limit=5000');
+      return await this.req('/mode_stats?mode_id=eq.' + encodeURIComponent(board) + '&select=user_id,wins,losses,draws&limit=5000');
     } catch (e) { if (SCHEMA_MISSING(e)) return { not_configured: true }; throw e; }
   }
   async recordModeResult(userId, mode, result) {

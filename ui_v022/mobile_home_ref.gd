@@ -212,8 +212,14 @@ func _build_top():
     sound_button.position = SOUND_RECT.position
     sound_button.size = SOUND_RECT.size
     sound_button.set_over_art(true)
-    sound_button.pressed.connect(func(): hub.toggle_sound())
+    sound_button.pressed.connect(func(): hub.open_home_volume(sound_button))   # R96 · painel MÚSICA / EFEITOS
     top.add_child(sound_button)
+    # R96 · RANKING (troféu) e CHAT GLOBAL (balão) à esquerda do som, no mesmo tamanho
+    for spec in [["trophy", "Ranking", hub.open_leaderboard, 2], ["chat", "Chat global", hub.open_global_chat, 1]]:
+        var tb: Button = hub.make_top_button(spec[0], spec[1], spec[2], SOUND_RECT.size.y)
+        tb.size = SOUND_RECT.size
+        tb.position = SOUND_RECT.position - Vector2((SOUND_RECT.size.x + 8.0) * int(spec[3]), 0)
+        top.add_child(tb)
     # cartão do jogador (toque abre o Perfil)
     var card := _hit(top, CARD_RECT, "PERFIL", func(): hub.show_page("profile"))
     card.name = "RefProfileCard"
@@ -390,7 +396,7 @@ func refresh():
         var nw: float = name_text.ink_width()
         seal.position = name_text.position + Vector2(nw + 10.0, -9.0)
     club_entry.set_active(hub.entitlements != null and hub.entitlements.club_active())
-    sound_button.glyph = "sound_off" if hub.sound_muted else "sound_on"
+    sound_button.glyph = "sound_off" if hub.home_sound_off() else "sound_on"
     sound_button.queue_redraw()
 
 func _process(_delta):

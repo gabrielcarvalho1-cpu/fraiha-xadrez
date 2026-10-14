@@ -15,6 +15,8 @@ const { Payments } = require('./payments/service');
 const { BotService } = require('./bots/service');
 const { Party } = require('./modes/party');
 const { VoiceService } = require('./voice/service');
+const { Leaderboard } = require('./social/leaderboard');   // R96 · RANKING (troféu da Home)
+const { GlobalChat } = require('./social/global_chat');    // R96 · CHAT GLOBAL
 const { ModeControls, CLOSED_MESSAGE } = require('./admin/controls');   // FRAIHA Admin: ativar/desativar modos (autoridade no servidor)
 const Cosmetics = require('./accounts/cosmetics');
 const Status = require('./accounts/status');   // R55 · status do perfil
@@ -82,6 +84,8 @@ class Backend {
     this.presence = new Presence({ send: (ws, o) => this.send(ws, o), backend: this });
     this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
     this.party = new Party({ send: (ws, o) => this.send(ws, o), backend: this });   // R35: MARCHA REAL / XEQUE online
+    this.leaderboard = new Leaderboard({ send: (ws, o) => this.send(ws, o), backend: this });
+    this.globalChat = new GlobalChat({ send: (ws, o) => this.send(ws, o), backend: this });
     this.voice = new VoiceService({ backend: this, send: (ws, o) => this.send(ws, o), env: opts.env || process.env });   // FRAIHA Voice v1
     // FRAIHA Admin · desativar um modo bloqueia novas entradas/pareamentos; partidas em andamento seguem.
     this.modeControls = new ModeControls({ now: this.now, env: opts.env || process.env });
@@ -278,6 +282,7 @@ class Backend {
     if (old && (!identity || old.id !== identity.id)) {
       for (const g of this.games()) g.onClose(ws);
       if (this.party) this.party.onClose(ws);
+      if (this.globalChat) this.globalChat.onClose(ws);
       this.unlink(ws, old.id);
     }
     ws.identity = identity;
@@ -405,6 +410,14 @@ class Backend {
         return this.ranked ? this.ranked.handle(ws, m) : this.fail(ws, 'Ranked indisponível.');
       }
       if (this.kind === 'disabled') return this.fail(ws, 'Contas ainda não configuradas no servidor.', { code: 'accounts_disabled' });
+      if (a === 'leaderboard_get') {
+        if (!ws.identity) return this.send(ws, { type: 'leaderboard', board: String(m.board || ''), available: false, error: 'identity_required', rows: [], me: null });
+        return this.leaderboard.handle(ws, m);
+      }
+      if (a.startsWith('gchat_')) {
+        if (!ws.identity) return this.send(ws, { type: 'gchat_error', message: 'Conectando ao servidor…', code: 'identity_required' });
+        return this.globalChat.handle(ws, m);
+      }
       if (a.startsWith('invite_')) {
         if (!ws.user || !ws.profile) return this.send(ws, { type: 'invite_error', message: 'Entre ou crie uma conta para convidar amigos.', code: 'auth_required' });
         try { return await this.invites.handle(ws, m); }
@@ -611,6 +624,7 @@ class Backend {
     }
   }
   onClose(ws) {
+    if (this.globalChat) this.globalChat.onClose(ws);
     this.invalidate(ws, { closed: true });
   }
 }

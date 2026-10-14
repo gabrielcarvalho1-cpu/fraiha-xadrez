@@ -152,6 +152,10 @@ var sound_muted := false        # botão SOM da Home: silencia o bus Master (mes
 var music_muted := false        # R34: MUTAR MÚSICA (botões dentro do XEQUE e da MARCHA REAL)
 var effects_muted := false      # R34: MUTAR EFEITOS
 var sound_button: Button
+var trophy_button: Button        # R96 · RANKING
+var gchat_button: Button         # R96 · CHAT GLOBAL
+var leaderboard_ui
+var global_chat_ui
 var volume_label: Label
 var music_volume_label: Label
 var account_caption := "ENTRAR / CRIAR CONTA"
@@ -1069,7 +1073,7 @@ var bot_ref_cards: Control
 var _ref_hidden: Array = []
 func _sync_ref_full(on: bool):
     if on:
-        for n in [sound_button, fullscreen_button]:
+        for n in [sound_button, fullscreen_button, trophy_button, gchat_button]:
             if n is CanvasItem and is_instance_valid(n) and n.visible and not n.is_ancestor_of(canvas) and not canvas.is_ancestor_of(n):
                 n.visible = false
                 _ref_hidden.append(n)
@@ -2420,6 +2424,7 @@ func set_mode_volume(kind: String, v: float):
         _set_volume(v * 100.0 if v > 0.0 else volume * 100.0, false)
         AudioServer.set_bus_mute(AudioServer.get_bus_index("Effects"), effects_muted)
     _save_preferences()
+    _refresh_sound_button()
 
 ## R34: liga/desliga só a música ou só os efeitos (os volumes guardados não mudam).
 func set_music_muted(value: bool):
@@ -2480,9 +2485,51 @@ func _build_web_quit_caption():
     var last0 := menu_buttons.size() - 1
     if OS.has_feature("web") and last0 >= 0: menu_buttons[last0].tooltip_text = "Voltar para o site fraihaxadrez.com"
 
+## R96 · botão do topo da Home (troféu / balão) no mesmo estilo do som e da tela cheia.
+func make_top_button(glyph: String, tip: String, action: Callable, side := 62.0) -> Button:
+    var b = preload("res://ui_v022/hud_button.gd").make(glyph)
+    b.name = glyph.capitalize() + "TopButton"
+    b.size = Vector2(side, side)
+    b.custom_minimum_size = Vector2(side, side)
+    b.tooltip_text = tip
+    b.pressed.connect(action)
+    return b
+
+## R96 · RANKING (XADREZ por fila, XEQUE, MARCHA REAL) e CHAT GLOBAL — painéis por cima da Home.
+func open_leaderboard():
+    if not is_instance_valid(leaderboard_ui):
+        leaderboard_ui = load("res://ui_v022/leaderboard_ui.gd").new()
+        add_child(leaderboard_ui)
+        leaderboard_ui.setup(self, account)
+    if is_instance_valid(global_chat_ui): global_chat_ui.close()
+    leaderboard_ui.show_ranking()
+
+func open_global_chat():
+    if not is_instance_valid(global_chat_ui):
+        global_chat_ui = load("res://ui_v022/global_chat_ui.gd").new()
+        add_child(global_chat_ui)
+        global_chat_ui.setup(self, account)
+    if is_instance_valid(leaderboard_ui): leaderboard_ui.close()
+    global_chat_ui.show_chat()
+
+## R96 · ícone de som da Home desligado = som geral mudo OU música e efeitos no zero.
+func home_sound_off() -> bool:
+    return sound_muted or (music_muted and effects_muted)
+
+## R96 · botão de som da Home: abre o painel com MÚSICA e EFEITOS deslizantes (antes só mutava).
+## Se o som geral estava mudo (preferência antiga do botão), liga de novo para as barras valerem.
+func open_home_volume(btn: Control):
+    if sound_muted: set_sound_muted(false)
+    var r := Rect2(get_viewport().get_visible_rect().size.x - 80, 10, 60, 60)
+    if is_instance_valid(btn):
+        var xf := btn.get_global_transform_with_canvas()
+        r = Rect2(xf.origin, btn.size * xf.get_scale())
+    preload("res://ui_v022/mode_sound.gd").volume_popup(self, "both", r)
+
 func _refresh_sound_button():
+    if is_instance_valid(mobile_ui) and mobile_ui.has_method("refresh_sound"): mobile_ui.refresh_sound()
     if not is_instance_valid(sound_button): return
-    sound_button.glyph = "sound_off" if sound_muted else "sound_on"
+    sound_button.glyph = "sound_off" if home_sound_off() else "sound_on"
     sound_button.tooltip_text = "Som desligado · clique para ligar" if sound_muted else "Som ligado · clique para silenciar"
     sound_button.queue_redraw()
 
@@ -3156,8 +3203,15 @@ func _build_reference_chrome():
     sound_button.name = "SoundButton"
     sound_button.size = Vector2(62, 62)
     sound_button.position = Vector2(364, 16)
-    sound_button.pressed.connect(toggle_sound)
+    sound_button.pressed.connect(func(): open_home_volume(sound_button))   # R96 · painel MÚSICA / EFEITOS
     canvas.add_child(sound_button)
+    # R96 · RANKING (troféu) e CHAT GLOBAL (balão), ao lado do som e da tela cheia
+    trophy_button = make_top_button("trophy", "Ranking", open_leaderboard)
+    trophy_button.position = Vector2(504, 16)
+    canvas.add_child(trophy_button)
+    gchat_button = make_top_button("chat", "Chat global", open_global_chat)
+    gchat_button.position = Vector2(574, 16)
+    canvas.add_child(gchat_button)
     _refresh_sound_button()
     var clip = Control.new()
     clip.name = "RefPortraitClip"

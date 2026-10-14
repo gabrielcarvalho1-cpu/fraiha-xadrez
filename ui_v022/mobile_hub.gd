@@ -376,6 +376,9 @@ func show_page(id: String):
                 # largura a partir da tela (não da própria linha: isso realimentava e estourava a largura)
                 _fit_club()
                 if not resized.is_connected(_fit_club): resized.connect(_fit_club)
+                # R96 · RANKING (troféu) e CHAT GLOBAL (balão) ao lado da tela cheia e do som
+                top_row.add_child(hub.make_top_button("trophy", "Ranking", hub.open_leaderboard, 54.0))
+                top_row.add_child(hub.make_top_button("chat", "Chat global", hub.open_global_chat, 54.0))
                 fullscreen_button = preload("res://ui_v022/hud_button.gd").make("fullscreen")
                 fullscreen_button.name = "FullscreenButtonMobile"
                 fullscreen_button.custom_minimum_size = Vector2(54, 54)
@@ -384,7 +387,7 @@ func show_page(id: String):
                 sound_button = preload("res://ui_v022/hud_button.gd").make("sound_on")
                 sound_button.name = "SoundButtonMobile"
                 sound_button.custom_minimum_size = Vector2(54, 54)
-                sound_button.pressed.connect(func(): hub.toggle_sound())
+                sound_button.pressed.connect(func(): hub.open_home_volume(sound_button))   # R96
                 top_row.add_child(sound_button)
                 refresh_sound()
                 hub.refresh_fullscreen_button()
@@ -446,8 +449,8 @@ var avatar_note: Label = null
 
 func refresh_sound():
     if not is_instance_valid(sound_button): return
-    sound_button.glyph = "sound_off" if hub.sound_muted else "sound_on"
-    sound_button.tooltip_text = "Som desligado" if hub.sound_muted else "Som ligado"
+    sound_button.glyph = "sound_off" if hub.home_sound_off() else "sound_on"
+    sound_button.tooltip_text = "Volume (música e efeitos)"
     sound_button.queue_redraw()
 
 func avatar_message(text: String, is_error: bool):

@@ -1,7 +1,7 @@
 extends Button
 ## Botão do HUD da partida no estilo FRAIHA: fundo verde-escuro, moldura dourada, cravos nos
 ## cantos e ícone desenhado em pixel (sem depender de fonte com símbolos).
-## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off". hint: tecla (ex.: "ESC").
+## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off", "trophy", "chat". hint: tecla (ex.: "ESC").
 const GOLD := Color("f4ce7f")
 const GOLD_DIM := Color("b99555")
 const INK := Color("0b150f")
@@ -137,6 +137,26 @@ func _draw():
                 var xc := Color("e07a5f") if not disabled else col
                 draw_line(x + Vector2(-r * 0.38, -r * 0.38), x + Vector2(r * 0.38, r * 0.38), xc, w * 1.2)
                 draw_line(x + Vector2(-r * 0.38, r * 0.38), x + Vector2(r * 0.38, -r * 0.38), xc, w * 1.2)
+        "trophy":
+            # R96 · RANKING: taça com alças, haste e base.
+            var t := center + Vector2(0, -r * 0.15)
+            draw_colored_polygon(PackedVector2Array([t + Vector2(-r * 0.78, -r * 0.85), t + Vector2(r * 0.78, -r * 0.85),
+                t + Vector2(r * 0.62, -r * 0.05), t + Vector2(r * 0.25, r * 0.38), t + Vector2(-r * 0.25, r * 0.38), t + Vector2(-r * 0.62, -r * 0.05)]), col)
+            draw_arc(t + Vector2(-r * 0.72, -r * 0.42), r * 0.34, deg_to_rad(90), deg_to_rad(270), 12, col, w)
+            draw_arc(t + Vector2(r * 0.72, -r * 0.42), r * 0.34, deg_to_rad(-90), deg_to_rad(90), 12, col, w)
+            draw_rect(Rect2(t + Vector2(-r * 0.12, r * 0.36), Vector2(r * 0.24, r * 0.42)), col)
+            draw_rect(Rect2(t + Vector2(-r * 0.55, r * 0.76), Vector2(r * 1.1, r * 0.3)), col)
+            draw_colored_polygon(PackedVector2Array([t + Vector2(0, -r * 0.62), t + Vector2(r * 0.14, -r * 0.34), t + Vector2(0, -r * 0.06), t + Vector2(-r * 0.14, -r * 0.34)]), INK)
+        "chat":
+            # R96 · CHAT GLOBAL: balão com três pontinhos.
+            var b := Rect2(center + Vector2(-r * 1.05, -r * 0.8), Vector2(r * 2.1, r * 1.35))
+            var st := StyleBoxFlat.new()
+            st.bg_color = col
+            st.set_corner_radius_all(int(r * 0.35))
+            draw_style_box(st, b)
+            draw_colored_polygon(PackedVector2Array([b.position + Vector2(r * 0.35, b.size.y - 1), b.position + Vector2(r * 0.95, b.size.y - 1), b.position + Vector2(r * 0.25, b.size.y + r * 0.55)]), col)
+            for i in 3:
+                draw_circle(b.get_center() + Vector2((i - 1) * r * 0.55, 0), r * 0.15, INK)
         "restart":
             draw_arc(center, r * 0.85, deg_to_rad(-70), deg_to_rad(220), 20, col, w)
             var end := center + Vector2(cos(deg_to_rad(-70)), sin(deg_to_rad(-70))) * r * 0.85
