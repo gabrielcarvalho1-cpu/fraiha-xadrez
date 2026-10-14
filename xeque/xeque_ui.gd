@@ -722,9 +722,8 @@ func _sync_chat_dock():
     var lay: Dictionary = view.L() if view != null else {}
     var d: Rect2 = lay.get("chat", Rect2()) if (online and mode == "game" and visible) else Rect2()
     if d.size.x > 0.0 and layout == "portrait":
-        # celular alto: sobra faixa embaixo dos botões XEQUE / JOGAR CARTAS → CHAT grande ali, no canto direito
-        var bottom: float = (get_viewport().get_visible_rect().size.y - origin.y) / k
-        if bottom - 1900.0 >= 96.0: d = Rect2(680, 1900, 360, minf(100.0, bottom - 1912.0))
+        # R90 · celular em pé: CHAT no cantinho direito, ao lado das cartas da mão (a mão anda para a esquerda)
+        d = view.CHAT_PORTRAIT
     pc.set_dock(Rect2(origin + d.position * k, d.size * k) if d.size.x > 0.0 else Rect2())
 
 ## R88 · retângulo (em pixels de tela) da área de toque com este id — para abrir o volume junto do ícone

@@ -25,6 +25,16 @@ var list: VBoxContainer
 var scroll: ScrollContainer
 var input: LineEdit
 var status: Label
+var send_btn: Button
+var close_btn: Button
+var panel_style: StyleBoxFlat
+## R90 · cores da sala (nada de verde): XEQUE vinho + marfim + ouro; MARCHA REAL roxo real + ouro
+const THEMES := {
+    "xeque": {"btn": Color("6b1424"), "panel": Color(0.16, 0.04, 0.06, 0.95), "border": Color("d9a441"), "text": Color("f3e6c8"), "off": Color("3a0e16")},
+    "marcha": {"btn": Color("3d1c57"), "panel": Color(0.09, 0.05, 0.14, 0.95), "border": Color("d9a441"), "text": Color("f3e6c8"), "off": Color("261338")},
+}
+func _theme() -> Dictionary:
+    return THEMES.get(game, THEMES["xeque"])
 
 func _init():
     layer = 92
@@ -38,12 +48,13 @@ func setup(acc):
     toggle.text = "CHAT"
     toggle.focus_mode = Control.FOCUS_NONE
     toggle.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    _style(toggle, Color("123222"), GOLD, 22)
+    _style(toggle, THEMES.xeque.btn, THEMES.xeque.border, 22, THEMES.xeque.text)
     toggle.pressed.connect(func(): set_open(not opened))
     add_child(toggle)
     panel = PanelContainer.new()
     panel.name = "PartyChatPanel"
     var st := StyleBoxFlat.new()
+    panel_style = st
     st.bg_color = Color(0.03, 0.10, 0.06, 0.94)
     st.border_color = Color("c99a45")
     st.set_border_width_all(2)
@@ -65,10 +76,11 @@ func setup(acc):
     title.add_theme_color_override("font_color", GOLD)
     title.add_theme_font_size_override("font_size", 18)
     head.add_child(title)
-    var close := Button.new()
+    close_btn = Button.new()
+    var close := close_btn
     close.text = "×"
     close.focus_mode = Control.FOCUS_NONE
-    _style(close, Color("1b3a2a"), GOLD, 18)
+    _style(close, THEMES.xeque.off, GOLD, 18)
     close.pressed.connect(func(): set_open(false))
     head.add_child(close)
     to_row = HBoxContainer.new()
@@ -107,7 +119,10 @@ func setup(acc):
     input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     input.text_submitted.connect(func(_t): send_current())
     row.add_child(input)
-    var send := Button.new()
+    # R90 · Web no celular: campo HTML real (teclado abre no iPhone) com barra de envio fixa acima do teclado
+    preload("res://ui_v022/web_text_field.gd").attach(input, true)
+    send_btn = Button.new()
+    var send := send_btn
     send.text = "ENVIAR"
     send.focus_mode = Control.FOCUS_NONE
     _style(send, Color("e9b23a"), Color("5a3b06"), 16, Color("2a1a04"))
@@ -142,6 +157,7 @@ func bind(p_room: String, p_game: String, p_names: Array):
     to_row.visible = game == "marcha"
     if game != "marcha": to = "all"
     title.text = "CHAT DA MESA · " + ("MARCHA REAL" if game == "marcha" else "XEQUE")
+    _apply_theme()
     visible = true
     _layout()
     _rebuild()
@@ -162,12 +178,22 @@ func set_open(v: bool):
     opened = v
     if v: unread = 0
     _layout()
-    if v: input.grab_focus.call_deferred()
+    if v and input.focus_mode != Control.FOCUS_NONE: input.grab_focus.call_deferred()
+
+func _apply_theme():
+    var t := _theme()
+    _style(toggle, t.btn, t.border, 22, t.text)
+    _style(close_btn, t.off, t.border, 18, t.text)
+    if panel_style != null:
+        panel_style.bg_color = t.panel
+        panel_style.border_color = t.border
+    set_to(to)
 
 func set_to(v: String):
     to = v if game == "marcha" else "all"
-    _style(to_all, Color("e9b23a") if to == "all" else Color("173a2a"), GOLD, 14, Color("2a1a04") if to == "all" else CREAM)
-    _style(to_ally, Color("2f7fb0") if to == "ally" else Color("173a2a"), ALLY, 14, Color.WHITE if to == "ally" else CREAM)
+    var off: Color = _theme().off
+    _style(to_all, Color("e9b23a") if to == "all" else off, GOLD, 14, Color("2a1a04") if to == "all" else CREAM)
+    _style(to_ally, Color("2f7fb0") if to == "ally" else off, ALLY, 14, Color.WHITE if to == "ally" else CREAM)
     input.placeholder_text = "Mensagem só para o aliado…" if to == "ally" else "Mensagem para todos…"
 
 func send_current():

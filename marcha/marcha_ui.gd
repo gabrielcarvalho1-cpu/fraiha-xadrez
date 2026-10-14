@@ -1158,27 +1158,30 @@ func on_hover(p: Vector2):
     _hover_seat = seat
     if seat >= 0: pp.hover("marcha_seat_%d" % seat, seat_info(seat), _seat_screen_rect(seat))
 
-## R88 · celular em pé: microfone e fone GRANDES à esquerda do painel SUA VEZ; CHAT à direita dele.
+## R88 · celular em pé: microfone e fone GRANDES; R90 · na linha de baixo do tabuleiro, do mesmo tamanho do painel
+## SUA VEZ: microfone à esquerda (com o fone dividindo o espaço quando a voz está ligada) e CHAT à direita.
+func _row_ok() -> bool:
+    return portrait and not portrait_game.is_empty() and portrait_row.size() == 3
+
+func _voice_pair() -> bool:
+    var vo = voice()
+    return vo != null and vo.in_match() and vo.available() and vo.active()
+
 func mic_rect() -> Rect2:
-    if portrait and not portrait_game.is_empty():
-        var pr: Rect2 = portrait_game[5][1]
-        var w: float = clampf(pr.position.x - 48.0, 90.0, 150.0)
-        return Rect2((pr.position.x - w) / 2.0, pr.get_center().y - w - 10.0, w, w)
+    if _row_ok():
+        var l: Rect2 = portrait_row[0]
+        return Rect2(l.position, Vector2((l.size.x - 10.0) / 2.0, l.size.y)) if _voice_pair() else l
     return rr(Rect2(1230, 12, 54, 53))
 
 func ear_rect() -> Rect2:
-    if portrait and not portrait_game.is_empty():
+    if _row_ok():
         var m := mic_rect()
-        return Rect2(m.position.x, m.end.y + 20.0, m.size.x, m.size.y)
+        return Rect2(m.end.x + 10.0, m.position.y, m.size.x, m.size.y)
     return rr(Rect2(1162, 12, 54, 53))
 
 func chat_dock() -> Rect2:
-    if not (portrait and not portrait_game.is_empty()): return Rect2()
-    var pr: Rect2 = portrait_game[5][1]
-    var x0: float = pr.end.x + 24.0
-    var w: float = 1080.0 - x0 - 24.0
-    if w < 120.0: return Rect2()
-    return Rect2(x0, pr.get_center().y - 55.0, w, 110.0)
+    if not _row_ok(): return Rect2()
+    return portrait_row[2]
 
 func _sync_chat_dock():
     var pc = stage.get("party_chat") if stage != null else null
@@ -1325,6 +1328,7 @@ func board_rect() -> Rect2:
 ## As placas dos perfis ficam numa faixa "virtual" da arte (x >= 3000), lado a lado, iguais.
 const R57_VSEAT_X := 3000.0
 var portrait_game: Array = []
+var portrait_row: Array = []      # R90 · [microfone, SUA VEZ, CHAT] lado a lado (celular em pé)
 ## R75.1 · em pé a tela usa a ALTURA INTEIRA do aparelho (design 1080 x altura proporcional). De cima para baixo:
 ## título/ícones, placas dos perfis, TABULEIRO (centralizado no espaço livre), faixa da ajuda da jogada (só aparece
 ## quando há algo a escolher), linha SUA VEZ + JOGAR CARTA (compacta, lado a lado) e as CARTAS rentes ao fim da tela.
@@ -1334,29 +1338,34 @@ func _portrait_layout():
     var H: float = design.y
     var top := 262.0
     var ch := 352.0                              # cartas (4 lado a lado, ~248 de largura)
-    var ph := 300.0                              # painel SUA VEZ + JOGAR CARTA (arte 330x280)
+    # R90 · linha única de ponta a ponta: MICROFONE | SUA VEZ + JOGAR CARTA | CHAT, os três do mesmo tamanho
+    # (a altura vem da arte do painel 330x280 na largura de 1/3 da tela). Mais baixa que o painel antigo:
+    # o que sobra vai para o TABULEIRO.
+    var gx := 14.0
+    var sw: float = (1080.0 - 24.0 - 2.0 * gx) / 3.0
+    var ph: float = sw * PANEL_LOW_SRC.size.y / PANEL_LOW_SRC.size.x   # R90.1 · painel sem a faixa da coroa (mais baixo)
     var bottom_pad := 12.0
     var min_gap := 14.0
-    var bw := 1060.0
+    var bw := 1076.0                             # R90.1 · tabuleiro de ponta a ponta
     var bh: float = BOARD_SRC.size.y * bw / BOARD_SRC.size.x
     var maxb: float = H - top - ph - ch - bottom_pad - 4.0 * min_gap
-    if bh > maxb:                                # aparelho baixo: encolhe painel, cartas e só então o tabuleiro
-        ph = maxf(230.0, ph - (bh - maxb))
+    if bh > maxb:                                # aparelho baixo: encolhe as cartas e só então o tabuleiro
+        ch = maxf(280.0, ch - (bh - maxb))
         maxb = H - top - ph - ch - bottom_pad - 4.0 * min_gap
-        if bh > maxb:
-            ch = maxf(280.0, ch - (bh - maxb))
-            maxb = H - top - ph - ch - bottom_pad - 4.0 * min_gap
         if bh > maxb:
             bh = maxb
             bw = BOARD_SRC.size.x * bh / BOARD_SRC.size.y
-    # sobrou altura (celular alto): o painel cresce até 440; espaços entre blocos no máximo 46
-    ph = clampf(H - top - bh - ch - bottom_pad - 4.0 * 46.0, ph, 440.0)
-    var gap: float = clampf((H - top - bh - ph - ch - bottom_pad) / 4.0, min_gap, 46.0)
-    var extra: float = maxf(0.0, H - top - bh - ph - ch - bottom_pad - 4.0 * gap)
-    var y0: float = top + gap + extra * 0.5
+    # R90.2 · celular alto: o tabuleiro já está na largura toda; a altura que sobra vai para as CARTAS (crescem e
+    # encostam umas nas outras, sobrepondo até 30%) e o resto é dividido igual entre os blocos (sem faixa vazia).
+    var spare: float = H - top - bh - ph - ch - bottom_pad - 4.0 * min_gap
+    if spare > 0.0:
+        var ch_max: float = (1060.0 / (4.0 - 3.0 * CARD_OVERLAP_MAX)) * R57_CARD.y / R57_CARD.x
+        ch += clampf(spare, 0.0, maxf(0.0, ch_max - ch))
+    var gap: float = maxf(min_gap, (H - top - bh - ph - ch - bottom_pad) / 4.0)
+    var y0: float = top + gap
     var board := Rect2((1080.0 - bw) / 2.0, y0, bw, bh)
-    var pw: float = ph * 330.0 / 280.0
-    var panel := Rect2((1080.0 - pw) / 2.0, board.end.y + gap, pw, ph)
+    var panel := Rect2(12.0 + sw + gx, board.end.y + gap, sw, ph)
+    portrait_row = [Rect2(12.0, panel.position.y, sw, ph), panel, Rect2(panel.end.x + gx, panel.position.y, sw, ph)]
     var cards := Rect2(20.0, panel.end.y + gap, 1040.0, ch)
     # ajuda da jogada: só quando há algo a escolher, por cima das placas, longe do tabuleiro
     var help := Rect2(8, 140, 1064, 104)
@@ -1366,11 +1375,14 @@ func _portrait_layout():
         [Rect2(3000, 0, 740, 108), Rect2(8, 114, 1064, 155.3)],         # 2 placas (faixa virtual)
         [BOARD_SRC, board],                                             # 3 tabuleiro (justo na moldura)
         [Rect2(520, 735, 640, 206), cards],                             # 4 mão
-        [Rect2(30, 640, 330, 280), panel],                              # 5 SUA VEZ + JOGAR CARTA (moldura da arte)
-        [Rect2(30, 640, 330, 280), panel],                              # 6
+        [PANEL_LOW_SRC, panel],                                         # 5 SUA VEZ + JOGAR CARTA (moldura, sem a coroa)
+        [PANEL_LOW_SRC, panel],                                         # 6
         [Rect2(22, 504, 326, 132), help],                               # 7 ajuda da jogada / CANCELAR
     ]
 
+## R90.1 · painel SUA VEZ do celular em pé sem a faixa da coroa: a arte painel_vez_baixo.png tira as linhas 17..77
+## do painel (330x280 → 330x220); na arte da mesa o que sobra começa 60 px abaixo (só a borda de cima é colada).
+const PANEL_LOW_SRC := Rect2(30, 700, 330, 220)
 ## R86 · moldura dourada do tabuleiro na arte da mesa (medida no PNG): só ela entra no celular em pé
 const BOARD_SRC := Rect2(486, 117, 711, 637)
 
@@ -1512,13 +1524,24 @@ const R57_ICONS := [["fullscreen", Rect2(1300, 12, 54, 53)], ["mute_music", Rect
 const R57_TIMER := Rect2(62, 720, 265, 107)
 const R57_PLAY := Rect2(62, 840, 273, 62)
 const R57_CARD := Vector2(138, 195)
+const CARD_OVERLAP_MAX := 0.20     # R90.2 · em pé as cartas podem se sobrepor até 20% (o texto da carta continua inteiro)
 
 func card_rect(i: int, n: int) -> Rect2:
     if desk and portrait and not portrait_game.is_empty():
         # R87 · em pé: cartas retas, grandes e lado a lado (como na referência)
         var cb: Rect2 = portrait_game[4][1]
+        var cw: float = cb.size.y * R57_CARD.x / R57_CARD.y
         var gp := 14.0
-        var cw: float = minf((cb.size.x - (n - 1) * gp) / maxf(1.0, n), cb.size.y * R57_CARD.x / R57_CARD.y)
+        if n > 1:
+            gp = minf(14.0, (cb.size.x - n * cw) / float(n - 1))
+            if n >= 5 and gp < 14.0:                 # 5 cartas (3ª rodada): diminuem, sem sobrepor
+                gp = 14.0
+                cw = (cb.size.x - (n - 1) * gp) / float(n)
+            elif gp < -cw * CARD_OVERLAP_MAX:        # nem sobrepondo cabe: a carta diminui
+                gp = -cw * CARD_OVERLAP_MAX
+                cw = cb.size.x / (n - (n - 1) * CARD_OVERLAP_MAX)
+                gp = -cw * CARD_OVERLAP_MAX
+        cw = minf(cw, cb.size.x)
         var chh: float = cw * R57_CARD.y / R57_CARD.x
         var tot: float = n * cw + (n - 1) * gp
         return Rect2(cb.position.x + (cb.size.x - tot) / 2.0 + i * (cw + gp), cb.end.y - chh, cw, chh)
@@ -2567,27 +2590,44 @@ class TableView extends Control:
             # R77 · o microfone fica SEMPRE no lugar dele na partida; sem voz (bots, navegador sem suporte) fica
             # apagado e o toque explica onde a voz funciona
             var dr: Rect2 = ui.mic_rect()
-            draw_rect(dr, Color("0a0612"))
-            draw_rect(dr, Color(0.85, 0.66, 0.31, 0.45), false, 2.0)
-            ui.VoiceGlyph.draw_mic(self, dr.grow(-8), "DISCONNECTED", Color(0.85, 0.66, 0.31, 0.45))
+            _voice_box(dr, false)
+            ui.VoiceGlyph.draw_mic(self, _glyph_rect(dr), "DISCONNECTED", Color(0.85, 0.66, 0.31, 0.45))
             ui.hits.append({"rect": dr, "id": "voice_info"})
         if not lobby and ui.mode == "game" and voice_on:
             var vr: Rect2 = ui.mic_rect()
-            draw_rect(vr, Color("0a0612"))
-            draw_rect(vr, ui.GOLD, false, 2.0)
-            ui.VoiceGlyph.draw_mic(self, vr.grow(-8), vo.state, ui.GOLD, vo.is_speaking(vo.my_uid))
+            _voice_box(vr, true)
+            ui.VoiceGlyph.draw_mic(self, _glyph_rect(vr), vo.state, ui.GOLD, vo.is_speaking(vo.my_uid))
             ui.hits.append({"rect": vr, "id": "voice"})
             if vo.active() or vo.state == "ERROR": ui.hits.append({"rect": ui.VoiceGlyph.draw_leave_badge(self, vr), "id": "voice_off"})
             var tx := vr.position.x - 10
             if vo.active():
                 var er: Rect2 = ui.ear_rect()
-                draw_rect(er, Color("0a0612"))
-                draw_rect(er, ui.GOLD, false, 2.0)
-                ui.VoiceGlyph.draw_headphones(self, er.grow(-9), vo.speaker_muted, ui.GOLD)
+                _voice_box(er, true)
+                ui.VoiceGlyph.draw_headphones(self, _glyph_rect(er), vo.speaker_muted, ui.GOLD)
                 ui.hits.append({"rect": er, "id": "voice_ear"})
                 tx = er.position.x - 10
             if not ui.blk:   # em pé/deitado no celular não cabe o texto ao lado (o título está ali); o ícone já mostra o estado
                 ui.VoiceGlyph.draw_status(self, tx, vr.get_center().y, 300, vo.status_text(), 17, Color("e8dcc0"))
+
+    ## R90 · caixa do microfone/fone: no celular em pé fica na linha do SUA VEZ, roxa com borda dourada como o CHAT
+    func _voice_box(r: Rect2, on: bool):
+        if ui._row_ok():
+            var sb := StyleBoxFlat.new()
+            sb.bg_color = Color("3d1c57") if on else Color("261338")
+            sb.border_color = Color("d9a441") if on else Color(0.85, 0.66, 0.31, 0.6)
+            sb.set_border_width_all(3)
+            sb.set_corner_radius_all(12)
+            sb.shadow_color = Color(0, 0, 0, 0.45)
+            sb.shadow_size = 8
+            draw_style_box(sb, r)
+            return
+        draw_rect(r, Color("0a0612"))
+        draw_rect(r, ui.GOLD if on else Color(0.85, 0.66, 0.31, 0.45), false, 2.0)
+
+    func _glyph_rect(r: Rect2) -> Rect2:
+        if not ui._row_ok(): return r.grow(-8)
+        var s: float = minf(r.size.x, r.size.y) * 0.58
+        return Rect2(r.get_center() - Vector2(s, s) / 2.0, Vector2(s, s))
 
     func _draw_game_r57():
         ui._sync_chat_dock()   # R88 · CHAT no lugar reservado (celular em pé)
@@ -2601,7 +2641,7 @@ class TableView extends Control:
                     # R86 · painel SUA VEZ recortado da arte com fundo transparente (sem pedaço de parede em volta)
                     var pr: Rect2 = ui.portrait_game[5][1]
                     _soft_shadow(pr.grow(-pr.size.x * 0.03))
-                    draw_texture_rect(tex("res://marcha/art/r86/painel_vez.png"), pr, false)
+                    draw_texture_rect(tex("res://marcha/art/r86/painel_vez_baixo.png"), pr, false)
                     continue
                 draw_texture_rect_region(plate, ui.portrait_game[i][1], ui.portrait_game[i][0])
             var icons_src := Rect2(1290, 0, 360, 80)   # só os ícones da arte; à esquerda fica o lugar do microfone

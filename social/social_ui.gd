@@ -1132,7 +1132,7 @@ func _build_dm():
     row.add_theme_constant_override("separation", 6)
     box.add_child(row)
     dm_input = LineEdit.new()
-    preload("res://ui_v022/web_text_field.gd").attach(dm_input)
+    preload("res://ui_v022/web_text_field.gd").attach(dm_input, true)   # R90 · barra de envio acima do teclado
     dm_input.name = "DmInput"
     dm_input.placeholder_text = "Mensagem para %s" % String(dm_peer.get("nickname", "amigo"))
     dm_input.max_length = DM_MAX

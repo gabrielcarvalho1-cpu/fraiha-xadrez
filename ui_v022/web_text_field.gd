@@ -5,18 +5,27 @@ extends Node
 ## sobre o LineEdit enquanto ele está visível: o toque cai nele, o navegador foca e abre o
 ## teclado (também no iOS). O texto é espelhado no LineEdit (que continua sendo a fonte usada
 ## pelo jogo) e Enter vira text_submitted. Fora da Web mobile não faz nada.
+##
+## R90 · modo CHAT (attach(line, true)): ao tocar no campo, ele vira uma barra fixa no topo da área
+## visível (acima do teclado no iPhone e no Android) com um botão ENVIAR próprio, em HTML. Tocar no
+## ENVIAR não tira o foco do campo (o teclado fica aberto e nada na tela pula), então o toque nunca se
+## perde e dá para mandar várias mensagens seguidas. Tocar fora fecha o teclado e a barra volta ao lugar.
 const Mobile = preload("res://ui_v022/mobile_layout.gd")
 static var _next_id := 0
 var field: LineEdit
+var chat := false
 var el: JavaScriptObject
+var bar: JavaScriptObject
+var win: JavaScriptObject
 var dom_id := ""
 var _last := ""
 var _shown := false
 
-static func attach(line: LineEdit) -> Node:
+static func attach(line: LineEdit, chat_mode := false) -> Node:
     var helper = load("res://ui_v022/web_text_field.gd").new()
     helper.name = "WebTextField"
     helper.field = line
+    helper.chat = chat_mode
     line.add_child(helper, false, Node.INTERNAL_MODE_BACK)
     return helper
 
@@ -32,8 +41,9 @@ func _ready():
     var kind := "email" if field.virtual_keyboard_type == LineEdit.KEYBOARD_TYPE_EMAIL_ADDRESS else ("password" if field.secret else "text")
     JavaScriptBridge.eval("""
         (() => {
+            const id = %s, chat = %s;
             const el = document.createElement('input');
-            el.id = %s; el.type = %s; el.maxLength = %d;
+            el.id = id; el.type = %s; el.maxLength = %d;
             el.autocomplete = 'off'; el.autocapitalize = 'sentences'; el.spellcheck = true;
             el.placeholder = %s; el.enterKeyHint = 'send';
             el.style.cssText = 'position:fixed;display:none;z-index:20;margin:0;border:0;outline:none;' +
@@ -42,47 +52,111 @@ func _ready():
             el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); el.dataset.submit = '1'; } });
             if (!document.getElementById('fraiha-text-style')) {
                 const st = document.createElement('style'); st.id = 'fraiha-text-style';
-                st.textContent = 'input[id^=fraiha-text-]::placeholder{color:#b9ad8e;opacity:1}';
+                st.textContent = 'input[id^=fraiha-text-]::placeholder{color:#b9ad8e;opacity:1}' +
+                    '.fraiha-chat-bar{position:fixed;left:0;right:0;z-index:30;display:none;gap:8px;align-items:center;' +
+                    'padding:8px 10px;box-sizing:border-box;background:rgba(14,10,8,.97);border-bottom:2px solid #c99a45;' +
+                    'box-shadow:0 4px 14px rgba(0,0,0,.55)}' +
+                    '.fraiha-chat-bar button{flex:0 0 auto;height:46px;padding:0 16px;border-radius:8px;border:2px solid #7a5512;' +
+                    'background:#e9b23a;color:#2a1a04;font:bold 16px Georgia,serif;letter-spacing:1px;touch-action:manipulation}' +
+                    '.fraiha-chat-bar button:active{background:#ffd56a}';
                 document.head.appendChild(st);
             }
             document.body.appendChild(el);
+            if (!chat) return;
+            // Barra do chat: faixa fixa no topo da área visível, com o ENVIAR à direita. O campo NÃO é movido
+            // de lugar no DOM (mover um campo focado tira o foco): só muda de posição/estilo por cima da barra.
+            const bar = document.createElement('div');
+            bar.id = id + '-bar'; bar.className = 'fraiha-chat-bar';
+            bar.style.justifyContent = 'flex-end';
+            const send = document.createElement('button');
+            send.type = 'button'; send.textContent = 'ENVIAR';
+            const fire = () => { const t = Date.now(); if (t - (+el.dataset.ts || 0) < 400) return; el.dataset.ts = String(t); el.dataset.submit = '1'; };
+            // pointerdown/touchstart/mousedown sem ação padrão: o campo continua focado e o teclado não fecha
+            for (const ev of ['pointerdown', 'touchstart', 'mousedown']) send.addEventListener(ev, e => e.preventDefault(), {passive: false});
+            send.addEventListener('touchend', e => { e.preventDefault(); fire(); }, {passive: false});
+            send.addEventListener('click', e => { e.preventDefault(); fire(); });
+            bar.appendChild(send);
+            document.body.appendChild(bar);
+            const vv = window.visualViewport;
+            const place = () => {
+                const top = (vv && vv.offsetTop) || 0;
+                bar.style.top = top + 'px';
+                if (el.dataset.docked === '1') el.style.top = (top + 8) + 'px';
+            };
+            const dock = () => {
+                if (el.dataset.docked === '1') return;
+                el.dataset.docked = '1';
+                el._geo = {left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height, fontSize: el.style.fontSize};
+                bar.style.display = 'flex';
+                Object.assign(el.style, {left: '10px', width: 'calc(100% - 132px)', height: '46px', fontSize: '16px', zIndex: '31',
+                    background: '#1d1510', border: '1px solid #84754b'});
+                place();
+            };
+            const undock = () => {
+                if (el.dataset.docked !== '1') return;
+                el.dataset.docked = '';
+                bar.style.display = 'none';
+                Object.assign(el.style, el._geo || {}, {zIndex: '20', background: 'transparent', border: '0'});
+            };
+            el.addEventListener('focus', dock);
+            // o toque no ENVIAR não tira o foco (acima); qualquer outro blur (toque fora, teclado fechado) desencaixa
+            el.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== el) undock(); }, 60));
+            if (vv) { vv.addEventListener('resize', place); vv.addEventListener('scroll', place); }
         })()
-    """ % [JSON.stringify(dom_id), JSON.stringify(kind), field.max_length if field.max_length > 0 else 512, JSON.stringify(field.placeholder_text)])
-    el = JavaScriptBridge.get_interface("document").getElementById(dom_id)
+    """ % [JSON.stringify(dom_id), "true" if chat else "false", JSON.stringify(kind), field.max_length if field.max_length > 0 else 512, JSON.stringify(field.placeholder_text)])
+    var doc = JavaScriptBridge.get_interface("document")
+    el = doc.getElementById(dom_id)
+    if chat: bar = doc.getElementById(dom_id + "-bar")
+    win = JavaScriptBridge.get_interface("window")
     # O LineEdit continua existindo (moldura e texto usados pelo jogo), mas quem mostra o texto é o campo HTML.
     for c in ["font_color", "font_placeholder_color", "caret_color"]:
         field.add_theme_color_override(c, Color(0, 0, 0, 0))
+    # R90 · o LineEdit do Godot não pode pegar o foco: senão o Godot abre o PRÓPRIO teclado escondido e
+    # disputa o foco com o campo HTML (no Android o texto ia para um, o toque para o outro).
+    field.focus_mode = Control.FOCUS_NONE
+    field.virtual_keyboard_enabled = false
+    field.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _exit_tree():
     if el != null:
         el.blur()
         el.remove()
         el = null
+    if bar != null:
+        bar.remove()
+        bar = null
+
+func docked() -> bool:
+    return el != null and str(el.dataset.docked) == "1"
 
 func _process(_delta):
     if el == null: return
     var show := field.is_visible_in_tree() and field.editable
     if show != _shown:
         _shown = show
+        if not show:
+            el.blur()
+            if bar != null: bar.style.display = "none"
         el.style.display = "block" if show else "none"
-        if not show: el.blur()
     if not show: return
-    # Posição: coordenadas do viewport → pixels CSS da página (o canvas ocupa a janela).
-    var xf := field.get_global_transform_with_canvas()
-    var vp := field.get_viewport().get_visible_rect().size
-    var css := Vector2(float(JavaScriptBridge.eval("window.innerWidth")), float(JavaScriptBridge.eval("window.innerHeight")))
-    var k := Vector2(css.x / maxf(1.0, vp.x), css.y / maxf(1.0, vp.y))
-    var pos := xf.origin * k
-    var size := field.size * xf.get_scale() * k
-    el.style.left = "%dpx" % roundi(pos.x)
-    el.style.top = "%dpx" % roundi(pos.y)
-    el.style.width = "%dpx" % roundi(size.x)
-    el.style.height = "%dpx" % roundi(size.y)
-    el.style.fontSize = "%dpx" % clampi(roundi(size.y * 0.42), 14, 28)   # acompanha a escala do campo do jogo
+    if not docked():
+        # Posição: coordenadas do viewport → pixels CSS da página (o canvas ocupa a janela).
+        var xf := field.get_global_transform_with_canvas()
+        var vp := field.get_viewport().get_visible_rect().size
+        var css := Vector2(float(win.innerWidth), float(win.innerHeight))
+        var k := Vector2(css.x / maxf(1.0, vp.x), css.y / maxf(1.0, vp.y))
+        var pos := xf.origin * k
+        var size := field.size * xf.get_scale() * k
+        el.style.left = "%dpx" % roundi(pos.x)
+        el.style.top = "%dpx" % roundi(pos.y)
+        el.style.width = "%dpx" % roundi(size.x)
+        el.style.height = "%dpx" % roundi(size.y)
+        el.style.fontSize = "%dpx" % clampi(roundi(size.y * 0.42), 16, 28)   # 16 px no mínimo: o iPhone não dá zoom
     # Senha: o botão de mostrar/ocultar do jogo troca também o tipo do campo HTML.
     if field.virtual_keyboard_type == LineEdit.KEYBOARD_TYPE_PASSWORD:
         var want := "password" if field.secret else "text"
         if str(el.type) != want: el.type = want
+    if str(el.placeholder) != field.placeholder_text: el.placeholder = field.placeholder_text
     # Espelha o texto nos dois sentidos (o jogo limpa o campo depois de enviar).
     var dom := str(el.value)
     if dom != _last:
