@@ -2109,21 +2109,30 @@ class TableView extends Control:
     ## marca de saída de cada lugar são trocadas pelas da cor real de quem está ali (recortes em r57/cores).
     const VIEW_PARTS := {
         "base": [Vector2(476.4, 1133.2), Vector2(297.2, 383.4), Vector2(1151.5, 251.2), Vector2(1309.3, 1008.2)],
-        "lane": [Vector2(802.2, 1151.4), Vector2(274.0, 692.6), Vector2(801.1, 238.8), Vector2(1326.0, 692.6)],
         "saida": [Vector2(678.1, 1324.3), Vector2(98.6, 560.0), Vector2(931.5, 84.2), Vector2(1499.2, 816.4)],
     }
+    ## pista de chegada de cada lugar (px da arte, medida): cada uma tem tamanho próprio na arte; a peça trocada
+    ## (r57/cores/pista_l<lugar>_c<cor>.png) já vem girada e no tamanho exato deste retângulo (+1 px de folga)
+    const VIEW_LANES := [Rect2(828, 573, 38, 125), Rect2(543, 405, 130, 45), Rect2(827, 163, 40, 120), Rect2(1016, 405, 128, 45)]
     func _draw_view_colors(br: Rect2, s: float):
         var art_k := 730.0 / 1600.0           # px da arte por unidade do tabuleiro
+        var art0 := Vector2(480, 110)          # canto do tabuleiro na arte (ART_RECT)
         for seat in 4:
             var f: int = (seat + ui.view_seat) % 4
             if f == seat: continue
-            for kind in ["base", "lane", "saida"]:
+            # pista: retângulo exato do lugar
+            var lt: Texture2D = ui._mt("res://marcha/art/r57/cores/pista_l%d_c%d.png" % [seat, f])
+            if lt != null:
+                var lr: Rect2 = VIEW_LANES[seat].grow(1.0)
+                var p0: Vector2 = br.position + (lr.position - art0) / art_k * s
+                draw_set_transform(ui.origin + p0 * ui.k, 0.0, Vector2(ui.k, ui.k))
+                draw_texture_rect(lt, Rect2(Vector2.ZERO, lr.size / art_k * s), false)
+            for kind in ["base", "saida"]:
                 var tex: Texture2D = ui._mt("res://marcha/art/r57/cores/%s_%d.png" % [kind, f])
                 if tex == null: continue
                 var c: Vector2 = br.position + Vector2(VIEW_PARTS[kind][seat]) * s
-                var ang: float = PI / 2.0 * float(posmod(seat - f, 4)) if kind == "lane" else 0.0   # pista: vertical ↔ horizontal
                 var sc: float = s / art_k
-                draw_set_transform(ui.origin + c * ui.k, ang, Vector2(ui.k * sc, ui.k * sc))
+                draw_set_transform(ui.origin + c * ui.k, 0.0, Vector2(ui.k * sc, ui.k * sc))
                 draw_texture(tex, -tex.get_size() / 2.0)
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
 
