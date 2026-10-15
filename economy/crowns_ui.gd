@@ -93,7 +93,7 @@ func _section(parent: Control, t: String, extra := "") -> HBoxContainer:
 func _panel(parent: Control, accent := false) -> VBoxContainer:
 	var p := PanelContainer.new()
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.05, 0.045, 0.04, 0.82) if not accent else Color(0.09, 0.065, 0.02, 0.9)
+	s.bg_color = Color(0.03, 0.06, 0.14, 0.88) if not accent else Color(0.05, 0.10, 0.24, 0.92)
 	s.border_color = Color("c99a45") if not accent else GOLD
 	s.set_border_width_all(2)
 	s.set_corner_radius_all(6)
@@ -132,7 +132,11 @@ func _balance(parent: Control, st: Dictionary, logged: bool):
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
 	v.add_child(row)
-	var g := Art.Glyph.new("crown", ts(54), GOLD, true)
+	var g := TextureRect.new()   # a coroa dourada da arte do jogo
+	g.texture = preload("res://ui_kit/mobile/bots_crown.png")
+	g.custom_minimum_size = Vector2(ts(52), ts(47))
+	g.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	g.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(g)
 	var col := VBoxContainer.new()

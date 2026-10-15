@@ -141,7 +141,7 @@ func _draw():
         var badge: Texture2D = ThemeCatalog.badge_texture(Catalog.IDS[after])
         if badge != null:
             var sr := R(SHIELD)
-            draw_circle(sr.get_center(), sr.size.x * 0.52, Color(0.03, 0.08, 0.05, 0.85))
+            draw_circle(sr.get_center(), sr.size.x * 0.52, Color(0.042, 0.066, 0.113, 0.85))
             var ts := badge.get_size()
             var sc := minf(sr.size.x / ts.x, sr.size.y / ts.y)
             draw_texture_rect(badge, Rect2(sr.get_center() - ts * sc / 2.0, ts * sc), false)

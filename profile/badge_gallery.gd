@@ -79,7 +79,7 @@ class BadgeCard extends Button:
         var focused: bool = gallery.focus_id == badge
         var r := Rect2(Vector2.ZERO, size)
         var sb := StyleBoxFlat.new()
-        sb.bg_color = Color("10241a") if st != "locked" else Color("0c1511")
+        sb.bg_color = Color("161f32") if st != "locked" else Color("11151e")
         sb.set_corner_radius_all(6)
         sb.set_border_width_all(3 if st == "selected" or focused else 2)
         sb.border_color = EMERALD if st == "selected" else (Color("fff0b8") if focused else (GOLD if st == "unlocked" else Color("3a4038")))
@@ -97,7 +97,7 @@ class BadgeCard extends Button:
             draw_texture_rect(tex, pr, false, Color(0.45, 0.45, 0.45, 0.9) if st == "locked" else Color.WHITE)
         else:
             var c := pr.get_center()
-            draw_circle(c, side * 0.30, Color("0a120e"))
+            draw_circle(c, side * 0.30, Color("0e121a"))
             draw_arc(c, side * 0.30, 0, TAU, 40, GOLD if badge == "auto" else MUTED, 2.0)
             var f0 := get_theme_default_font()
             draw_string(f0, c + Vector2(-side * 0.3, 6), "AUTO" if badge == "auto" else "—", HORIZONTAL_ALIGNMENT_CENTER, side * 0.6, 16, GOLD if badge == "auto" else MUTED)

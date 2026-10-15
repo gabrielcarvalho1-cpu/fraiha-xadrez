@@ -218,7 +218,7 @@ func _confirm(method: String):
 class QrPlaceholder extends Control:
     func _draw():
         var r := Rect2(Vector2.ZERO, size)
-        draw_rect(r, Color(0.02, 0.06, 0.04, 0.9))
+        draw_rect(r, Color(0.028, 0.047, 0.085, 0.9))
         var gold := Color(0.79, 0.6, 0.27, 0.9)
         var x := 0.0
         while x < size.x:

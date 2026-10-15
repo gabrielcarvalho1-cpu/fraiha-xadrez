@@ -21,7 +21,7 @@ func _draw():
         return
     var r := Rect2(Vector2.ZERO, size)
     var dim := accent.darkened(0.45)
-    draw_rect(r, Color(0.04, 0.07, 0.055, 0.92))
+    draw_rect(r, Color(0.057, 0.071, 0.099, 0.92))
     # faixa de cima mais clara (pergaminho escuro) para dar volume
     draw_rect(Rect2(r.position + Vector2(3, 3), Vector2(r.size.x - 6, r.size.y * 0.42)), Color(1, 1, 1, 0.025))
     draw_rect(r.grow(-1), accent if active else dim, false, 2.0)
@@ -36,6 +36,6 @@ func _draw_voice():
     if voice_state != "" and portrait_rect.size.x > 0:
         var side := clampf(portrait_rect.size.x * 0.36, 14.0, 26.0)
         var b := Rect2(portrait_rect.position + Vector2(-side * 0.25, portrait_rect.size.y - side * 0.75), Vector2(side, side))
-        draw_circle(b.get_center(), side * 0.55, Color("0b150f"))
+        draw_circle(b.get_center(), side * 0.55, Color("10141e"))
         draw_arc(b.get_center(), side * 0.55, 0, TAU, 16, Color(accent, 0.8), 1.5)
         VoiceGlyph.draw_headphones(self, b.grow(-side * 0.12), voice_state == "deaf", Color("8fe28a") if voice_state == "speaking" else Color("f4ce7f"))

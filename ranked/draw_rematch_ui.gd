@@ -71,7 +71,7 @@ func setup(p_ui, p_controller):
 	banner = PanelContainer.new()
 	banner.name = "DrawOfferBanner"
 	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.04, 0.12, 0.08, 0.96)
+	st.bg_color = Color(0.056, 0.093, 0.168, 0.96)
 	st.border_color = Color("d9a94a")
 	st.set_border_width_all(3)
 	st.set_corner_radius_all(10)
@@ -104,7 +104,7 @@ func setup(p_ui, p_controller):
 	toast.name = "DrawToast"
 	toast.autowrap_mode = TextServer.AUTOWRAP_OFF
 	var tst := StyleBoxFlat.new()
-	tst.bg_color = Color(0.03, 0.08, 0.05, 0.92)
+	tst.bg_color = Color(0.042, 0.066, 0.113, 0.92)
 	tst.border_color = Color("84754b")
 	tst.set_border_width_all(2)
 	tst.set_corner_radius_all(8)

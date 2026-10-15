@@ -85,7 +85,7 @@ func _row(r: Rect2, codes: Array, adv: int, who: String):
     if r.size.x <= 0.0 or r.size.y <= 0.0: return
     if compact and codes.is_empty() and adv <= 0: return       # celular: sem faixa vazia
     var bg := StyleBoxFlat.new()
-    bg.bg_color = Color(0.04, 0.10, 0.07, 0.8)
+    bg.bg_color = Color(0.056, 0.084, 0.141, 0.8)
     bg.border_color = Color("8a7442")
     bg.set_border_width_all(1)
     bg.set_corner_radius_all(8)
@@ -132,7 +132,7 @@ func _row(r: Rect2, codes: Array, adv: int, who: String):
         var pr := Rect2(Vector2(x + (ic - sz.x) / 2.0, cy - sz.y / 2.0), sz)
         # disco suave atrás (claro nas peças escuras, escuro nas claras) para ler sobre qualquer fundo
         var dark_piece := code.begins_with("b")
-        draw_circle(pr.get_center() + Vector2(0, ic * 0.04), ic * 0.44, Color(0.93, 0.86, 0.68, 0.55) if dark_piece else Color(0.02, 0.05, 0.03, 0.55))
+        draw_circle(pr.get_center() + Vector2(0, ic * 0.04), ic * 0.44, Color(0.93, 0.86, 0.68, 0.55) if dark_piece else Color(0.029, 0.043, 0.071, 0.55))
         draw_texture_rect_region(tex, pr, icon[1])
 
 func _skin_row(r: Rect2, codes: Array, adv: int):

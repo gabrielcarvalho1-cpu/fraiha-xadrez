@@ -454,7 +454,7 @@ func _build_profile():
     profile_button.add_child(desk_badge)
 
 ## Moldura ornamental FRAIHA (verde escuro + dourado): borda dupla, cantos e losangos, tudo dentro do retângulo.
-func _ornate_panel(parent: Node, pos: Vector2, dimensions: Vector2, fill := Color(0.043,0.094,0.067,0.95)) -> Control:
+func _ornate_panel(parent: Node, pos: Vector2, dimensions: Vector2, fill := Color(0.061, 0.084, 0.132,0.95)) -> Control:
     var panel = Control.new()
     panel.position = pos
     panel.size = dimensions
@@ -490,7 +490,7 @@ func _build_account_card():
     icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
     icon.draw.connect(func():
         var c = icon.size / 2.0
-        icon.draw_circle(c, 21.0, Color("14261c"))
+        icon.draw_circle(c, 21.0, Color("1c2435"))
         if account_card_logged and avatar_texture() != null:
             icon.draw_texture_rect(avatar_texture(), Rect2(Vector2(3,3), icon.size - Vector2(6,6)), false)
         else:
@@ -534,7 +534,7 @@ func _feature_ranked(button: TextureButton):
     glow.name = "RankedGlow"
     glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var under = StyleBoxFlat.new()
-    under.bg_color = Color("0c1a12")
+    under.bg_color = Color("111725")
     under.set_corner_radius_all(6)
     under.shadow_color = Color(1.0,0.76,0.28,0.55)
     under.shadow_size = 16
@@ -974,7 +974,7 @@ func _build_settings_page():
     legal_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     legal_btn.add_theme_font_override("font", FONT_CINZEL)
     legal_btn.add_theme_font_size_override("font_size", 22)
-    for pair in [["normal", Color("0f2a1f")], ["hover", Color("174030")], ["pressed", Color("0a1f16")]]:
+    for pair in [["normal", Color("15213a")], ["hover", Color("1f3156")], ["pressed", Color("0e182b")]]:
         var st := StyleBoxFlat.new()
         st.bg_color = pair[1]
         st.border_color = Color("c99a45")
@@ -1044,7 +1044,7 @@ func _settings_slider(parent: Node, node_name: String) -> HSlider:
     slider.step = 1
     slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     var track = StyleBoxFlat.new()
-    track.bg_color = Color("0b1a12")
+    track.bg_color = Color("0f1625")
     track.border_color = Color(0.85, 0.71, 0.37, 0.7)
     track.set_border_width_all(1)
     track.set_corner_radius_all(4)
@@ -1280,7 +1280,7 @@ func _hud_text_button(caption: String, min_size: Vector2) -> Button:
     b.focus_mode = Control.FOCUS_ALL
     b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     b.add_theme_font_size_override("font_size", 16)
-    var states = {"normal": [Color("12301c"), Color("b8913f")], "hover": [Color("1d4a2b"), Color("f0c45c")], "pressed": [Color("0a1d11"), Color("f0c45c")], "focus": [Color("1d4a2b"), Color("f0c45c")]}
+    var states = {"normal": [Color("192642"), Color("b8913f")], "hover": [Color("263a62"), Color("f0c45c")], "pressed": [Color("0e1729"), Color("f0c45c")], "focus": [Color("263a62"), Color("f0c45c")]}
     for st in states:
         var sb = StyleBoxFlat.new()
         sb.bg_color = states[st][0]
@@ -1669,7 +1669,7 @@ func _history_row(e: Dictionary, compact: bool, st, mh) -> Control:
     var box = PanelContainer.new()
     box.name = "HistoryRow"
     var sb = StyleBoxFlat.new()
-    sb.bg_color = Color(0.03, 0.10, 0.06, 0.92)
+    sb.bg_color = Color(0.042, 0.075, 0.141, 0.92)
     sb.border_color = Color("8a6a2c")
     sb.set_border_width_all(2)
     sb.set_corner_radius_all(6)
@@ -1898,7 +1898,7 @@ func _progress(parent: Node, value: int, height: int = 14):
     var fill = StyleBoxFlat.new()
     fill.bg_color = GOLD
     var background = StyleBoxFlat.new()
-    background.bg_color = Color("223b33")
+    background.bg_color = Color("2e394f")
     background.border_color = Color("708577")
     background.set_border_width_all(1)
     bar.add_theme_stylebox_override("fill",fill)
@@ -2154,7 +2154,7 @@ func _draw_presentation_frame():
     var art = canvas.get_node_or_null("ForestArtwork")
     var tex: Texture2D = art.texture if art != null else null
     if tex == null:
-        presentation_frame.draw_rect(full, Color("0f1a12"))
+        presentation_frame.draw_rect(full, Color("151a25"))
         return
     var cover = maxf(full.size.x / DESIGN.x, full.size.y / DESIGN.y) * 1.04
     var cover_rect = Rect2((full.size - DESIGN * cover) / 2.0, DESIGN * cover)
@@ -2166,7 +2166,7 @@ func _draw_presentation_frame():
         # tudo duplicado), a borda da própria arte continua ESPELHADA e escurece para fora.
         var u = canvas.scale.x
         var wr := Rect2(artwork.position - Vector2(WIDE_PAD * u, 0), FOREST_WIDE.get_size() * u)
-        presentation_frame.draw_rect(full, Color("0b1a10"))
+        presentation_frame.draw_rect(full, Color("0f1625"))
         presentation_frame.draw_texture_rect(FOREST_WIDE, wr, false)
         var th: float = FOREST_WIDE.get_height()
         for side in 2:
@@ -2182,7 +2182,7 @@ func _draw_presentation_frame():
                 var a := pow(float(i + 1) / n, 1.4) * 0.85
                 var w := gap / n
                 var x := wr.position.x - (i + 1) * w if side == 0 else wr.end.x + i * w
-                presentation_frame.draw_rect(Rect2(x, 0, w + 0.5, full.size.y), Color(0.03, 0.06, 0.04, a))
+                presentation_frame.draw_rect(Rect2(x, 0, w + 0.5, full.size.y), Color(0.043, 0.057, 0.085, a))
         return
     # Sobras da tela (fora da tela cheia): panorama de folhagem em pixel art, levemente escurecido.
     var foliage: Texture2D = load("res://ui_v022/assets/home_side_foliage.png")   # R87 · não fica presa na memória do celular
@@ -2350,7 +2350,7 @@ func _build_side_art():
     root.add_child(side_art)
     var dim := ColorRect.new()
     dim.name = "SideDim"
-    dim.color = Color(0.02, 0.03, 0.02, 0.72)
+    dim.color = Color(0.029, 0.034, 0.043, 0.72)
     dim.mouse_filter = Control.MOUSE_FILTER_STOP
     side_art.add_child(dim)
     side_panel = Control.new()
@@ -2519,7 +2519,12 @@ func make_top_button(glyph: String, tip: String, action: Callable, side := 62.0)
     b.custom_minimum_size = Vector2(side, side)
     b.tooltip_text = tip
     b.pressed.connect(action)
+    b.set_frame(TOP_FRAME_CEL if side != 62.0 else TOP_FRAME_PC, 14.0)   # R113 · moldura dos botões de som / tela cheia
     return b
+
+## R113 · moldura dos botões do topo, recortada da arte da Home (PC: som em 363,17; celular: som em 730,45)
+const TOP_FRAME_PC := preload("res://ui_v022/assets/r113/moldura_botao_topo_pc.png")
+const TOP_FRAME_CEL := preload("res://ui_v022/assets/r113/moldura_botao_topo_cel.png")
 
 ## R112 · COROAS: um controlador só (estado do servidor, botões de saldo, painel e aviso "+N COROAS").
 var crowns = null
@@ -2956,7 +2961,7 @@ func _build_profile_frame(pbtn: Control):
     ref_status_label.add_theme_font_override("font", PROFILE_STATUS_FONT)
     ref_status_label.add_theme_font_size_override("font_size", 16)
     ref_status_label.add_theme_color_override("font_color", Color("f1e6cc"))
-    ref_status_label.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    ref_status_label.add_theme_color_override("font_outline_color", Color(0.043, 0.052, 0.071, 0.9))
     ref_status_label.add_theme_constant_override("outline_size", 3)
     ref_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     ref_status_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
@@ -2970,7 +2975,7 @@ func _build_profile_frame(pbtn: Control):
     ref_status_author.add_theme_font_override("font", PROFILE_STATUS_FONT)
     ref_status_author.add_theme_font_size_override("font_size", 16)
     ref_status_author.add_theme_color_override("font_color", Color("f1e6cc"))
-    ref_status_author.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    ref_status_author.add_theme_color_override("font_outline_color", Color(0.043, 0.052, 0.071, 0.9))
     ref_status_author.add_theme_constant_override("outline_size", 3)
     ref_status_author.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     ref_status_author.position = Vector2(PROFILE_STATUS.position.x, PROFILE_STATUS.position.y + 22) - pbtn.position
@@ -2987,7 +2992,7 @@ func _build_profile_frame(pbtn: Control):
     ref_status_edit.size = PROFILE_STATUS_EDIT.size
     for st in ["normal", "hover", "pressed", "focus", "disabled"]:
         var sb := StyleBoxFlat.new()
-        sb.bg_color = Color(0.05, 0.12, 0.08, 0.0 if st == "normal" else 0.75)
+        sb.bg_color = Color(0.070, 0.102, 0.168, 0.0 if st == "normal" else 0.75)
         sb.set_corner_radius_all(4)
         ref_status_edit.add_theme_stylebox_override(st, sb)
     ref_status_edit.draw.connect(func(): _draw_pencil(ref_status_edit))
@@ -3178,7 +3183,7 @@ func _build_status_editor():
     status_input.add_theme_color_override("font_placeholder_color", Color(0.95, 0.9, 0.8, 0.45))
     status_input.add_theme_color_override("caret_color", Color("f4ce7f"))
     status_input.add_theme_color_override("selection_color", Color(0.85, 0.66, 0.25, 0.35))
-    status_input.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    status_input.add_theme_color_override("font_outline_color", Color(0.043, 0.052, 0.071, 0.9))
     status_input.add_theme_constant_override("outline_size", 3)
     for st in ["normal", "focus", "read_only"]:
         status_input.add_theme_stylebox_override(st, StyleBoxEmpty.new())   # sem caixa: a frase vira o campo
@@ -3192,7 +3197,7 @@ func _build_status_editor():
     status_note = Label.new()
     status_note.name = "StatusNote"
     status_note.add_theme_font_size_override("font_size", 12)
-    status_note.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    status_note.add_theme_color_override("font_outline_color", Color(0.043, 0.052, 0.071, 0.9))
     status_note.add_theme_constant_override("outline_size", 3)
     status_note.position = Vector2(4, 24)
     status_note.size = Vector2(PROFILE_STATUS.size.x - 60, 18)
@@ -3201,7 +3206,7 @@ func _build_status_editor():
     status_count = Label.new()
     status_count.name = "StatusCount"
     status_count.add_theme_font_size_override("font_size", 12)
-    status_count.add_theme_color_override("font_outline_color", Color(0.03, 0.05, 0.03, 0.9))
+    status_count.add_theme_color_override("font_outline_color", Color(0.043, 0.052, 0.071, 0.9))
     status_count.add_theme_constant_override("outline_size", 3)
     status_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     status_count.position = Vector2(PROFILE_STATUS.size.x - 60, 24)
@@ -3266,6 +3271,7 @@ func _build_reference_chrome():
     canvas.add_child(gchat_button)
     # R112 · COROAS: saldo ao lado do chat (toque abre o painel)
     var crown_chip: Button = crowns_client().make_chip(62.0, 118.0)
+    crown_chip.set_frame(TOP_FRAME_PC, 14.0)
     crown_chip.position = Vector2(644, 16)
     canvas.add_child(crown_chip)
     _refresh_sound_button()
@@ -3327,7 +3333,7 @@ func _build_reference_chrome():
     # Insígnia da liga: a arte já traz a da Madeira; outras ligas cobrem com a insígnia viva.
     ref_badge_plate = Panel.new()
     var plate = StyleBoxFlat.new()
-    plate.bg_color = Color(0.0,0.13,0.07)
+    plate.bg_color = Color(0.000, 0.060, 0.181)
     plate.set_corner_radius_all(6)
     ref_badge_plate.add_theme_stylebox_override("panel", plate)
     ref_badge_plate.position = PROFILE_BADGE.position - pbtn.position
@@ -3384,7 +3390,7 @@ func _build_reference_chrome():
     ref_menu_cover = Panel.new()
     ref_menu_cover.name = "RefMenuCover"
     var cover = StyleBoxFlat.new()
-    cover.bg_color = Color(0.03,0.12,0.075)
+    cover.bg_color = Color(0.042, 0.084, 0.168)
     cover.set_corner_radius_all(4)
     ref_menu_cover.add_theme_stylebox_override("panel", cover)
     ref_menu_cover.position = PC_COVER.position

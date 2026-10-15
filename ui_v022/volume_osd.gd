@@ -16,7 +16,7 @@ func _ready():
     panel.name = "VolumeOSD"
     panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var style = StyleBoxFlat.new()
-    style.bg_color = Color(0.05, 0.09, 0.07, 0.92)
+    style.bg_color = Color(0.070, 0.089, 0.127, 0.92)
     style.border_color = Color("b19758")
     style.set_border_width_all(2)
     style.set_corner_radius_all(10)
@@ -44,7 +44,7 @@ func _ready():
     bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
     bar.max_value = 100
     var bg = StyleBoxFlat.new()
-    bg.bg_color = Color("0b1410")
+    bg.bg_color = Color("10141c")
     bg.set_corner_radius_all(4)
     var fill = StyleBoxFlat.new()
     fill.bg_color = GOLD

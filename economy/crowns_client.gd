@@ -107,7 +107,7 @@ func _refresh_chips():
 		b.add_theme_font_size_override("font_size", fs)
 		for sn in ["normal", "hover", "pressed", "disabled"]:
 			var sb = b.get_theme_stylebox(sn)
-			if sb is StyleBoxFlat: sb.content_margin_right = 6.0
+			if sb != null: sb.content_margin_right = 6.0
 
 func open_panel():
 	if not is_instance_valid(panel):
@@ -127,23 +127,25 @@ func show_toast(gained: int, lines):
 		_toast = PanelContainer.new()
 		_toast.name = "CrownsToast"
 		_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var st := StyleBoxFlat.new()
-		st.bg_color = Color(0.06, 0.05, 0.04, 0.94)
-		st.border_color = GOLD
-		st.set_border_width_all(2)
-		st.set_corner_radius_all(8)
-		st.shadow_color = Color(0, 0, 0, 0.55)
-		st.shadow_size = 10
-		for side in ["left", "right"]: st.set("content_margin_" + side, 22)
-		for side in ["top", "bottom"]: st.set("content_margin_" + side, 10)
+		# R113 · na moldura dos botões do jogo (dourada, fundo azul, joias nos cantos)
+		var st := StyleBoxTexture.new()
+		st.texture = preload("res://ui_kit/art/fr_btn_azul.png")
+		for side in ["left", "right", "top", "bottom"]: st.set("texture_margin_" + side, 18.0)
+		for side in ["left", "right"]: st.set("content_margin_" + side, 30.0)
+		for side in ["top", "bottom"]: st.set("content_margin_" + side, 16.0)
 		_toast.add_theme_stylebox_override("panel", st)
 		_toast_layer.add_child(_toast)
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 12)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_toast.add_child(row)
-		var g := preload("res://monetization/premium_art.gd").Glyph.new("crown", 44, GOLD, true)
+		var g := TextureRect.new()   # a coroa dourada da arte do jogo
+		g.texture = preload("res://ui_kit/mobile/bots_crown.png")
+		g.custom_minimum_size = Vector2(46, 42)
+		g.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		g.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		g.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(g)
 		var col := VBoxContainer.new()
 		col.add_theme_constant_override("separation", 0)
@@ -153,13 +155,15 @@ func show_toast(gained: int, lines):
 		_toast_title.add_theme_font_override("font", FONT)
 		_toast_title.add_theme_font_size_override("font_size", 26)
 		_toast_title.add_theme_color_override("font_color", GOLD)
-		_toast_title.add_theme_color_override("font_outline_color", Color(0.16, 0.08, 0.0))
+		_toast_title.add_theme_color_override("font_outline_color", Color(0.10, 0.05, 0.0))
 		_toast_title.add_theme_constant_override("outline_size", 5)
 		col.add_child(_toast_title)
 		_toast_lines = Label.new()
 		_toast_lines.add_theme_font_override("font", FONT_SEMI)
 		_toast_lines.add_theme_font_size_override("font_size", 15)
 		_toast_lines.add_theme_color_override("font_color", CREAM)
+		_toast_lines.add_theme_color_override("font_outline_color", Color(0.02, 0.04, 0.10))
+		_toast_lines.add_theme_constant_override("outline_size", 3)
 		col.add_child(_toast_lines)
 	_toast_title.text = "+%s COROAS" % fmt(gained)
 	var ls := PackedStringArray()

@@ -205,7 +205,7 @@ func _draw_card():
     view.size = Vector2(SIZE.x, _height())
     var r := Rect2(Vector2.ZERO, view.size)
     view.draw_rect(r.grow(4), Color(0, 0, 0, 0.45))
-    view.draw_rect(r, Color("0d241a"))
+    view.draw_rect(r, Color("121d32"))
     view.draw_rect(r, GOLD, false, 2.0)
     view.draw_rect(r.grow(-5), Color(0.85, 0.7, 0.37, 0.35), false, 1.0)
     # foto
@@ -213,7 +213,7 @@ func _draw_card():
     view.draw_rect(pr.grow(3), Color("2a1a05"))
     var tex: Texture2D = info.get("avatar", null)
     if tex != null: view.draw_texture_rect(tex, pr, false)
-    else: view.draw_rect(pr, Color("17382a"))
+    else: view.draw_rect(pr, Color("1f2e4c"))
     view.draw_rect(pr.grow(1), GOLD, false, 2.0)
     _decorate_photo.call_deferred(pr)   # mexe em nós filhos: fora do desenho
     var name := String(card.get("nickname", info.get("name", "")))
@@ -253,8 +253,8 @@ func _draw_card():
     if not bl.is_empty():
         var active := bl in ["ADICIONAR AMIGO", "ACEITAR PEDIDO"]
         _btn = Rect2(16, SIZE.y - 46, SIZE.x - 32, 34)
-        view.draw_rect(_btn, Color("e9b23a") if active else Color("173a2a"))
-        view.draw_rect(_btn, GOLD if active else Color("4c6b58"), false, 1.5)
+        view.draw_rect(_btn, Color("e9b23a") if active else Color("1f2f4e"))
+        view.draw_rect(_btn, GOLD if active else Color("4c5a78"), false, 1.5)
         _txt(bl, Vector2(_btn.position.x, _btn.position.y + 24), 18, Color("2a1a04") if active else MUTED, true, _btn.size.x, HORIZONTAL_ALIGNMENT_CENTER)
     if not notice.is_empty():
         _txt(notice, Vector2(16, SIZE.y - 54), 13, Color("9fe0a8") if notice.begins_with("Pedido") or notice.begins_with("Agora") else LOSS, false, SIZE.x - 32)

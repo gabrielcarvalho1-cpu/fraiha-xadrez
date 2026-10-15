@@ -12,7 +12,7 @@ func _draw():
     var index = maxi(0,IDS.find(league_id))
     var color: Color = COLORS[index]
     var rect = Rect2(Vector2(2,2),size-Vector2(4,4))
-    draw_rect(rect,Color("101c17"),false,6)
+    draw_rect(rect,Color("161c27"),false,6)
     draw_rect(rect,color,false,2)
     draw_rect(rect.grow(-4),Color("dfb96c"),false,1)
     for p in [rect.position,Vector2(rect.end.x,rect.position.y),rect.end,Vector2(rect.position.x,rect.end.y)]:

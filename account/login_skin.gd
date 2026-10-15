@@ -119,7 +119,7 @@ class SkinButton extends Button:
         var inset := Rect2(Vector2(56, 14), Vector2(size.x - 112, size.y - 28)) if primary else Rect2(Vector2(50, 10), Vector2(size.x - 100, size.y - 20))
         if down: draw_rect(inset, Color(0, 0, 0, 0.22))
         elif lit: draw_rect(inset, Color(1.0, 0.92, 0.6, 0.10))
-        if disabled: draw_rect(r, Color(0.02, 0.05, 0.03, 0.45))
+        if disabled: draw_rect(r, Color(0.029, 0.043, 0.071, 0.45))
 
 # ---------------------------------------------------------------- link (linha com ícone, texto e seta)
 class SkinLink extends Button:
@@ -154,7 +154,7 @@ class SkinLink extends Button:
         var pfs := maxi(9, int(round(fs * gk)))
         draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE / gk)
         var pb := base * gk
-        draw_string_outline(f, pb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, 2, Color(0.05, 0.08, 0.05, 0.7))
+        draw_string_outline(f, pb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, 2, Color(0.071, 0.085, 0.113, 0.7))
         draw_string(f, pb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, pfs, Color("fff0c8") if lit else CREAM)
         draw_set_transform(Vector2.ZERO)
         if lit: draw_rect(Rect2(Vector2(30, 0), Vector2(size.x - 40, 56)), Color(1.0, 0.9, 0.6, 0.06))

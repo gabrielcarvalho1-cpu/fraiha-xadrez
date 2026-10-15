@@ -102,7 +102,7 @@ func setup(owner_stage) -> void:
 	moves.scroll_active = false
 	moves.clip_contents = true
 	var ms := StyleBoxFlat.new()
-	ms.bg_color = Color(0.03, 0.08, 0.05, 0.86)
+	ms.bg_color = Color(0.042, 0.066, 0.113, 0.86)
 	ms.border_color = Color(0.79, 0.6, 0.27, 0.7)
 	ms.set_border_width_all(1)
 	ms.set_corner_radius_all(6)
@@ -116,7 +116,7 @@ func setup(owner_stage) -> void:
 	sheet = PanelContainer.new()
 	sheet.name = "HudMovesSheet"
 	var ss := StyleBoxFlat.new()
-	ss.bg_color = Color(0.03, 0.08, 0.05, 0.95)
+	ss.bg_color = Color(0.042, 0.066, 0.113, 0.95)
 	ss.border_color = Color("c99a45")
 	ss.set_border_width_all(2)
 	ss.set_corner_radius_all(8)
@@ -539,7 +539,7 @@ func _build_plates() -> void:
 		var clock := Panel.new()                      # deitado: caixa do relógio no estilo da arte + ampulheta
 		clock.name = "HudClockBox_" + key
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color("0b2418")
+		sb.bg_color = Color("0f1b32")
 		sb.border_color = Color("c99a45")
 		sb.set_border_width_all(2)
 		sb.set_corner_radius_all(6)

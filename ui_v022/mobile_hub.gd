@@ -26,7 +26,7 @@ func setup(owner_hub):
     name = "MobileHome"
     mouse_filter = Control.MOUSE_FILTER_STOP
     var background = ColorRect.new()
-    background.color = Color("0b1110")
+    background.color = Color("101218")
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     background.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(background)
@@ -48,8 +48,8 @@ func setup(owner_hub):
     add_child(hero)
     hero_fade = TextureRect.new()
     var grad = Gradient.new()
-    grad.set_color(0, Color(0.04, 0.07, 0.05, 0.0))
-    grad.set_color(1, Color(0.04, 0.07, 0.05, 1.0))
+    grad.set_color(0, Color(0.057, 0.071, 0.099, 0.0))
+    grad.set_color(1, Color(0.057, 0.071, 0.099, 1.0))
     var gt = GradientTexture2D.new()
     gt.gradient = grad
     gt.fill_from = Vector2(0, 0.35)
@@ -218,7 +218,7 @@ func _old_button(parent: Node, text: String, action: Callable) -> Button:
     button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     button.add_theme_font_size_override("font_size",18)
     var style = StyleBoxFlat.new()
-    style.bg_color = Color("14221d")
+    style.bg_color = Color("1c222f")
     style.border_color = Color("84754b")
     style.set_border_width_all(1)
     style.set_corner_radius_all(5)
@@ -226,7 +226,7 @@ func _old_button(parent: Node, text: String, action: Callable) -> Button:
     style.content_margin_right = 10
     button.add_theme_stylebox_override("normal",style)
     var highlighted = style.duplicate()
-    highlighted.bg_color = Color("26382b")
+    highlighted.bg_color = Color("333b4c")
     highlighted.border_color = Color("e5c37c")
     for state in ["pressed","hover","focus"]: button.add_theme_stylebox_override(state,highlighted)
     button.pressed.connect(action)
@@ -241,14 +241,14 @@ func _feature(button: Button):
         button.custom_minimum_size.y = 58
         return
     var style: StyleBoxFlat = button.get_theme_stylebox("normal").duplicate()
-    style.bg_color = Color("223a2a")
+    style.bg_color = Color("2e394e")
     style.border_color = Color("f0cf7a")
     style.set_border_width_all(2)
     style.shadow_color = Color(0.96,0.78,0.36,0.3)
     style.shadow_size = 6
     button.add_theme_stylebox_override("normal", style)
     var hi: StyleBoxFlat = style.duplicate()
-    hi.bg_color = Color("2e4a33")
+    hi.bg_color = Color("3d4962")
     for state in ["pressed","hover","focus"]: button.add_theme_stylebox_override(state, hi)
     button.add_theme_color_override("font_color", Color("ffd98a"))
     button.add_theme_color_override("font_hover_color", Color("ffe3a3"))

@@ -61,7 +61,7 @@ func setup(v, mobile := false) -> void:
     label.name = "VoiceStatus"
     label.add_theme_font_size_override("font_size", 13)
     label.add_theme_color_override("font_color", Color("e8dcc0"))
-    label.add_theme_color_override("font_outline_color", Color("0b150f"))
+    label.add_theme_color_override("font_outline_color", Color("10141e"))
     label.add_theme_constant_override("outline_size", 3)
     label.custom_minimum_size = Vector2(150, 0)
     label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

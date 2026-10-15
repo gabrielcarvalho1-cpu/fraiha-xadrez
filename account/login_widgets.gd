@@ -28,12 +28,12 @@ class OrnateButton extends Button:
         var inner_r := r.grow(-(3.0 if primary else 2.0))
         var inner := Art.pointed(inner_r, notch - 1.5)
         if primary:
-            var top := Color("2f7d43") if not down else Color("1d5a2c")
-            var bottom := Color("0f3d1d")
+            var top := Color("2f5aa8") if not down else Color("254074")
+            var bottom := Color("142952")
             if lit: top = top.lightened(0.12)
             Art.vertical_gradient(self, inner, top, bottom)
         else:
-            Art.vertical_gradient(self, inner, Color("16211b").lightened(0.06 if lit else 0.0), Color("070d0a"))
+            Art.vertical_gradient(self, inner, Color("1f242e").lightened(0.06 if lit else 0.0), Color("0a0d13"))
         var line := Art.pointed(r.grow(-7.0), notch - 4.0)
         line.append(line[0])
         draw_polyline(line, Color(Art.GOLD.r, Art.GOLD.g, Art.GOLD.b, 0.35 if primary else 0.22), 1.0)
@@ -114,7 +114,7 @@ class Field extends MarginContainer:
     func _draw():
         var r := Rect2(Vector2.ZERO, size)
         var focused := line != null and line.has_focus()
-        draw_rect(r, Color(0.02, 0.05, 0.035, 0.9))
+        draw_rect(r, Color(0.029, 0.043, 0.071, 0.9))
         draw_rect(r, Art.GOLD_MID if focused else Color(0.62, 0.48, 0.24, 0.9), false, 1.6)
         draw_rect(r.grow(-4.0), Color(Art.GOLD.r, Art.GOLD.g, Art.GOLD.b, 0.14 if focused else 0.07), false, 1.0)
         # Pequenas pontas nos cantos (como nos campos da referência).

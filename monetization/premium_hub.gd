@@ -740,7 +740,7 @@ func benefit_card(parent: Node, icon_kind: String, title: String, desc: String, 
     var head := HBoxContainer.new()
     head.add_theme_constant_override("separation", 6)
     v.add_child(head)
-    var chk := Art.Glyph.new("check", 18, Art.CHECK if variant != "parchment" else Color("2f6b2a"))
+    var chk := Art.Glyph.new("check", 18, Art.CHECK if variant != "parchment" else Color("355087"))
     chk.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
     chk.custom_minimum_size.y = 24
     head.add_child(chk)

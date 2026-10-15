@@ -97,7 +97,7 @@ func setup(service, ranked_controller):
     hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(hud)
     dim = ColorRect.new()
-    dim.color = Color(0.02, 0.04, 0.03, 0.82)
+    dim.color = Color(0.029, 0.038, 0.057, 0.82)
     add_child(dim)
     # Moldura medieval (mesma da tela de entrada: ouro, brasão, cavalos) atrás do conteúdo.
     art_panel = preload("res://ranked/online_art_panel.gd").new()
@@ -226,7 +226,7 @@ func _make_strip() -> Dictionary:
     name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     name.add_theme_color_override("font_color", Color("f4edda"))
     name.add_theme_font_override("font", preload("res://account/login_art.gd").FONT_BOLD)
-    name.add_theme_color_override("font_outline_color", Color("0b150f"))
+    name.add_theme_color_override("font_outline_color", Color("10141e"))
     name.add_theme_constant_override("outline_size", 4)
     col.add_child(name)
     var subrow = HBoxContainer.new()
@@ -241,7 +241,7 @@ func _make_strip() -> Dictionary:
     var sub = Label.new()
     sub.add_theme_font_size_override("font_size", 16)
     sub.add_theme_color_override("font_color", GOLD)
-    sub.add_theme_color_override("font_outline_color", Color("0b150f"))
+    sub.add_theme_color_override("font_outline_color", Color("10141e"))
     sub.add_theme_constant_override("outline_size", 3)
     sub.clip_text = true
     sub.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -427,7 +427,7 @@ func _bar(parent: Node, value: float) -> ProgressBar:
     var fill = StyleBoxFlat.new()
     fill.bg_color = GOLD
     var bg = StyleBoxFlat.new()
-    bg.bg_color = Color("223b33")
+    bg.bg_color = Color("2e394f")
     bg.border_color = Color("708577")
     bg.set_border_width_all(1)
     bar.add_theme_stylebox_override("fill", fill)
@@ -687,7 +687,7 @@ func _mode_card(grid: Container, item: Array):
     var card = PanelContainer.new()
     card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     var style = StyleBoxFlat.new()
-    style.bg_color = Color("0a1a10")
+    style.bg_color = Color("0e1625")
     style.border_color = Color("c99a45")
     style.set_border_width_all(2)
     style.set_corner_radius_all(6)
@@ -744,7 +744,7 @@ func _casual_card(grid: Container, item: Array):
     var card = PanelContainer.new()
     card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     var style = StyleBoxFlat.new()
-    style.bg_color = Color("0a1a10")
+    style.bg_color = Color("0e1625")
     style.border_color = Color("c99a45")
     style.set_border_width_all(2)
     style.set_corner_radius_all(6)
@@ -1049,7 +1049,7 @@ func _style_resign(art: bool):
         return
     resign_button.text = "DESISTIR"
     var flat = StyleBoxFlat.new()
-    flat.bg_color = Color(0.06, 0.11, 0.09, 0.9)
+    flat.bg_color = Color(0.084, 0.107, 0.154, 0.9)
     flat.border_color = Color("84754b")
     flat.set_border_width_all(1)
     flat.set_corner_radius_all(6)

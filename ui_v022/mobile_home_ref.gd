@@ -224,6 +224,7 @@ func _build_top():
     var cx0 := CLUB_RECT.end.x + 10.0
     var cx1 := SOUND_RECT.position.x - (SOUND_RECT.size.x + 8.0) * 2.0 - 10.0
     var chip: Button = hub.crowns_client().make_chip(SOUND_RECT.size.y, cx1 - cx0)
+    chip.set_frame(hub.TOP_FRAME_CEL, 16.0)   # R113 · mesma moldura do som
     chip.name = "CrownsTopButtonMobile"
     chip.position = Vector2(cx0, SOUND_RECT.position.y)
     top.add_child(chip)

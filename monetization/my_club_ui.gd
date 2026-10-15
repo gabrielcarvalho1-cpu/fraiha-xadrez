@@ -32,7 +32,7 @@ static func build(hub, parent: VBoxContainer):
     head.add_child(hv)
     var t := Art.label(hv, "MEU CLUB", hub.fs(46), Art.GOLD, Art.FONT_BOLD)
     t.add_theme_constant_override("outline_size", 8)
-    t.add_theme_color_override("font_outline_color", Color(0.05, 0.12, 0.05, 0.95))
+    t.add_theme_color_override("font_outline_color", Color(0.070, 0.102, 0.168, 0.95))
     Art.label(hv, "JOGUE.  ENTENDA.  EVOLUA.", hub.fs(22), Art.acc_text(), Art.FONT_BOLD)
     if not hub.club_owned():
         Art.label(hv, "Estatísticas avançadas, relatório semanal, histórico detalhado, treinos e desafios são exclusivos do Club FRAIHA.", hub.fs(19), Art.CREAM)
@@ -278,6 +278,6 @@ class WeekChart extends Control:
             var x := i * bw * 1.6 + bw * 0.3
             var h: float = (base - 8.0) * float(vals[i]) / float(top)
             if h > 0.0:
-                draw_rect(Rect2(x, base - h, bw, h), Color("2f6b2a"))
+                draw_rect(Rect2(x, base - h, bw, h), Color("355087"))
                 draw_rect(Rect2(x, base - h, bw, h), ink, false, 1.5)
             draw_string(f, Vector2(x + bw * 0.25, size.y - 4), days[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, ink)

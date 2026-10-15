@@ -37,7 +37,7 @@ func _init():
     var bg := Panel.new()
     bg.name = "PortraitBg"
     var sb := StyleBoxFlat.new()
-    sb.bg_color = Color("0c1712")
+    sb.bg_color = Color("111620")
     sb.border_color = Color("5d6b58")
     sb.set_border_width_all(1)
     sb.set_corner_radius_all(4)

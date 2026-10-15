@@ -187,7 +187,7 @@ func _row_box(r, head: bool) -> HBoxContainer:
 	var mine: bool = account != null and String(r.get("user_id", "")) == String(account.get("user_id"))
 	var bg := PanelContainer.new()
 	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.10, 0.20, 0.13, 0.95) if pos % 2 == 1 else Color(0.06, 0.13, 0.09, 0.95)
+	st.bg_color = Color(0.136, 0.181, 0.272, 0.95) if pos % 2 == 1 else Color(0.083, 0.116, 0.181, 0.95)
 	if pos >= 1 and pos <= 3:
 		st.border_color = MEDAL[pos - 1]
 		st.set_border_width_all(1)

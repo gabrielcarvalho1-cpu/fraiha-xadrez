@@ -38,8 +38,8 @@ static func draw_mic(ci: CanvasItem, r: Rect2, state: String, col: Color, talkin
         "ERROR":
             var p := c + Vector2(s * 0.30, -s * 0.28)
             ci.draw_circle(p, s * 0.12, RED)
-            ci.draw_line(p + Vector2(0, -s * 0.06), p + Vector2(0, s * 0.02), Color("0b150f"), w * 0.9)
-            ci.draw_circle(p + Vector2(0, s * 0.065), w * 0.45, Color("0b150f"))
+            ci.draw_line(p + Vector2(0, -s * 0.06), p + Vector2(0, s * 0.02), Color("10141e"), w * 0.9)
+            ci.draw_circle(p + Vector2(0, s * 0.065), w * 0.45, Color("10141e"))
 
 ## Fone de ouvido = ÁUDIO RECEBIDO da voz (diferente do alto-falante de música/efeitos do jogo).
 ## muted: risco vermelho (não estou ouvindo ninguém, mas continuo na sala).
@@ -69,7 +69,7 @@ static func draw_seat_voice(ci: CanvasItem, avatar: Rect2, voice, seat: int) -> 
         for i in 3: ci.draw_rect(avatar.grow(4 + i * 2.0), Color(0.5, 0.95, 0.5, 0.6 - i * 0.18), false, 2.5)
     var side := clampf(avatar.size.x * 0.34, 18.0, 34.0)
     var b := Rect2(avatar.position + Vector2(-side * 0.3, avatar.size.y - side * 0.7), Vector2(side, side))
-    ci.draw_circle(b.get_center(), side * 0.56, Color("0b150f"))
+    ci.draw_circle(b.get_center(), side * 0.56, Color("10141e"))
     ci.draw_arc(b.get_center(), side * 0.56, 0, TAU, 18, Color("d9b45e"), 1.5)
     var deaf: bool = (not me) and voice.is_participant_muted(uid)
     draw_headphones(ci, b.grow(-side * 0.12), deaf, LIVE if talking else Color("f4ce7f"))
@@ -78,7 +78,7 @@ static func draw_seat_voice(ci: CanvasItem, avatar: Rect2, voice, seat: int) -> 
 static func draw_leave_badge(ci: CanvasItem, r: Rect2) -> Rect2:
     var rr := minf(r.size.x, r.size.y) * 0.2
     var c := Vector2(r.end.x - rr * 0.4, r.position.y + rr * 0.4)
-    ci.draw_circle(c, rr, Color("0b150f"))
+    ci.draw_circle(c, rr, Color("10141e"))
     ci.draw_arc(c, rr, 0, TAU, 16, Color("b99555"), 1.5)
     var a := rr * 0.45
     ci.draw_line(c + Vector2(-a, -a), c + Vector2(a, a), Color("f1e4c2"), 2.0)
@@ -94,6 +94,6 @@ static func draw_status(ci: CanvasItem, right_x: float, center_y: float, width: 
         lines = [txt.substr(0, cut), txt.substr(cut + 3)] if cut > 0 else [txt]
     var y := center_y - (lines.size() - 1) * fs * 0.6 + fs * 0.35
     for ln in lines:
-        ci.draw_string_outline(font, Vector2(right_x - width, y), String(ln), HORIZONTAL_ALIGNMENT_RIGHT, width, fs, 4, Color("0b150f"))
+        ci.draw_string_outline(font, Vector2(right_x - width, y), String(ln), HORIZONTAL_ALIGNMENT_RIGHT, width, fs, 4, Color("10141e"))
         ci.draw_string(font, Vector2(right_x - width, y), String(ln), HORIZONTAL_ALIGNMENT_RIGHT, width, fs, col)
         y += fs * 1.2

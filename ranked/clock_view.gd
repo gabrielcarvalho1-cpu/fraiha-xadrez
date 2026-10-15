@@ -75,7 +75,7 @@ func _draw():
 
 func _restyle():
     # Placa verde e ouro; da vez: dourada e viva; tempo baixo: vermelha pulsando.
-    style.bg_color = Color("123a24") if is_active else Color(0.04, 0.09, 0.06, 0.88)
+    style.bg_color = Color("182a4e") if is_active else Color(0.056, 0.080, 0.127, 0.88)
     style.border_color = Color("f1d58a") if is_active else Color("6e5a2a")
     if low and is_active:
         style.bg_color = Color("4a1410")

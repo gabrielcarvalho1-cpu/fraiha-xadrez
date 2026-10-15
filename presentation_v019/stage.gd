@@ -151,7 +151,7 @@ func _ready():
 func _build_backdrop():
     # Onde nada é desenhado aparecia o cinza padrão do Godot. Agora: verde-escuro + folhagem
     # em pixel art recortada da própria arte da floresta, em mosaico espelhado (sem emendas).
-    RenderingServer.set_default_clear_color(Color("0b1a10"))
+    RenderingServer.set_default_clear_color(Color("0f1625"))
     var layer := CanvasLayer.new()
     layer.name = "LeafBackdrop"
     layer.layer = -5
@@ -191,7 +191,7 @@ func _build_navigation():
     bot_info.name = "BotInfo"
     bot_info.add_theme_font_size_override("font_size", 20)
     bot_info.add_theme_color_override("font_color", Color("efcf83"))
-    bot_info.add_theme_color_override("font_outline_color", Color("102018"))
+    bot_info.add_theme_color_override("font_outline_color", Color("161e2d"))
     bot_info.add_theme_constant_override("outline_size", 5)
     bot_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     bot_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -238,7 +238,7 @@ func _build_desk_panel(overlay: CanvasLayer):
     desk_panel = PanelContainer.new()
     desk_panel.name = "MatchPlayerPanel"
     var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.06, 0.13, 0.09, 0.93)
+    style.bg_color = Color(0.083, 0.116, 0.181, 0.93)
     style.border_color = Color("b99555")
     style.set_border_width_all(2)
     style.set_corner_radius_all(10)
@@ -272,7 +272,7 @@ func _build_desk_panel(overlay: CanvasLayer):
     desk_name.name = "DeskName"
     desk_name.add_theme_font_size_override("font_size", 22)
     desk_name.add_theme_color_override("font_color", Color("f4ce7f"))
-    desk_name.add_theme_color_override("font_outline_color", Color("0b150f"))
+    desk_name.add_theme_color_override("font_outline_color", Color("10141e"))
     desk_name.add_theme_constant_override("outline_size", 4)
     desk_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     desk_name.clip_text = true
@@ -358,7 +358,7 @@ func _medieval_dialog_theme() -> Theme:
     var th := Theme.new()
     var gold := Color("c99a45")
     var frame := StyleBoxFlat.new()
-    frame.bg_color = Color("0c1f14")
+    frame.bg_color = Color("111a2b")
     frame.border_color = gold
     frame.set_border_width_all(3)
     frame.border_width_top = 44
@@ -376,7 +376,7 @@ func _medieval_dialog_theme() -> Theme:
     th.set_color("title_color", "Window", Color("1a0f02"))
     th.set_constant("title_height", "Window", 40)
     var body := StyleBoxFlat.new()
-    body.bg_color = Color("0c1f14")
+    body.bg_color = Color("111a2b")
     body.border_color = Color(0.79, 0.6, 0.27, 0.35)
     body.set_border_width_all(1)
     for side in ["left", "right", "top", "bottom"]: body.set("content_margin_" + side, 18)
@@ -384,7 +384,7 @@ func _medieval_dialog_theme() -> Theme:
     th.set_color("font_color", "Label", Color("f1e4c2"))
     th.set_font_size("font_size", "Label", 24)
     var btn := StyleBoxFlat.new()
-    btn.bg_color = Color("1f5a2e")
+    btn.bg_color = Color("284174")
     btn.border_color = Color("f1d58a")
     btn.set_border_width_all(2)
     btn.set_corner_radius_all(4)
@@ -395,10 +395,10 @@ func _medieval_dialog_theme() -> Theme:
     btn.shadow_color = Color(0, 0, 0, 0.4)
     btn.shadow_size = 3
     var lit := btn.duplicate()
-    lit.bg_color = Color("2d7a40")
+    lit.bg_color = Color("2f5aa8")
     lit.border_color = Color("fff0b8")
     var down := btn.duplicate()
-    down.bg_color = Color("153f20")
+    down.bg_color = Color("1c2f54")
     th.set_stylebox("normal", "Button", btn)
     th.set_stylebox("hover", "Button", lit)
     th.set_stylebox("pressed", "Button", down)
@@ -761,7 +761,7 @@ func _build_mobile_controls(overlay: CanvasLayer):
     mobile_status = Label.new()
     mobile_status.add_theme_font_size_override("font_size", 20)
     mobile_status.add_theme_color_override("font_color", Color("efcf83"))
-    mobile_status.add_theme_color_override("font_outline_color", Color("102018"))
+    mobile_status.add_theme_color_override("font_outline_color", Color("161e2d"))
     mobile_status.add_theme_constant_override("outline_size", 5)
     mobile_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     mobile_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -865,7 +865,7 @@ func _mobile_status_text() -> String:
 
 func _badge_style(accent: Color) -> StyleBoxFlat:
     var style = StyleBoxFlat.new()
-    style.bg_color = Color(0.05, 0.08, 0.07, 0.82)
+    style.bg_color = Color(0.071, 0.085, 0.113, 0.82)
     style.border_color = accent
     style.set_border_width_all(1)
     style.set_corner_radius_all(6)
@@ -879,10 +879,10 @@ func _touch_button_style(button: Button):
     if button.has_meta("touch_style"): return
     button.set_meta("touch_style", true)
     var style = _badge_style(Color("84754b"))
-    style.bg_color = Color(0.06, 0.11, 0.09, 0.9)
+    style.bg_color = Color(0.084, 0.107, 0.154, 0.9)
     button.add_theme_stylebox_override("normal", style)
     var active = style.duplicate()
-    active.bg_color = Color("26382b")
+    active.bg_color = Color("333b4c")
     active.border_color = Color("e5c37c")
     for state in ["pressed", "hover", "focus"]: button.add_theme_stylebox_override(state, active)
     button.add_theme_color_override("font_color", Color("efe3c4"))

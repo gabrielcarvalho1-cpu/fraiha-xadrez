@@ -130,7 +130,7 @@ func show_result(p_result: String):
     set_process(true)
     var mat: ShaderMaterial = backdrop.material
     mat.set_shader_parameter("amount", 0.0)
-    mat.set_shader_parameter("tint", Color(0.0, 0.02, 0.01) if result == "victory" else Color(0.06, 0.0, 0.0))
+    mat.set_shader_parameter("tint", Color(0.000, 0.010, 0.029) if result == "victory" else Color(0.06, 0.0, 0.0))
     glow.modulate = Color(1, 1, 1, 0)
     glow.scale = Vector2(0.2, 0.2)
     art.modulate = Color(1, 1, 1, 0)

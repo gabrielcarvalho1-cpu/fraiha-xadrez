@@ -27,7 +27,7 @@ func band_color(k: float) -> Color:
     return Color("1b150e").lerp(Color("3a2c1a"), absf(k - 0.5) * 2.0)
 
 func medallion_color() -> Color:
-    return Color("140d06") if style == "fundador" else Color("0b2416")
+    return Color("140d06") if style == "fundador" else Color("0f1b32")
 
 func _init():
     name = "ClubFrame"

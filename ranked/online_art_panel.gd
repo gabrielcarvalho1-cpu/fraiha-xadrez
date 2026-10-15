@@ -9,7 +9,7 @@ var ART: Texture2D:
         if _art == null: _art = load("res://ui_v022/assets/online_panel.png")
         return _art
 const TITLE_FONT := preload("res://account/fonts/Cinzel-Bold.woff")
-const BG_TAB := Color("001b0f")
+const BG_TAB := Color("000d26")
 const TAB_ART := preload("res://ui_v022/assets/online_tab.png")
 const ICON_CASUAL := preload("res://ui_v022/assets/online_tab_icon_casual.png")
 const ICON_RANKED := preload("res://ui_v022/assets/online_tab_icon_ranked.png")
@@ -204,7 +204,7 @@ func _draw():
     if not rated and n > 0:
         # R35.1 · CONVIDAR AMIGO (casual): botão verde e ouro no mesmo estilo dos cartões
         var ir := INVITE
-        draw_rect(ir, Color("0d2a1a") if hover != "invite" else Color("174a2c"))
+        draw_rect(ir, Color("121f3a") if hover != "invite" else Color("1e3562"))
         draw_rect(ir, Color("d9a441"), false, 2.0)
         draw_rect(ir.grow(-4), Color(0.85, 0.64, 0.25, 0.35), false, 1.0)
         _center(TITLE_FONT, "CONVIDAR AMIGO", ir.get_center().x, ir.get_center().y + 8, 24, ir.size.x - 20, Color("f6d27a"), 4, Color(0.1, 0.05, 0.0, 0.8))

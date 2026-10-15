@@ -87,8 +87,8 @@ const KINGDOM_DOT := [Color("f3ecdc"), Color("d81f33"), Color("2c3340"), Color("
 const GOLD := Color("e7b84a")
 const GOLD_LINE := Color("b8892f")
 const CREAM := Color("f3ead2")
-const PANEL := Color("0f2b20")
-const PANEL_DARK := Color("0a1d16")
+const PANEL := Color("15213b")
+const PANEL_DARK := Color("0e1729")
 const TURN_MS := 15000   # R54 · 15 s por vez (servidor: online_v021/modes/party.js marchaTurnMs)
 const BOT_DELAY := 0.95
 const SWAP_MIN := 1.0             # R35.1: troca do J leva de 1,0 a 2,4 s (+0,7 s de brilho)
@@ -1900,7 +1900,7 @@ class TableView extends Control:
         var f := fs
         while f > 10 and text_w(s, font_key, f) > room: f -= 1
         return f
-    func panel(r: Rect2, glow := false, fill: Color = Color("0f2b20")):
+    func panel(r: Rect2, glow := false, fill: Color = Color("15213b")):
         if ui.desk:
             _panel_r57(r, glow)
             return
@@ -1952,14 +1952,14 @@ class TableView extends Control:
             text(label, Vector2(r.position.x, r.get_center().y + fr * 0.36), "bold_sp", fr, Color("f4ead2") if enabled else Color("6b6060"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 3, Color(0.05, 0.02, 0.06, 0.8))
             if enabled: ui.hits.append({"rect": r, "id": id})
             return
-        draw_rect(r, Color("07110c"))
+        draw_rect(r, Color("0a0f18"))
         draw_rect(r, Color("c99a45") if enabled else Color("4a4030"), false, 2.0)
         draw_rect(r.grow(-5), Color(0.79, 0.6, 0.27, 0.25), false, 1.0)
         var f2 := fit(label, "bold_sp", fs, r.size.x - 20)
         text(label, Vector2(r.position.x, r.get_center().y + f2 * 0.36), "bold_sp", f2, ui.CREAM if enabled else Color("6b6656"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
         if enabled: ui.hits.append({"rect": r, "id": id})
     func square_button(r: Rect2, glyph: String, id: String):
-        draw_rect(r, Color("0a1611"))
+        draw_rect(r, Color("0e141f"))
         draw_rect(r, ui.GOLD, false, 2.0)
         if glyph == "?":
             text("?", Vector2(r.position.x, r.get_center().y + 11), "bold", 30, ui.GOLD, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
@@ -1967,13 +1967,13 @@ class TableView extends Control:
             for i in 3: draw_line(r.get_center() + Vector2(-9, -6 + i * 6), r.get_center() + Vector2(9, -6 + i * 6), ui.GOLD, 2.5)
         ui.hits.append({"rect": r, "id": id})
     func fullscreen_button(r: Rect2, on: bool):
-        draw_rect(r, Color("0a1611"))
+        draw_rect(r, Color("0e141f"))
         draw_rect(r, ui.GOLD, false, 2.0)
         ui.FullscreenControl.draw_glyph(self, r.grow(-6), on, ui.GOLD, 2.5)
         ui.hits.append({"rect": r, "id": "fullscreen"})
     func sound_button(r: Rect2, kind: String):
         var off: bool = ui.Sound.music_muted(ui.hub) if kind == "music" else ui.Sound.effects_muted(ui.hub)
-        draw_rect(r, Color("0a1611"))
+        draw_rect(r, Color("0e141f"))
         draw_rect(r, ui.GOLD, false, 2.0)
         ui.Sound.glyph(self, r.grow(-6), kind, off, ui.GOLD if not off else Color("6b6656"))
         ui.hits.append({"rect": r, "id": "mute_music" if kind == "music" else "mute_fx"})
@@ -1987,7 +1987,7 @@ class TableView extends Control:
     # ------------------------------------------------------------ barra do modo
     func _draw_bar():
         var w: float = ui.design.x
-        draw_rect(Rect2(0, 0, w, 82 if not ui.portrait else 116), Color(0.02, 0.05, 0.04, 0.55))
+        draw_rect(Rect2(0, 0, w, 82 if not ui.portrait else 116), Color(0.029, 0.043, 0.071, 0.55))
         var by := 82.0 if not ui.portrait else 116.0
         draw_line(Vector2(0, by), Vector2(w, by), ui.GOLD_LINE, 2.0)
         var ty := 44.0 if not ui.portrait else 58.0
@@ -2014,7 +2014,7 @@ class TableView extends Control:
         var vo = ui.voice()
         if ui.mode == "game" and vo != null and vo.in_match() and vo.available():
             var vr := Rect2(right - gap * 3, top, bs, bs)
-            draw_rect(vr, Color("0a1611"))
+            draw_rect(vr, Color("0e141f"))
             draw_rect(vr, ui.GOLD, false, 2.0)
             ui.VoiceGlyph.draw_mic(self, vr.grow(-6), vo.state, ui.GOLD, vo.is_speaking(vo.my_uid))
             ui.hits.append({"rect": vr, "id": "voice"})
@@ -2023,7 +2023,7 @@ class TableView extends Control:
             if vo.active():
                 # ÁUDIO RECEBIDO (fone): ouvir / não ouvir os outros, sem sair da sala nem mexer no microfone
                 var er := Rect2(right - gap * 4, top, bs, bs)
-                draw_rect(er, Color("0a1611"))
+                draw_rect(er, Color("0e141f"))
                 draw_rect(er, ui.GOLD, false, 2.0)
                 ui.VoiceGlyph.draw_headphones(self, er.grow(-7), vo.speaker_muted, ui.GOLD)
                 ui.hits.append({"rect": er, "id": "voice_ear"})
@@ -2105,7 +2105,7 @@ class TableView extends Control:
         # cartas na mão (versos) e peões ainda no Pátio
         for c in n:
             var cr := Rect2(Vector2(x + c * 17, r.position.y + 84), Vector2(16, 24))
-            draw_rect(cr, Color("1c4a35"))
+            draw_rect(cr, Color("253962"))
             draw_rect(cr, Color("b8892f"), false, 1.0)
             diamond(cr.get_center(), 3, Color("d9b45e"))
         var dx := x + maxf(n, 3) * 17 + 18
@@ -2481,8 +2481,8 @@ class TableView extends Control:
     func _draw_turn_box(r: Rect2):
         var g = ui.g
         var mine: bool = g != null and g.turn == 0 and ui.mode == "game"
-        var top := Color("ffd65c") if mine else Color("2a4d3c")
-        var bot := Color("e9a417") if mine else Color("163326")
+        var top := Color("ffd65c") if mine else Color("374765")
+        var bot := Color("e9a417") if mine else Color("1e2b45")
         for i in int(r.size.y):
             draw_line(r.position + Vector2(0, i), r.position + Vector2(r.size.x, i), top.lerp(bot, float(i) / r.size.y), 1.0)
         draw_rect(r, Color("5a3b06") if mine else Color("c99a45"), false, 2.0)
@@ -2524,7 +2524,7 @@ class TableView extends Control:
         for i in 2:
             var r := Rect2(Vector2(at.x + i * (bw + 8), at.y), Vector2(bw, 40))
             var on: bool = items[i][2]
-            draw_rect(r, Color("f0c44c") if on else Color("0a1611"))
+            draw_rect(r, Color("f0c44c") if on else Color("0e141f"))
             draw_rect(r, ui.GOLD, false, 2.0)
             var f := fit(items[i][1], "bold", 20, r.size.x - 10)
             text(items[i][1], Vector2(r.position.x, r.position.y + 28), "bold", f, Color("1c1405") if on else ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
@@ -2551,7 +2551,7 @@ class TableView extends Control:
             var cap := "7" if a == 7 else "%d+%d" % [a, 7 - a]
             var r := Rect2(x, top, w, h)
             var on: bool = ui.split_first == a
-            draw_rect(r, Color("f0c44c") if on else Color("10261c"))
+            draw_rect(r, Color("f0c44c") if on else Color("162035"))
             draw_rect(r, ui.GOLD, false, 3.0)
             var fs := fit(cap, "bold", int(h * 0.5), r.size.x - 10)
             text(cap, Vector2(r.position.x, r.get_center().y + fs * 0.36), "bold", fs, Color("1c1405") if on else ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
@@ -2579,7 +2579,7 @@ class TableView extends Control:
             var cap := "7" if a == 7 else "%d+%d" % [a, 7 - a]
             var r := Rect2(Vector2(x, y), Vector2(chip, 40))
             var on: bool = ui.split_first == a
-            draw_rect(r, Color("f0c44c") if on else Color("0a1611"))
+            draw_rect(r, Color("f0c44c") if on else Color("0e141f"))
             draw_rect(r, ui.GOLD, false, 2.0)
             text(cap, Vector2(r.position.x, r.position.y + 29), "bold", 22 if chip > 60 else 19, Color("1c1405") if on else ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
             ui.hits.append({"rect": r, "id": "split_%d" % a})
@@ -2610,7 +2610,7 @@ class TableView extends Control:
             _plate(Rect2(40, 404, 390, 122), 3)
             # últimas jogadas
             var lr := Rect2(40, 556, 390, 316)
-            draw_rect(lr, Color(0.02, 0.07, 0.05, 0.75))
+            draw_rect(lr, Color(0.028, 0.052, 0.099, 0.75))
             draw_rect(lr, Color("6f5524"), false, 1.5)
             text("ÚLTIMAS JOGADAS", Vector2(62, 596), "semi_sp2", 18, Color("d9a441"))
             if g != null:
@@ -2893,7 +2893,7 @@ class TableView extends Control:
         var ok: bool = bool(info.get("can_play", false))
         var bw := text_w(badge, "bold_sp", 18) + 30
         var brr := Rect2(Vector2(x, sy), Vector2(bw, 36))
-        draw_rect(brr, Color("1d6b45") if ok else Color("5a2a1a"))
+        draw_rect(brr, Color("254587") if ok else Color("5a2a1a"))
         draw_rect(brr, Color("8fe0a8") if ok else Color("f2a070"), false, 2.0)
         text(badge, Vector2(brr.position.x, brr.position.y + 26), "bold_sp", 18, Color("eafff0") if ok else Color("ffe2c8"), brr.size.x, HORIZONTAL_ALIGNMENT_CENTER)
         var note := String(info.get("note", ""))
@@ -3189,7 +3189,7 @@ class TableView extends Control:
     func _draw_flash():
         var w := text_w(ui.flash, "semi", 26) + 60
         var r := Rect2(Vector2(ui.design.x / 2.0 - w / 2.0, ui.design.y * (0.88 if not ui.portrait else 0.18)), Vector2(w, 56))
-        draw_rect(r, Color(0.05, 0.08, 0.06, 0.94))
+        draw_rect(r, Color(0.071, 0.085, 0.113, 0.94))
         draw_rect(r, ui.GOLD, false, 2.0)
         text(ui.flash, Vector2(r.position.x, r.position.y + 37), "semi", 26, ui.CREAM, r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
 

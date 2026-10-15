@@ -185,7 +185,7 @@ func _draw_view():
     if absf(view.size.x - preview_size) > 1.0 or absf(view.size.y - preview_size) > 1.0:
         preview_size = minf(view.size.x, view.size.y)   # geometria sempre no quadrado real
     var r := _photo_rect()
-    view.draw_rect(Rect2(Vector2.ZERO, view.size), Color(0.02, 0.05, 0.03))
+    view.draw_rect(Rect2(Vector2.ZERO, view.size), Color(0.029, 0.043, 0.071))
     view.draw_texture_rect(source_tex, r, false)
     # escurece fora do círculo (prévia de como fica no medalhão) e desenha a borda
     var c := Vector2(preview_size, preview_size) / 2.0

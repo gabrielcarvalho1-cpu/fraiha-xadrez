@@ -107,7 +107,7 @@ func _draw_panel():
 	if not visible: return
 	var c := canvas
 	c.draw_rect(box.grow(5), Color(0, 0, 0, 0.35))
-	c.draw_rect(box, Color(0.05, 0.08, 0.07, 0.96))
+	c.draw_rect(box, Color(0.071, 0.085, 0.113, 0.96))
 	c.draw_rect(box, GOLD, false, 2.0)
 	c.draw_rect(box.grow(-5), Color(GOLD.r, GOLD.g, GOLD.b, 0.3), false, 1.0)
 	var f: Font = ThemeDB.fallback_font
@@ -121,7 +121,7 @@ func _draw_panel():
 		c.draw_string(f, Vector2(col_x, box.position.y + 50), pct, HORIZONTAL_ALIGNMENT_CENTER, col_w, 18, CREAM if v > 0.0 else Color("e0574a"))
 		# trilho: vazio escuro, cheio dourado de baixo para cima
 		c.draw_rect(tr.grow(2), Color("120a06"))
-		c.draw_rect(tr, Color("24322b"))
+		c.draw_rect(tr, Color("313744"))
 		var fill_h := tr.size.y * v
 		c.draw_rect(Rect2(tr.position.x, tr.end.y - fill_h, tr.size.x, fill_h), GOLD)
 		var ky := tr.end.y - fill_h

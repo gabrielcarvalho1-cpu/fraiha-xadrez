@@ -4,7 +4,7 @@ extends Button
 ## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off", "trophy", "chat", "crown". hint: tecla (ex.: "ESC").
 const GOLD := Color("f4ce7f")
 const GOLD_DIM := Color("b99555")
-const INK := Color("0b150f")
+const INK := Color("10141e")
 var glyph := ""
 var hint := ""
 var icon_only := false
@@ -28,6 +28,24 @@ func set_over_art(on: bool):
         add_theme_stylebox_override(pair[0], pair[1])
     queue_redraw()
 
+## R113 · a mesma moldura da arte da Home (dourada, fundo escuro), recortada dos botões de som / tela cheia.
+## Em 9 partes: estica sem deformar os cantos (serve também para o botão largo das Coroas).
+var framed := false
+func set_frame(tex: Texture2D, margin := 14.0):
+    framed = true
+    for pair in [["normal", Color(1, 1, 1)], ["hover", Color(1.22, 1.16, 1.05)], ["pressed", Color(0.82, 0.82, 0.82)], ["disabled", Color(0.6, 0.6, 0.6)]]:
+        var st := StyleBoxTexture.new()
+        st.texture = tex
+        st.texture_margin_left = margin
+        st.texture_margin_right = margin
+        st.texture_margin_top = margin
+        st.texture_margin_bottom = margin
+        st.modulate_color = pair[1]
+        add_theme_stylebox_override(pair[0], st)
+    add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+    _margins()
+    queue_redraw()
+
 static func make(glyph_id: String, caption := "", key_hint := "") -> Button:
     var b = load("res://ui_v022/hud_button.gd").new()
     b.glyph = glyph_id
@@ -49,7 +67,7 @@ func _style():
     add_theme_color_override("font_outline_color", INK)
     add_theme_constant_override("outline_size", 4)
     var normal := StyleBoxFlat.new()
-    normal.bg_color = Color(0.07, 0.14, 0.10, 0.93)
+    normal.bg_color = Color(0.097, 0.129, 0.194, 0.93)
     normal.border_color = GOLD_DIM
     normal.set_border_width_all(2)
     normal.set_corner_radius_all(8)
@@ -57,13 +75,13 @@ func _style():
     normal.shadow_size = 6
     normal.shadow_offset = Vector2(0, 2)
     var hover := normal.duplicate()
-    hover.bg_color = Color(0.11, 0.22, 0.15, 0.96)
+    hover.bg_color = Color(0.149, 0.198, 0.297, 0.96)
     hover.border_color = GOLD
     var pressed := normal.duplicate()
-    pressed.bg_color = Color(0.05, 0.10, 0.07, 0.96)
+    pressed.bg_color = Color(0.070, 0.094, 0.141, 0.96)
     pressed.border_color = GOLD
     var disabled := normal.duplicate()
-    disabled.bg_color = Color(0.06, 0.09, 0.08, 0.8)
+    disabled.bg_color = Color(0.085, 0.099, 0.127, 0.8)
     disabled.border_color = Color("4b4a3a")
     for pair in [["normal", normal], ["hover", hover], ["pressed", pressed], ["disabled", disabled], ["focus", StyleBoxEmpty.new()]]:
         add_theme_stylebox_override(pair[0], pair[1])
@@ -71,7 +89,7 @@ func _style():
 
 func _margins():
     for s in ["normal", "hover", "pressed", "disabled"]:
-        var st: StyleBoxFlat = get_theme_stylebox(s)
+        var st: StyleBox = get_theme_stylebox(s)
         st.content_margin_left = (icon_box - 4.0) if not icon_only else 0.0
         st.content_margin_right = (_hint_width() + 22.0) if not hint.is_empty() else 16.0
 
@@ -86,7 +104,7 @@ func _draw():
     var lit := is_hovered() or button_pressed
     var col := GOLD if (lit and not disabled) else (Color("7d8479") if disabled else Color("e9cf8f"))
     # Cravos dourados nos cantos da moldura.
-    for c in ([] if glyph.is_empty() else [Vector2(6, 6), Vector2(size.x - 6, 6), Vector2(6, size.y - 6), Vector2(size.x - 6, size.y - 6)]):
+    for c in ([] if glyph.is_empty() or framed else [Vector2(6, 6), Vector2(size.x - 6, 6), Vector2(6, size.y - 6), Vector2(size.x - 6, size.y - 6)]):
         draw_colored_polygon(PackedVector2Array([c + Vector2(0, -2.5), c + Vector2(2.5, 0), c + Vector2(0, 2.5), c + Vector2(-2.5, 0)]), GOLD_DIM if not lit else GOLD)
     var box := minf(size.y, icon_box)
     var center := Vector2(icon_box / 2.0 + 2.0, size.y / 2.0) if not icon_only else size / 2.0

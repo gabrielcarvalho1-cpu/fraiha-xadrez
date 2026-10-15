@@ -78,13 +78,13 @@ func setup(service, avatar_callable: Callable = Callable()):
     avatar_for = avatar_callable
     layer = 66   # R35.1: por cima das telas dos modos (MARCHA REAL / XEQUE), que convidam daqui
     dim = ColorRect.new()
-    dim.color = Color(0.02, 0.04, 0.03, 0.82)
+    dim.color = Color(0.029, 0.038, 0.057, 0.82)
     dim.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(dim)
     panel = PanelContainer.new()
     panel.name = "FriendsPanel"
     var style = StyleBoxFlat.new()   # (base do aviso/toast)
-    style.bg_color = Color("#142217f7")
+    style.bg_color = Color("#1c222ff7")
     style.border_color = Color("#b19758")
     style.set_border_width_all(2)
     style.set_corner_radius_all(8)
@@ -123,7 +123,7 @@ func setup(service, avatar_callable: Callable = Callable()):
     toast = PanelContainer.new()
     toast.name = "FriendsToast"
     var ts = style.duplicate()
-    ts.bg_color = Color("#1d3322f2")
+    ts.bg_color = Color("#273145f2")
     for side in ["left", "right", "top", "bottom"]: ts.set("content_margin_" + side, 10)
     toast.add_theme_stylebox_override("panel", ts)
     toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -315,7 +315,7 @@ func show_request_card(who: Dictionary):
     req_card = PanelContainer.new()
     req_card.name = "FriendRequestCard"
     var st = StyleBoxFlat.new()
-    st.bg_color = Color("#101a14f5")
+    st.bg_color = Color("#161b25f5")
     st.border_color = Color("#c79a4a")
     st.set_border_width_all(2)
     st.set_corner_radius_all(6)
@@ -562,7 +562,7 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
         var dot = Panel.new()
         var ds = StyleBoxFlat.new()
         ds.bg_color = Color("36c25a"); ds.set_corner_radius_all(6)
-        ds.border_color = Color("0d1a10"); ds.set_border_width_all(1)
+        ds.border_color = Color("121825"); ds.set_border_width_all(1)
         dot.add_theme_stylebox_override("panel", ds)
         dot.size = Vector2(12, 12)
         dot.position = Vector2(34, 34)
@@ -1018,7 +1018,7 @@ func _style_scrollbar():
     if bar.has_meta("fraiha"): return
     bar.set_meta("fraiha", true)
     var tr := StyleBoxFlat.new()
-    tr.bg_color = Color(0.02, 0.06, 0.05, 0.85)
+    tr.bg_color = Color(0.028, 0.047, 0.085, 0.85)
     tr.border_color = Color(0.72, 0.56, 0.24, 0.8)
     tr.set_border_width_all(1)
     tr.set_corner_radius_all(4)
@@ -1184,7 +1184,7 @@ func _build_dm():
     dm_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     dm_scroll.custom_minimum_size.y = 240
     var bg = StyleBoxFlat.new()
-    bg.bg_color = Color(0.03, 0.06, 0.05, 0.75)
+    bg.bg_color = Color(0.043, 0.057, 0.085, 0.75)
     bg.border_color = Color("3d4a3a")
     bg.set_border_width_all(1)
     bg.set_corner_radius_all(6)
@@ -1247,7 +1247,7 @@ func _dm_line(m: Dictionary):
     dm_list.add_child(wrap)
     var bubble = PanelContainer.new()
     var st = StyleBoxFlat.new()
-    st.bg_color = Color("2c4a2f") if mine else Color("1b2a24")
+    st.bg_color = Color("3a4762") if mine else Color("252c3a")
     st.border_color = Color("b19758") if mine else Color("4b5a4c")
     st.set_border_width_all(1)
     st.set_corner_radius_all(8)

@@ -80,7 +80,7 @@ func _build():
     root.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(root)
     var bg := ColorRect.new()
-    bg.color = Color(0.01, 0.04, 0.025, 1.0)
+    bg.color = Color(0.014, 0.029, 0.057, 1.0)
     bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root.add_child(bg)

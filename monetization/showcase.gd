@@ -109,7 +109,7 @@ func _draw():
     var src := Rect2((ts.x - vis.x) * 0.5, clampf((ts.y - vis.y) * 0.3, 0.0, ts.y - vis.y), vis.x, vis.y)
     draw_texture_rect_region(tex, Rect2(Vector2.ZERO, s), src)
     # escurece o lado do texto e a base, para leitura
-    var ink := Color(0.02, 0.035, 0.025)
+    var ink := Color(0.029, 0.036, 0.050)
     if pieces_right:
         var steps := 24
         for i in steps:

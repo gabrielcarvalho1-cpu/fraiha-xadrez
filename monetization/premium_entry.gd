@@ -27,8 +27,8 @@ func _draw():
     var lit := is_hovered() or has_focus()
     var r := Rect2(Vector2(0, 8), size - Vector2(0, 8))
     # Fundo preto/verde com gradiente e borda dourada dupla.
-    var top := Color("1a2a14") if lit else Color("0f1d10")
-    var bottom := Color("050a06")
+    var top := Color("1c263a") if lit else Color("151c29")
+    var bottom := Color("070a0e")
     var pts := PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
     draw_polygon(pts, PackedColorArray([top, top, bottom, bottom]))
     draw_rect(r, Color("e2b65a") if lit else Color("c99a45"), false, 2.5)

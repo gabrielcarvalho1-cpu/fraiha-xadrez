@@ -216,8 +216,8 @@ func _draw():
     draw_polyline(rim, Color("5a3d10"), 1.2)
     # interior verde profundo (gradiente vertical) emoldurado pelo ouro
     var inner := ribbon(w, h, notch, border)
-    var top := Color("1f5a30") if active else Color("12331c")
-    var bottom := Color("07180c")
+    var top := Color("284174") if active else Color("182745")
+    var bottom := Color("0a1222")
     if lit: top = top.lightened(0.10)
     var cols := PackedColorArray()
     for p in inner: cols.append(top.lerp(bottom, clampf((p.y - border) / maxf(1.0, h - border * 2.0), 0.0, 1.0)))
@@ -262,7 +262,7 @@ func _paint_mid(l: Node2D):
     for i in 4:
         var rr := ms / 2.0 - i * (ms / 10.0)
         l.draw_circle(mc, rr, gold_at(0.15 + i * 0.22, lit))
-    l.draw_circle(mc, ms / 2.0 - 2.0, Color("0b2416"))
+    l.draw_circle(mc, ms / 2.0 - 2.0, Color("0f1b32"))
     l.draw_arc(mc, ms / 2.0 - 2.0, 0, TAU, 32, Color("f1d58a"), 1.0)
 
 ## brilho do medalhão (ativo): alfa vem do modulate da camada
@@ -312,7 +312,7 @@ func _paint_front(l: Node2D):
         l.draw_circle(sc + Vector2(0, 1), ss / 2.0 + 1.0, Color(0, 0, 0, 0.4))
         for i in 3:
             l.draw_circle(sc, ss / 2.0 - i * (ss / 8.0), gold_at(0.1 + i * 0.3, lit))
-        Art.icon(l, "check", Rect2(sc - Vector2(ss, ss) * 0.28, Vector2(ss, ss) * 0.56), Color("1a3a12"))
+        Art.icon(l, "check", Rect2(sc - Vector2(ss, ss) * 0.28, Vector2(ss, ss) * 0.56), Color("182a4e"))
 
 ## faísca (ativo): estrela de raio 1 na origem; a camada anda/escala/esmaece
 func _paint_spark(l: Node2D):
@@ -364,4 +364,4 @@ func _paint_seal_pulse(l: Node2D):
 func _paint_seal_top(l: Node2D):
     var sc := art_seal + Vector2(0, 1.0 if _down() else 0.0)
     l.draw_arc(sc, 14.0, PI * 1.1, PI * 1.9, 16, Color(1, 0.95, 0.7, 0.75), 2.0)
-    l.draw_polyline(PackedVector2Array([sc + Vector2(-8, 0), sc + Vector2(-2, 6), sc + Vector2(9, -7)]), Color("0f3518"), 5.0)
+    l.draw_polyline(PackedVector2Array([sc + Vector2(-8, 0), sc + Vector2(-2, 6), sc + Vector2(9, -7)]), Color("142648"), 5.0)

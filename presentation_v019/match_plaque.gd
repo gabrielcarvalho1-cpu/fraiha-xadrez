@@ -45,7 +45,7 @@ func _draw():
     var f := _font()
     var rect := Rect2(Vector2.ZERO, size)
     var body := StyleBoxFlat.new()
-    body.bg_color = Color(0.06, 0.13, 0.09, 0.94)
+    body.bg_color = Color(0.083, 0.116, 0.181, 0.94)
     body.border_color = GOLD_DIM
     body.set_border_width_all(2)
     body.set_corner_radius_all(10)
@@ -67,7 +67,7 @@ func _draw():
     var x0 := 34.0
     draw_string(f, Vector2(x0, 23), "ADVERSÁRIO", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, MUTED)
     var main := _main_text()
-    draw_string_outline(f, Vector2(x0, 47), main, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, 4, Color("0b150f"))
+    draw_string_outline(f, Vector2(x0, 47), main, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, 4, Color("10141e"))
     draw_string(f, Vector2(x0, 47), main, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, GOLD)
     # Marcadores de nível: losangos cheios até a dificuldade escolhida.
     var filled := LEVELS.find(level_id) + 1
@@ -86,5 +86,5 @@ func _draw():
     draw_string(f, Vector2(x1, 23), "VOCÊ JOGA DE", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, MUTED)
     if king != null:
         draw_texture_rect(king, Rect2(x1 - 2, 27, 26, 26), false)
-    draw_string_outline(f, Vector2(x1 + 30, 47), side_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, 4, Color("0b150f"))
+    draw_string_outline(f, Vector2(x1 + 30, 47), side_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, 4, Color("10141e"))
     draw_string(f, Vector2(x1 + 30, 47), side_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, CREAM)

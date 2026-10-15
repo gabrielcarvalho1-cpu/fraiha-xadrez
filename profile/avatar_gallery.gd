@@ -192,8 +192,8 @@ class Card extends Button:
             if tex == null:
                 # sem arte: silhueta + brasão da liga (mesmo desenho dos cartões do PC), por baixo da moldura
                 var pr0 := Rect2(portrait.position, portrait.size)
-                draw_rect(pr0, Color("0a120e"))
-                var hc0 := Color("1f2a24") if st == "locked" else Color("2c3a30")
+                draw_rect(pr0, Color("0e121a"))
+                var hc0 := Color("2b303a") if st == "locked" else Color("2c3a30")
                 draw_circle(pr0.position + pr0.size * Vector2(0.5, 0.42), pr0.size.x * 0.17, hc0)
                 draw_colored_polygon(PackedVector2Array([pr0.position + pr0.size * Vector2(0.18, 1.0), pr0.position + pr0.size * Vector2(0.26, 0.70), pr0.position + pr0.size * Vector2(0.5, 0.62), pr0.position + pr0.size * Vector2(0.74, 0.70), pr0.position + pr0.size * Vector2(0.82, 1.0)]), hc0)
                 var b0 := ThemeCatalog.badge_texture(String(Catalog.entry(avatar).get("league", "")))
@@ -206,7 +206,7 @@ class Card extends Button:
         var r := Rect2(Vector2.ZERO, size)
         # base do cartão
         var sb := StyleBoxFlat.new()
-        sb.bg_color = Color("10241a") if st != "locked" else Color("0c1511")
+        sb.bg_color = Color("161f32") if st != "locked" else Color("11151e")
         sb.set_corner_radius_all(6)
         sb.set_border_width_all(3 if st == "selected" else 2)
         sb.border_color = {"selected": EMERALD, "unlocked": GOLD, "no_art_unlocked": GOLD.darkened(0.2), "locked": Color("3a4038")}[st]
@@ -240,9 +240,9 @@ class Card extends Button:
         var pr := Rect2(portrait.position, portrait.size)
         # sem arte: silhueta + brasão da liga
         if tex == null:
-            draw_rect(pr, Color("0a120e"))
+            draw_rect(pr, Color("0e121a"))
             var c := pr.position + pr.size * Vector2(0.5, 0.42)
-            var hc := Color("1f2a24") if st == "locked" else Color("2c3a30")
+            var hc := Color("2b303a") if st == "locked" else Color("2c3a30")
             draw_circle(c, pr.size.x * 0.17, hc)
             draw_colored_polygon(PackedVector2Array([pr.position + pr.size * Vector2(0.18, 1.0), pr.position + pr.size * Vector2(0.26, 0.70), pr.position + pr.size * Vector2(0.5, 0.62), pr.position + pr.size * Vector2(0.74, 0.70), pr.position + pr.size * Vector2(0.82, 1.0)]), hc)
             var e: Dictionary = Catalog.entry(avatar)
@@ -266,7 +266,7 @@ class Card extends Button:
         if st == "selected" and frame_art == null:
             var f2 := get_theme_default_font()
             var tag := Rect2(pr.position + Vector2(pr.size.x / 2.0 - 30, pr.size.y - 16), Vector2(60, 18))
-            draw_rect(tag, Color("163b25"))
+            draw_rect(tag, Color("1e2e4f"))
             draw_rect(tag, EMERALD, false, 1.5)
             draw_string(f2, tag.position + Vector2(0, 13), "EM USO", HORIZONTAL_ALIGNMENT_CENTER, tag.size.x, 11, Color("c9ffd9"))
         # legenda

@@ -52,7 +52,7 @@ func _card(b: Dictionary) -> Control:
     panel.custom_minimum_size = card_size
     if compact: panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     var sb := StyleBoxFlat.new()
-    sb.bg_color = Color("13241a") if st != "locked" else Color("101512")
+    sb.bg_color = Color("1a2232") if st != "locked" else Color("101512")
     sb.border_color = {"defeated": Color("7fc48c"), "available": Color("d9a441"), "locked": Color("3d4a40")}[st]
     sb.set_border_width_all(3 if st == "available" else 2)
     sb.set_corner_radius_all(6)
@@ -117,7 +117,7 @@ func _lab(parent: Node, text: String, size: int, color: Color) -> Label:
 
 func _style_button(btn: Button, st: String):
     var normal := StyleBoxFlat.new()
-    normal.bg_color = Color("6b4a12") if st == "available" else (Color("23402b") if st == "defeated" else Color("1a201c"))
+    normal.bg_color = Color("6b4a12") if st == "available" else (Color("2f3c56") if st == "defeated" else Color("1a201c"))
     normal.border_color = Color("f0c45c") if st != "locked" else Color("3d4a40")
     normal.set_border_width_all(2)
     normal.set_corner_radius_all(4)

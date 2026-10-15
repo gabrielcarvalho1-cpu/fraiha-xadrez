@@ -55,7 +55,7 @@ func setup(owner_hub, owner_mobile):
 	add_child(scenery)
 	dim = ColorRect.new()
 	dim.name = "RefDim"
-	dim.color = Color(0.01, 0.02, 0.015, 0.62)   # cena escurecida (como os painéis do PC): o painel é o foco
+	dim.color = Color(0.014, 0.019, 0.029, 0.62)   # cena escurecida (como os painéis do PC): o painel é o foco
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 	scroll = ScrollContainer.new()
@@ -453,9 +453,9 @@ func _parchment_row(row: PanelContainer):
 		var col := INK
 		if first:
 			# cor do resultado (vitória / derrota / empate) em tom escuro, legível no pergaminho
-			col = Color("2f6a1e") if c.g > c.r + 0.1 else (Color("8c2a18") if c.r > c.g + 0.25 else Color("6b4a0e"))
+			col = Color("264686") if c.g > c.r + 0.1 else (Color("8c2a18") if c.r > c.g + 0.25 else Color("6b4a0e"))
 		elif c.g > c.r + 0.15:
-			col = Color("2f6a1e")   # "Analisada · precisão"
+			col = Color("264686")   # "Analisada · precisão"
 		lab.add_theme_color_override("font_color", col)
 		first = false
 	for b in row.find_children("*", "Button", true, false):
@@ -594,7 +594,7 @@ func _build_bots():
 		var chip := Panel.new()
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var cs := StyleBoxFlat.new()
-		cs.bg_color = Color(0.03, 0.16, 0.11, 0.95)
+		cs.bg_color = Color(0.041, 0.101, 0.220, 0.95)
 		cs.border_color = {"defeated": Color("3fae6a"), "available": Color("d9a441"), "locked": Color("5d665f")}[st]
 		cs.set_border_width_all(maxi(1, int(round(4 * s))))
 		cs.set_corner_radius_all(int(round(16 * s)))

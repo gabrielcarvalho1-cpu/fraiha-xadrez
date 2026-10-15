@@ -83,7 +83,7 @@ func label(t: String, fs: int, col: Color, semi := false) -> Label:
 	l.add_theme_font_override("font", FONT_SEMI if semi else FONT)
 	l.add_theme_font_size_override("font_size", ts(fs))
 	l.add_theme_color_override("font_color", col)
-	l.add_theme_color_override("font_outline_color", Color("0b150f"))
+	l.add_theme_color_override("font_outline_color", Color("10141e"))
 	l.add_theme_constant_override("outline_size", 3)
 	return l
 
@@ -101,7 +101,7 @@ func button(t: String, fs: int, on := false) -> Button:
 func style_button(b: Button, on: bool):
 	for pair in [["normal", 0.0], ["hover", 0.08], ["pressed", -0.04], ["disabled", 0.0]]:
 		var s := StyleBoxFlat.new()
-		s.bg_color = (Color("d9a33a") if on else Color("0f2a1f")).lightened(maxf(0.0, pair[1])).darkened(maxf(0.0, -pair[1]))
+		s.bg_color = (Color("d9a33a") if on else Color("15213a")).lightened(maxf(0.0, pair[1])).darkened(maxf(0.0, -pair[1]))
 		s.border_color = Color("fff0b8") if on else Color("c99a45")
 		s.set_border_width_all(2)
 		s.set_corner_radius_all(3)
@@ -114,7 +114,7 @@ func style_button(b: Button, on: bool):
 	var fg := Color("2a1a04") if on else CREAM
 	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(k, fg)
-	b.add_theme_color_override("font_outline_color", Color("0b150f"))
+	b.add_theme_color_override("font_outline_color", Color("10141e"))
 	b.add_theme_constant_override("outline_size", 0 if on else 3)
 
 func is_open() -> bool:

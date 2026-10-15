@@ -25,7 +25,7 @@ static func full_page(canvas: Control, bg_name: String, size: Vector2, k := 0.92
     canvas.add_child(page)
     var block := ColorRect.new()
     block.name = "ClickBlock"
-    block.color = Color(0.02, 0.03, 0.02, dim)
+    block.color = Color(0.029, 0.034, 0.043, dim)
     block.position = -page.position / k - size * 2.0 / k
     block.size = size * 5.0 / k
     block.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -56,7 +56,7 @@ static func modal(canvas: Control, bg_name: String, ref_size: Vector2, design: V
     canvas.add_child(page)
     var block := ColorRect.new()
     block.name = "ClickBlock"
-    block.color = Color(0.02, 0.03, 0.02, dim)
+    block.color = Color(0.029, 0.034, 0.043, dim)
     block.position = -page.position / k - design * 2.0 / k
     block.size = design * 5.0 / k
     block.mouse_filter = Control.MOUSE_FILTER_STOP

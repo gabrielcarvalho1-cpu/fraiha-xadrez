@@ -130,7 +130,7 @@ func _build():
     bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
     bg.draw.connect(func():
-        bg.draw_rect(Rect2(Vector2.ZERO, bg.size), Color(0.01, 0.04, 0.025, 1.0))
+        bg.draw_rect(Rect2(Vector2.ZERO, bg.size), Color(0.014, 0.029, 0.057, 1.0))
         for i in 8: bg.draw_circle(Vector2(bg.size.x * 0.5, -bg.size.y * 0.2), bg.size.x * (0.2 + i * 0.08), Color(1.0, 0.78, 0.35, 0.03 * (1.0 - i / 8.0))))
     root.add_child(bg)
     sparkles = Art.Sparkles.new(24)
@@ -309,7 +309,7 @@ func _page_progress():
     progress_bar.show_percentage = false
     progress_bar.custom_minimum_size.y = 22
     var bgs := StyleBoxFlat.new()
-    bgs.bg_color = Color(0.03, 0.08, 0.05)
+    bgs.bg_color = Color(0.042, 0.066, 0.113)
     bgs.border_color = Color("c99a45")
     bgs.set_border_width_all(1)
     bgs.set_corner_radius_all(8)
@@ -559,13 +559,13 @@ func _page_report():
         b.add_theme_color_override("font_hover_color", Art.GOLD)
         b.add_theme_color_override("font_pressed_color", Art.GOLD)
         var st := StyleBoxFlat.new()
-        st.bg_color = Color(0.05, 0.10, 0.07, 0.8)
+        st.bg_color = Color(0.070, 0.094, 0.141, 0.8)
         st.set_corner_radius_all(4)
         st.content_margin_left = 8
         st.content_margin_right = 8
         b.add_theme_stylebox_override("normal", st)
         var hv := st.duplicate()
-        hv.bg_color = Color(0.12, 0.22, 0.14, 0.95)
+        hv.bg_color = Color(0.162, 0.207, 0.297, 0.95)
         b.add_theme_stylebox_override("hover", hv)
         b.add_theme_stylebox_override("pressed", hv)
         var idx: int = i

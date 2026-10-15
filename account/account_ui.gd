@@ -48,7 +48,7 @@ func setup(service):
     layer = 60
     dim = ColorRect.new()
     dim.name = "AccountDim"
-    dim.color = Color(0.02, 0.04, 0.03, 0.78)
+    dim.color = Color(0.029, 0.038, 0.057, 0.78)
     dim.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(dim)
     scroll = ScrollContainer.new()
@@ -440,7 +440,7 @@ class TermsCheck extends Button:
         var box := Rect2(Vector2(4, top + 12), Vector2(56, 56))
         var border := WARN if warn else GOLD
         if _flash > 0.0: draw_rect(box.grow(8.0 * _flash), Color(WARN.r, WARN.g, WARN.b, 0.35 * _flash))
-        draw_rect(box, Color(0.04, 0.07, 0.04, 0.95))
+        draw_rect(box, Color(0.057, 0.071, 0.099, 0.95))
         draw_rect(box, border, false, 4.0)
         if button_pressed:
             var a := box.position

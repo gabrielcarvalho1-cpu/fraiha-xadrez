@@ -55,7 +55,7 @@ func setup(acc):
     panel.name = "PartyChatPanel"
     var st := StyleBoxFlat.new()
     panel_style = st
-    st.bg_color = Color(0.03, 0.10, 0.06, 0.94)
+    st.bg_color = Color(0.042, 0.075, 0.141, 0.94)
     st.border_color = Color("c99a45")
     st.set_border_width_all(2)
     st.set_corner_radius_all(10)

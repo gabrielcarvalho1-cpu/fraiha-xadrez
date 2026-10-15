@@ -51,7 +51,7 @@ static func option(hub, parent: Node, node_name: String, preview: Control, title
     b.custom_minimum_size = Vector2(w, w * 1.3)
     for st_name in ["normal", "hover", "pressed", "focus", "disabled"]:
         var sb := StyleBoxFlat.new()
-        sb.bg_color = Color(0.03, 0.10, 0.06, 0.92) if not selected else Color(0.10, 0.20, 0.08, 0.96)
+        sb.bg_color = Color(0.042, 0.075, 0.141, 0.92) if not selected else Color(0.109, 0.163, 0.272, 0.96)
         sb.border_color = Color("f6d27a") if selected else (Color("f0c45c") if st_name in ["hover", "focus"] else Color(0.79, 0.6, 0.27, 0.55))
         sb.set_border_width_all(3 if selected else 2)
         sb.set_corner_radius_all(6)

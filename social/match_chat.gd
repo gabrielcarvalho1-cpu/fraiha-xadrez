@@ -38,7 +38,7 @@ func setup(service):
     panel.name = "MatchChat"
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
     var style = StyleBoxFlat.new()
-    style.bg_color = Color(0.03, 0.10, 0.06, 0.88)
+    style.bg_color = Color(0.042, 0.075, 0.141, 0.88)
     style.border_color = Color("c99a45")
     style.set_border_width_all(2)
     style.set_corner_radius_all(10)
@@ -104,7 +104,7 @@ func setup(service):
     restore_button.name = "ChatRestore"
     restore_button.tooltip_text = "Abrir o chat"
     var rs: StyleBoxFlat = restore_button.get_theme_stylebox("normal").duplicate()
-    rs.bg_color = Color(0.05, 0.16, 0.09, 0.92)
+    rs.bg_color = Color(0.069, 0.119, 0.220, 0.92)
     rs.border_color = Color("c99a45")
     rs.set_border_width_all(2)
     rs.set_corner_radius_all(10)
@@ -112,7 +112,7 @@ func setup(service):
     rs.shadow_size = 6
     restore_button.add_theme_stylebox_override("normal", rs)
     var rh: StyleBoxFlat = rs.duplicate()
-    rh.bg_color = Color(0.09, 0.26, 0.14, 0.95)
+    rh.bg_color = Color(0.120, 0.196, 0.347, 0.95)
     rh.border_color = Color("f4ce7f")
     for state in ["hover", "pressed"]: restore_button.add_theme_stylebox_override(state, rh)
     restore_button.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
@@ -127,7 +127,7 @@ func _small(parent: Node, text: String, action: Callable) -> Button:
     b.text = text
     b.focus_mode = Control.FOCUS_NONE
     var st = StyleBoxFlat.new()
-    st.bg_color = Color("14221d")
+    st.bg_color = Color("1c222f")
     st.border_color = Color("84754b")
     st.set_border_width_all(1)
     st.set_corner_radius_all(4)
@@ -135,7 +135,7 @@ func _small(parent: Node, text: String, action: Callable) -> Button:
     st.content_margin_right = 8
     b.add_theme_stylebox_override("normal", st)
     var hi = st.duplicate()
-    hi.bg_color = Color("26382b")
+    hi.bg_color = Color("333b4c")
     for state in ["hover", "pressed"]: b.add_theme_stylebox_override(state, hi)
     b.add_theme_color_override("font_color", Color("efe3c4"))
     b.pressed.connect(action)

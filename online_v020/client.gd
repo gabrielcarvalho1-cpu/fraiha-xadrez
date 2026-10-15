@@ -56,7 +56,7 @@ func _ready():
 
 func panel_style()->StyleBoxFlat:
     var style=StyleBoxFlat.new()
-    style.bg_color=Color("#142217f2")
+    style.bg_color=Color("#1c222ff2")
     style.border_color=Color("#b19758")
     style.set_border_width_all(2)
     style.set_corner_radius_all(7)
@@ -71,14 +71,14 @@ func button(parent:Control,caption:String,callback:Callable)->Button:
     b.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     b.add_theme_font_size_override("font_size",18)
     var normal = StyleBoxFlat.new()
-    normal.bg_color = Color("10271feF")
+    normal.bg_color = Color("162136eF")
     normal.border_color = Color("b69a52")
     normal.set_border_width_all(1)
     normal.set_corner_radius_all(3)
     normal.content_margin_left = 16
     normal.content_margin_right = 16
     var hover = normal.duplicate()
-    hover.bg_color = Color("294636")
+    hover.bg_color = Color("36435d")
     hover.border_color = Color("f0d38b")
     b.add_theme_stylebox_override("normal",normal)
     b.add_theme_stylebox_override("hover",hover)

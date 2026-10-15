@@ -68,7 +68,7 @@ func show_progress(bot_id: String, reward: Dictionary, fresh := true):
     root.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(root)
     var dim := ColorRect.new()
-    dim.color = Color(0, 0.02, 0.01, 0.68)
+    dim.color = Color(0.000, 0.010, 0.029, 0.68)
     dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_child(dim)
     var scroll := ScrollContainer.new()
@@ -82,7 +82,7 @@ func show_progress(bot_id: String, reward: Dictionary, fresh := true):
     panel.name = "Panel"
     panel.custom_minimum_size = Vector2(minf(560.0, vp.x - 24.0), 0)
     var sb := StyleBoxFlat.new()
-    sb.bg_color = Color("11261a")
+    sb.bg_color = Color("182135")
     sb.border_color = Color("f0c45c")
     sb.set_border_width_all(3)
     sb.set_corner_radius_all(8)
@@ -273,7 +273,7 @@ func show_error(message: String):
     root.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(root)
     var dim := ColorRect.new()
-    dim.color = Color(0, 0.02, 0.01, 0.6)
+    dim.color = Color(0.000, 0.010, 0.029, 0.6)
     dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_child(dim)
     var center := CenterContainer.new()
@@ -338,7 +338,7 @@ func _button(parent: Node, caption: String, primary: bool, cb: Callable) -> Butt
     var states := {"normal": 0.0, "hover": 0.15, "pressed": -0.1, "focus": 0.15}
     for st in states:
         var s := StyleBoxFlat.new()
-        s.bg_color = (Color("6b4a12") if primary else Color("163522")).lightened(maxf(0.0, states[st])).darkened(maxf(0.0, -states[st]))
+        s.bg_color = (Color("6b4a12") if primary else Color("1e2c48")).lightened(maxf(0.0, states[st])).darkened(maxf(0.0, -states[st]))
         s.border_color = Color("f0c45c") if primary else Color("b8913f")
         s.set_border_width_all(2)
         s.set_corner_radius_all(5)

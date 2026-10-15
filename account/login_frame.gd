@@ -103,7 +103,7 @@ func _banners(r: Rect2, k: float):
         var x := r.position.x - w * 0.55 if side == 0 else r.end.x - w * 0.45
         var top := r.position.y + 58.0 * k
         var pts := PackedVector2Array([Vector2(x, top), Vector2(x + w, top), Vector2(x + w, top + h), Vector2(x + w / 2.0, top + h - 16.0 * k), Vector2(x, top + h)])
-        Art.vertical_gradient(self, pts, Color("1d4a2c"), Color("0c2415"))
+        Art.vertical_gradient(self, pts, Color("263a62"), Color("111c32"))
         var outline := pts.duplicate()
         outline.append(pts[0])
         draw_polyline(outline, Art.GOLD_MID, 2.0 * k)
@@ -158,7 +158,7 @@ func _crest(r: Rect2, k: float):
     var outer := PackedVector2Array()
     for p in shield: outer.append(c + (p - c) * 1.12)
     Art.vertical_gradient(self, outer, Art.GOLD, Art.GOLD_DARK)
-    Art.vertical_gradient(self, shield, Color("1e4a2c"), Color("0b2214"))
+    Art.vertical_gradient(self, shield, Color("283b62"), Color("0f1a2f"))
     var inner := PackedVector2Array()
     for p in shield: inner.append(c + (p - c) * 0.86)
     inner.append(inner[0])
@@ -175,4 +175,4 @@ func _crest(r: Rect2, k: float):
     draw_rect(Rect2(cc + Vector2(-cw / 2.0, ch / 2.0 - 1.0), Vector2(cw, ch * 0.28)), Art.GOLD_MID)
     for p in [cc + Vector2(-cw / 2.0, -ch * 0.25), cc + Vector2(0, -ch / 2.0), cc + Vector2(cw / 2.0, -ch * 0.25)]:
         draw_circle(p, 3.2 * k, Art.GOLD)
-    Art.diamond(self, cc + Vector2(0, ch * 0.22), 3.5 * k, Color("2f7a3c"))
+    Art.diamond(self, cc + Vector2(0, ch * 0.22), 3.5 * k, Color("2f5aa8"))

@@ -41,7 +41,7 @@ func setup(owner):
 	scenery.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(scenery)
 	dim = ColorRect.new()
-	dim.color = Color(0.01, 0.02, 0.015, 0.62)
+	dim.color = Color(0.014, 0.019, 0.029, 0.62)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 	scroll = ScrollContainer.new()
@@ -84,7 +84,7 @@ func set_notice(text: String):
 		notice_label.add_theme_font_size_override("font_size", 14)
 		notice_label.add_theme_color_override("font_color", Color("ffb08f"))
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.03, 0.08, 0.05, 0.94)
+		sb.bg_color = Color(0.042, 0.066, 0.113, 0.94)
 		sb.border_color = Color("c99a45")
 		sb.set_border_width_all(2)
 		sb.set_corner_radius_all(6)

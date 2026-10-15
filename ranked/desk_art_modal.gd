@@ -44,7 +44,7 @@ func begin(tex: Texture2D, ref_size: Vector2, which: String, with_dim := false):
 	ref = ref_size
 	if with_dim:
 		dim = ColorRect.new()
-		dim.color = Color(0.02, 0.04, 0.03, 0.8)
+		dim.color = Color(0.029, 0.038, 0.057, 0.8)
 		dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(dim)
 	art = TextureRect.new()

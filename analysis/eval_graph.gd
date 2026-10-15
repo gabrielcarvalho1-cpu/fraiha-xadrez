@@ -43,7 +43,7 @@ static func _y_of(signed_pawns: float) -> float:
 func _draw():
     var w := size.x
     var h := size.y
-    draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.06, 0.04, 0.9))
+    draw_rect(Rect2(Vector2.ZERO, size), Color(0.028, 0.047, 0.085, 0.9))
     draw_rect(Rect2(Vector2.ZERO, size), Color("c99a45"), false, 1.5)
     if moves.is_empty(): return
     var n := moves.size()
@@ -73,7 +73,7 @@ func _draw():
     down.append(Vector2(pts[pts.size() - 1].x, h * 0.5))
     down.append(Vector2(0, h * 0.5))
     if up.size() >= 3: draw_colored_polygon(up, Color(0.93, 0.88, 0.72, 0.85))
-    if down.size() >= 3: draw_colored_polygon(down, Color(0.08, 0.12, 0.10, 0.95))
+    if down.size() >= 3: draw_colored_polygon(down, Color(0.112, 0.130, 0.168, 0.95))
     draw_line(Vector2(0, h * 0.5), Vector2(w, h * 0.5), Color(0.79, 0.6, 0.27, 0.6), 1.0)
     draw_polyline(pts, Color("f1d58a"), 2.0, true)
     # marcadores de pontos críticos

@@ -30,7 +30,7 @@ func setup(service, avatar_callable: Callable = Callable(), hide_fn: Callable = 
     panel = PanelContainer.new()
     panel.name = "InviteCard"
     var style = StyleBoxFlat.new()
-    style.bg_color = Color("#101a14f5")
+    style.bg_color = Color("#161b25f5")
     style.border_color = Color("#c79a4a")
     style.set_border_width_all(2)
     style.set_corner_radius_all(6)
