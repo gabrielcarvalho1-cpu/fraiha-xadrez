@@ -15,6 +15,7 @@ const PaymentRealUI := preload("res://monetization/payment_real_ui.gd")
 const PersonalizeUI := preload("res://monetization/personalize_ui.gd")
 const MyClubUI := preload("res://monetization/my_club_ui.gd")
 const PurchasesUI := preload("res://monetization/purchases_ui.gd")
+const PreviewBoard := preload("res://monetization/preview_board.gd")
 const Mobile := preload("res://ui_v022/mobile_layout.gd")
 const Showcase := preload("res://monetization/showcase.gd")
 
@@ -366,7 +367,7 @@ func founder_showcase() -> Control:
     more.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     more.custom_minimum_size.x = 300 * maxf(k, 0.8)
     more.pressed.connect(func(): show_page("founder"))
-    v.add_child(more)
+    v.add_child(_with_try(more, "fundador"))
     return sc
 
 func club_showcase() -> Control:
@@ -395,8 +396,63 @@ func club_showcase() -> Control:
     more.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     more.custom_minimum_size.x = 300 * maxf(k, 0.8)
     more.pressed.connect(func(): show_page("club"))
-    v.add_child(more)
+    v.add_child(_with_try(more, "club"))
     return sc
+
+## R108 · linha com "VER TODOS OS BENEFÍCIOS" + "EXPERIMENTAR" (prévia do tabuleiro do universo).
+func _with_try(more: Control, theme_id: String) -> Control:
+    var row := HFlowContainer.new()
+    row.add_theme_constant_override("h_separation", 10)
+    row.add_theme_constant_override("v_separation", 8)
+    row.add_child(more)
+    var tr := Art.Cta.new("EXPERIMENTAR", "gold" if theme_id == "fundador" else "green", 50 * maxf(k, 0.85), int(17 * maxf(k, 0.85)))
+    tr.name = "Try_" + theme_id
+    tr.icon_kind = ""
+    tr.custom_minimum_size.x = 220 * maxf(k, 0.8)
+    tr.pressed.connect(func(): open_preview(theme_id))
+    row.add_child(tr)
+    return row
+
+## R108 · prévia do universo: o tabuleiro com as peças do conjunto sobre a arena.
+func open_preview(theme_id: String):
+    var host := _modal_host()
+    var center := CenterContainer.new()
+    center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    host.add_child(center)
+    var f := Art.Frame.new("founder" if theme_id == "fundador" else "club", int(18 * k))
+    f.name = "PreviewModal"
+    center.add_child(f)
+    var v := VBoxContainer.new()
+    v.add_theme_constant_override("separation", 10)
+    f.add_child(v)
+    var title := "UNIVERSO FUNDADOR" if theme_id == "fundador" else "ACADEMIA CLUB"
+    var tl := Art.label(v, title, fs(30), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
+    tl.name = "PreviewTitle"
+    var w := minf(view.x - (70.0 if narrow else 60.0), 1000.0)
+    var h := minf(view.y - (230.0 if not narrow else 260.0), w * (0.62 if not narrow else 1.05))
+    var board = PreviewBoard.new(theme_id)
+    board.custom_minimum_size = Vector2(w, h)
+    v.add_child(board)
+    var d := Art.label(v, ("Peças em ouro e obsidiana e o Salão do Fundador: são seus para sempre, junto com selo, título e moldura." if theme_id == "fundador" else "Peças em marfim e esmeralda na Academia Club: liberadas enquanto o Club estiver ativo."), fs(16), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
+    d.custom_minimum_size.x = w
+    var row := HBoxContainer.new()
+    row.alignment = BoxContainer.ALIGNMENT_CENTER
+    row.add_theme_constant_override("separation", 12)
+    v.add_child(row)
+    var close := Art.Cta.new("FECHAR", "dark", 52, 15 if narrow else 17)
+    close.name = "PreviewClose"
+    close.icon_kind = ""
+    close.custom_minimum_size.x = 120 if narrow else 180
+    close.pressed.connect(close_modal)
+    row.add_child(close)
+    var go := Art.Cta.new("QUERO ESTE", "gold" if theme_id == "fundador" else "green", 52, 15 if narrow else 17)
+    go.name = "PreviewGo"
+    go.icon_kind = ""
+    go.custom_minimum_size.x = 150 if narrow else 200
+    go.pressed.connect(func():
+        close_modal()
+        show_page("founder" if theme_id == "fundador" else "club"))
+    row.add_child(go)
 
 ## Cartões dos dois pacotes de Fundador lado a lado (um embaixo do outro no celular).
 func founder_plans() -> Control:
