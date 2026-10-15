@@ -67,7 +67,7 @@ func run():
     # ---------------- Catálogo / segurança
     check(Catalog.payment_mode() == "mock" and OS.is_debug_build(), "editor/testes (build de depuração) = simulação; a build publicada é real")
     check(Catalog.enabled_methods() == ["pix", "card"], "PIX é o primeiro método")
-    check(Catalog.FOUNDER_LIMIT == 100, "FOUNDER_LIMIT = 100")
+    check(Catalog.FOUNDER_CLUB_DAYS == 90 and not (Catalog as Script).get_script_constant_map().has("FOUNDER_LIMIT"), "R103 · Fundador por tempo (sem limite de vagas), 90 dias de Club")
     check(not load("res://monetization/monetization_catalog.gd").get_script_constant_map().has("FOUNDER_WHATSAPP_URL") and not FileAccess.get_file_as_string("res://monetization/monetization_catalog.gd").contains("chat.whatsapp.com/"), "R39: o link do grupo dos Fundadores não fica mais no jogo (vem do servidor)")
     var Ent = load("res://monetization/entitlements.gd").new(null)
     Ent.apply_server({"is_founder": true, "club_active": false, "club_expires_at": null, "founder_perks": {"whatsapp_url": "https://chat.whatsapp.com/X"}})
@@ -86,7 +86,7 @@ func run():
     entry.pressed.emit()
     await settle()
     check(pr.visible and pr.page == "hub", "abre o Hub Premium")
-    check(node("HubFounderCard") != null and node("HubClubCard") != null, "Hub mostra os dois cartões")
+    check(node("FounderShowcase") != null and node("ClubShowcase") != null and node("BecomeLegend") != null and node("SubscribeClubYearly") != null, "R103 · vitrine: Fundador, Lendário, Club 30 dias e 1 ano")
     check(node("HeaderTestStamp") != null and node("TestBanner") != null, "MODO TESTE visível")
     check(press("OpenFounder") and pr.page == "founder", "abre Pacote Fundador")
     pr.back()
@@ -112,7 +112,7 @@ func run():
     check(node("Benefit_COMUNIDADE_DOS_FUNDADORES") != null, "benefício Comunidade dos Fundadores listado")
     check(String(node("TestPrice").text) == "R$ 0,00", "preço exibido R$ 0,00")
     check("49,90" in String(node("PlannedPrice").text), "preço planejado exibido")
-    check("100" in String(node("FounderLimit").text), "edição limitada: primeiros 100")
+    check("TEMPO LIMITADO" in String(node("FounderLimit").text), "R103 · Fundador por tempo limitado")
     check(press("BecomeFounder") and node("PaymentMock") != null, "abre escolha de pagamento")
     var pix = node("OptionPix")
     var card = node("OptionCard")
@@ -193,7 +193,7 @@ func run():
     check(state.summary() == "fundador+club", "estado: Fundador + Club")
     pr.show_page("hub")
     await settle()
-    check(node("HubFounderCard").find_child("StatusBadge", true, false) != null and node("HubClubCard").find_child("StatusBadge", true, false) != null, "Hub mostra os dois ativos")
+    check(node("FounderShowcase").find_child("StatusBadge", true, false) != null and node("ClubShowcase").find_child("StatusBadge", true, false) != null, "Hub mostra os dois ativos")
 
     # ---------------- Segurança do mock
     var cfg := ConfigFile.new()

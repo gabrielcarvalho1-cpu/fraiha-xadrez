@@ -13,7 +13,7 @@ signal changed
 const Catalog := preload("res://monetization/monetization_catalog.gd")
 
 var state                      # monetization_state (flags dev_mock_*)
-var real := {"is_founder": false, "club_active": false, "club_expires_at": "", "founder_perks": {}}
+var real := {"is_founder": false, "club_active": false, "club_expires_at": "", "founder_perks": {}, "founder_tier": "", "founder_number": 0}
 var real_known := false        # já recebeu entitlements do servidor nesta sessão?
 
 func _init(monetization_state):
@@ -28,12 +28,15 @@ func apply_server(data: Dictionary):
         # o servidor manda null quando não há Club: String(null) quebrava e o direito não era aplicado
         "club_expires_at": "" if data.get("club_expires_at") == null else str(data.get("club_expires_at")),
         "founder_perks": data.get("founder_perks") if data.get("founder_perks") is Dictionary else {},
+        # R103 · "founder" | "legend" e o número do Fundador (#N), quando o servidor já tem a 0012
+        "founder_tier": "" if data.get("founder_tier") == null else str(data.get("founder_tier")),
+        "founder_number": int(data.get("founder_number")) if data.get("founder_number") is float or data.get("founder_number") is int else 0,
     }
     real_known = true
     changed.emit()
 
 func clear_server():
-    real = {"is_founder": false, "club_active": false, "club_expires_at": "", "founder_perks": {}}
+    real = {"is_founder": false, "club_active": false, "club_expires_at": "", "founder_perks": {}, "founder_tier": "", "founder_number": 0}
     real_known = false
     changed.emit()
 

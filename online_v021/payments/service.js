@@ -70,6 +70,8 @@ class Payments {
     this.founderLimit = Math.max(0, Number(env.FRAIHA_FOUNDER_LIMIT) || 0);   // 0 = sem limite de vagas
     const until = String(env.FRAIHA_FOUNDER_UNTIL || '').trim();
     this.founderUntil = until && !isNaN(Date.parse(until)) ? new Date(until.length <= 10 ? until + 'T23:59:59-03:00' : until).toISOString() : null;
+    // R103 · encerrar a venda do Fundador quando o dono decidir: FRAIHA_FOUNDER_OPEN=0 (ou false/nao) no Render.
+    this.founderClosedByEnv = /^(0|false|nao|não|off|fechado|encerrado)$/i.test(String(env.FRAIHA_FOUNDER_OPEN || '').trim());
     this.now = () => Date.now();
     this.founderGroup = String(env.FRAIHA_FOUNDER_WHATSAPP_URL || '').trim();
     this.lastPoll = new Map();
@@ -84,6 +86,7 @@ class Payments {
   }
   // R103 · Fundador à venda? (prazo e, se configurado, vagas)
   async founderOpen() {
+    if (this.founderClosedByEnv) return { open: false, reason: 'closed', message: 'O Pacote Fundador saiu de venda. Obrigado a todos que apoiaram o começo do reino!' };
     if (this.founderUntil && this.now() > Date.parse(this.founderUntil)) return { open: false, reason: 'closed', message: 'O Pacote Fundador saiu de venda. Obrigado a todos que apoiaram o começo do reino!' };
     if (this.founderLimit > 0 && await this.foundersCount() >= this.founderLimit) return { open: false, reason: 'sold_out', message: 'As vagas do Pacote Fundador se esgotaram.' };
     return { open: true };

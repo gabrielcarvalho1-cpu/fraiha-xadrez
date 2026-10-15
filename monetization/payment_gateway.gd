@@ -40,8 +40,8 @@ class MockPaymentProvider:
     func start(product_id: String, method: String) -> Dictionary:
         var ok := false
         match product_id:
-            "founder": ok = state.mock_activate_founder()
-            "club_monthly": ok = state.mock_activate_club()
+            "founder", "founder_legend": ok = state.mock_activate_founder()
+            "club_monthly", "club_yearly": ok = state.mock_activate_club()
         return {"ok": ok, "mock": true, "error": "" if ok else "unknown_product", "status": "paid" if ok else "error", "method": method}
     func status(_charge_id: String) -> Dictionary:
         return {"ok": true, "mock": true, "status": "paid"}

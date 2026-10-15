@@ -69,11 +69,11 @@ func run():
     pr = hub.premium
     var opened := []
     pr.url_opener = func(u): opened.append(u)
-    check(await wait_until(func(): return pr.founder_remaining() == 2, 5.0), "vagas de Fundador vêm do servidor (restam 2)")
-    await wait_until(func(): return node("FounderLimit") != null and String(node("FounderLimit").text).contains("RESTAM 2"), 2.0)
-    check(String(node("FounderLimit").text).contains("RESTAM 2 VAGAS"), "página do Fundador mostra RESTAM 2 VAGAS")
+    check(await wait_until(func(): return pr.offer.has("founder_open"), 5.0), "oferta de Fundador vem do servidor")
+    await wait_until(func(): return node("FounderLimit") != null and String(node("FounderLimit").text).contains("31/12"), 2.0)
+    check(String(node("FounderLimit").text).contains("POR TEMPO LIMITADO · ATÉ 31/12"), "R103 · página do Fundador mostra o prazo (POR TEMPO LIMITADO · ATÉ 31/12)")
     check(not node("HeaderTestStamp").visible and not node("TestBanner").visible and node("PlannedPrice") == null and node("PriceHow") != null, "sem MODO TESTE / simulação; preço real com PIX ou cartão")
-    check(String(node("TestPrice").text) == "R$ 49,90", "preço real R$ 49,90")
+    check(String(node("TestPrice").text) == "R$ 44,90" and String(node("PriceHow").text).contains("R$ 49,90 no cartão"), "R103 · preço real R$ 44,90 no PIX / R$ 49,90 no cartão")
     await shot("1_fundador")
     # ---------- PIX ----------
     check(press("BecomeFounder") and node("OptionPix") != null and node("OptionCard") != null and node("SimulatePix") == null, "TORNAR-SE FUNDADOR abre a escolha PIX / cartão (pagamento real, sem simulação)")
@@ -94,8 +94,8 @@ func run():
     check(await approve(ref), "pagamento aprovado no Mercado Pago (falso)")
     check(press("PaymentCheck"), "JÁ PAGUEI")
     check(await wait_until(func(): return hub.is_founder() and node("WelcomeModal") != null, 12.0), "servidor confirma com o Mercado Pago → Fundador liberado + tela de boas-vindas")
-    check(String(node("ConfirmTitle").text).contains("FUNDADOR") and String(node("ConfirmBody").text).contains("30 dias de Club"), "boas-vindas lista o que foi liberado")
-    check(hub.club_active() and bool(hub.entitlements.real.is_founder), "direito REAL do servidor (não simulação), com 30 dias de Club")
+    check(String(node("ConfirmTitle").text).contains("FUNDADOR") and String(node("ConfirmBody").text).contains("90 dias de Club"), "boas-vindas lista o que foi liberado")
+    check(hub.club_active() and bool(hub.entitlements.real.is_founder), "direito REAL do servidor (não simulação), com 90 dias de Club")
     await shot("4_boas_vindas")
     press("ConfirmCancel")
     await process_frame
@@ -106,9 +106,9 @@ func run():
     # ---------- Club: renovar no cartão ----------
     pr.show_page("club")
     await process_frame
-    check(node("RenewClub") != null and String(node("ClubActiveText").text).contains("faltam"), "Club ativo mostra os dias restantes e RENOVAR · +30 DIAS")
+    check(node("SubscribeClub") != null and String(node("ClubActiveText").text).contains("faltam"), "Club ativo mostra os dias restantes e os planos para renovar")
     await shot("5_club")
-    check(press("RenewClub") and press("ChooseCard"), "renovar com cartão")
+    check(press("SubscribeClub") and press("ChooseCard"), "renovar com cartão")
     check(await wait_until(func(): return node("CardOpenCheckout") != null, 8.0), "checkout do cartão criado no Mercado Pago")
     check(press("CardOpenCheckout") and String(opened.back()).contains("checkout") and String(opened.back()).contains("pref_id="), "ABRIR PAGAMENTO COM CARTÃO abre o checkout seguro do Mercado Pago")
     await shot("6_cartao")
@@ -116,7 +116,7 @@ func run():
     check(await approve(String(ui.charge.get("id", ""))), "cartão aprovado no Mercado Pago (falso)")
     check(press("PaymentCheck"), "JÁ PAGUEI (cartão)")
     check(await wait_until(func(): return node("WelcomeModal") != null and String(node("ConfirmTitle").text).contains("CLUB"), 12.0), "Club renovado: boas-vindas do Club")
-    check(hub.entitlements.club_days_left() >= 59 and hub.entitlements.club_days_left() <= 61, "Club somou +30 dias (%d dias)" % hub.entitlements.club_days_left())
+    check(hub.entitlements.club_days_left() >= 119 and hub.entitlements.club_days_left() <= 121, "Club somou +30 dias (%d dias)" % hub.entitlements.club_days_left())
     press("ConfirmCancel")
     # ---------- Fundador não compra de novo / sair limpa ----------
     pr.show_page("founder")

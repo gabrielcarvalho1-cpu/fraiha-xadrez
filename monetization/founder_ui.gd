@@ -1,5 +1,5 @@
 extends RefCounted
-## PACOTE FUNDADOR FRAIHA — página do produto (compra única, edição limitada).
+## PACOTE FUNDADOR FRAIHA — página do produto (compra única, por tempo limitado; R103: Fundador e Lendário).
 ## Estado exibido vem SOMENTE de dev_mock_founder (simulação). Nenhum benefício é competitivo.
 const Art := preload("res://monetization/premium_art.gd")
 const Catalog := preload("res://monetization/monetization_catalog.gd")
@@ -19,7 +19,7 @@ const WHY := [
 ## [ícone, título, descrição, estado depois de ativar (TESTE)]
 const BENEFITS := [
     ["seal", "SELO FUNDADOR PERMANENTE", "Emblema ao lado do seu nome, no perfil e na tela inicial.", "now"],
-    ["crown", "AVATAR FUNDADOR EXCLUSIVO", "Rei e Rainha dourados — só para Fundadores.", "now"],
+    ["crown", "AVATAR FUNDADOR EXCLUSIVO", "Retrato do Fundador, reservado a quem apoiou o começo.", "now"],
     ["scroll", "TÍTULO EXCLUSIVO", "“Fundador do Reino”.", "now"],
     ["frame", "MOLDURA DE PERFIL EXCLUSIVA", "Visual especial reservado aos Fundadores.", "now"],
     ["pawn", "CONJUNTO DE PEÇAS FUNDADOR", "Peças de marfim dourado e obsidiana, fora da progressão do Ranked.", "now"],
@@ -27,13 +27,14 @@ const BENEFITS := [
     ["chat", "COMUNIDADE DOS FUNDADORES", "Grupo exclusivo dos Fundadores no WhatsApp.", "now"],
     ["hourglass", "ACESSO ANTECIPADO", "Laboratório: novidades em teste antes do lançamento geral.", "now"],
     ["megaphone", "DESTAQUE SOCIAL", "Seu selo aparece para os outros jogadores: Amigos, chat, convites e partidas.", "now"],
-    ["calendar", "30 DIAS DE CLUB FRAIHA", "Um mês de Club FRAIHA incluso no Pacote Fundador.", "trial"],
+    ["calendar", "90 DIAS DE CLUB FRAIHA", "Três meses de Club inclusos (1 ano no Fundador Lendário).", "trial"],
 ]
 
 static func build(hub, parent: VBoxContainer):
     var owned: bool = hub.founder_owned()
     var real: bool = hub.founder_real()
     _hero(hub, parent, owned, real)
+    parent.add_child(hub.founder_plans())
     if owned: _reward(hub, parent)
     # O reino começa aqui (conceito)
     var c: VBoxContainer = hub.section(parent, "O REINO COMEÇA AQUI", "crown", "founder")
@@ -64,7 +65,7 @@ static func build(hub, parent: VBoxContainer):
             tag = "BENEFÍCIO FUTURO"
         hub.benefit_card(bg, item[0], item[1], item[2], tag, tone, "dark")
     b.add_child(hub.fair_play_note())
-    if not owned:
+    if not owned and hub.founder_open():
         var again: Button = Art.Cta.new("TORNAR-SE FUNDADOR", "gold", 68 * maxf(hub.k, 0.85), int(24 * maxf(hub.k, 0.85)))
         again.name = "BecomeFounderBottom"
         again.shimmer = true
@@ -98,20 +99,15 @@ static func _hero(hub, parent: VBoxContainer, owned: bool, real := false):
     chips.add_theme_constant_override("v_separation", 6)
     v.add_child(chips)
     chips.add_child(Art.Stamp.new("EDIÇÃO DE LANÇAMENTO", "new", 14))
-    chips.add_child(Art.Stamp.new("EDIÇÃO LIMITADA", "new", 14))
     var t := Art.label(v, "PACOTE FUNDADOR FRAIHA", hub.fs(46), Art.GOLD, Art.FONT_BOLD)
     t.add_theme_constant_override("outline_size", 8)
     t.add_theme_color_override("font_outline_color", Color(0.16, 0.08, 0.0, 0.95))
-    var rem: int = hub.founder_remaining() if hub.has_method("founder_remaining") else -1
-    var lim_n: int = hub.founder_limit() if hub.has_method("founder_limit") else Catalog.FOUNDER_LIMIT
-    var lim_text := "Primeiros %d Fundadores do FRAIHA" % lim_n
-    if rem == 0: lim_text += "  ·  VAGAS ESGOTADAS"
-    elif rem > 0: lim_text += "  ·  RESTAM %d %s" % [rem, "VAGA" if rem == 1 else "VAGAS"]
-    var lim := Art.label(v, lim_text, hub.fs(20), Color("ffe6a0"), Art.FONT_SEMI)
+    var lim := Art.label(v, hub.founder_deadline_text(), hub.fs(20), Color("ffe6a0"), Art.FONT_SEMI)
     lim.name = "FounderLimit"
     if owned:
-        v.add_child(hub.status_badge("FUNDADOR DO REINO"))
-        var big := Art.label(v, "FUNDADOR FRAIHA", hub.fs(34), Color("fff1c0"), Art.FONT_BOLD)
+        var n: int = hub.founder_number()
+        v.add_child(hub.status_badge("FUNDADOR LENDÁRIO" if hub.legend_owned() else "FUNDADOR DO REINO"))
+        var big := Art.label(v, "FUNDADOR FRAIHA" + (" #%d" % n if n > 0 else ""), hub.fs(34), Color("fff1c0"), Art.FONT_BOLD)
         big.name = "FounderOwnedTitle"
         Art.label(v, "Você faz parte de quem esteve aqui desde o começo.", hub.fs(22), Art.CREAM)
         if not real: Art.label(v, "Estado de desenvolvimento (simulação): nenhuma compra real foi feita.", hub.fs(15), Color("f2a070"))
@@ -121,21 +117,7 @@ static func _hero(hub, parent: VBoxContainer, owned: bool, real := false):
         pz.pressed.connect(func(): hub.show_page("personalize"))
         v.add_child(pz)
     else:
-        v.add_child(hub.price_block("founder", false))
-        var pay := HFlowContainer.new()
-        pay.add_theme_constant_override("h_separation", 8)
-        pay.add_theme_constant_override("v_separation", 6)
-        v.add_child(pay)
-        pay.add_child(Art.Stamp.new("PAGAMENTO ÚNICO", "info", 15))
-        pay.add_child(Art.Stamp.new("SEM MENSALIDADE", "info", 15))
-        var sold_out := rem == 0 and not Catalog.is_mock()
-        var cta := Art.Cta.new("VAGAS ESGOTADAS" if sold_out else "TORNAR-SE FUNDADOR", "dark" if sold_out else "gold", 70 * maxf(hub.k, 0.85), int(25 * maxf(hub.k, 0.85)))
-        cta.name = "BecomeFounder"
-        cta.icon_kind = "" if sold_out else "crown"
-        cta.shimmer = not sold_out
-        cta.disabled = sold_out
-        if not sold_out: cta.pressed.connect(func(): hub.open_payment("founder"))
-        v.add_child(cta)
+        Art.label(v, "Escolha o seu pacote logo abaixo: Fundador ou Fundador Lendário. Pagamento único, sem mensalidade.", hub.fs(19), Art.CREAM)
 
 static func _reward(hub, parent: VBoxContainer):
     var f := Art.Frame.new("reward", int(26 * hub.k))

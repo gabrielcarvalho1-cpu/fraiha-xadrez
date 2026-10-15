@@ -54,8 +54,13 @@ func _account():
 func _club() -> bool:
     return product_id.begins_with("club")
 
+## R103 · valor do método escolhido (PIX tem desconto); antes da escolha mostra os dois.
 func _price_text() -> String:
-    return Catalog.planned_price(product_id) + (" · 30 DIAS DE CLUB" if _club() else " · PAGAMENTO ÚNICO")
+    var days := Catalog.club_days(product_id)
+    var what := (("%d DIAS DE CLUB" % days) if days < 365 else "1 ANO DE CLUB") if _club() else "PAGAMENTO ÚNICO"
+    if method == "pix": return Catalog.pix_price(product_id) + " NO PIX · " + what
+    if method == "card": return Catalog.planned_price(product_id) + " NO CARTÃO · " + what
+    return "%s no PIX  ·  %s no cartão" % [Catalog.pix_price(product_id), Catalog.planned_price(product_id)]
 
 # ------------------------------------------------------------ estrutura
 func _show(id: String):
@@ -101,13 +106,16 @@ func _fit_height(scroll: ScrollContainer, f: Control):
 
 # ------------------------------------------------------------ 1. escolha
 func _choose(v: VBoxContainer):
+    method = ""
     Art.label(v, "ESCOLHA A FORMA DE PAGAMENTO", hub.fs(30), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
     Art.label(v, _price_text(), hub.fs(20), Color("fff1c0"), Art.FONT_SEMI, HORIZONTAL_ALIGNMENT_CENTER)
     if _club():
-        Art.label(v, "Sem renovação automática: quando os 30 dias acabarem, você renova se quiser.", hub.fs(16), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
-    v.add_child(_option("pix", "PIX", "Aprovação na hora · QR Code ou Copia e Cola", "PAGAR COM PIX", true))
-    v.add_child(_option("card", "CARTÃO", ("Crédito aqui mesmo no jogo, no formulário seguro do Mercado Pago" if _inline_possible() else "Crédito ou débito na página segura do Mercado Pago"), "PAGAR COM CARTÃO", false))
+        Art.label(v, "Sem renovação automática: quando o prazo acabar, você renova se quiser.", hub.fs(16), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
+    v.add_child(_option("pix", "PIX · " + Catalog.pix_price(product_id), "%d%% de desconto · aprovação na hora · QR Code ou Copia e Cola" % Catalog.PIX_DISCOUNT_PCT, "PAGAR COM PIX", true))
+    v.add_child(_option("card", "CARTÃO · " + Catalog.planned_price(product_id), ("Crédito aqui mesmo no jogo, no formulário seguro do Mercado Pago" if _inline_possible() else "Crédito ou débito na página segura do Mercado Pago"), "PAGAR COM CARTÃO", false))
     Art.label(v, "O FRAIHA nunca vê os dados do seu cartão. O recibo vai para o e-mail da sua conta.", hub.fs(14), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
+    var law := Art.label(v, "Direito de arrependimento: até 7 dias após a compra você pode pedir o reembolso integral (Termos de Uso, seção Compras). Compra para maiores de 18 anos ou com autorização dos responsáveis.", hub.fs(13), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
+    law.name = "PaymentRefundNote"
     var cancel := Art.Cta.new("CANCELAR", "dark", 54, 18)
     cancel.name = "PaymentCancel"
     cancel.pressed.connect(hub.close_modal)
@@ -437,6 +445,8 @@ const ERRORS := {
     "auth_required": "Entre na sua conta para comprar. Assim a vantagem fica salva na conta e vale em qualquer aparelho.",
     "already_founder": "Você já é Fundador do Reino. Obrigado por apoiar o FRAIHA desde o começo!",
     "founder_sold_out": "As vagas do Pacote Fundador se esgotaram. Obrigado pelo interesse!",
+    "founder_closed": "A oferta do Pacote Fundador foi encerrada. Obrigado pelo interesse! O Club FRAIHA continua disponível.",
+    "order_open": "Você já tem um pedido de Fundador aguardando pagamento. Conclua o PIX aberto ou espere 30 minutos para gerar outro.",
     "provider_not_configured": "Os pagamentos ainda não foram ligados neste servidor. Tente novamente mais tarde.",
     "email_required": "Sua conta precisa de um e-mail para receber o recibo do pagamento.",
     "server_error": "O Mercado Pago não respondeu agora. Nada foi cobrado. Tente novamente em instantes.",

@@ -15,6 +15,7 @@ const PaymentRealUI := preload("res://monetization/payment_real_ui.gd")
 const PersonalizeUI := preload("res://monetization/personalize_ui.gd")
 const MyClubUI := preload("res://monetization/my_club_ui.gd")
 const Mobile := preload("res://ui_v022/mobile_layout.gd")
+const Showcase := preload("res://monetization/showcase.gd")
 
 var state
 var gateway
@@ -80,12 +81,6 @@ func _on_server(msg: Dictionary):
     offer = msg
     if visible and modal == null and page in ["hub", "founder", "club"]: _rebuild()
 
-## Vagas de Fundador restantes (-1 = ainda não sabemos).
-func founder_remaining() -> int:
-    return int(offer.get("founder_remaining", -1)) if offer.has("founder_remaining") else -1
-
-func founder_limit() -> int:
-    return int(offer.get("founder_limit", Catalog.FOUNDER_LIMIT))
 
 func close():
     close_modal()
@@ -241,7 +236,7 @@ func _set_crumbs():
     for c in crumbs.get_children():
         crumbs.remove_child(c)
         c.queue_free()
-    var parts := ["CONFIGURAÇÕES", "FRAIHA PREMIUM"]
+    var parts := ["FRAIHA PREMIUM"]
     if page == "founder": parts.append("PACOTE FUNDADOR")
     elif page == "club": parts.append("CLUB FRAIHA")
     elif page == "personalize": parts.append("PERSONALIZAÇÃO")
@@ -255,7 +250,7 @@ func _set_crumbs():
         l.autowrap_mode = TextServer.AUTOWRAP_OFF
         l.clip_text = narrow
         if narrow: l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    back_button.text = "VOLTAR" if narrow else ("CONFIGURAÇÕES" if page == "hub" else "FRAIHA PREMIUM")
+    back_button.text = "VOLTAR" if narrow or page == "hub" else "FRAIHA PREMIUM"
     back_button.icon_kind = ""
     back_button.queue_redraw()
 
@@ -276,29 +271,13 @@ func _rebuild():
     tail.custom_minimum_size.y = 40 if narrow else 24
     column.add_child(tail)
 
-# ---------------------------------------------------------------- hub
+# ---------------------------------------------------------------- hub (R103 · vitrine)
 func _build_hub(parent: VBoxContainer):
-    var hero := VBoxContainer.new()
-    hero.alignment = BoxContainer.ALIGNMENT_CENTER
-    hero.add_theme_constant_override("separation", 6)
-    parent.add_child(hero)
-    var crown_row := HBoxContainer.new()
-    crown_row.alignment = BoxContainer.ALIGNMENT_CENTER
-    crown_row.add_theme_constant_override("separation", 18)
-    hero.add_child(crown_row)
-    crown_row.add_child(Art.Glyph.new("shield", 46 * k, Art.GOLD_MID))
-    crown_row.add_child(Art.Glyph.new("crown", 74 * k, Art.GOLD, true))
-    crown_row.add_child(Art.Glyph.new("shield", 46 * k, Art.GOLD_MID))
-    var t := Art.label(hero, "FRAIHA PREMIUM", fs(58), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
-    t.add_theme_constant_override("outline_size", 8)
-    t.add_theme_color_override("font_outline_color", Color(0.16, 0.08, 0.0, 0.95))
-    Art.label(hero, "Apoie o reino, vista sua identidade e evolua o seu jogo.", fs(22), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
-    hero.add_child(fair_play_note())
-    var cards: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
-    cards.add_theme_constant_override("separation", 22 if not narrow else 18)
-    parent.add_child(cards)
-    cards.add_child(_hub_card_founder())
-    cards.add_child(_hub_card_club())
+    parent.add_child(founder_showcase())
+    parent.add_child(founder_plans())
+    parent.add_child(club_showcase())
+    parent.add_child(club_plans())
+    parent.add_child(fair_play_note())
     # R31: atalhos para o que o jogador já tem
     var quick: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
     quick.add_theme_constant_override("separation", 16)
@@ -316,82 +295,181 @@ func _build_hub(parent: VBoxContainer):
     mc.pressed.connect(func(): show_page("myclub"))
     quick.add_child(mc)
 
-func _hub_card_founder() -> Control:
-    var f := Art.Frame.new("founder", int(26 * k))
-    f.name = "HubFounderCard"
-    f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    f.glow = true
-    var v := VBoxContainer.new()
-    v.add_theme_constant_override("separation", int(10 * k))
-    f.add_child(v)
-    var top := HBoxContainer.new()
-    top.add_theme_constant_override("separation", 14)
-    v.add_child(top)
-    var seal := TextureRect.new()
-    seal.name = "FounderCardBadge"
-    seal.texture = preload("res://monetization/art/founder_badge.png")
-    seal.custom_minimum_size = Vector2(96, 96) * maxf(k, 0.8)
-    seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    seal.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    top.add_child(seal)
-    var tv := VBoxContainer.new()
-    tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    top.add_child(tv)
-    tv.add_child(Art.Stamp.new("EDIÇÃO DE LANÇAMENTO", "new", int(13 * maxf(k, 0.9))))
-    Art.label(tv, "PACOTE FUNDADOR FRAIHA", fs(32), Art.GOLD, Art.FONT_BOLD)
-    if founder_owned():
-        v.add_child(status_badge("FUNDADOR DO REINO · ATIVO" + (" (TESTE)" if not founder_real() else "")))
-    v.add_child(price_block("founder", false))
-    Art.label(v, "Faça parte de quem ajudou a construir o reino desde o início.", fs(20), Art.CREAM)
+func _showcase(kind: String) -> Control:
+    var sc = Showcase.new(kind)
+    sc.pieces_right = not narrow
+    sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    sc.custom_minimum_size.y = (580.0 if narrow else 380.0) * maxf(k, 0.8) if not compact else 260.0
+    sc.overlay.add_theme_constant_override("separation", int(8 * k))
+    return sc
+
+## Título da vitrine numa linha só (encolhe no celular).
+func _title_px(text: String) -> int:
+    var w := column.custom_minimum_size.x * (0.9 if narrow else 0.5) - 12.0
+    return Art.fit(Art.FONT_BOLD, text, fs(54), w, 22)
+
+func _shadow(l: Label, size := 6):
+    l.add_theme_constant_override("outline_size", size)
+    l.add_theme_color_override("font_outline_color", Color(0.03, 0.03, 0.02, 0.95))
+
+## Vitrine do Fundador: salão do trono + peças douradas, prazo da oferta e título.
+func founder_showcase() -> Control:
+    var sc := _showcase("founder")
+    sc.name = "FounderShowcase"
+    var v: VBoxContainer = sc.overlay
     var chips := HFlowContainer.new()
     chips.add_theme_constant_override("h_separation", 8)
     chips.add_theme_constant_override("v_separation", 6)
     v.add_child(chips)
-    chips.add_child(Art.Stamp.new("PAGAMENTO ÚNICO", "info", 13))
-    chips.add_child(Art.Stamp.new("EDIÇÃO LIMITADA · %d" % Catalog.FOUNDER_LIMIT, "info", 13))
+    chips.add_child(Art.Stamp.new("EDIÇÃO DE LANÇAMENTO", "new", int(14 * maxf(k, 0.9))))
+    var limit := founder_deadline_text()
+    if not limit.is_empty():
+        var st := Art.Stamp.new(limit, "test" if not founder_open() else "info", int(14 * maxf(k, 0.9)))
+        st.name = "FounderDeadline"
+        chips.add_child(st)
+    var t := Art.label(v, "PACOTE FUNDADOR", _title_px("PACOTE FUNDADOR"), Art.GOLD, Art.FONT_BOLD)
+    _shadow(t, 9)
+    var sub := Art.label(v, "Entre para a história do FRAIHA. Selo, título, peças e salão exclusivos, para sempre na sua conta.", fs(21), Art.CREAM)
+    _shadow(sub, 5)
+    if founder_owned():
+        var n := founder_number()
+        var who := ("FUNDADOR LENDÁRIO" if legend_owned() else "FUNDADOR DO REINO") + (" #%d" % n if n > 0 else "")
+        v.add_child(status_badge(who + ("" if founder_real() else " (TESTE)")))
+    var more := Art.Cta.new("VER TODOS OS BENEFÍCIOS", "dark", 50 * maxf(k, 0.85), int(17 * maxf(k, 0.85)))
+    more.name = "OpenFounder"
+    more.icon_kind = ""
+    more.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    more.custom_minimum_size.x = 300 * maxf(k, 0.8)
+    more.pressed.connect(func(): show_page("founder"))
+    v.add_child(more)
+    return sc
+
+func club_showcase() -> Control:
+    var sc := _showcase("club")
+    sc.name = "ClubShowcase"
+    var v: VBoxContainer = sc.overlay
+    var chips := HFlowContainer.new()
+    chips.add_theme_constant_override("h_separation", 8)
+    chips.add_theme_constant_override("v_separation", 6)
+    v.add_child(chips)
+    chips.add_child(Art.Stamp.new("SEM RENOVAÇÃO AUTOMÁTICA", "info", int(14 * maxf(k, 0.9))))
+    var t := Art.label(v, "CLUB FRAIHA", _title_px("CLUB FRAIHA"), Art.GOLD, Art.FONT_BOLD)
+    _shadow(t, 9)
+    var tag := Art.label(v, "JOGUE.  ENTENDA.  EVOLUA.", fs(24), Color("bfe8a8"), Art.FONT_BOLD)
+    _shadow(tag, 5)
+    var sub := Art.label(v, "Análise ilimitada das suas partidas, treino dos seus erros e evolução acompanhada.", fs(20), Art.CREAM)
+    _shadow(sub, 5)
+    if club_real():
+        var left: int = main_hub.entitlements.club_days_left() if main_hub != null else -1
+        v.add_child(status_badge("CLUB ATIVO" + (" · FALTAM %d DIAS" % left if left > 1 else "")))
+    elif state.club_subscription_view():
+        v.add_child(status_badge("CLUB FRAIHA ATIVO (TESTE)"))
+    var more := Art.Cta.new("VER TODOS OS BENEFÍCIOS", "dark", 50 * maxf(k, 0.85), int(17 * maxf(k, 0.85)))
+    more.name = "OpenClub"
+    more.icon_kind = ""
+    more.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    more.custom_minimum_size.x = 300 * maxf(k, 0.8)
+    more.pressed.connect(func(): show_page("club"))
+    v.add_child(more)
+    return sc
+
+## Cartões dos dois pacotes de Fundador lado a lado (um embaixo do outro no celular).
+func founder_plans() -> Control:
+    var row: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
+    row.name = "FounderPlans"
+    row.add_theme_constant_override("separation", 18)
+    var closed := not founder_open()
+    var owned := founder_owned()
+    var legend := legend_owned()
+    var c1 := ""
+    if legend or owned: c1 = "VOCÊ JÁ É FUNDADOR"
+    elif closed: c1 = "OFERTA ENCERRADA"
+    else: c1 = "QUERO SER FUNDADOR"
+    row.add_child(plan_card("founder", "founder", "FUNDADOR", "", [
+        "Selo, título e moldura de Fundador",
+        "Avatar Fundador e peças douradas",
+        "Salão do Fundador (universo exclusivo)",
+        "%d dias de Club FRAIHA inclusos" % Catalog.FOUNDER_CLUB_DAYS,
+        "Grupo dos Fundadores no WhatsApp",
+    ], c1, closed or owned, "gold"))
+    var c2 := ""
+    if legend: c2 = "VOCÊ JÁ É LENDÁRIO"
+    elif closed: c2 = "OFERTA ENCERRADA"
+    else: c2 = "QUERO SER LENDÁRIO"
+    row.add_child(plan_card("founder_legend", "reward", "FUNDADOR LENDÁRIO", "MAIS COMPLETO", [
+        "Tudo do Pacote Fundador",
+        "1 ANO de Club FRAIHA incluso",
+        "Título exclusivo \"Fundador Lendário\"",
+        "Apoio máximo ao FRAIHA no lançamento",
+    ], c2, closed or legend, "gold"))
+    return row
+
+func club_plans() -> Control:
+    var row: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
+    row.name = "ClubPlans"
+    row.add_theme_constant_override("separation", 18)
+    var active := club_owned()
+    row.add_child(plan_card("club_monthly", "club", "CLUB · 30 DIAS", "", [
+        "Todos os recursos do Club por 30 dias",
+        "Sem renovação automática",
+        "Renovar soma +30 dias ao que resta",
+    ], "RENOVAR · +30 DIAS" if active else "ATIVAR 30 DIAS", false, "green"))
+    var pm := int(Catalog.product("club_monthly").get("pix_price_cents", 0)) * 12
+    var py := int(Catalog.product("club_yearly").get("pix_price_cents", 0))
+    var save := int(round(100.0 * (pm - py) / maxf(1.0, pm)))
+    row.add_child(plan_card("club_yearly", "club", "CLUB · 1 ANO", "ECONOMIZE %d%%" % save, [
+        "Todos os recursos do Club por 365 dias",
+        "Sai por %s por mês no PIX" % Catalog.monthly_equiv("club_yearly"),
+        "Sem renovação automática",
+    ], "RENOVAR · +1 ANO" if active else "ATIVAR 1 ANO", false, "green"))
+    return row
+
+## Cartão de plano: selo opcional, nome, preço (PIX em destaque + cartão), lista e botão de compra.
+func plan_card(product_id: String, variant: String, title: String, ribbon: String, lines: Array, cta_text: String, cta_off: bool, cta_tone: String) -> Control:
+    var f := Art.Frame.new(variant, int(22 * k))
+    f.name = "Plan_" + product_id
+    f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    f.glow = not ribbon.is_empty()
+    var v := VBoxContainer.new()
+    v.add_theme_constant_override("separation", int(8 * k))
+    f.add_child(v)
+    var head := HBoxContainer.new()
+    head.add_theme_constant_override("separation", 10)
+    v.add_child(head)
+    var tl := Art.label(head, title, fs(30), Art.GOLD, Art.FONT_BOLD)
+    tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    if not ribbon.is_empty():
+        var rb := Art.Stamp.new(ribbon, "new", int(13 * maxf(k, 0.9)))
+        rb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+        head.add_child(rb)
+    v.add_child(price_block(product_id, false))
+    for line in lines:
+        var r := HBoxContainer.new()
+        r.add_theme_constant_override("separation", 8)
+        v.add_child(r)
+        var g := Art.Glyph.new("check", 22 * maxf(k, 0.85), Color("8fe08a"), false)
+        g.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+        r.add_child(g)
+        var l := Art.label(r, line, fs(18), Art.CREAM)
+        l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     var spacer := Control.new()
     spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
     v.add_child(spacer)
-    var cta := Art.Cta.new("CONHECER PACOTE FUNDADOR", "gold", 66 * maxf(k, 0.85), int(22 * maxf(k, 0.85)))
-    cta.name = "OpenFounder"
-    cta.shimmer = true
-    cta.pressed.connect(func(): show_page("founder"))
+    var cta := Art.Cta.new(cta_text, "dark" if cta_off else cta_tone, 64 * maxf(k, 0.85), int(21 * maxf(k, 0.85)))
+    var names := {"founder": "BecomeFounder", "founder_legend": "BecomeLegend", "club_monthly": "SubscribeClub", "club_yearly": "SubscribeClubYearly"}
+    cta.name = String(names.get(product_id, "Buy_" + product_id)) + ("Off" if cta_off else "")
+    cta.icon_kind = ""
+    cta.disabled = cta_off
+    cta.shimmer = not cta_off and not ribbon.is_empty()
+    if not cta_off: cta.pressed.connect(func(): open_payment(product_id))
     v.add_child(cta)
     return f
 
-func _hub_card_club() -> Control:
-    var f := Art.Frame.new("club", int(26 * k))
-    f.name = "HubClubCard"
-    f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    var v := VBoxContainer.new()
-    v.add_theme_constant_override("separation", int(10 * k))
-    f.add_child(v)
-    var top := HBoxContainer.new()
-    top.add_theme_constant_override("separation", 14)
-    v.add_child(top)
-    top.add_child(Art.Glyph.new("book", 64 * k, Art.GOLD, true))
-    var tv := VBoxContainer.new()
-    tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    top.add_child(tv)
-    tv.add_child(Art.Stamp.new("30 DIAS POR VEZ", "info", int(13 * maxf(k, 0.9))))
-    Art.label(tv, "CLUB FRAIHA", fs(32), Art.GOLD, Art.FONT_BOLD)
-    Art.label(v, "JOGUE.  ENTENDA.  EVOLUA.", fs(22), Color("bfe8a8"), Art.FONT_BOLD)
-    if club_real():
-        v.add_child(status_badge("CLUB FRAIHA ATIVO"))
-    elif state.club_subscription_view():
-        v.add_child(status_badge("CLUB FRAIHA ATIVO (TESTE)"))
-    elif state.founder_trial_view():
-        v.add_child(status_badge("%d DIAS DE CLUB · BENEFÍCIO FUNDADOR · SIMULAÇÃO" % Catalog.FOUNDER_CLUB_DAYS))
-    v.add_child(price_block("club_monthly", true))
-    Art.label(v, "Transforme suas partidas em aprendizado: análise, treino dos seus erros e evolução acompanhada.", fs(20), Art.CREAM)
-    var spacer := Control.new()
-    spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    v.add_child(spacer)
-    var cta := Art.Cta.new("CONHECER CLUB FRAIHA", "green", 66 * maxf(k, 0.85), int(22 * maxf(k, 0.85)))
-    cta.name = "OpenClub"
-    cta.pressed.connect(func(): show_page("club"))
-    v.add_child(cta)
-    return f
+## Prazo da oferta de Fundador ("POR TEMPO LIMITADO · ATÉ 14/12").
+func founder_deadline_text() -> String:
+    if not founder_open(): return "OFERTA ENCERRADA"
+    var d := Catalog.short_date(String(offer.get("founder_until", "") if offer.get("founder_until") != null else ""))
+    return "POR TEMPO LIMITADO" + (" · ATÉ %s" % d if not d.is_empty() else "")
 
 # ---------------------------------------------------------------- direitos (servidor OU simulação)
 func founder_owned() -> bool:
@@ -401,6 +479,21 @@ func founder_owned() -> bool:
 func club_owned() -> bool:
     if main_hub != null: return main_hub.club_active()
     return state.club_subscription_view() or state.founder_trial_view()
+
+## R103 · a oferta de Fundador está aberta? (o servidor decide pelo prazo; sem resposta = aberta)
+func founder_open() -> bool:
+    if Catalog.is_mock(): return true
+    return bool(offer.get("founder_open", true))
+
+func founder_number() -> int:
+    if main_hub != null and main_hub.entitlements != null:
+        var n := int(main_hub.entitlements.real.get("founder_number", 0))
+        if n > 0: return n
+    return int(offer.get("founder_number", 0)) if offer.get("founder_number") != null else 0
+
+func legend_owned() -> bool:
+    if main_hub != null and main_hub.entitlements != null and String(main_hub.entitlements.real.get("founder_tier", "")) == "legend": return true
+    return String(offer.get("founder_tier", "") if offer.get("founder_tier") != null else "") == "legend"
 
 ## Direito confirmado pelo SERVIDOR (não simulação).
 func founder_real() -> bool:
@@ -449,15 +542,17 @@ func fair_play_note() -> Control:
     if not narrow: l.autowrap_mode = TextServer.AUTOWRAP_OFF
     return row
 
-## Preço de teste em destaque + selo MODO TESTE + preço planejado.
+## R103 · Preço: PIX (com desconto) em destaque e o valor no cartão embaixo. No modo de teste: R$ 0,00 + selo.
 func price_block(product_id: String, monthly: bool) -> Control:
     var v := VBoxContainer.new()
-    v.add_theme_constant_override("separation", 2)
+    v.name = "PriceBlock"
+    v.add_theme_constant_override("separation", 0)
     var row := HFlowContainer.new()
-    row.add_theme_constant_override("h_separation", 12)
-    row.add_theme_constant_override("v_separation", 4)
+    row.add_theme_constant_override("h_separation", 10)
+    row.add_theme_constant_override("v_separation", 2)
     v.add_child(row)
-    var price := Art.label(row, Catalog.charge_price(product_id) + ((" / MÊS" if Catalog.is_mock() else " · 30 DIAS") if monthly else ""), fs(46), Color("fff1c0"), Art.FONT_BOLD)
+    var days := Catalog.club_days(product_id)
+    var price := Art.label(row, Catalog.charge_price(product_id) if Catalog.is_mock() else Catalog.pix_price(product_id), fs(46), Color("fff1c0"), Art.FONT_BOLD)
     price.name = "TestPrice"
     price.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     price.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -465,11 +560,15 @@ func price_block(product_id: String, monthly: bool) -> Control:
     price.add_theme_color_override("font_outline_color", Color(0.18, 0.1, 0.0, 0.9))
     if Catalog.is_mock():
         row.add_child(Art.Stamp.new("MODO TESTE", "test", 14))
-        var planned := "Preço planejado futuramente: %s%s" % [Catalog.planned_price(product_id), " / mês" if monthly else " · pagamento único"]
+        var planned := "Preço comercial: %s no PIX · %s no cartão" % [Catalog.pix_price(product_id), Catalog.planned_price(product_id)]
         var pl := Art.label(v, planned, fs(16), Art.MUTED)
         pl.name = "PlannedPrice"
     else:
-        var how := Art.label(v, ("PIX ou cartão · sem renovação automática" if monthly else "PIX ou cartão · pagamento único"), fs(16), Art.MUTED)
+        var pix := Art.Stamp.new("NO PIX · %d%% OFF" % Catalog.PIX_DISCOUNT_PCT, "ok", int(13 * maxf(k, 0.9)))
+        pix.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+        row.add_child(pix)
+        var when := "pagamento único" if Catalog.product(product_id).get("kind", "") == "one_time" else ("%d dias, sem renovação automática" % days if days < 365 else "1 ano, sem renovação automática")
+        var how := Art.label(v, "ou %s no cartão · %s" % [Catalog.planned_price(product_id), when], fs(16), Art.MUTED)
         how.name = "PriceHow"
     return v
 
@@ -577,17 +676,21 @@ func payment_confirmed(product_id: String):
     _rebuild()
     scroll.scroll_vertical = 0
     _celebrate()
-    var founder := product_id == "founder"
-    var title := "BEM-VINDO, FUNDADOR DO REINO!" if founder else "CLUB FRAIHA ATIVO!"
+    var founder := product_id in ["founder", "founder_legend"]
+    var legend := product_id == "founder_legend"
+    var num := founder_number()
+    var title := ("BEM-VINDO, FUNDADOR LENDÁRIO!" if legend else "BEM-VINDO, FUNDADOR DO REINO!") if founder else "CLUB FRAIHA ATIVO!"
     var lines := []
     if founder:
-        lines = ["Selo e título \"Fundador do Reino\"", "Avatar e moldura exclusivos de Fundador", "Universo e peças do Fundador", "30 dias de Club FRAIHA inclusos", "Grupo dos Fundadores no WhatsApp"]
+        if num > 0: lines.append("Você é o Fundador #%d do FRAIHA" % num)
+        lines += ["Selo e título \"%s\"" % ("Fundador Lendário" if legend else "Fundador do Reino"), "Avatar e moldura exclusivos de Fundador", "Universo e peças do Fundador",
+            ("1 ano" if legend else "%d dias" % Catalog.FOUNDER_CLUB_DAYS) + " de Club FRAIHA inclusos", "Grupo dos Fundadores no WhatsApp"]
     else:
-        lines = ["Análises ilimitadas", "MEU CLUB: estatísticas, treino dos seus erros e desafios", "Marcha Real sem limite diário", "Selo, avatares, moldura, universo e peças do Club"]
+        lines = ["Análises ilimitadas", "MEU CLUB: estatísticas, treino dos seus erros e desafios", "Selo, avatares, moldura, universo e peças do Club"]
     var body := "Pagamento confirmado pelo Mercado Pago. Já está liberado na sua conta:\n\n• " + "\n• ".join(lines)
-    if not founder and main_hub != null and main_hub.entitlements != null:
+    if main_hub != null and main_hub.entitlements != null:
         var exp := String(main_hub.entitlements.club_expires_at())
-        if not exp.is_empty(): body += "\n\nVálido até %s/%s/%s." % [exp.substr(8, 2), exp.substr(5, 2), exp.substr(0, 4)]
+        if not exp.is_empty(): body += "\n\nClub válido até %s/%s/%s." % [exp.substr(8, 2), exp.substr(5, 2), exp.substr(0, 4)]
     var f := open_confirm(title, body, "FECHAR", "PERSONALIZAR AGORA", func(): show_page("personalize"), "founder" if founder else "club")
     f.name = "WelcomeModal"
 

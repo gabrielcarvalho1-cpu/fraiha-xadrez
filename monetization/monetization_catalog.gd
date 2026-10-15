@@ -47,51 +47,99 @@ static func enabled_methods() -> Array:
 # ---------------------------------------------------------------------------
 # Fundador
 # ---------------------------------------------------------------------------
-## Edição limitada. O servidor é a autoridade (FRAIHA_FOUNDER_LIMIT) e informa as vagas restantes
-## (payment_offer); este número é só o texto enquanto a resposta não chega.
-const FOUNDER_LIMIT := 100
-## R39 · o link do grupo de WhatsApp dos Fundadores NÃO fica mais no jogo: o servidor só o entrega a
-## quem é Fundador de verdade (acct_state.founder_perks.whatsapp_url, env FRAIHA_FOUNDER_WHATSAPP_URL).
-## Benefício do Fundador: dias de Club inclusos (na V1 apenas simulado).
-const FOUNDER_CLUB_DAYS := 30
+## R103 · Fundador é por TEMPO LIMITADO (sem limite de vagas). O servidor é a autoridade
+## (FRAIHA_FOUNDER_UNTIL) e informa no payment_offer: founder_open, founder_until e o número do Fundador.
+## R39 · o link do grupo de WhatsApp dos Fundadores só vem do servidor, para quem é Fundador de verdade.
+## Dias de Club inclusos em cada pacote (o servidor é quem entrega).
+const FOUNDER_CLUB_DAYS := 90
+const LEGEND_CLUB_DAYS := 365
+## Desconto no PIX (texto). Os valores reais estão em pix_price_cents e no servidor.
+const PIX_DISCOUNT_PCT := 10
 
 # ---------------------------------------------------------------------------
-# Preços (centavos). TEST = cobrado na simulação; PLANNED = valor comercial futuro.
+# Preços (centavos). TEST = cobrado na simulação; PLANNED = cartão; PIX = com desconto.
 # ---------------------------------------------------------------------------
 const PRODUCTS := {
     "founder": {
-        "name": "PACOTE FUNDADOR FRAIHA",
+        "name": "PACOTE FUNDADOR",
         "kind": "one_time",
+        "club_days": 90,
         "test_price_cents": 0,
         "planned_price_cents": 4990,
+        "pix_price_cents": 4490,
+    },
+    "founder_legend": {
+        "name": "FUNDADOR LENDÁRIO",
+        "kind": "one_time",
+        "club_days": 365,
+        "test_price_cents": 0,
+        "planned_price_cents": 9990,
+        "pix_price_cents": 8990,
     },
     "club_monthly": {
-        "name": "CLUB FRAIHA",
-        "kind": "subscription_monthly",
+        "name": "CLUB FRAIHA · MENSAL",
+        "kind": "pass",
+        "club_days": 30,
         "test_price_cents": 0,
         "planned_price_cents": 1990,
+        "pix_price_cents": 1790,
     },
-    # Só vitrine na V1 (não assinável ainda).
     "club_yearly": {
-        "name": "CLUB FRAIHA · PLANO ANUAL",
-        "kind": "subscription_yearly",
+        "name": "CLUB FRAIHA · ANUAL",
+        "kind": "pass",
+        "club_days": 365,
         "test_price_cents": 0,
-        "planned_price_cents": 19990,
-        "available": false,
+        "planned_price_cents": 14990,
+        "pix_price_cents": 13490,
     },
 }
 
 static func product(id: String) -> Dictionary:
     return PRODUCTS.get(id, {})
 
+static func club_days(id: String) -> int:
+    return int(product(id).get("club_days", 0))
+
 ## R$ 49,90
 static func brl(cents: int) -> String:
     return "R$ %d,%02d" % [cents / 100, cents % 100]
 
-## Preço cobrado agora (teste na V1).
+## Preço cobrado agora (teste no modo mock).
 static func charge_price(id: String) -> String:
     var p := product(id)
     return brl(int(p.get("test_price_cents", 0)) if is_mock() else int(p.get("planned_price_cents", 0)))
 
+## Preço no cartão.
 static func planned_price(id: String) -> String:
     return brl(int(product(id).get("planned_price_cents", 0)))
+
+## Preço no PIX (com desconto).
+static func pix_price(id: String) -> String:
+    var p := product(id)
+    return brl(int(p.get("pix_price_cents", p.get("planned_price_cents", 0))))
+
+static func price_for(id: String, method: String) -> String:
+    if is_mock(): return charge_price(id)
+    return pix_price(id) if method == "pix" else planned_price(id)
+
+## "R$ 13,490 / ano = R$ 11,24 por mês" → só o valor mensal equivalente do anual no PIX.
+static func monthly_equiv(id: String) -> String:
+    var p := product(id)
+    return brl(int(round(float(p.get("pix_price_cents", 0)) / 12.0)))
+
+## "14/12" (horário de Brasília) a partir de um ISO do servidor (2026-12-15T02:59:59.000Z ou com -03:00).
+static func short_date(iso: String) -> String:
+    if iso.length() < 10: return ""
+    if iso.length() < 19: return "%s/%s" % [iso.substr(8, 2), iso.substr(5, 2)]
+    var t := Time.get_unix_time_from_datetime_string(iso.substr(0, 19))
+    var tail := iso.substr(19)
+    var dot := tail.find(".")
+    if dot == 0:
+        var i := 1
+        while i < tail.length() and tail[i] >= "0" and tail[i] <= "9": i += 1
+        tail = tail.substr(i)
+    if tail.length() >= 6 and (tail[0] == "+" or tail[0] == "-"):
+        var off := int(tail.substr(1, 2)) * 3600 + int(tail.substr(4, 2)) * 60
+        t -= off if tail[0] == "+" else -off
+    var brt := Time.get_datetime_dict_from_unix_time(t - 3 * 3600)
+    return "%02d/%02d" % [brt.day, brt.month]

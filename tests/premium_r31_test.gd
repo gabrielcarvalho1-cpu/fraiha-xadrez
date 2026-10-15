@@ -233,7 +233,7 @@ func run():
     var soon := 0
     for b in preload("res://monetization/club_ui.gd").BENEFITS:
         if b[3] != "DISPONÍVEL": soon += 1
-    check(soon == 1, "Club: só o desconto da loja segue EM BREVE")
+    check(soon == 0, "R103 · Club: nenhum benefício EM BREVE (sem promessa futura)")
     var fsoon := 0
     for b in preload("res://monetization/founder_ui.gd").BENEFITS:
         if b[3] == "soon": fsoon += 1

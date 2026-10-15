@@ -1,5 +1,5 @@
 extends RefCounted
-## CLUB FRAIHA — página da assinatura mensal (treinamento + análise + evolução).
+## CLUB FRAIHA — página do Club (30 dias ou 1 ano, sem renovação automática; treino + análise + evolução).
 ## Estado: servidor (entitlements reais) ou simulação (dev_mock_club / dev_mock_founder_club_trial).
 ## R31: os benefícios estão no ar (MEU CLUB, PERSONALIZAÇÃO, avatares/ícones/universo Club).
 ## Club NÃO inclui grupo de WhatsApp. Nada aqui dá vantagem no Ranked.
@@ -21,8 +21,6 @@ const BENEFITS := [
     ["seal", "SELO CLUB", "3 ícones e 3 avatares exclusivos de membro.", "DISPONÍVEL"],
     ["brush", "PERSONALIZAÇÃO PREMIUM", "Combine qualquer conjunto de peças conquistado com qualquer cenário; escolha ícone, título e moldura.", "DISPONÍVEL"],
     ["star", "ACESSO ANTECIPADO", "Laboratório: novidades em teste antes do lançamento geral.", "DISPONÍVEL"],
-    ["crown", "MARCHA REAL ILIMITADA", "O novo modo de cartas e corrida sem limite (sem Club: 1 partida por dia).", "DISPONÍVEL"],
-    ["tag", "DESCONTO FUTURO NA LOJA", "Condições especiais para membros na futura loja.", "EM BREVE"],
 ]
 
 static func active_view(hub) -> String:
@@ -34,6 +32,7 @@ static func active_view(hub) -> String:
 static func build(hub, parent: VBoxContainer):
     var active := active_view(hub)
     _hero(hub, parent, active)
+    parent.add_child(hub.club_plans())
     var c: VBoxContainer = hub.section(parent, "JOGUE. ENTENDA. EVOLUA.", "book", "club")
     Art.label(c, CONCEPT, hub.fs(19), Art.CREAM)
     if active.is_empty() or hub.main_hub == null: _weekly_report(hub, parent)
@@ -48,7 +47,6 @@ static func build(hub, parent: VBoxContainer):
         elif not active.is_empty(): tag = "INCLUSO · " + tag
         hub.benefit_card(g, item[0], item[1], item[2], tag, tone, "dark")
     b.add_child(hub.fair_play_note())
-    _yearly(hub, parent)
 
 static func _hero(hub, parent: VBoxContainer, active: String):
     var f := Art.Frame.new("club", int(30 * hub.k))
@@ -78,7 +76,7 @@ static func _hero(hub, parent: VBoxContainer, active: String):
     chips.add_theme_constant_override("h_separation", 8)
     chips.add_theme_constant_override("v_separation", 6)
     v.add_child(chips)
-    chips.add_child(Art.Stamp.new("30 DIAS POR VEZ", "info", 15))
+    chips.add_child(Art.Stamp.new("30 DIAS OU 1 ANO", "info", 15))
     chips.add_child(Art.Stamp.new("SEM RENOVAÇÃO AUTOMÁTICA", "info", 15))
     var t := Art.label(v, "CLUB FRAIHA", hub.fs(48), Art.GOLD, Art.FONT_BOLD)
     t.add_theme_constant_override("outline_size", 8)
@@ -112,14 +110,7 @@ static func _hero(hub, parent: VBoxContainer, active: String):
         if left >= 0 and left <= 5:
             var warn := Art.label(v, "Seu Club está acabando. Renove para não perder as vantagens.", hub.fs(17), Color("ffd27a"), Art.FONT_SEMI)
             warn.name = "ClubRenewWarning"
-        # R39 · sem cobrança automática: renovar soma +30 dias ao que ainda resta
-        if not Catalog.is_mock():
-            var renew := Art.Cta.new("RENOVAR · +30 DIAS", "green", 62 * maxf(hub.k, 0.85), int(22 * maxf(hub.k, 0.85)))
-            renew.name = "RenewClub"
-            renew.icon_kind = "book"
-            renew.pressed.connect(func(): hub.open_payment("club_monthly"))
-            v.add_child(renew)
-            Art.label(v, "%s por mais 30 dias, somados aos que ainda restam. PIX ou cartão." % Catalog.planned_price("club_monthly"), hub.fs(15), Art.MUTED)
+        Art.label(v, "Para renovar, escolha 30 dias ou 1 ano logo abaixo: os dias são somados aos que ainda restam.", hub.fs(15), Art.MUTED)
         return
     if active == "subscription":
         v.add_child(hub.status_badge("CLUB FRAIHA ATIVO"))
@@ -139,19 +130,13 @@ static func _hero(hub, parent: VBoxContainer, active: String):
     if active == "trial":
         v.add_child(hub.status_badge("%d DIAS DE CLUB · BENEFÍCIO FUNDADOR · SIMULAÇÃO" % Catalog.FOUNDER_CLUB_DAYS))
         Art.label(v, "Benefício simulado do Pacote Fundador. Não é uma assinatura.", hub.fs(16), Color("f2a070"))
-    v.add_child(hub.price_block("club_monthly", true))
-    var cta := Art.Cta.new("ATIVAR CLUB FRAIHA", "green", 70 * maxf(hub.k, 0.85), int(25 * maxf(hub.k, 0.85)))
-    cta.name = "SubscribeClub"
-    cta.icon_kind = "book"
-    cta.shimmer = true
-    cta.pressed.connect(func(): hub.open_payment("club_monthly"))
-    v.add_child(cta)
+    Art.label(v, "Escolha 30 dias ou 1 ano logo abaixo. PIX com 10% de desconto ou cartão. Sem renovação automática.", hub.fs(19), Art.CREAM)
 
 ## Exemplo visual do relatório semanal (pergaminho com selo EXEMPLO).
 static func _weekly_report(hub, parent: VBoxContainer):
     var v: VBoxContainer = hub.section(parent, "SUA SEMANA", "scroll", "parchment")
     v.get_parent().name = "WeeklyReport"
-    v.add_child(Art.Stamp.new("EXEMPLO · DADOS FICTÍCIOS", "test", 13))
+    v.add_child(Art.Stamp.new("EXEMPLO DE RELATÓRIO", "info", 13))
     var layout: BoxContainer = VBoxContainer.new() if hub.narrow else HBoxContainer.new()
     layout.add_theme_constant_override("separation", 26)
     v.add_child(layout)
@@ -185,23 +170,6 @@ static func _weekly_report(hub, parent: VBoxContainer):
         row.add_child(col)
         Art.label(col, pair[1], hub.fs(15), Art.INK.lightened(0.2))
         Art.label(col, pair[2], hub.fs(22), Art.INK, Art.FONT_BOLD)
-
-static func _yearly(hub, parent: VBoxContainer):
-    var f := Art.Frame.new("dark", int(20 * hub.k))
-    f.name = "YearlyPlan"
-    parent.add_child(f)
-    var row: BoxContainer = VBoxContainer.new() if hub.narrow else HBoxContainer.new()
-    row.add_theme_constant_override("separation", 16)
-    f.add_child(row)
-    row.add_child(Art.Glyph.new("calendar", 54, Art.GOLD_MID, true))
-    var v := VBoxContainer.new()
-    v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    row.add_child(v)
-    Art.label(v, "PLANO ANUAL", hub.fs(24), Art.GOLD, Art.FONT_BOLD)
-    Art.label(v, "%s / ANO · preço planejado" % Catalog.planned_price("club_yearly"), hub.fs(18), Art.CREAM)
-    var s := Art.Stamp.new("EM BREVE · AINDA NÃO DISPONÍVEL", "soon", 13)
-    s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    row.add_child(s)
 
 ## Gráfico de barras "de pergaminho" para o exemplo do relatório.
 class ReportChart extends Control:

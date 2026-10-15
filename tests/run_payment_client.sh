@@ -7,7 +7,7 @@ PORT=$((21000 + RANDOM % 9000)); MPP=$((PORT + 1))
 node tests/server/fake_mercadopago.cjs $MPP > /tmp/fake_mp.log 2>&1 &
 MP=$!
 PORT=$PORT FRAIHA_DEV_AUTH=1 FRAIHA_PAYMENT_PROVIDER=mercadopago FRAIHA_MP_ACCESS_TOKEN=TEST-TOKEN FRAIHA_MP_WEBHOOK_SECRET=s FRAIHA_MP_PUBLIC_KEY=APP_USR-public-key-teste \
-  FRAIHA_MP_API=http://127.0.0.1:$MPP FRAIHA_PUBLIC_URL=https://servidor.fraiha.test FRAIHA_FOUNDER_LIMIT=2 \
+  FRAIHA_MP_API=http://127.0.0.1:$MPP FRAIHA_PUBLIC_URL=https://servidor.fraiha.test FRAIHA_FOUNDER_UNTIL=2099-12-31 \
   FRAIHA_FOUNDER_WHATSAPP_URL=https://chat.whatsapp.com/GRUPO-TESTE node online_v021/server.js > /tmp/srv_payment.log 2>&1 &
 SRV=$!
 sleep 1

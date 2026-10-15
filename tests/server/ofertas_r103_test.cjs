@@ -68,6 +68,13 @@ function setup(env = {}) {
   check(t.last('payment_error').code === 'founder_closed', 'depois da data: não cria pedido de Fundador');
   await t.pay.handle(t.ws('dan'), { type: 'payment_create', product_id: 'club_monthly', method: 'card' });
   check(t.last('payment_charge').charge.amount_cents === 1990, 'Club continua à venda (cartão R$ 19,90)');
+  // Dono encerra a venda quando quiser (sem data)
+  t = setup({ FRAIHA_FOUNDER_OPEN: 'nao' });
+  await t.pay.handle(t.ws('eva'), { type: 'payment_offer' });
+  check(t.last('payment_offer').founder_open === false && t.last('payment_offer').founder_until === null, 'FRAIHA_FOUNDER_OPEN=nao: Fundador encerrado sem precisar de data');
+  t = setup({});
+  await t.pay.handle(t.ws('eva'), { type: 'payment_offer' });
+  check(t.last('payment_offer').founder_open === true && t.last('payment_offer').founder_until === null, 'sem configuração: Fundador à venda, por tempo limitado sem data');
   console.error = quiet;
   console.log(`OFERTAS_R103 CHECKS=${checks} FAILURES=${fails}`); process.exitCode = fails ? 1 : 0;
 })().catch(e => { console.log(e); process.exitCode = 1; });
