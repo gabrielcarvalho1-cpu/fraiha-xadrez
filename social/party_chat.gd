@@ -28,6 +28,9 @@ var status: Label
 var send_btn: Button
 var close_btn: Button
 var panel_style: StyleBoxFlat
+var emote_row: HFlowContainer
+const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
+const Cosmetics := preload("res://profile/premium_cosmetics.gd")
 ## R90 · cores da sala (nada de verde): XEQUE vinho + marfim + ouro; MARCHA REAL roxo real + ouro
 const THEMES := {
     "xeque": {"btn": Color("6b1424"), "panel": Color(0.16, 0.04, 0.06, 0.95), "border": Color("d9a441"), "text": Color("f3e6c8"), "off": Color("3a0e16")},
@@ -96,6 +99,12 @@ func setup(acc):
         to_row.add_child(b)
     to_all.pressed.connect(func(): set_to("all"))
     to_ally.pressed.connect(func(): set_to("ally"))
+    # R119 · EMOTES para a mesa toda (os de graça + os comprados na Loja de Coroas)
+    emote_row = HFlowContainer.new()
+    emote_row.name = "PartyEmoteRow"
+    emote_row.add_theme_constant_override("h_separation", 6)
+    emote_row.add_theme_constant_override("v_separation", 6)
+    col.add_child(emote_row)
     scroll = ScrollContainer.new()
     scroll.custom_minimum_size = Vector2(0, 180)
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -177,7 +186,9 @@ func active() -> bool:
 
 func set_open(v: bool):
     opened = v
-    if v: unread = 0
+    if v:
+        unread = 0
+        _fill_emotes()   # R119 · inclui os comprados desde a última vez
     _layout()
     if v and input.focus_mode != Control.FOCUS_NONE: input.grab_focus.call_deferred()
 
@@ -205,6 +216,24 @@ func send_current():
         status.text = ""
     else:
         status.text = "Sem conexão. Tente de novo em instantes."
+
+func _fill_emotes():
+    if emote_row == null: return
+    for c in emote_row.get_children(): c.queue_free()
+    for e in ShopCatalog.my_emotes(Cosmetics.shop_owned):
+        var eid := String(e.id)
+        var b := Button.new()
+        b.name = "PartyEmote_" + eid
+        b.text = String(e.text)
+        b.focus_mode = Control.FOCUS_NONE
+        _style(b, Color("16306a"), Color("c99a45"), 14)
+        b.pressed.connect(func(): send_emote(eid))
+        emote_row.add_child(b)
+
+func send_emote(id: String):
+    if room_id.is_empty() or account == null: return
+    if account.send_server({"type": "party_emote", "room_id": room_id, "id": id}): status.text = ""
+    else: status.text = "Sem conexão. Tente de novo em instantes."
 
 func _on_message(msg: Dictionary):
     var t := String(msg.get("type", ""))
@@ -237,6 +266,7 @@ func _rebuild():
         var tag := "[color=#8fd6ff][ALIADO][/color] " if ally else ""
         var col := "#f4ce7f" if mine else ("#8fd6ff" if ally else "#e8c78a")
         l.text = "%s[color=%s][b]%s:[/b][/color] %s" % [tag, col, _esc(who), _esc(String(m.get("text", "")))]
+        if m.has("emote"): l.text = "[color=%s][b]%s:[/b][/color] [color=#bcd4ff]“%s”[/color]" % [col, _esc(who), _esc(String(m.get("text", "")))]   # R119
         list.add_child(l)
     _layout()
     _scroll_end.call_deferred()

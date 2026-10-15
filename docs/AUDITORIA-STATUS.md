@@ -21,7 +21,7 @@
 - [x] R115 · Carregamento mais rápido: primeira abertura com ~25 MB (antes ~51 MB); XEQUE, MARCHA e ligas baixam depois
 - [x] R116/R117 · Loja de Coroas: 10 títulos e 6 molduras (migration 0017)
 - [x] R118 · Torneio da Semana de XEQUE e MARCHA: grátis, prêmio em Coroas (migration 0018)
-- [ ] Loja: emotes nas partidas online
+- [x] R119 · Emotes nas partidas online (4 de graça + 8 na Loja); xadrez, XEQUE e MARCHA
 - [ ] Loja: avatares novos (depende de arte)
 - [ ] Passe de temporada
 - [ ] Códigos de criador, Discord, CrazyGames

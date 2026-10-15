@@ -403,7 +403,12 @@ func _skin_chat_pc(M: Dictionary) -> void:
     _text_button(c.report_button, M.report, 18.0)
     _ghost(c.minimize_button, M.min, "min")
     _ghost(c.send_button, M.send, "send")
-    _place(c.scroll, M.list)
+    # R119 · EMOTES: botão no canto de baixo da lista; a fileira de emotes abre por cima da lista
+    var lr: Rect2 = M.list
+    _place(c.scroll, Rect2(lr.position.x, lr.position.y, lr.size.x, lr.size.y - 40))
+    if c.emote_button != null:
+        _text_button(c.emote_button, Rect2(lr.end.x - 124, lr.end.y - 36, 124, 34), 16.0)
+        _place(c.emote_row, Rect2(lr.position.x + 6, lr.position.y + 6, lr.size.x - 12, lr.size.y - 50))
     _place(c.status, Rect2(M.list.position.x, M.list.end.y - 30, M.list.size.x, 28))
     _place(c.input, M.input)
     var empty := StyleBoxEmpty.new()

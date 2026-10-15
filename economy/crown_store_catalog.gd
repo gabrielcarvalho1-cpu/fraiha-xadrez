@@ -18,7 +18,30 @@ const ITEMS := [
 	{"id": "jade", "kind": "frame", "name": "Moldura Jade", "price": 1200},
 	{"id": "ametista", "kind": "frame", "name": "Moldura Ametista", "price": 1500},
 	{"id": "obsidiana", "kind": "frame", "name": "Moldura Obsidiana", "price": 2000},
+	{"id": "emote_uau", "kind": "emote", "name": "Uau!", "price": 300},
+	{"id": "emote_pensando", "kind": "emote", "name": "Hmm… pensando", "price": 300},
+	{"id": "emote_sorte", "kind": "emote", "name": "Que sorte!", "price": 400},
+	{"id": "emote_calma", "kind": "emote", "name": "Calma, vou virar!", "price": 400},
+	{"id": "emote_mate_vem", "kind": "emote", "name": "Xeque-mate chegando…", "price": 500},
+	{"id": "emote_lenda", "kind": "emote", "name": "Lenda!", "price": 500},
+	{"id": "emote_rei_chegou", "kind": "emote", "name": "O rei chegou!", "price": 600},
+	{"id": "emote_respeito", "kind": "emote", "name": "Respeito, mestre.", "price": 600},
 ]
+
+## R119 · emotes de graça (aparecem para todos, sem comprar)
+const FREE_EMOTES := [
+	{"id": "emote_ola", "text": "Olá!"},
+	{"id": "emote_boa_jogada", "text": "Boa jogada!"},
+	{"id": "emote_obrigado", "text": "Obrigado!"},
+	{"id": "emote_boa_partida", "text": "Boa partida!"},
+]
+
+## emotes que ESTE jogador pode mandar agora: os de graça + os comprados (owned = store_state.owned)
+static func my_emotes(owned: Array) -> Array:
+	var out := FREE_EMOTES.duplicate()
+	for it in of_kind("emote"):
+		if String(it.id) in owned: out.append({"id": it.id, "text": it.name})
+	return out
 
 static func of_kind(kind: String) -> Array:
 	var out := []

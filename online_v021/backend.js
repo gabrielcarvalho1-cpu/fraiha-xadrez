@@ -94,6 +94,7 @@ class Backend {
     this.crownStore = new CrownStore({ backend: this, send: (ws, o) => this.send(ws, o) });   // R116
     this.tournaments = new Tournaments({ backend: this, send: (ws, o) => this.send(ws, o) });   // R118
     this.tournaments.start();
+    this.chat.ownedEmotes = uid => this.crownStore.owned(uid);   // R119 · emotes comprados na Loja de Coroas
     this.chat.reports = this.reports;
     // R103 · entrega pagamentos que ficaram "pagos sem vantagem": ao iniciar e de hora em hora
     if (this.store && this.store.persistent) {

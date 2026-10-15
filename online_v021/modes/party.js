@@ -383,6 +383,19 @@ class Party {
     if (seat < 0 || room.seats[seat].left) return this.send(ws, { type: 'party_error', code: 'not_player', message: 'Você não está nesta partida.' });
     if (a === 'party_leave') { this.leave(room, uid); return this.send(ws, { type: 'party_left', room_id: room.id }); }
     if (a === 'party_chat') return this.chat(ws, room, seat, m);
+    if (a === 'party_emote') {   // R119 · emote para a mesa toda
+      const hub = this.backend && this.backend.chat;
+      if (!hub) return;
+      return hub.emote(ws, room.seats[seat].uid, m, { scope: room.id, entry: { from: seat, to: 'all', nickname: room.seats[seat].nickname } }, entry => {
+        room.chat = room.chat || []; room.chatSeq = (room.chatSeq || 0) + 1;
+        const e = { id: room.chatSeq, ...entry };
+        room.chat.push(e); if (room.chat.length > 60) room.chat.shift();
+        room.seats.forEach((s, abs) => {
+          if (s.kind !== 'human' || s.left || !this.canSee(room, e, abs)) return;
+          this.toUser(s.uid, { type: 'party_chat_msg', room_id: room.id, ...this.chatView(e, abs) });
+        });
+      });
+    }
     if (a === 'party_chat_sync') return this.send(ws, { type: 'party_chat_history', room_id: room.id, messages: (room.chat || []).filter(e => this.canSee(room, e, seat)).map(e => this.chatView(e, seat)) });
     if (a !== 'party_action') return this.send(ws, { type: 'party_error', code: 'invalid', message: 'Ação desconhecida.' });
     const reject = (code, message) => this.send(ws, { type: 'party_error', code, message, room_id: room.id, snapshot: this.snapshot(room, seat) });
@@ -417,7 +430,7 @@ class Party {
     });
   }
   canSee(room, e, abs) { return e.to === 'all' || abs === e.from || abs === (e.from + 2) % 4; }
-  chatView(e, abs) { return { id: e.id, from_seat: rot(e.from, abs), to: e.to, nickname: e.nickname, text: e.text, ts: e.ts }; }
+  chatView(e, abs) { return { id: e.id, from_seat: rot(e.from, abs), to: e.to, nickname: e.nickname, text: e.text, ts: e.ts, emote: e.emote || undefined }; }
   cleanup() {
     const now = this.now();
     for (const [id, r] of this.rooms) {

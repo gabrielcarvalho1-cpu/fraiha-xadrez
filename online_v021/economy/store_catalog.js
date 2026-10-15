@@ -20,7 +20,25 @@ const ITEMS = [
   { id: 'jade', kind: 'frame', name: 'Moldura Jade', price: 1200 },
   { id: 'ametista', kind: 'frame', name: 'Moldura Ametista', price: 1500 },
   { id: 'obsidiana', kind: 'frame', name: 'Moldura Obsidiana', price: 2000 },
+  // R119 · emotes das partidas online (o nome É o texto que aparece para o adversário)
+  { id: 'emote_uau', kind: 'emote', name: 'Uau!', price: 300 },
+  { id: 'emote_pensando', kind: 'emote', name: 'Hmm… pensando', price: 300 },
+  { id: 'emote_sorte', kind: 'emote', name: 'Que sorte!', price: 400 },
+  { id: 'emote_calma', kind: 'emote', name: 'Calma, vou virar!', price: 400 },
+  { id: 'emote_mate_vem', kind: 'emote', name: 'Xeque-mate chegando…', price: 500 },
+  { id: 'emote_lenda', kind: 'emote', name: 'Lenda!', price: 500 },
+  { id: 'emote_rei_chegou', kind: 'emote', name: 'O rei chegou!', price: 600 },
+  { id: 'emote_respeito', kind: 'emote', name: 'Respeito, mestre.', price: 600 },
 ];
 const BY_ID = Object.fromEntries(ITEMS.map(i => [i.id, i]));
 const ofKind = kind => ITEMS.filter(i => i.kind === kind).map(i => i.id);
-module.exports = { ITEMS, BY_ID, ofKind };
+// R119 · emotes de graça (todo jogador com conta ou convidado)
+const FREE_EMOTES = [
+  { id: 'emote_ola', text: 'Olá!' },
+  { id: 'emote_boa_jogada', text: 'Boa jogada!' },
+  { id: 'emote_obrigado', text: 'Obrigado!' },
+  { id: 'emote_boa_partida', text: 'Boa partida!' },
+];
+const emoteText = id => { const f = FREE_EMOTES.find(e => e.id === id); if (f) return f.text; const i = BY_ID[id]; return i && i.kind === 'emote' ? i.name : null; };
+const isFreeEmote = id => FREE_EMOTES.some(e => e.id === id);
+module.exports = { ITEMS, BY_ID, ofKind, FREE_EMOTES, emoteText, isFreeEmote };

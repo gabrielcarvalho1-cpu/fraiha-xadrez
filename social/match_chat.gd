@@ -29,6 +29,12 @@ var toggle_button: Button
 var minimize_button: Button
 var minimized := false   # desktop: chat recolhido num botão "CHAT"
 var restore_button: Button
+## R119 · EMOTES: os de graça + os comprados na Loja de Coroas (premium_cosmetics.shop_owned)
+const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
+const Cosmetics := preload("res://profile/premium_cosmetics.gd")
+var emote_button: Button
+var emote_row: HFlowContainer
+var bubble_layer: Control
 
 func setup(service):
     account = service
@@ -60,6 +66,9 @@ func setup(service):
     title.add_theme_color_override("font_color", GOLD)
     title.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
     head.add_child(title)
+    emote_button = _small(head, "EMOTES", _toggle_emotes)
+    emote_button.name = "ChatEmotes"
+    emote_button.tooltip_text = "Reações rápidas (as da Loja de Coroas aparecem aqui depois de compradas)"
     mute_button = _small(head, "SILENCIAR", _toggle_mute)
     mute_button.tooltip_text = "Deixar de ver as mensagens do adversário (só para você)"
     report_button = _small(head, "DENUNCIAR", _report)
@@ -76,6 +85,12 @@ func setup(service):
     list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     list.add_theme_constant_override("separation", 4)
     scroll.add_child(list)
+    emote_row = HFlowContainer.new()
+    emote_row.name = "EmoteRow"
+    emote_row.add_theme_constant_override("h_separation", 6)
+    emote_row.add_theme_constant_override("v_separation", 6)
+    emote_row.hide()
+    col.add_child(emote_row)
     status = Label.new()
     status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     status.add_theme_color_override("font_color", Color("ff9d86"))
@@ -186,6 +201,91 @@ func send_current():
     else:
         _show_status("Sem conexão. Tente de novo em instantes.")
 
+func _toggle_emotes():
+    emote_row.visible = not emote_row.visible
+    if emote_row.visible: _fill_emotes()
+
+func _fill_emotes():
+    for c in emote_row.get_children(): c.queue_free()
+    if emote_row.top_level and not emote_row.has_meta("bg"):   # tabuleiro com arte (PC): abre por cima da lista, com fundo
+        emote_row.set_meta("bg", true)
+        emote_row.draw.connect(func(): emote_row.draw_rect(Rect2(Vector2(-6, -6), emote_row.size + Vector2(12, 12)), Color(0.03, 0.05, 0.10, 0.95)))
+    for e in ShopCatalog.my_emotes(Cosmetics.shop_owned):
+        var eid := String(e.id)
+        var b := _small(emote_row, String(e.text), func(): send_emote(eid))
+        b.name = "Emote_" + eid
+        b.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
+        b.add_theme_font_size_override("font_size", 15 if Mobile.active(get_viewport()) else 18)
+        b.custom_minimum_size.y = 42
+        for pair in [["normal", 0.0], ["hover", 0.12], ["pressed", -0.1]]:   # botão azul com borda dourada (padrão do jogo)
+            var st := StyleBoxFlat.new()
+            st.bg_color = Color("16306a").lightened(maxf(0.0, pair[1])).darkened(maxf(0.0, -pair[1]))
+            st.border_color = Color("c99a45") if pair[0] == "normal" else GOLD
+            st.set_border_width_all(2)
+            st.set_corner_radius_all(6)
+            st.content_margin_left = 12
+            st.content_margin_right = 12
+            b.add_theme_stylebox_override(pair[0], st)
+        b.add_theme_color_override("font_color", GOLD)
+        b.add_theme_color_override("font_hover_color", Color("ffe6a0"))
+
+func send_emote(id: String):
+    if match_id.is_empty(): return
+    if account.send_server({"type": "chat_emote", "match_id": match_id, "id": id}):
+        emote_row.hide()
+        status.hide()
+    else:
+        _show_status("Sem conexão. Tente de novo em instantes.")
+
+## balão grande por cima do jogo (2,5 s) — o emote "fala" sem precisar olhar o chat
+func show_bubble(text: String, mine: bool, who: String):
+    if bubble_layer == null:
+        bubble_layer = Control.new()
+        bubble_layer.name = "EmoteBubbles"
+        bubble_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        bubble_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+        add_child(bubble_layer)
+    for c in bubble_layer.get_children(): c.queue_free()
+    var p := PanelContainer.new()
+    p.name = "EmoteBubble"
+    p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var st := StyleBoxTexture.new()
+    st.texture = preload("res://ui_kit/art/fr_btn_azul.png")
+    for side in ["left", "right", "top", "bottom"]: st.set("texture_margin_" + side, 18.0)
+    for side in ["left", "right"]: st.set("content_margin_" + side, 28.0)
+    for side in ["top", "bottom"]: st.set("content_margin_" + side, 12.0)
+    p.add_theme_stylebox_override("panel", st)
+    var v := VBoxContainer.new()
+    v.add_theme_constant_override("separation", 0)
+    p.add_child(v)
+    var n := Label.new()
+    n.text = "VOCÊ" if mine else who.to_upper()
+    n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    n.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
+    n.add_theme_font_size_override("font_size", 14)
+    n.add_theme_color_override("font_color", Color("bcd4ff"))
+    v.add_child(n)
+    var l := Label.new()
+    l.text = text
+    l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    l.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
+    l.add_theme_font_size_override("font_size", 24 if Mobile.active(get_viewport()) else 36)
+    l.add_theme_color_override("font_color", GOLD)
+    l.add_theme_color_override("font_outline_color", Color(0.1, 0.05, 0.0))
+    l.add_theme_constant_override("outline_size", 5)
+    v.add_child(l)
+    bubble_layer.add_child(p)
+    var vs := get_viewport().get_visible_rect().size
+    var sz := p.get_combined_minimum_size()
+    p.size = sz
+    p.position = Vector2(floorf((vs.x - sz.x) * 0.5), vs.y * (0.62 if mine else (0.3 if Mobile.active(get_viewport()) else 0.16)))
+    p.modulate.a = 0.0
+    var tw := create_tween()
+    tw.tween_property(p, "modulate:a", 1.0, 0.15)
+    tw.tween_interval(2.3)
+    tw.tween_property(p, "modulate:a", 0.0, 0.4)
+    tw.tween_callback(p.queue_free)
+
 func _toggle_mute():
     muted = not muted
     mute_button.text = "REATIVAR" if muted else "SILENCIAR"
@@ -205,6 +305,8 @@ func _on_message(msg: Dictionary):
             if messages.size() > 80: messages.pop_front()
             if not (muted and String(msg.get("from_color", "")) != my_color):
                 _add_line(msg)
+                if msg.has("emote"):   # R119
+                    show_bubble(String(msg.get("text", "")), String(msg.get("from_color", "")) == my_color, String(msg.get("nickname", "")))
                 if String(msg.get("from_color", "")) != my_color and not _visible_now():
                     unread += 1
                     _refresh_toggle()
@@ -251,9 +353,13 @@ func _add_line(m: Dictionary, scroll_now := true):
     var line = Label.new()
     # Label comum (sem BBCode): o texto do jogador nunca vira formatação.
     line.text = "%s: %s" % [("Você" if mine else String(m.get("nickname", "Adversário"))), String(m.get("text", ""))]
+    if m.has("emote"):   # R119 · emote: destacado em azul claro, entre aspas
+        line.text = "%s: “%s”" % [("Você" if mine else String(m.get("nickname", "Adversário"))), String(m.get("text", ""))]
+        line.add_theme_color_override("font_color", Color("bcd4ff"))
+        line.set_meta("emote", true)
     line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    line.add_theme_color_override("font_color", GOLD if mine else Color("efe3c4"))
+    if not line.has_meta("emote"): line.add_theme_color_override("font_color", GOLD if mine else Color("efe3c4"))
     line.mouse_filter = Control.MOUSE_FILTER_IGNORE
     list.add_child(line)
     if scroll_now: _scroll_end()
@@ -293,10 +399,11 @@ func layout(board: Rect2, mobile: bool, safe: Rect2):
         restore_button.hide()
         return
     var fonts = 15 if mobile else 20
-    for node in [title, mute_button, report_button, close_button, input, send_button, status]:
+    for node in [title, emote_button, mute_button, report_button, close_button, input, send_button, status]:
         node.add_theme_font_size_override("font_size", fonts)
     for child in list.get_children(): child.add_theme_font_size_override("font_size", fonts)
     close_button.visible = mobile
+    title.visible = not mobile   # R119 · celular: sem espaço para o título com EMOTES na mesma linha (o painel já é o chat)
     minimize_button.visible = not mobile
     input.custom_minimum_size.y = 44 if mobile else 48
     send_button.custom_minimum_size = Vector2(0, 44 if mobile else 48)

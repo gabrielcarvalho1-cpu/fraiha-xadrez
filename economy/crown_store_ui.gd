@@ -148,7 +148,7 @@ func _card(it: Dictionary) -> Control:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	p.add_child(v)
-	var kind := label({"title": "TÍTULO", "frame": "MOLDURA DO RETRATO"}.get(tab, ""), 11, DIM, true)
+	var kind := label({"title": "TÍTULO", "frame": "MOLDURA DO RETRATO", "emote": "EMOTE NAS PARTIDAS ONLINE"}.get(tab, ""), 11, DIM, true)
 	v.add_child(kind)
 	if tab == "frame": v.add_child(_frame_preview(id))
 	var name_l := label(String(it.name), 17 if narrow() else 20, GOLD)
