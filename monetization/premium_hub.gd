@@ -252,21 +252,28 @@ func _relayout():
     if visible: _rebuild()
     backdrop.queue_redraw()
 
+## R111 · fundo no estilo do jogo: o salão do produto (trono do Fundador / biblioteca do Club), escurecido,
+## com vinheta e luz dourada — no lugar do verde chapado.
+const BG_FOUNDER := preload("res://cosmetics/v031/fundador_arena.png")
+const BG_CLUB := preload("res://cosmetics/v031/club_arena.png")
 func _draw_backdrop():
     var s := backdrop.size
-    backdrop.draw_rect(Rect2(Vector2.ZERO, s), Color(0.01, 0.04, 0.025, 1.0))
-    # Vinheta + luz dourada no alto (salão do reino).
+    backdrop.draw_rect(Rect2(Vector2.ZERO, s), Color(0.02, 0.015, 0.01, 1.0))
+    var tex: Texture2D = BG_CLUB if page in ["club", "myclub"] else BG_FOUNDER
+    var ts := tex.get_size()
+    var sc := maxf(s.x / ts.x, s.y / ts.y)
+    var vis := s / sc
+    backdrop.draw_texture_rect_region(tex, Rect2(Vector2.ZERO, s), Rect2((ts - vis) * 0.5, vis), Color(0.42, 0.40, 0.38, 1.0))
+    # escurece para o conteúdo ler bem e puxa a luz para o alto
+    backdrop.draw_rect(Rect2(Vector2.ZERO, s), Color(0.02, 0.012, 0.005, 0.55))
+    for i in 12:
+        var a := 0.05 * (1.0 - i / 12.0)
+        backdrop.draw_rect(Rect2(0, 0, s.x * 0.06 * (12 - i) / 12.0, s.y), Color(0, 0, 0, a * 3.0))
+        backdrop.draw_rect(Rect2(s.x - s.x * 0.06 * (12 - i) / 12.0, 0, s.x * 0.06 * (12 - i) / 12.0, s.y), Color(0, 0, 0, a * 3.0))
     for i in 10:
-        var a := 0.035 * (1.0 - i / 10.0)
-        backdrop.draw_circle(Vector2(s.x * 0.5, -s.y * 0.15), s.x * (0.25 + i * 0.07), Color(1.0, 0.78, 0.35, a))
-    var stripe := Color(0.79, 0.6, 0.27, 0.10)
-    backdrop.draw_line(Vector2(0, 2), Vector2(s.x, 2), Color(0.79, 0.6, 0.27, 0.5), 2.0)
-    backdrop.draw_line(Vector2(0, s.y - 2), Vector2(s.x, s.y - 2), Color(0.79, 0.6, 0.27, 0.5), 2.0)
-    var step := 64.0
-    var x := -s.y
-    while x < s.x:
-        backdrop.draw_line(Vector2(x, s.y), Vector2(x + s.y, 0), stripe * Color(1, 1, 1, 0.25), 1.0)
-        x += step
+        backdrop.draw_circle(Vector2(s.x * 0.5, -s.y * 0.2), s.x * (0.22 + i * 0.06), Color(1.0, 0.78, 0.35, 0.025 * (1.0 - i / 10.0)))
+    backdrop.draw_line(Vector2(0, 2), Vector2(s.x, 2), Color(0.85, 0.65, 0.25, 0.6), 2.0)
+    backdrop.draw_line(Vector2(0, s.y - 2), Vector2(s.x, s.y - 2), Color(0.85, 0.65, 0.25, 0.6), 2.0)
 
 func _set_crumbs():
     for c in crumbs.get_children():
@@ -294,6 +301,7 @@ func _set_crumbs():
 
 func _rebuild():
     if column == null: return
+    if backdrop != null: backdrop.queue_redraw()
     _set_crumbs()
     for c in column.get_children():
         column.remove_child(c)

@@ -195,57 +195,109 @@ static func label(parent: Node, text: String, size: int, color := CREAM, font: F
 # ======================================================================
 class Frame extends PanelContainer:
     ## founder | club | parchment | dark | reward | test
+    ## R111 · no estilo do jogo: fundo de obsidiana (ou esmeralda escura no Club), moldura dourada em pixel art
+    ## com relevo (claro em cima, sombra embaixo), cantoneiras com gema e filete interno — igual às placas da Home.
     var variant := "dark"
     var glow := false
     var t := 0.0
+    var pad_px := 22
     func _init(v := "dark", pad := 22):
         variant = v
-        var st := StyleBoxFlat.new()
-        st.set_corner_radius_all(6)
-        st.set_border_width_all(3 if v in ["founder", "reward"] else 2)
-        st.content_margin_left = pad
-        st.content_margin_right = pad
-        st.content_margin_top = pad
-        st.content_margin_bottom = pad
-        st.shadow_color = Color(0, 0, 0, 0.55)
-        st.shadow_size = 10
-        match v:
-            "founder":
-                st.bg_color = Color(0.03, 0.05, 0.04, 0.95)
-                st.border_color = Color("d9ad55")
-            "club":
-                st.bg_color = Color(0.05, 0.20, 0.11, 0.94)
-                st.border_color = Color("c99a45")
-            "parchment":
-                st.bg_color = Color("e6d3a0")
-                st.border_color = Color("8a6224")
-            "reward":
-                st.bg_color = Color(0.10, 0.12, 0.05, 0.96)
-                st.border_color = Color("ffd76a")
-            "test":
-                st.bg_color = Color(0.20, 0.07, 0.03, 0.92)
-                st.border_color = Color("e0703c")
-            _:
-                st.bg_color = Color(0.03, 0.10, 0.06, 0.92)
-                st.border_color = Color(0.79, 0.6, 0.27, 0.75)
+        pad_px = pad
+        var st := StyleBoxEmpty.new()
+        var p := pad + (6 if v != "parchment" else 2)
+        st.content_margin_left = p
+        st.content_margin_right = p
+        st.content_margin_top = p
+        st.content_margin_bottom = p
         add_theme_stylebox_override("panel", st)
         mouse_filter = Control.MOUSE_FILTER_IGNORE
     func _process(delta):
         if glow:
             t += delta
             queue_redraw()
+    func _palette() -> Dictionary:
+        match variant:
+            "club": return {"top": Color("131a12"), "bottom": Color("060905"), "gem": Color("3fd38a"), "gem_dark": Color("0d6b3c")}
+            "parchment": return {"top": Color("ead9a8"), "bottom": Color("d8c08a"), "gem": Color("8a6224"), "gem_dark": Color("5a3d12")}
+            "test": return {"top": Color("2a1208"), "bottom": Color("140703"), "gem": Color("f2a070"), "gem_dark": Color("8a3a18")}
+            "reward": return {"top": Color("2a1d08"), "bottom": Color("0e0904"), "gem": Color("ff5a4a"), "gem_dark": Color("8a1712")}
+            "founder": return {"top": Color("1c140a"), "bottom": Color("080503"), "gem": Color("ff5a4a"), "gem_dark": Color("8a1712")}
+            _: return {"top": Color("16120c"), "bottom": Color("070504"), "gem": Color("5aa8ff"), "gem_dark": Color("1d4c99")}
     func _draw():
-        var r := Rect2(Vector2.ZERO, size)
-        var gold := Color("f1d58a") if variant != "parchment" else Color("8a6224")
-        if variant == "test": gold = Color("f2a070")
-        draw_rect(r.grow(-7), Color(gold.r, gold.g, gold.b, 0.30), false, 1.0)
-        if variant in ["founder", "reward"]:
-            draw_rect(r.grow(-11), Color(gold.r, gold.g, gold.b, 0.14), false, 1.0)
-        for c in [Vector2(0, 0), Vector2(size.x, 0), Vector2(0, size.y), size]:
-            PremiumArtRef.diamond(self, c, 7.0 if variant in ["founder", "reward"] else 5.0, gold)
+        var s := size
+        if s.x < 12 or s.y < 12: return
+        var pal := _palette()
+        var parch := variant == "parchment"
+        # sombra
+        draw_rect(Rect2(Vector2(4, 7), s), Color(0, 0, 0, 0.45))
+        # fundo com degradê vertical (faixas de 4 px: leitura de pixel art)
+        var bands := maxi(8, int(s.y / 4.0))
+        for i in bands:
+            var y0 := s.y * i / bands
+            draw_rect(Rect2(0, y0, s.x, s.y / bands + 1.0), (pal.top as Color).lerp(pal.bottom, float(i) / bands))
+        # treliça discreta de losangos (textura de pedra/tecido)
+        if not parch:
+            var lat := Color(1.0, 0.85, 0.45, 0.035)
+            var step := 26.0
+            var x := -s.y
+            while x < s.x:
+                draw_line(Vector2(x, s.y), Vector2(x + s.y, 0), lat, 1.0)
+                draw_line(Vector2(x, 0), Vector2(x + s.y, s.y), lat, 1.0)
+                x += step
+            # luz suave no alto
+            for i in 6:
+                draw_rect(Rect2(0, 0, s.x, 6.0 + i * 6.0), Color(1.0, 0.8, 0.4, 0.012))
+        # moldura: bronze escuro por fora, ouro com relevo, filete interno
+        var dark := Color("4a2e0c") if not parch else Color("6a4818")
+        var gold := Color("d9a640") if not parch else Color("9a6c26")
+        var hi := Color("ffe39a") if not parch else Color("c89a4a")
+        var lo := Color("7c4f12") if not parch else Color("5a3d12")
+        if variant == "test":
+            gold = Color("d97a4a"); hi = Color("ffc09a"); lo = Color("7a3414")
+        draw_rect(Rect2(Vector2.ZERO, s), dark, false, 3.0)
+        var r := Rect2(Vector2(3, 3), s - Vector2(6, 6))
+        draw_rect(r, gold, false, 3.0)
+        draw_line(r.position + Vector2(0, 1), Vector2(r.end.x, r.position.y + 1), hi, 1.0)     # topo claro
+        draw_line(r.position + Vector2(1, 0), Vector2(r.position.x + 1, r.end.y), hi, 1.0)     # esquerda clara
+        draw_line(Vector2(r.position.x, r.end.y - 1), r.end - Vector2(0, 1), lo, 1.0)          # base escura
+        draw_line(Vector2(r.end.x - 1, r.position.y), r.end - Vector2(1, 0), lo, 1.0)          # direita escura
+        draw_rect(Rect2(Vector2(6, 6), s - Vector2(12, 12)), Color(0, 0, 0, 0.55), false, 1.0)
+        draw_rect(Rect2(Vector2(10, 10), s - Vector2(20, 20)), Color(gold.r, gold.g, gold.b, 0.32), false, 1.0)
+        # cantoneiras em degrau com gema
+        var big := variant in ["founder", "reward", "club"]
+        var arm := 22.0 if big else 15.0
+        for c in [[Vector2(0, 0), Vector2(1, 1)], [Vector2(s.x, 0), Vector2(-1, 1)], [Vector2(0, s.y), Vector2(1, -1)], [s, Vector2(-1, -1)]]:
+            var o: Vector2 = c[0]
+            var d: Vector2 = c[1]
+            var w := 4.0
+            draw_rect(_r(o, d, Vector2(arm, w), Vector2(1, 1)), gold)
+            draw_rect(_r(o, d, Vector2(w, arm), Vector2(1, 1)), gold)
+            draw_rect(_r(o, d, Vector2(arm - 6, 2), Vector2(3, 6)), hi)
+            draw_rect(_r(o, d, Vector2(2, arm - 6), Vector2(6, 3)), hi)
+            # gema
+            var gc := o + d * Vector2(9, 9)
+            var gr := 5.0 if big else 3.5
+            PremiumArtRef.diamond(self, gc, gr + 2.0, dark)
+            PremiumArtRef.diamond(self, gc, gr + 1.0, gold)
+            PremiumArtRef.diamond(self, gc, gr, pal.gem_dark)
+            PremiumArtRef.diamond(self, gc + Vector2(-gr * 0.25, -gr * 0.25), gr * 0.55, pal.gem)
+        # ornamento central em cima (Fundador / recompensa / Club)
+        if big and s.x > 160:
+            var cx := s.x / 2.0
+            draw_rect(Rect2(cx - 34, 1, 68, 5), gold)
+            draw_rect(Rect2(cx - 34, 1, 68, 1), hi)
+            PremiumArtRef.diamond(self, Vector2(cx, 4), 9.0, dark)
+            PremiumArtRef.diamond(self, Vector2(cx, 4), 7.5, gold)
+            PremiumArtRef.diamond(self, Vector2(cx, 4), 5.0, pal.gem_dark)
+            PremiumArtRef.diamond(self, Vector2(cx - 1, 3), 2.6, pal.gem)
         if glow:
             var a := 0.18 + 0.14 * sin(t * 2.4)
-            draw_rect(r.grow(2), Color(1.0, 0.85, 0.4, a), false, 3.0)
+            draw_rect(Rect2(Vector2.ZERO, s).grow(2), Color(1.0, 0.85, 0.4, a), false, 3.0)
+    ## retângulo a partir do canto `o`, crescendo na direção `d`, deslocado `off` para dentro
+    func _r(o: Vector2, d: Vector2, sz: Vector2, off: Vector2) -> Rect2:
+        var p := o + d * off
+        return Rect2(Vector2(p.x if d.x > 0 else p.x - sz.x, p.y if d.y > 0 else p.y - sz.y), sz)
 
 # Referência estática usada dentro das classes internas.
 class PremiumArtRef:
@@ -387,7 +439,7 @@ class Cta extends Button:
             "ember":
                 top = Color("b4462a"); bottom = Color("5a1b0c")
             _:
-                top = Color("1b2a21"); bottom = Color("070d0a"); ink = Color("f1d58a")
+                top = Color("2a1f10"); bottom = Color("0b0805"); ink = Color("f1d58a")
         if disabled:
             top = Color("3a3d36"); bottom = Color("1c1e1a"); ink = Color("8b8f86"); rim = Color("6d6656")
         elif lit:

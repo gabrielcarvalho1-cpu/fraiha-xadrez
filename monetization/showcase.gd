@@ -48,7 +48,12 @@ func _place():
     if pieces_right:
         overlay.position = Vector2(size.x * 0.045, maxf(8.0, (size.y - h) * 0.5))
     elif kind == "founder":
-        overlay.position = Vector2(size.x * 0.05, maxf(size.y * 0.47, size.y - h - 14.0))
+        # a arte ocupa a metade de cima; se o texto não couber embaixo, a vitrine cresce
+        var art_h := minf(size.y * 0.5, size.x * 0.62)
+        var need := ceilf(size.x * 0.62 * 0.92 + h + 16.0)
+        if w > 120.0 and need > size.y + 1.0 and need > custom_minimum_size.y and need < size.x * 2.6:
+            custom_minimum_size.y = need
+        overlay.position = Vector2(size.x * 0.05, maxf(art_h * 0.92, size.y - h - 14.0))
     else:
         overlay.position = Vector2(size.x * 0.05, size.y * 0.04)
     overlay.size = Vector2(w, h)
@@ -67,7 +72,7 @@ func _piece(col: int, dark: bool, center_bottom: Vector2, h: float, alpha := 1.0
 func _draw_splash(s: Vector2):
     draw_rect(Rect2(Vector2.ZERO, s), Color(0.03, 0.02, 0.01))
     var band := SPLASH_BAND
-    var sc := (s.y * 0.96 if pieces_right else s.y * 0.5) / band.size.y
+    var sc := (s.y * 0.96 if pieces_right else minf(s.y * 0.5, s.x * 0.62)) / band.size.y
     var cx := s.x * (0.74 if pieces_right else 0.5)
     var x0 := cx - (SPLASH_PIECES_X - band.position.x) * sc
     var y0 := 0.0 if not pieces_right else (s.y - band.size.y * sc) * 0.62
