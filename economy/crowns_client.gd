@@ -12,6 +12,10 @@ const CREAM := Color("efe3c4")
 var hub
 var account
 var state: Dictionary = {}
+var store_state: Dictionary = {}   # R116 · LOJA DE COROAS (store_state do servidor)
+var store_panel = null
+signal store_changed
+signal store_result(ok: bool, item: String, message: String)
 var chips: Array = []
 var panel = null
 var _asked_for := ""
@@ -49,8 +53,10 @@ func logged_in() -> bool:
 
 func _on_account_changed():
 	if not logged_in():
-		if not state.is_empty():
+		if not state.is_empty() or not store_state.is_empty():
 			state = {}
+			store_state = {}
+			preload("res://profile/premium_cosmetics.gd").shop_owned = []
 			_asked_for = ""
 			_refresh_chips()
 			changed.emit()
@@ -61,7 +67,27 @@ func _on_account_changed():
 		request()
 
 func request():
-	if logged_in() and account.has_method("send_server"): account.send_server({"type": "crowns_get"})
+	if logged_in() and account.has_method("send_server"):
+		account.send_server({"type": "crowns_get"})
+		account.send_server({"type": "store_get"})   # R116 · também diz quais títulos/itens a conta já tem
+
+func buy(item_id: String):
+	if logged_in() and account.has_method("send_server"): account.send_server({"type": "store_buy", "item": item_id})
+
+func owned(item_id: String) -> bool:
+	return item_id in (store_state.get("owned", []) as Array) if store_state.get("owned") is Array else false
+
+func store_available() -> bool:
+	return bool(store_state.get("available", false))
+
+func open_store(tab := "title"):
+	if not is_instance_valid(store_panel):
+		store_panel = load("res://economy/crown_store_ui.gd").new()
+		hub.add_child(store_panel)
+		store_panel.setup(hub, account, self)
+	if is_instance_valid(panel) and panel.is_open(): panel.close()
+	store_panel.show_store(tab)
+	request()
 
 func _on_message(m: Dictionary):
 	match String(m.get("type", "")):
@@ -69,6 +95,18 @@ func _on_message(m: Dictionary):
 			state = m
 			_refresh_chips()
 			changed.emit()
+		"store_state":
+			store_state = m
+			preload("res://profile/premium_cosmetics.gd").shop_owned = (m.get("owned", []) as Array).duplicate() if m.get("owned") is Array else []
+			if hub != null and hub.has_method("refresh_club"): hub.refresh_club()   # título comprado e em uso volta a aparecer
+			store_changed.emit()
+		"store_bought":
+			if m.has("balance") and m.get("balance") != null:
+				state["balance"] = int(m.get("balance"))
+				_refresh_chips()
+			store_result.emit(true, String(m.get("item", "")), "")
+		"store_error":
+			store_result.emit(false, String(m.get("item", "")), String(m.get("message", "Não foi possível concluir.")))
 		"crowns_reward":
 			if m.has("balance") and m.get("balance") != null:
 				state["balance"] = int(m.get("balance"))

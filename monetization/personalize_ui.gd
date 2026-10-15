@@ -138,9 +138,17 @@ static func _titles(hub, parent: VBoxContainer, mh):
     option(hub, row, "Title_auto", _glyph("star"), "AUTOMÁTICO", pref == "auto", false, "", func(): mh.set_cosmetic("title", "auto"))
     for id in Cosmetics.TITLES:
         var tid: String = id
+        if Cosmetics.requirement("title", tid) == "shop" and not Cosmetics.allowed("title", tid, false, false): continue   # R116 · da loja: só os comprados
         var locked := not Cosmetics.allowed("title", tid, mh.is_founder(), mh.club_active(), mh.is_legend())
         var kind := "pawn" if tid.is_empty() else ("crown" if tid == "fundador" else "book")
         option(hub, row, "Title_" + (tid if not tid.is_empty() else "none"), _glyph(kind, Art.MUTED if tid.is_empty() else Art.GOLD), (Cosmetics.title_text(tid) if not tid.is_empty() else "Nenhum").to_upper(), pref == tid, locked, Cosmetics.lock_hint("title", tid), func(): mh.set_cosmetic("title", tid))
+
+    # R116 · mais títulos na Loja de Coroas
+    if mh.has_method("crowns_client"):
+        var more := Art.Cta.new("MAIS TÍTULOS NA LOJA DE COROAS", "dark", 48 * maxf(hub.k, 0.8), int(16 * maxf(hub.k, 0.8)))
+        more.name = "PersonalizeShopTitles"
+        more.pressed.connect(func(): mh.crowns_client().open_store("title"))
+        v.add_child(more)
 
 static func _frames(hub, parent: VBoxContainer, mh):
     var v: VBoxContainer = hub.section(parent, "MOLDURA DO PERFIL", "frame")

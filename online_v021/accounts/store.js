@@ -389,6 +389,17 @@ class MemoryStore {
     return w.streak;
   }
   async crownWallet(userId) { const w = (this.crownWallets || new Map()).get(userId); return w ? { ...w } : null; }
+  // R116 · Loja de Coroas (em memória)
+  async crownBuy(userId, itemId, price) {
+    this.crownOwned = this.crownOwned || new Map();
+    const set = this.crownOwned.get(userId) || new Set();
+    if (set.has(itemId)) return 'ja_tem';
+    if (this._cw(userId).balance < price) return 'saldo_insuficiente';
+    set.add(itemId); this.crownOwned.set(userId, set);
+    if (price > 0) await this.crownAward(userId, -price, 'buy', itemId);
+    return 'ok';
+  }
+  async crownItems(userId) { return [...((this.crownOwned || new Map()).get(userId) || [])]; }
   async crownDaily(userId, day) { const c = (this.crownDays || new Map()).get(userId + '|' + day); return c ? { ...c } : null; }
   async crownLedger(userId, limit = 20) {
     return (this.crownLedgerRows || []).filter(r => r.user_id === userId).slice(-limit).reverse().map(({ key, ...r }) => r);
@@ -864,6 +875,14 @@ class SupabaseStore {
   async crownDaily(userId, day) {
     const rows = await this.req('/crown_daily?user_id=eq.' + encodeURIComponent(userId) + '&day=eq.' + encodeURIComponent(day) + '&select=counters');
     return rows[0] ? rows[0].counters : null;
+  }
+  // R116 · Loja de Coroas (0017)
+  async crownBuy(userId, itemId, price) {
+    return this.req('/rpc/fraiha_crown_buy', { method: 'POST', body: JSON.stringify({ p_user: userId, p_item: itemId, p_price: price }) });
+  }
+  async crownItems(userId) {
+    const rows = await this.req('/crown_items?user_id=eq.' + encodeURIComponent(userId) + '&select=item_id&order=bought_at.asc');
+    return rows.map(r => r.item_id);
   }
   async crownLedger(userId, limit = 20) {
     return this.req('/crown_ledger?user_id=eq.' + encodeURIComponent(userId) + '&select=delta,reason,ref,created_at&order=id.desc&limit=' + Math.max(1, Math.min(100, limit | 0)));

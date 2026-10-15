@@ -260,18 +260,9 @@ func _when(iso: String) -> String:
 	return "%02d/%02d %02d:%02d" % [d.day, d.month, d.hour, d.minute]
 
 func _soon(parent: Control):
-	var v := _panel(parent)
-	v.name = "CrownsStoreSoon"
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	v.add_child(row)
-	var lt := label("LOJA DE COROAS", 15, GOLD)
-	if not _pc(): _wrap(lt)
-	row.add_child(lt)
-	if _pc(): row.add_child(_wrap(label("itens visuais e torneios", 12, DIM, true)))
-	var s := Art.Stamp.new("EM BREVE", "soon", ts(11))
-	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(s)
-	var txt := "Junte Coroas desde já: em breve elas vão valer itens visuais e entradas de torneios."
-	if _pc(): v.tooltip_text = txt   # no PC a coluna é curta: uma linha só
-	else: v.add_child(_wrap(label(txt, 12, DIM, true)))
+	# R116 · a LOJA DE COROAS abriu: títulos já à venda; molduras, avatares e emotes chegam em seguida
+	var b := button("ABRIR A LOJA DE COROAS", 15, true)
+	b.name = "CrownsOpenStore"
+	b.custom_minimum_size = Vector2(0, ts(44))
+	b.pressed.connect(func(): client.open_store("title"))
+	parent.add_child(b)

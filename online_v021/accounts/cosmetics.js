@@ -3,6 +3,7 @@
 // O SERVIDOR decide o que pode ser usado, pelos direitos da conta (entitlements) e pela escada de
 // bots (bot_progress). Só aparência: nada aqui altera PL, matchmaking, tempo, regras ou resultado.
 const LADDER = require('../../bot/bot_ladder.json');
+const ShopCatalog = require('../economy/store_catalog');   // R116 · itens da Loja de Coroas
 
 const FREE_AVATARS = ['warrior', 'archer', 'peao_branco', 'peao_negro'];
 const LEGACY_AVATARS = ['mage', 'paladin'];            // recompensas antigas: quem já tem continua exibindo
@@ -13,23 +14,26 @@ for (const b of LADDER.bots) if (b.reward && b.reward.type === 'avatar') LADDER_
 const ALL_AVATARS = [...FREE_AVATARS, ...LEGACY_AVATARS, ...Object.keys(LADDER_AVATARS), ...FOUNDER_AVATARS, ...CLUB_AVATARS];
 
 const BADGES = ['', 'fundador', 'club_a', 'club_b', 'club_c'];
-const TITLES = ['', 'fundador', 'lendario', 'club'];   // R103 · lendario = Fundador Lendário
+const SHOP_TITLES = ShopCatalog.ofKind('title');        // R116 · comprados com Coroas (para sempre)
+const TITLES = ['', 'fundador', 'lendario', 'club', ...SHOP_TITLES];   // R103 · lendario = Fundador Lendário
 const FRAMES = ['liga', 'club', 'fundador'];
 
 const need = (kind, id) => {
   if (!id || id === 'liga') return '';
+  if (ShopCatalog.BY_ID[id] && ShopCatalog.BY_ID[id].kind === kind) return 'shop';
   if (id === 'lendario') return 'legend';
   if (id === 'fundador') return 'founder';
   if (kind === 'badge' && id.startsWith('club_')) return 'club';
   if (id === 'club') return 'club';
   return '';
 };
-const has = (req, ent) => req === '' || (req === 'founder' ? !!(ent && ent.is_founder)
+// 'shop' (comprado na Loja de Coroas): a posse é conferida no validate (owned); depois de usado, é para sempre.
+const has = (req, ent, owned, id) => req === '' || (req === 'shop' ? (owned === undefined || (Array.isArray(owned) && owned.includes(id))) : req === 'founder' ? !!(ent && ent.is_founder)
   : req === 'legend' ? !!(ent && ent.is_founder && ent.founder_tier === 'legend') : !!(ent && ent.club_active));
 
 // Valida um pedido acct_set_cosmetics. ent = getEntitlements; defeated = bots vencidos (ou null se a
 // escada não estiver configurada no banco). Devolve { ok, values } ou { error, code, field }.
-function validate(m, ent, defeated) {
+function validate(m, ent, defeated, owned = []) {
   const out = {};
   if (m.avatar_id !== undefined) {
     const a = String(m.avatar_id || '');
@@ -46,7 +50,8 @@ function validate(m, ent, defeated) {
     if (m[field] === undefined) continue;
     const v = String(m[field] || (kind === 'frame' ? 'liga' : ''));
     if (!list.includes(v)) return { error: 'Opção inválida.', code: 'cosmetic_invalid', field };
-    if (!has(need(kind, v), ent)) return { error: 'Item exclusivo (' + ({ founder: 'Pacote Fundador', legend: 'Fundador Lendário' }[need(kind, v)] || 'Club FRAIHA') + ').', code: 'cosmetic_locked', field };
+    if (need(kind, v) === 'shop' && !has('shop', ent, owned || [], v)) return { error: 'Compre este item na Loja de Coroas.', code: 'cosmetic_locked', field };
+    if (!has(need(kind, v), ent, owned || [], v)) return { error: 'Item exclusivo (' + ({ founder: 'Pacote Fundador', legend: 'Fundador Lendário' }[need(kind, v)] || 'Club FRAIHA') + ').', code: 'cosmetic_locked', field };
     out[field] = v;
   }
   if (!Object.keys(out).length) return { error: 'Nada para alterar.', code: 'cosmetic_invalid' };
@@ -78,4 +83,4 @@ function look(o) {
     frame: FRAMES.includes(o.frame) ? o.frame : 'liga', founder: !!o.founder, club: !!o.club };
 }
 
-module.exports = { look, validate, effective, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, CLUB_AVATARS, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };
+module.exports = { look, validate, effective, SHOP_TITLES, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, CLUB_AVATARS, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };

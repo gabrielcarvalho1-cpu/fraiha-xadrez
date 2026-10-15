@@ -23,6 +23,7 @@ const Status = require('./accounts/status');   // R55 · status do perfil
 const { Reports } = require('./moderation/reports');   // R104 · denúncias e suspensão
 const { Referrals } = require('./social/referrals');   // R105 · convite por link e indicação
 const { Crowns } = require('./economy/crowns');   // R112 · Coroas
+const { Store: CrownStore } = require('./economy/store');   // R116 · Loja de Coroas
 
 const GUEST_TTL_MS = 24 * 3600e3;
 const SESSION_REVALIDATE_MS = 60e3;
@@ -89,6 +90,7 @@ class Backend {
     this.reports = new Reports({ backend: this });   // R104
     this.referrals = new Referrals({ backend: this, send: (ws, o) => this.send(ws, o) });   // R105
     this.crowns = new Crowns({ backend: this, send: (ws, o) => this.send(ws, o) });   // R112
+    this.crownStore = new CrownStore({ backend: this, send: (ws, o) => this.send(ws, o) });   // R116
     this.chat.reports = this.reports;
     // R103 · entrega pagamentos que ficaram "pagos sem vantagem": ao iniciar e de hora em hora
     if (this.store && this.store.persistent) {
@@ -473,6 +475,7 @@ class Backend {
       if (a.startsWith('payment_')) return this.payments.handle(ws, m);
       if (a.startsWith('ref_')) return this.referrals.handle(ws, m);   // R105
       if (a.startsWith('crowns_')) return this.crowns.handle(ws, m);   // R112
+      if (a.startsWith('store_')) return this.crownStore.handle(ws, m);   // R116
       if (a.startsWith('bot_')) {
         try { return await this.bots.handle(ws, m); }
         catch (e) { if (e === CANCELLED) return; console.error('bots', a, e && e.message); return this.send(ws, { type: 'bot_error', code: 'server_error', message: 'Erro temporário no servidor. Tente novamente.' }); }
@@ -588,7 +591,8 @@ class Backend {
         const ent = await this.checked(ws, revision, this.store.getEntitlements(accountId));
         let defeated = null;
         if (m.avatar_id !== undefined && this.bots) { const b = await this.checked(ws, revision, this.bots.summary(accountId)); defeated = b.available ? b.defeated : null; }
-        const v = Cosmetics.validate(m, ent, defeated);
+        const owned = await this.checked(ws, revision, this.crownStore.owned(accountId));   // R116 · itens da Loja de Coroas
+        const v = Cosmetics.validate(m, ent, defeated, owned);
         if (v.error) return this.send(ws, { type: 'acct_cosmetics_error', code: v.code, field: v.field || '', message: v.error });
         const r = await op.wait(() => this.store.setCosmetics(accountId, v.values));
         if (r.error) return this.send(ws, { type: 'acct_cosmetics_error', code: r.code || 'profile_error', message: r.error });

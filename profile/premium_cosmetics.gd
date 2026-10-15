@@ -21,8 +21,16 @@ const BADGE_ART_SMALL := {
     "club_c": "res://monetization/art/club_badge_c_small.png",
 }
 ## Títulos exibidos sob o nome. "" = nenhum.
-const TITLES := ["", "fundador", "lendario", "club"]
-const TITLE_TEXT := {"": "", "fundador": "Fundador do Reino", "lendario": "Fundador Lendário", "club": "Membro do Club FRAIHA"}
+## R116 · depois dos títulos de direito, os da LOJA DE COROAS (economy/crown_store_catalog.gd; comprados = para sempre).
+const TITLES := ["", "fundador", "lendario", "club",
+	"estrategista", "mestre_tatico", "rei_do_blitz", "guardiao", "dama_de_ferro", "cavaleiro", "gambito", "lenda_xeque", "senhor_marcha", "imperador"]
+const TITLE_TEXT := {"": "", "fundador": "Fundador do Reino", "lendario": "Fundador Lendário", "club": "Membro do Club FRAIHA",
+	"estrategista": "Estrategista", "mestre_tatico": "Mestre Tático", "rei_do_blitz": "Rei do Blitz", "guardiao": "Guardião do Reino",
+	"dama_de_ferro": "Dama de Ferro", "cavaleiro": "Cavaleiro da Coroa", "gambito": "Mestre do Gambito", "lenda_xeque": "Lenda do XEQUE",
+	"senhor_marcha": "Senhor da Marcha", "imperador": "Imperador do Tabuleiro"}
+const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
+## R116 · itens da Loja de Coroas que esta conta já tem (o servidor manda em store_state; economy/crowns_client.gd guarda).
+static var shop_owned: Array = []
 ## Molduras do retrato. "liga" = moldura da liga atual (padrão de todo jogador).
 const FRAMES := ["liga", "club", "fundador"]
 const FRAME_NAMES := {"liga": "Moldura da Liga", "club": "Moldura Club", "fundador": "Moldura Fundador"}
@@ -30,6 +38,8 @@ const FRAME_NAMES := {"liga": "Moldura da Liga", "club": "Moldura Club", "fundad
 ## Que direito cada item exige: "" (todos) | "founder" | "legend" (R103 · Fundador Lendário) | "club".
 static func requirement(kind: String, id: String) -> String:
     if id.is_empty() or id == "liga": return ""
+    var shop := ShopCatalog.item(id)
+    if not shop.is_empty() and String(shop.kind) == kind: return "shop"
     if id == "lendario": return "legend"
     if id == "fundador": return "founder"
     if kind == "badge" and id.begins_with("club_"): return "club"
@@ -41,6 +51,7 @@ static func allowed(kind: String, id: String, founder: bool, club: bool, legend 
         "founder": return founder
         "legend": return founder and legend
         "club": return club
+        "shop": return id in shop_owned
     return true
 
 static func lock_hint(kind: String, id: String) -> String:
@@ -48,6 +59,7 @@ static func lock_hint(kind: String, id: String) -> String:
         "founder": return "Exclusivo do Pacote Fundador"
         "legend": return "Exclusivo do Fundador Lendário"
         "club": return "Exclusivo do Club FRAIHA"
+        "shop": return "Loja de Coroas · %d Coroas" % int(ShopCatalog.item(id).get("price", 0))
     return ""
 
 ## Escolha automática (preferência vazia): o melhor item que o jogador possui.
