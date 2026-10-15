@@ -231,6 +231,12 @@ class Ranked {
       const ids = ['w', 'b'].map(c => String(match.players[c].userId || ''));
       if (ids.every(id => UUID_RE.test(id)) && ids[0] !== ids[1]) for (const id of ids) R.onGame(id);
     }
+    // R112 · Coroas: cada conta da partida (10+ lances) ganha pela vitória / pela partida jogada
+    const CR = this.backend && this.backend.crowns;
+    if (CR && match.result && ((match.pos && match.pos.ply) || 0) >= 10) {
+      const w = match.result.winner;
+      for (const c of ['w', 'b']) CR.onGame(String(match.players[c].userId || ''), { kind: this.kind, ref: match.id, result: w === 'draw' ? 'draw' : w === c ? 'win' : 'loss' });
+    }
     for (const c of ['w', 'b']) {
       const uid = match.players[c].userId, ws = this.sockets.get(uid);
       if (ws && match.players[c].connected) this.send(ws, match.resultFor(c, saved));

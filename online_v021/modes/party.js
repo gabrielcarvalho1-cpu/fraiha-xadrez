@@ -297,8 +297,19 @@ class Party {
     const R = this.backend && this.backend.referrals;
     const humans = room.seats.filter(s => s.kind === 'human' && /^[0-9a-f-]{36}$/i.test(String(s.uid || '')));
     if (R && new Set(humans.map(s => s.uid)).size >= 2) for (const s of humans) R.onGame(s.uid);
+    this.rewardCrowns(room);   // R112
     for (const s of room.seats) if (s.kind === 'human' && this.byUser.get(s.uid) === room.id) this.byUser.delete(s.uid);
     for (const s of room.seats) if (s.kind === 'human' && this.backend && this.backend.presenceChanged) this.backend.presenceChanged(s.uid);
+  }
+  // R112 · Coroas: quem ficou até o fim da mesa (XEQUE / Marcha) ganha pela vitória / pela partida jogada
+  rewardCrowns(room) {
+    const CR = this.backend && this.backend.crowns, gw = room.g ? room.g.winner : -1;
+    if (!CR) return;
+    room.seats.forEach((s, seat) => {
+      if (s.kind !== 'human' || s.left || !/^[0-9a-f-]{36}$/i.test(String(s.uid || ''))) return;
+      const win = gw >= 0 && (room.game === 'marcha' ? seat % 2 === gw : seat === gw);
+      CR.onGame(s.uid, { kind: room.game === 'xeque' ? 'xeque' : 'marcha', ref: room.id, result: win ? 'win' : gw >= 0 ? 'loss' : 'draw' });
+    });
   }
   // R37 · placar do modo (cartão de perfil): vitória/derrota de cada pessoa da mesa. Quem saiu perde.
   recordStats(room) {

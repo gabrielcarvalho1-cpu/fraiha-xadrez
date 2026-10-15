@@ -2521,6 +2521,15 @@ func make_top_button(glyph: String, tip: String, action: Callable, side := 62.0)
     b.pressed.connect(action)
     return b
 
+## R112 · COROAS: um controlador só (estado do servidor, botões de saldo, painel e aviso "+N COROAS").
+var crowns = null
+func crowns_client():
+    if crowns == null:
+        crowns = load("res://economy/crowns_client.gd").new()
+        add_child(crowns)
+        if account != null: crowns.setup(self, account)
+    return crowns
+
 ## R96 · RANKING (XADREZ por fila, XEQUE, MARCHA REAL) e CHAT GLOBAL — painéis por cima da Home.
 func open_leaderboard():
     if not is_instance_valid(leaderboard_ui):
@@ -3255,6 +3264,10 @@ func _build_reference_chrome():
     gchat_button = make_top_button("chat", "Chat global", open_global_chat)
     gchat_button.position = Vector2(574, 16)
     canvas.add_child(gchat_button)
+    # R112 · COROAS: saldo ao lado do chat (toque abre o painel)
+    var crown_chip: Button = crowns_client().make_chip(62.0, 118.0)
+    crown_chip.position = Vector2(644, 16)
+    canvas.add_child(crown_chip)
     _refresh_sound_button()
     var clip = Control.new()
     clip.name = "RefPortraitClip"
@@ -3552,6 +3565,8 @@ func _sync_menu_cover():
 func bind_account(acc):
     account = acc
     if bot_progress != null: bot_progress.setup(acc)
+    if crowns != null and crowns.account == null: crowns.setup(self, acc)   # R112
+    else: crowns_client()
     if nickname_editor != null and nickname_editor.account == null: nickname_editor.setup(acc, 18)
     acc.changed.connect(_on_account_changed)
     if acc.has_signal("status_saved"):   # R55 · status do perfil

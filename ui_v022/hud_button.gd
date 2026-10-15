@@ -1,7 +1,7 @@
 extends Button
 ## Botão do HUD da partida no estilo FRAIHA: fundo verde-escuro, moldura dourada, cravos nos
 ## cantos e ícone desenhado em pixel (sem depender de fonte com símbolos).
-## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off", "trophy", "chat". hint: tecla (ex.: "ESC").
+## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off", "trophy", "chat", "crown". hint: tecla (ex.: "ESC").
 const GOLD := Color("f4ce7f")
 const GOLD_DIM := Color("b99555")
 const INK := Color("0b150f")
@@ -157,6 +157,14 @@ func _draw():
             draw_colored_polygon(PackedVector2Array([b.position + Vector2(r * 0.35, b.size.y - 1), b.position + Vector2(r * 0.95, b.size.y - 1), b.position + Vector2(r * 0.25, b.size.y + r * 0.55)]), col)
             for i in 3:
                 draw_circle(b.get_center() + Vector2((i - 1) * r * 0.55, 0), r * 0.15, INK)
+        "crown":
+            # R112 · COROAS: coroa de 3 pontas com joias e faixa.
+            var c0 := center + Vector2(0, r * 0.1)
+            draw_colored_polygon(PackedVector2Array([c0 + Vector2(-r * 1.0, r * 0.55), c0 + Vector2(-r * 1.05, -r * 0.65), c0 + Vector2(-r * 0.5, -r * 0.1),
+                c0 + Vector2(0, -r * 0.95), c0 + Vector2(r * 0.5, -r * 0.1), c0 + Vector2(r * 1.05, -r * 0.65), c0 + Vector2(r * 1.0, r * 0.55)]), col)
+            draw_rect(Rect2(c0 + Vector2(-r * 1.0, r * 0.62), Vector2(r * 2.0, r * 0.3)), col)
+            for p in [Vector2(-r * 1.05, -r * 0.65), Vector2(0, -r * 0.95), Vector2(r * 1.05, -r * 0.65)]: draw_circle(c0 + p, r * 0.17, col)
+            for k in [-0.5, 0.0, 0.5]: draw_circle(c0 + Vector2(r * k, r * 0.25), r * 0.11, INK)
         "restart":
             draw_arc(center, r * 0.85, deg_to_rad(-70), deg_to_rad(220), 20, col, w)
             var end := center + Vector2(cos(deg_to_rad(-70)), sin(deg_to_rad(-70))) * r * 0.85

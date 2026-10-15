@@ -220,6 +220,13 @@ func _build_top():
         tb.size = SOUND_RECT.size
         tb.position = SOUND_RECT.position - Vector2((SOUND_RECT.size.x + 8.0) * int(spec[3]), 0)
         top.add_child(tb)
+    # R112 · COROAS: saldo entre o SEJA MEMBRO e o troféu
+    var cx0 := CLUB_RECT.end.x + 10.0
+    var cx1 := SOUND_RECT.position.x - (SOUND_RECT.size.x + 8.0) * 2.0 - 10.0
+    var chip: Button = hub.crowns_client().make_chip(SOUND_RECT.size.y, cx1 - cx0)
+    chip.name = "CrownsTopButtonMobile"
+    chip.position = Vector2(cx0, SOUND_RECT.position.y)
+    top.add_child(chip)
     # cartão do jogador (toque abre o Perfil)
     var card := _hit(top, CARD_RECT, "PERFIL", func(): hub.show_page("profile"))
     card.name = "RefProfileCard"

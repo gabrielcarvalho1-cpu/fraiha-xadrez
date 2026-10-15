@@ -359,6 +359,40 @@ class MemoryStore {
     e.club_active = true; if (!e.club_source) e.club_source = source || 'referral';
     this.entitlements.set(userId, e); return e.club_expires_at;
   }
+  // ---------- R112 · Coroas (em memória: desenvolvimento/testes) ----------
+  _cw(userId) {
+    this.crownWallets = this.crownWallets || new Map();
+    if (!this.crownWallets.has(userId)) this.crownWallets.set(userId, { user_id: userId, balance: 0, earned_total: 0, streak: 0, last_daily: null });
+    return this.crownWallets.get(userId);
+  }
+  async crownAward(userId, delta, reason, ref) {
+    this.crownLedgerRows = this.crownLedgerRows || [];
+    const key = userId + '|' + reason + '|' + (ref || '');
+    if (this.crownLedgerRows.some(r => r.key === key)) return null;
+    const w = this._cw(userId);
+    if (w.balance + delta < 0) { const e = new Error('crown_wallets_balance_check'); e.code = '23514'; throw e; }
+    w.balance += delta; w.earned_total += Math.max(delta, 0);
+    this.crownLedgerRows.push({ key, id: this.crownLedgerRows.length + 1, user_id: userId, delta, reason, ref: ref || '', created_at: new Date().toISOString() });
+    return w.balance;
+  }
+  async crownBump(userId, day, inc) {
+    this.crownDays = this.crownDays || new Map();
+    const k = userId + '|' + day, c = { ...(this.crownDays.get(k) || {}) };
+    for (const [n, v] of Object.entries(inc || {})) c[n] = (c[n] || 0) + v;
+    this.crownDays.set(k, c); return { ...c };
+  }
+  async crownCheckin(userId, day) {
+    const w = this._cw(userId);
+    if (w.last_daily && w.last_daily >= day) return null;
+    const prev = new Date(Date.parse(day + 'T00:00:00Z') - 86400e3).toISOString().slice(0, 10);
+    w.streak = w.last_daily === prev ? w.streak + 1 : 1; w.last_daily = day;
+    return w.streak;
+  }
+  async crownWallet(userId) { const w = (this.crownWallets || new Map()).get(userId); return w ? { ...w } : null; }
+  async crownDaily(userId, day) { const c = (this.crownDays || new Map()).get(userId + '|' + day); return c ? { ...c } : null; }
+  async crownLedger(userId, limit = 20) {
+    return (this.crownLedgerRows || []).filter(r => r.user_id === userId).slice(-limit).reverse().map(({ key, ...r }) => r);
+  }
   // ---------- R104 · denúncias e suspensão (em memória: desenvolvimento/testes) ----------
   async createReport(row) {
     this.reports = this.reports || [];
@@ -812,6 +846,27 @@ class SupabaseStore {
   }
   async grantClubDays(userId, days, source) {
     return this.req('/rpc/fraiha_grant_club_days', { method: 'POST', body: JSON.stringify({ p_user: userId, p_days: days, p_source: source || 'referral' }) });
+  }
+  // ---------- R112 · Coroas (0016) ----------
+  async crownAward(userId, delta, reason, ref) {
+    return this.req('/rpc/fraiha_crown_award', { method: 'POST', body: JSON.stringify({ p_user: userId, p_delta: delta, p_reason: reason, p_ref: ref || '' }) });
+  }
+  async crownBump(userId, day, inc) {
+    return (await this.req('/rpc/fraiha_crown_bump', { method: 'POST', body: JSON.stringify({ p_user: userId, p_day: day, p_inc: inc || {} }) })) || {};
+  }
+  async crownCheckin(userId, day) {
+    return this.req('/rpc/fraiha_crown_checkin', { method: 'POST', body: JSON.stringify({ p_user: userId, p_day: day }) });
+  }
+  async crownWallet(userId) {
+    const rows = await this.req('/crown_wallets?user_id=eq.' + encodeURIComponent(userId) + '&select=*');
+    return rows[0] || null;
+  }
+  async crownDaily(userId, day) {
+    const rows = await this.req('/crown_daily?user_id=eq.' + encodeURIComponent(userId) + '&day=eq.' + encodeURIComponent(day) + '&select=counters');
+    return rows[0] ? rows[0].counters : null;
+  }
+  async crownLedger(userId, limit = 20) {
+    return this.req('/crown_ledger?user_id=eq.' + encodeURIComponent(userId) + '&select=delta,reason,ref,created_at&order=id.desc&limit=' + Math.max(1, Math.min(100, limit | 0)));
   }
   // ---------- R104 · denúncias (0013) e suspensão ----------
   async createReport(row) {

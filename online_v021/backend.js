@@ -22,6 +22,7 @@ const Cosmetics = require('./accounts/cosmetics');
 const Status = require('./accounts/status');   // R55 · status do perfil
 const { Reports } = require('./moderation/reports');   // R104 · denúncias e suspensão
 const { Referrals } = require('./social/referrals');   // R105 · convite por link e indicação
+const { Crowns } = require('./economy/crowns');   // R112 · Coroas
 
 const GUEST_TTL_MS = 24 * 3600e3;
 const SESSION_REVALIDATE_MS = 60e3;
@@ -87,6 +88,7 @@ class Backend {
     this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
     this.reports = new Reports({ backend: this });   // R104
     this.referrals = new Referrals({ backend: this, send: (ws, o) => this.send(ws, o) });   // R105
+    this.crowns = new Crowns({ backend: this, send: (ws, o) => this.send(ws, o) });   // R112
     this.chat.reports = this.reports;
     // R103 · entrega pagamentos que ficaram "pagos sem vantagem": ao iniciar e de hora em hora
     if (this.store && this.store.persistent) {
@@ -470,6 +472,7 @@ class Backend {
       }
       if (a.startsWith('payment_')) return this.payments.handle(ws, m);
       if (a.startsWith('ref_')) return this.referrals.handle(ws, m);   // R105
+      if (a.startsWith('crowns_')) return this.crowns.handle(ws, m);   // R112
       if (a.startsWith('bot_')) {
         try { return await this.bots.handle(ws, m); }
         catch (e) { if (e === CANCELLED) return; console.error('bots', a, e && e.message); return this.send(ws, { type: 'bot_error', code: 'server_error', message: 'Erro temporário no servidor. Tente novamente.' }); }
@@ -508,6 +511,7 @@ class Backend {
         if (existing) this.invites.onAuthenticated(ws);
         if (existing && !renewed) this.party.onAuthenticated(ws);
         if (existing) await this.checked(ws, revision, this.presence.snapshot(ws));
+        if (existing && !renewed) this.crowns.onLogin(user.id);   // R112 · entrada do dia (uma vez por dia)
         return;
       }
       if (!ws.user) return this.fail(ws, 'Entre na sua conta primeiro.', { code: 'auth_required' });
@@ -522,6 +526,7 @@ class Backend {
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'profile_error' });
         if (m.ref) await this.referrals.onProfileCreated(accountId, m.ref);   // R105 · conta nova pelo link de convite
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
+        this.crowns.onLogin(accountId);   // R112 · primeira entrada do dia
         return this.presence.snapshot(ws);
       }
       if (a === 'acct_refresh') return await this.state(ws);
