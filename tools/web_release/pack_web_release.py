@@ -128,6 +128,11 @@ def main(argv):
     amb = ambiente_web.conferir(os.path.join(export_dir, "index.pck"), ambiente)   # fail-closed, antes de tudo
     gl = gl_ids_reuse.garantir(export_dir)          # R94 · fail-closed; muda o index.js antes do SHA do nome
     au = audio_samples_release.garantir(export_dir)   # R99 · fail-closed; liberação segura das amostras de áudio
+    # R106 · imagens com perda na qualidade aprovada (0,75): o export precisa ter sido feito depois do texture_quality.py
+    import subprocess
+    tq = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "texture_quality.py"), "--check"], capture_output=True, text=True)
+    if tq.returncode != 0:
+        raise SystemExit("ERRO: imagens fora da qualidade aprovada — rode tools/web_release/texture_quality.py e exporte de novo.\n" + tq.stdout[-800:])
     fp = None if legacy else fingerprint_web.plan(export_dir)
     files = files_needed(export_dir, web_dir, fp)
     if fp is not None:
@@ -144,6 +149,7 @@ def main(argv):
              "# AMBIENTE %s - servidor %s" % (ambiente, amb["servidor"]),
              "# R94 correcao GL IDs: %s - index.js %s" % (gl["estado"], gl["sha_depois"]),
              "# R99 liberacao das amostras de audio: %s - index.js %s" % (au["estado"], au["sha_depois"]),
+             "# R106 imagens WebP qualidade %s; musicas 96 kbps" % "0.75",
              "# caminho  tamanho  SHA256 — TODOS obrigatórios no bucket (o MONTAR-UPLOAD confere cada um)"]
     if fp is not None:
         lines.insert(1, "# R55.5 nomes com SHA-256: motor %s · pacote %s · index.html sobe POR ULTIMO" % (fp[2]["executable"], fp[2]["mainPack"]))
