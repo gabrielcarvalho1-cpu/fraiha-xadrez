@@ -304,6 +304,10 @@ class Party {
   // R112 · Coroas: quem ficou até o fim da mesa (XEQUE / Marcha) ganha pela vitória / pela partida jogada
   rewardCrowns(room) {
     const CR = this.backend && this.backend.crowns, gw = room.g ? room.g.winner : -1;
+    // R118 · Torneio da Semana: a mesa inteira (quem saiu não pontua; precisa de 2 pessoas)
+    const T = this.backend && this.backend.tournaments;
+    if (T) T.onTable(room.game === 'xeque' ? 'xeque' : 'marcha', room.seats.map((s, seat) => s.kind !== 'human' ? null
+      : { uid: s.uid, left: !!s.left, win: gw >= 0 && (room.game === 'marcha' ? seat % 2 === gw : seat === gw) }).filter(Boolean));
     if (!CR) return;
     room.seats.forEach((s, seat) => {
       if (s.kind !== 'human' || s.left || !/^[0-9a-f-]{36}$/i.test(String(s.uid || ''))) return;

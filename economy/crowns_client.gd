@@ -80,6 +80,16 @@ func owned(item_id: String) -> bool:
 func store_available() -> bool:
 	return bool(store_state.get("available", false))
 
+var tourn_panel = null
+## R118 · TORNEIO DA SEMANA (XEQUE / MARCHA REAL)
+func open_tournament(g := "xeque"):
+	if not is_instance_valid(tourn_panel):
+		tourn_panel = load("res://economy/tournament_ui.gd").new()
+		hub.add_child(tourn_panel)
+		tourn_panel.setup(hub, account, self)
+	if is_instance_valid(panel) and panel.is_open(): panel.close()
+	tourn_panel.show_tournament(g)
+
 func open_store(tab := "title"):
 	if not is_instance_valid(store_panel):
 		store_panel = load("res://economy/crown_store_ui.gd").new()

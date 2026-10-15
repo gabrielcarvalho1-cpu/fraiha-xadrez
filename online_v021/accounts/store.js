@@ -400,6 +400,18 @@ class MemoryStore {
     return 'ok';
   }
   async crownItems(userId) { return [...((this.crownOwned || new Map()).get(userId) || [])]; }
+  // R118 · Torneio da Semana (em memória)
+  async tournAdd(week, game, userId, pts, win) {
+    this.tourn = this.tourn || new Map();
+    const k = week + '|' + game + '|' + userId;
+    const r = this.tourn.get(k) || { week, game, user_id: userId, points: 0, games: 0, wins: 0, updated_at: 0, seq: 0 };
+    r.points += pts; r.games += 1; r.wins += win ? 1 : 0; r.seq = (this._tseq = (this._tseq || 0) + 1);
+    this.tourn.set(k, r); return r.points;
+  }
+  async tournTop(week, game, limit = 10) {
+    return [...(this.tourn || new Map()).values()].filter(r => r.week === week && r.game === game)
+      .sort((a, b) => b.points - a.points || b.wins - a.wins || a.seq - b.seq).slice(0, limit).map(r => ({ ...r }));
+  }
   async crownDaily(userId, day) { const c = (this.crownDays || new Map()).get(userId + '|' + day); return c ? { ...c } : null; }
   async crownLedger(userId, limit = 20) {
     return (this.crownLedgerRows || []).filter(r => r.user_id === userId).slice(-limit).reverse().map(({ key, ...r }) => r);
@@ -875,6 +887,14 @@ class SupabaseStore {
   async crownDaily(userId, day) {
     const rows = await this.req('/crown_daily?user_id=eq.' + encodeURIComponent(userId) + '&day=eq.' + encodeURIComponent(day) + '&select=counters');
     return rows[0] ? rows[0].counters : null;
+  }
+  // R118 · Torneio da Semana (0018)
+  async tournAdd(week, game, userId, pts, win) {
+    return this.req('/rpc/fraiha_tourn_add', { method: 'POST', body: JSON.stringify({ p_week: week, p_game: game, p_user: userId, p_pts: pts, p_win: !!win }) });
+  }
+  async tournTop(week, game, limit = 10) {
+    return this.req('/tournament_scores?week=eq.' + encodeURIComponent(week) + '&game=eq.' + encodeURIComponent(game)
+      + '&select=user_id,points,games,wins&order=points.desc,wins.desc,updated_at.asc&limit=' + Math.max(1, Math.min(500, limit | 0)));
   }
   // R116 · Loja de Coroas (0017)
   async crownBuy(userId, itemId, price) {

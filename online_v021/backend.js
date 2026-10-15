@@ -24,6 +24,7 @@ const { Reports } = require('./moderation/reports');   // R104 · denúncias e s
 const { Referrals } = require('./social/referrals');   // R105 · convite por link e indicação
 const { Crowns } = require('./economy/crowns');   // R112 · Coroas
 const { Store: CrownStore } = require('./economy/store');   // R116 · Loja de Coroas
+const { Tournaments } = require('./economy/tournaments');   // R118 · Torneio da Semana
 
 const GUEST_TTL_MS = 24 * 3600e3;
 const SESSION_REVALIDATE_MS = 60e3;
@@ -91,6 +92,8 @@ class Backend {
     this.referrals = new Referrals({ backend: this, send: (ws, o) => this.send(ws, o) });   // R105
     this.crowns = new Crowns({ backend: this, send: (ws, o) => this.send(ws, o) });   // R112
     this.crownStore = new CrownStore({ backend: this, send: (ws, o) => this.send(ws, o) });   // R116
+    this.tournaments = new Tournaments({ backend: this, send: (ws, o) => this.send(ws, o) });   // R118
+    this.tournaments.start();
     this.chat.reports = this.reports;
     // R103 · entrega pagamentos que ficaram "pagos sem vantagem": ao iniciar e de hora em hora
     if (this.store && this.store.persistent) {
@@ -476,6 +479,7 @@ class Backend {
       if (a.startsWith('ref_')) return this.referrals.handle(ws, m);   // R105
       if (a.startsWith('crowns_')) return this.crowns.handle(ws, m);   // R112
       if (a.startsWith('store_')) return this.crownStore.handle(ws, m);   // R116
+      if (a.startsWith('tourn_')) return this.tournaments.handle(ws, m);   // R118
       if (a.startsWith('bot_')) {
         try { return await this.bots.handle(ws, m); }
         catch (e) { if (e === CANCELLED) return; console.error('bots', a, e && e.message); return this.send(ws, { type: 'bot_error', code: 'server_error', message: 'Erro temporário no servidor. Tente novamente.' }); }

@@ -268,3 +268,9 @@ func _soon(parent: Control):
 	b.custom_minimum_size = Vector2(0, ts(44))
 	b.pressed.connect(func(): client.open_store("title"))
 	parent.add_child(b)
+	# R118 · torneio grátis de XEQUE / MARCHA com prêmio em Coroas
+	var tb := button("TORNEIO DA SEMANA", 15)
+	tb.name = "CrownsOpenTournament"
+	tb.custom_minimum_size = Vector2(0, ts(44))
+	tb.pressed.connect(func(): client.open_tournament("xeque"))
+	parent.add_child(tb)
