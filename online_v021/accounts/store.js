@@ -11,8 +11,10 @@ const RESERVED = ['admin', 'fraiha', 'moderador', 'suporte', 'system', 'convidad
 const Cosmetics = require('./cosmetics');
 // Avatares aceitos na criação do perfil (gratuitos + antigos). Os demais só por acct_set_cosmetics.
 const AVATARS = [...Cosmetics.FREE_AVATARS, ...Cosmetics.LEGACY_AVATARS];
-const FOUNDER_CLUB_DAYS = 30;          // Pacote Fundador inclui 30 dias de Club
+const FOUNDER_CLUB_DAYS = 90;          // R103 · Pacote Fundador inclui 90 dias de Club (era 30)
 const CLUB_MONTH_DAYS = 30;
+// R103 · dias de Club de cada produto (mesma regra da função fraiha_club_days, migração 0012)
+const CLUB_DAYS = { founder: FOUNDER_CLUB_DAYS, founder_legend: 365, club_monthly: CLUB_MONTH_DAYS, club_yearly: 365 };
 // Novo vencimento do Club: soma `days` ao que ainda resta (nunca perde dias já pagos).
 const extendClub = (expiresAt, days, now = Date.now()) => {
   const base = expiresAt && new Date(expiresAt).getTime() > now ? new Date(expiresAt).getTime() : now;
@@ -127,7 +129,8 @@ class MemoryStore {
   async getEntitlements(userId) {
     this.entitlements = this.entitlements || new Map();
     const e = this.entitlements.get(userId) || {};
-    return { is_founder: !!e.is_founder, club_active: !!e.club_active && (!e.club_expires_at || new Date(e.club_expires_at) > new Date()), club_expires_at: e.club_expires_at || null };
+    return { is_founder: !!e.is_founder, club_active: !!e.club_active && (!e.club_expires_at || new Date(e.club_expires_at) > new Date()), club_expires_at: e.club_expires_at || null,
+      founder_number: e.founder_number || null, founder_tier: e.founder_tier || (e.is_founder ? 'founder' : null) };
   }
   async setEntitlements(userId, patch) {
     this.entitlements = this.entitlements || new Map();
@@ -137,18 +140,43 @@ class MemoryStore {
   // ---------- R31: liberar direitos depois de pagamento confirmado (mesma regra da função 0007) ----------
   async grantEntitlement(userId, productId, source) {
     this.entitlements = this.entitlements || new Map();
+    if (!CLUB_DAYS[productId]) return null;
     const e = { ...(this.entitlements.get(userId) || {}) }, now = new Date().toISOString();
-    if (productId === 'founder') {
+    const founderish = productId === 'founder' || productId === 'founder_legend';
+    if (founderish) {
       e.is_founder = true; e.founder_since = e.founder_since || now;
-      e.club_expires_at = extendClub(e.club_active ? e.club_expires_at : null, FOUNDER_CLUB_DAYS);
-      e.club_active = true; e.club_source = e.club_source && e.club_source !== 'founder_bonus' ? e.club_source : 'founder_bonus';
-    } else if (productId === 'club_monthly') {
-      e.club_expires_at = extendClub(e.club_active ? e.club_expires_at : null, CLUB_MONTH_DAYS);
-      e.club_active = true; e.club_source = String(source || 'manual');
-    } else return null;
+      if (!e.founder_number) { this.founderSeq = (this.founderSeq || 0) + 1; e.founder_number = this.founderSeq; }
+      e.founder_tier = productId === 'founder_legend' ? 'legend' : (e.founder_tier || 'founder');
+      e.club_source = e.club_source && e.club_source !== 'founder_bonus' ? e.club_source : 'founder_bonus';
+    } else e.club_source = String(source || 'manual');
+    e.club_expires_at = extendClub(e.club_active ? e.club_expires_at : null, CLUB_DAYS[productId]);
+    e.club_active = true;
     e.updated_at = now;
     this.entitlements.set(userId, e);
     return this.getEntitlements(userId);
+  }
+  // R103 · paga E entrega na mesma operação (como fraiha_pay_and_grant): repetir não entrega duas vezes
+  async payAndGrant(provider, ref, source) {
+    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === 'pending');
+    if (!p) return null;
+    if (this.failGrant) throw new Error('falha simulada na entrega');   // testes
+    p.status = 'paid'; p.paid_at = new Date().toISOString();
+    await this.grantEntitlement(p.user_id, p.product_id, source);
+    p.granted_at = new Date().toISOString();
+    return { ...p };
+  }
+  async grantPaidMissing() {
+    let n = 0;
+    for (const p of (this.payments || [])) if (p.status === 'paid' && !p.granted_at) { await this.grantEntitlement(p.user_id, p.product_id, p.provider); p.granted_at = new Date().toISOString(); n++; }
+    return { granted: n };
+  }
+  async findOpenPayment(userId, productIds, sinceMs) {
+    const since = Date.now() - sinceMs;
+    const p = (this.payments || []).find(x => x.user_id === userId && productIds.includes(x.product_id) && x.status === 'pending' && new Date(x.created_at).getTime() > since);
+    return p ? { ...p } : null;
+  }
+  async listPayments(userId, limit = 20) {
+    return (this.payments || []).filter(x => !userId || x.user_id === userId).slice().reverse().slice(0, limit).map(x => ({ ...x }));
   }
   // ---------- R31: pagamentos (em memória só para desenvolvimento/testes) ----------
   async createPayment(row) {
@@ -179,9 +207,9 @@ class MemoryStore {
     this.entitlements = this.entitlements || new Map();
     const e = { ...(this.entitlements.get(userId) || {}) };
     const cut = (iso, days) => iso ? new Date(new Date(iso).getTime() - days * 86400000).toISOString() : null;
-    if (productId === 'founder') { e.is_founder = false; e.founder_since = null; e.club_expires_at = cut(e.club_expires_at, FOUNDER_CLUB_DAYS); }
-    else if (productId === 'club_monthly') e.club_expires_at = cut(e.club_expires_at, CLUB_MONTH_DAYS);
-    else return null;
+    if (!CLUB_DAYS[productId]) return null;
+    if (productId === 'founder' || productId === 'founder_legend') { e.is_founder = false; e.founder_since = null; e.founder_tier = null; }
+    e.club_expires_at = cut(e.club_expires_at, CLUB_DAYS[productId]);
     if (!e.club_expires_at || new Date(e.club_expires_at) <= new Date()) { e.club_active = false; e.club_expires_at = null; }
     e.updated_at = new Date().toISOString();
     this.entitlements.set(userId, e);
@@ -443,10 +471,14 @@ class SupabaseStore {
   // ---------- Direitos (0005): tabela entitlements, escrita só pelo webhook/backend ----------
   async getEntitlements(userId) {
     try {
-      const rows = await this.req('/entitlements?user_id=eq.' + encodeURIComponent(userId) + '&select=is_founder,club_active,club_expires_at');
+      let rows;
+      try { rows = await this.req('/entitlements?user_id=eq.' + encodeURIComponent(userId) + '&select=is_founder,club_active,club_expires_at,founder_number,founder_tier'); }
+      catch (e2) { if (!/42703|PGRST204|column/.test(String(e2.code) + ' ' + String(e2.message))) throw e2;   // banco sem a 0012
+        rows = await this.req('/entitlements?user_id=eq.' + encodeURIComponent(userId) + '&select=is_founder,club_active,club_expires_at'); }
       const e = rows[0] || {};
       const active = !!e.club_active && (!e.club_expires_at || new Date(e.club_expires_at) > new Date());
-      return { is_founder: !!e.is_founder, club_active: active, club_expires_at: e.club_expires_at || null };
+      return { is_founder: !!e.is_founder, club_active: active, club_expires_at: e.club_expires_at || null,
+        founder_number: e.founder_number || null, founder_tier: e.founder_tier || (e.is_founder ? 'founder' : null) };
     } catch (e) {
       if (/42P01|PGRST205|does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message))) return { is_founder: false, club_active: false, club_expires_at: null, not_configured: true };
       throw e;
@@ -483,6 +515,29 @@ class SupabaseStore {
   async countFounders() {
     try { const rows = await this.req('/entitlements?is_founder=eq.true&select=user_id'); return Array.isArray(rows) ? rows.length : 0; }
     catch (e) { if (/42P01|PGRST205|does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message))) return 0; throw e; }
+  }
+  // R103 · paga e entrega numa transação só (fraiha_pay_and_grant, migração 0012). Sem a 0012 → { missing: true }.
+  async payAndGrant(provider, ref, source) {
+    try { return await this.req('/rpc/fraiha_pay_and_grant', { method: 'POST', body: JSON.stringify({ p_provider: provider, p_ref: ref, p_source: String(source || '') }) }); }
+    catch (e) { if (SCHEMA_MISSING(e) || /PGRST202/.test(String(e.code))) return { missing: true }; throw e; }
+  }
+  async grantPaidMissing() {
+    try { return await this.req('/rpc/fraiha_grant_paid_missing', { method: 'POST', body: '{}' }); }
+    catch (e) { if (SCHEMA_MISSING(e) || /PGRST202/.test(String(e.code))) return { missing: true }; throw e; }
+  }
+  async findOpenPayment(userId, productIds, sinceMs) {
+    const since = new Date(Date.now() - sinceMs).toISOString();
+    const rows = await this.req('/payments?user_id=eq.' + encodeURIComponent(userId) + '&status=eq.pending&product_id=in.(' + productIds.join(',') + ')&created_at=gt.' + encodeURIComponent(since) + '&select=payment_id,provider_ref,product_id&limit=1');
+    return rows[0] || null;
+  }
+  async listPayments(userId, limit = 20) {
+    const q = (userId ? 'user_id=eq.' + encodeURIComponent(userId) + '&' : '') + 'select=payment_id,user_id,product_id,method,provider_ref,amount_cents,status,created_at,paid_at&order=created_at.desc&limit=' + (limit | 0);
+    return this.req('/payments?' + q);
+  }
+  // banco sem a 0012: a entrega falhou depois de marcar pago → volta para pendente (a próxima notificação tenta de novo)
+  async revertPaid(provider, ref) {
+    await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.paid',
+      { method: 'PATCH', body: JSON.stringify({ status: 'pending', paid_at: null }) });
   }
   async markPayment(provider, ref, status) {
     const patch = { status }; if (status === 'paid') patch.paid_at = new Date().toISOString();
@@ -667,4 +722,4 @@ class SupabaseStore {
 }
 const DM_COLS = 'id,sender_id,recipient_id,body,created_at,read_at';
 
-module.exports = { STAT_MODES, MemoryStore, SupabaseStore, validateNickname, cleanNickname, nextNickChange, NICK_COOLDOWN_MS, MODES, AVATARS, emptyStats, UUID_RE, pub, extendClub, FOUNDER_CLUB_DAYS };
+module.exports = { CLUB_DAYS, STAT_MODES, MemoryStore, SupabaseStore, validateNickname, cleanNickname, nextNickChange, NICK_COOLDOWN_MS, MODES, AVATARS, emptyStats, UUID_RE, pub, extendClub, FOUNDER_CLUB_DAYS };

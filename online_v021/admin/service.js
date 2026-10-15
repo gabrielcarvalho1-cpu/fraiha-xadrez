@@ -78,6 +78,7 @@ class AdminService {
         if (pm) { if (!need('players.read')) return; const d = await this.player(pm[1].toLowerCase()); return d ? out(200, d) : out(404, { error: 'not_found' }); }
         if (path === '/admin/api/audit') return need('audit.read') && out(200, { persistent: this.audit.persistent, items: this.audit.list({ limit: url.searchParams.get('limit'), action: url.searchParams.get('action') || '' }) });
         if (path === '/admin/api/system') return need('system.read') && out(200, this.system());
+        if (path === '/admin/api/payments') return need('payments.read') && out(200, await this.payments(url.searchParams.get('status') || ''));
         return out(404, { error: 'not_found' });
       }
       if (req.method === 'POST') {
@@ -99,6 +100,13 @@ class AdminService {
           catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
           return this.setQueue(admin, qm[1], body, out);
         }
+        if (path === '/admin/api/payments/reconcile') {   // R103 · entrega pagamentos "pagos sem vantagem"
+          if (!need('payments.write')) return;
+          if (this.limited('write:' + admin.id, 20)) return out(429, { error: 'rate_limited' });
+          const r = this.backend.payments ? await this.backend.payments.reconcile() : null;
+          this.audit.record({ actor: admin, action: 'payments_reconcile', target: null, before: null, after: r, result: r && !r.missing ? 'ok' : 'unavailable', reason: '' });
+          return out(200, { result: r || { missing: true } });
+        }
         const em = /^\/admin\/api\/players\/([0-9a-fA-F-]{36})\/(club|founder)$/.exec(path);
         if (em) {
           if (!need('entitlements.write')) return;
@@ -116,6 +124,27 @@ class AdminService {
       console.error('[admin] api error', e && e.message);
       return out(500, { error: 'server_error' });
     }
+  }
+  // ---------------------------------------------------------------- R103 · VENDAS
+  async payments(status) {
+    const st = this.backend.store, P = require('../payments/service');
+    if (!st || !st.listPayments) return { items: [], available: false };
+    let rows = [];
+    try { rows = await Q.withTimeout(st.listPayments(null, 300)); } catch (e) { return { items: [], available: false, error: 'query_error' }; }
+    if (status) rows = rows.filter(r => r.status === status);
+    const names = new Map();
+    try { for (const p of await Q.withTimeout(st.getProfilesByIds([...new Set(rows.map(r => r.user_id))]))) names.set(p.user_id, p.nickname); } catch {}
+    const month = new Date(this.now()); month.setUTCDate(1); month.setUTCHours(3, 0, 0, 0);
+    const sum = { paid_month_cents: 0, paid_month: 0, paid_total_cents: 0, paid_total: 0, refunded: 0, pending: 0, by_product: {} };
+    for (const r of rows) {
+      if (r.status === 'paid') {
+        sum.paid_total++; sum.paid_total_cents += Number(r.amount_cents) || 0;
+        if (r.paid_at && new Date(r.paid_at) >= month) { sum.paid_month++; sum.paid_month_cents += Number(r.amount_cents) || 0; }
+        sum.by_product[r.product_id] = (sum.by_product[r.product_id] || 0) + 1;
+      } else if (r.status === 'refunded') sum.refunded++;
+      else if (r.status === 'pending') sum.pending++;
+    }
+    return { available: true, summary: sum, items: rows.map(r => ({ ...r, nickname: names.get(r.user_id) || null, title: (P.PRODUCTS[r.product_id] || {}).title || r.product_id })) };
   }
   // ---------------------------------------------------------------- dados
   async overview() {

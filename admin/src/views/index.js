@@ -321,6 +321,45 @@ function entitlementView(ctx, kind) {
 export const club = ctx => entitlementView(ctx, 'club');
 export const founder = ctx => entitlementView(ctx, 'founder');
 
+// ---------------------------------------------------------------- R103 · VENDAS
+const BRL = c => (Number(c || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const PAY_ST = { paid: ['PAGO', 'on'], pending: ['PENDENTE', 'partial'], refunded: ['REEMBOLSADO', 'off'], cancelled: ['CANCELADO', 'off'], failed: ['FALHOU', 'off'] };
+export function sales(ctx) {
+  const f = frame(ctx, 'Vendas', 'Pagamentos do Mercado Pago (PIX e cartão). Reembolso: faça no painel do Mercado Pago — o jogo retira a vantagem sozinho quando o aviso chega.');
+  let filter = '';
+  return {
+    error: f.error,
+    async load() {
+      const d = await ctx.api.get('/admin/api/payments' + (filter ? '?status=' + filter : ''));
+      if (!ctx.alive()) return;
+      if (!d.available) return f.show(stateBox('error', 'Pagamentos indisponíveis neste servidor (sem banco ou sem a tabela payments).'));
+      const s = d.summary, can = ctx.session && ctx.session.admin && (ctx.session.admin.perms || []).includes('payments.write');
+      const prod = Object.entries(s.by_product).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—';
+      const chips = [['', 'Todos'], ['paid', 'Pagos'], ['pending', 'Pendentes'], ['refunded', 'Reembolsados']].map(([k, t]) =>
+        h('button', { class: 'btn' + (filter === k ? ' primary' : ''), onclick: () => { filter = k; ctx.refresh(); } }, t));
+      f.show(
+        h('div', { class: 'cards' },
+          card('Vendido no mês', { value: s.paid_month_cents, status: 'real', note: `${fmtInt(s.paid_month)} pagamento(s) desde o dia 1º` }, { fmt: BRL, hero: true }),
+          card('Vendido no total', { value: s.paid_total_cents, status: 'real', note: `${fmtInt(s.paid_total)} pagamento(s) · ${prod}` }, { fmt: BRL }),
+          card('Pendentes', { value: fmtInt(s.pending), status: 'real', note: 'PIX gerado e ainda não pago' }),
+          card('Reembolsados', { value: fmtInt(s.refunded), status: 'real', note: 'vantagem retirada automaticamente' })),
+        h('div', { class: 'panel' },
+          h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px' }, ...chips,
+            can ? h('button', { class: 'btn', style: 'margin-left:auto', onclick: async () => {
+              const ok = await confirmAction({ title: 'Conferir entregas', body: 'Entrega agora a vantagem de todo pagamento aprovado que ainda não liberou nada.', confirmWord: 'CONFERIR', actionLabel: 'Conferir', danger: false });
+              if (!ok) return;
+              const r = await ctx.api.post('/admin/api/payments/reconcile', {}); toast(r.result && r.result.missing ? 'Banco sem a migração 0012.' : `Entregues: ${(r.result && r.result.granted) || 0}`); ctx.refresh(); } }, 'Conferir entregas') : ''),
+          d.items.length ? h('div', { class: 'tablewrap' }, h('table', {}, h('thead', {}, h('tr', {}, ['Quando', 'Jogador', 'Produto', 'Forma', 'Valor', 'Situação', 'Pedido'].map(t => h('th', {}, t)))),
+            h('tbody', {}, d.items.map(r => h('tr', { class: 'click', onclick: () => { location.hash = '#/players/' + r.user_id; } },
+              h('td', {}, fmtDate(r.paid_at || r.created_at)), h('td', {}, r.nickname || r.user_id.slice(0, 8)), h('td', {}, r.title),
+              h('td', {}, r.method === 'pix' ? 'PIX' : 'Cartão'), h('td', {}, BRL(r.amount_cents)),
+              h('td', {}, h('span', { class: 'badge ' + (PAY_ST[r.status] || ['', ''])[1] }, (PAY_ST[r.status] || [r.status])[0])),
+              h('td', { class: 'mono dim' }, String(r.provider_ref || '').slice(0, 8)))))))
+            : stateBox('empty', 'Nenhum pagamento ainda.')));
+    },
+  };
+}
+
 // ---------------------------------------------------------------- ADMIN LOG
 export function audit(ctx) {
   const f = frame(ctx, 'Admin Log', 'Toda ação administrativa real é registrada pelo SERVIDOR antes de responder.');
@@ -356,7 +395,7 @@ export function system(ctx) {
       f.show(h('div', { class: 'cols3' },
         h('div', { class: 'panel' }, h('h2', {}, 'Servidor'), h('div', { class: 'kv' }, row('Ambiente', d.env.toUpperCase()), row('Backend de contas', d.backend_kind), row('Versão', d.server_version || '—'), row('Commit', d.commit || '—'), row('No ar há', fmtDur(d.uptime_ms)))),
         h('div', { class: 'panel' }, h('h2', {}, 'Dados do Admin'), h('div', { class: 'kv' }, row('Telemetria desde', fmtDate(d.tracking_since)), row('Admin Log persistente', d.audit_persistent ? 'sim' : 'NÃO (memória + log)'), row('Controles persistentes', d.controls_persistent ? 'sim' : 'NÃO (memória)'), row('Administradores', fmtInt(d.admins)))),
-        h('div', { class: 'panel' }, h('h2', {}, 'Integrações'), h('div', { class: 'kv' }, row('Voice configurado', d.voice_configured ? 'sim' : 'não'), row('Pagamentos', 'fora do Admin V1'))),
+        h('div', { class: 'panel' }, h('h2', {}, 'Integrações'), h('div', { class: 'kv' }, row('Voice configurado', d.voice_configured ? 'sim' : 'não'), row('Pagamentos', 'ver a tela Vendas'))),
       ));
     },
   };

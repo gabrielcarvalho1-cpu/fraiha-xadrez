@@ -77,10 +77,10 @@ const settle = (ms = 150) => new Promise(r => setTimeout(r, ms));
   let ch = (await ana.next('payment_charge', 5000)).charge;
   const call = mp.calls.find(x => x.method === 'POST' && x.url === '/v1/payments');
   check(ch.method === 'pix' && ch.copy_paste.startsWith('00020126') && ch.qr_code_base64 && ch.ticket_url && ch.status === 'pending' && ch.expires_at, 'PIX: QR (imagem), Copia e Cola, link e validade chegam ao jogo');
-  check(call && call.body.payment_method_id === 'pix' && call.body.transaction_amount === 49.9 && call.body.payer.email === 'AnaPix@dev.local' && call.body.external_reference === ch.id && call.idem === ch.id, 'PIX criado no Mercado Pago com valor 49,90, e-mail da conta, referência interna e chave de idempotência');
+  check(call && call.body.payment_method_id === 'pix' && call.body.transaction_amount === 44.9 && call.body.payer.email === 'AnaPix@dev.local' && call.body.external_reference === ch.id && call.idem === ch.id, 'PIX criado no Mercado Pago com valor 44,90 (10% de desconto no PIX), e-mail da conta, referência interna e chave de idempotência');
   check(/\/webhooks\/payments$/.test(call.body.notification_url) && /-03:00$/.test(call.body.date_of_expiration), 'PIX com notification_url do servidor e validade no horário de Brasília');
   check(!JSON.stringify(ch).includes('TEST-TOKEN'), 'nenhuma chave do Mercado Pago vai para o jogo');
-  check(call.body.additional_info.items[0].category_id === 'virtual_goods' && call.body.additional_info.items[0].unit_price === 49.9 && call.body.statement_descriptor === 'FRAIHA XADREZ', 'R40.1: PIX leva os detalhes do item e o nome na fatura');
+  check(call.body.additional_info.items[0].category_id === 'virtual_goods' && call.body.additional_info.items[0].unit_price === 44.9 && call.body.statement_descriptor === 'FRAIHA XADREZ', 'R40.1: PIX leva os detalhes do item e o nome na fatura');
   const pixId = String(mp.nextId - 1);
   // status ainda pendente
   ana.send({ type: 'payment_status', charge_id: ch.id });
@@ -101,7 +101,7 @@ const settle = (ms = 150) => new Promise(r => setTimeout(r, ms));
   check(r.code === 200, 'webhook assinado aceito (200)');
   up = await ana.next(m => m.type === 'payment_update' && m.charge.status === 'paid', 4000);
   st = await ana.next('acct_state', 4000);
-  check(up.charge.id === ch.id && st.entitlements.is_founder === true && st.entitlements.club_active === true, 'PIX aprovado → Fundador + 30 dias de Club, e o jogo é avisado na hora');
+  check(up.charge.id === ch.id && st.entitlements.is_founder === true && st.entitlements.club_active === true, 'PIX aprovado → Fundador + 90 dias de Club, e o jogo é avisado na hora');
   check(st.founder_perks && st.founder_perks.whatsapp_url === 'https://chat.whatsapp.com/GRUPO-TESTE', 'Fundador de verdade recebe o link do grupo (só ele)');
   // webhook repetido → não libera de novo
   r = await notify(P, pixId);
@@ -109,7 +109,7 @@ const settle = (ms = 150) => new Promise(r => setTimeout(r, ms));
   ana.send({ type: 'acct_refresh' }); st = await ana.next('acct_state');
   const exp1 = st.entitlements.club_expires_at;
   const days = (new Date(exp1) - Date.now()) / 86400000;
-  check(r.code === 200 && days > 29 && days < 31, 'webhook repetido não soma outros 30 dias (%s dias)'.replace('%s', days.toFixed(1)));
+  check(r.code === 200 && days > 89 && days < 91, 'webhook repetido não soma outros 90 dias (%s dias)'.replace('%s', days.toFixed(1)));
   // Fundador não compra de novo
   ana.send({ type: 'payment_create', product_id: 'founder', method: 'pix' });
   let err = await ana.next('payment_error');
@@ -130,13 +130,13 @@ const settle = (ms = 150) => new Promise(r => setTimeout(r, ms));
   r = await notify(P, cardOk);
   st = await ana.next('acct_state', 4000);
   const days2 = (new Date(st.entitlements.club_expires_at) - Date.now()) / 86400000;
-  check(days2 > 59 && days2 < 61, 'Club no cartão aprovado soma +30 dias ao que restava (%s dias)'.replace('%s', days2.toFixed(1)));
+  check(days2 > 119 && days2 < 121, 'Club no cartão aprovado soma +30 dias ao que restava (%s dias)'.replace('%s', days2.toFixed(1)));
   // ---------- reembolso do Club → tira os 30 dias ----------
   mp.payments.get(cardOk).status = 'refunded';
   r = await notify(P, cardOk);
   st = await ana.next('acct_state', 4000);
   const days3 = (new Date(st.entitlements.club_expires_at) - Date.now()) / 86400000;
-  check(days3 > 29 && days3 < 31 && st.entitlements.is_founder, 'reembolso do Club tira os 30 dias dele (o Fundador continua)');
+  check(days3 > 89 && days3 < 91 && st.entitlements.is_founder, 'reembolso do Club tira os 30 dias dele (o Fundador continua)');
   // ---------- contestação do Fundador → perde tudo ----------
   mp.payments.get(pixId).status = 'charged_back';
   r = await notify(P, pixId);

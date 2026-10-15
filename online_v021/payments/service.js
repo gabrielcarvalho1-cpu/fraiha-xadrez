@@ -10,14 +10,20 @@
 // Regras: o cliente nunca confirma pagamento; nenhuma credencial fica no Godot; nada de número
 // de cartão/CVV passa pelo FRAIHA (checkout hospedado do provedor). Provedor via env:
 //   FRAIHA_PAYMENT_PROVIDER = "" (nenhum) | "mercadopago"   (+ chaves em env, ver providers/mercadopago.js)
-//   FRAIHA_FOUNDER_LIMIT    = vagas do Pacote Fundador (padrão 100)
+//   FRAIHA_FOUNDER_UNTIL    = R103 · data em que o Pacote Fundador sai de venda (ex.: 2026-12-31). Vazio = à venda.
+//   FRAIHA_FOUNDER_LIMIT    = vagas do Fundador (opcional; 0 ou vazio = sem limite de vagas)
 //   FRAIHA_FOUNDER_WHATSAPP_URL = link do grupo dos Fundadores (só vai para quem é Fundador de verdade)
 const crypto = require('crypto');
 
+// R103 · preço por forma de pagamento: PIX com 10% de desconto (arredondado para ,90). amount_cents = preço do cartão.
 const PRODUCTS = {
-  founder:      { kind: 'one_time',  amount_cents: 4990,  title: 'Pacote Fundador FRAIHA' },
-  club_monthly: { kind: 'subscription', amount_cents: 1990, title: 'Club FRAIHA (30 dias)' },
+  founder:        { kind: 'one_time', amount_cents: 4990,  pix_cents: 4490,  title: 'Pacote Fundador FRAIHA', founder: true },
+  founder_legend: { kind: 'one_time', amount_cents: 9990,  pix_cents: 8990,  title: 'Pacote Fundador Lendário FRAIHA', founder: true },
+  club_monthly:   { kind: 'pass',     amount_cents: 1990,  pix_cents: 1790,  title: 'Club FRAIHA (30 dias)' },
+  club_yearly:    { kind: 'pass',     amount_cents: 14990, pix_cents: 13490, title: 'Club FRAIHA (1 ano)' },
 };
+const priceOf = (product, method) => (method === 'pix' ? product.pix_cents : product.amount_cents);
+const OPEN_ORDER_MS = 30 * 60 * 1000;   // PIX vale 30 min: um Fundador em aberto bloqueia outro pedido de Fundador
 const METHODS = ['pix', 'card'];
 const STATUS_POLL_MS = 8000;     // consulta ao provedor quando o jogador pergunta (no máximo 1x a cada 8 s por pedido)
 const CARD_ATTEMPTS = 6;         // tentativas de cartão no jogo por pedido (cartão recusado → pode tentar outro)
@@ -61,7 +67,10 @@ function createProvider(env = process.env) {
 class Payments {
   constructor({ send, backend, env = process.env }) {
     this.send = send; this.backend = backend; this.provider = createProvider(env);
-    this.founderLimit = Math.max(0, Number(env.FRAIHA_FOUNDER_LIMIT) || 100);
+    this.founderLimit = Math.max(0, Number(env.FRAIHA_FOUNDER_LIMIT) || 0);   // 0 = sem limite de vagas
+    const until = String(env.FRAIHA_FOUNDER_UNTIL || '').trim();
+    this.founderUntil = until && !isNaN(Date.parse(until)) ? new Date(until.length <= 10 ? until + 'T23:59:59-03:00' : until).toISOString() : null;
+    this.now = () => Date.now();
     this.founderGroup = String(env.FRAIHA_FOUNDER_WHATSAPP_URL || '').trim();
     this.lastPoll = new Map();
     if (this.provider.name !== 'none' && this.provider.ready && !this.provider.ready()) console.warn('[pagamentos] provedor ' + this.provider.name + ' sem configuração completa: ' + (this.provider.missing ? this.provider.missing().join(', ') : ''));
@@ -73,14 +82,25 @@ class Payments {
   async foundersCount() {
     try { return this.store.countFounders ? await this.store.countFounders() : 0; } catch (e) { console.error('countFounders', e && e.message); return 0; }
   }
-  // O que a loja mostra: provedor pronto?, vagas de Fundador, se já é Fundador.
+  // R103 · Fundador à venda? (prazo e, se configurado, vagas)
+  async founderOpen() {
+    if (this.founderUntil && this.now() > Date.parse(this.founderUntil)) return { open: false, reason: 'closed', message: 'O Pacote Fundador saiu de venda. Obrigado a todos que apoiaram o começo do reino!' };
+    if (this.founderLimit > 0 && await this.foundersCount() >= this.founderLimit) return { open: false, reason: 'sold_out', message: 'As vagas do Pacote Fundador se esgotaram.' };
+    return { open: true };
+  }
+  // O que a loja mostra: provedor pronto?, preços (PIX e cartão), prazo do Fundador, situação do jogador.
   async offer(ws) {
     const ent = await this.store.getEntitlements(ws.user.id).catch(() => ({}));
-    const sold = await this.foundersCount();
+    const sold = this.founderLimit > 0 ? await this.foundersCount() : 0;
+    const fo = await this.founderOpen();
+    const prices = {}, prices_pix = {};
+    for (const [id, p] of Object.entries(PRODUCTS)) { prices[id] = p.amount_cents; prices_pix[id] = p.pix_cents; }
     return { type: 'payment_offer', ready: this.ready(), methods: METHODS.slice(),
-      founder_limit: this.founderLimit, founder_remaining: Math.max(0, this.founderLimit - sold),
-      is_founder: !!(ent && ent.is_founder), club_active: !!(ent && ent.club_active), club_expires_at: (ent && ent.club_expires_at) || null,
-      prices: { founder: PRODUCTS.founder.amount_cents, club_monthly: PRODUCTS.club_monthly.amount_cents } };
+      founder_open: fo.open, founder_until: this.founderUntil, founder_limit: this.founderLimit,
+      founder_remaining: this.founderLimit > 0 ? Math.max(0, this.founderLimit - sold) : null,
+      is_founder: !!(ent && ent.is_founder), founder_tier: (ent && ent.founder_tier) || null, founder_number: (ent && ent.founder_number) || null,
+      club_active: !!(ent && ent.club_active), club_expires_at: (ent && ent.club_expires_at) || null,
+      prices, prices_pix };
   }
   // Extras só para quem é Fundador de verdade (o link do grupo nunca fica no Godot).
   founderPerks(ent) { return ent && ent.is_founder && this.founderGroup ? { whatsapp_url: this.founderGroup } : null; }
@@ -95,16 +115,21 @@ class Payments {
       if (!product || !METHODS.includes(method)) return this.fail(ws, 'Produto ou forma de pagamento inválidos.', 'bad_request');
       if (!this.ready()) return this.fail(ws, 'Pagamento real ainda não configurado neste servidor.', 'provider_not_configured');
       if (!ws.user.email) return this.fail(ws, 'Sua conta precisa de um e-mail para o recibo do pagamento.', 'email_required');
-      if (productId === 'founder') {
+      if (product.founder) {
         const ent = await this.store.getEntitlements(ws.user.id).catch(() => ({}));
-        if (ent && ent.is_founder) return this.fail(ws, 'Você já é Fundador do Reino. Obrigado!', 'already_founder');
-        if (await this.foundersCount() >= this.founderLimit) return this.fail(ws, 'As vagas do Pacote Fundador se esgotaram.', 'founder_sold_out');
+        if (ent && ent.founder_tier === 'legend') return this.fail(ws, 'Você já é Fundador Lendário. Obrigado!', 'already_founder');
+        if (ent && ent.is_founder && productId === 'founder') return this.fail(ws, 'Você já é Fundador do Reino. Obrigado!', 'already_founder');
+        const fo = await this.founderOpen();
+        if (!fo.open) return this.fail(ws, fo.message, fo.reason === 'sold_out' ? 'founder_sold_out' : 'founder_closed');
+        // dois PIX de Fundador abertos ao mesmo tempo poderiam ser pagos os dois
+        const open = this.store.findOpenPayment ? await this.store.findOpenPayment(ws.user.id, ['founder', 'founder_legend'], OPEN_ORDER_MS).catch(() => null) : null;
+        if (open) return this.fail(ws, 'Você já tem um pagamento de Fundador em aberto. Conclua esse pagamento ou aguarde 30 minutos para começar outro.', 'order_open');
       }
-      const ref = crypto.randomUUID();
+      const ref = crypto.randomUUID(), amount = priceOf(product, method);
       try {
-        if (this.store.createPayment) await this.store.createPayment({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref, amount_cents: product.amount_cents, status: 'pending' });
-        const charge = await this.provider.createCharge({ ref, userId: ws.user.id, productId, method, amountCents: product.amount_cents, title: product.title, email: ws.user.email });
-        return this.send(ws, { type: 'payment_charge', charge: { ...charge, id: ref, product_id: productId, amount_cents: product.amount_cents } });
+        if (this.store.createPayment) await this.store.createPayment({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref, amount_cents: amount, status: 'pending' });
+        const charge = await this.provider.createCharge({ ref, userId: ws.user.id, productId, method, amountCents: amount, title: product.title, email: ws.user.email });
+        return this.send(ws, { type: 'payment_charge', charge: { ...charge, id: ref, product_id: productId, amount_cents: amount } });
       } catch (e) {
         if (this.store.markPayment) await this.store.markPayment(this.provider.name, ref, 'failed').catch(() => {});
         if (e.code === 'provider_not_configured') return this.fail(ws, 'Pagamento real ainda não configurado neste servidor.', 'provider_not_configured');
@@ -113,6 +138,11 @@ class Payments {
       }
     }
     if (a === 'payment_card_pay') return this.cardPay(ws, m);
+    if (a === 'payment_history') {   // R103 · minhas compras (perfil)
+      const rows = this.store.listPayments ? await this.store.listPayments(ws.user.id, 30).catch(() => []) : [];
+      return this.send(ws, { type: 'payment_history', items: rows.filter(r => r.status !== 'failed').map(r => ({ product_id: r.product_id, title: (PRODUCTS[r.product_id] || {}).title || r.product_id,
+        method: r.method, amount_cents: r.amount_cents, status: r.status, created_at: r.created_at, paid_at: r.paid_at || null })) });
+    }
     if (a === 'payment_status') {
       const ref = String(m.charge_id || '');
       let row = this.store.getPayment ? await this.store.getPayment(this.provider.name, ref) : null;
@@ -187,8 +217,7 @@ class Payments {
         console.error('[pagamentos] valor/moeda não confere — direito NÃO liberado', ref, ev.amountCents, ev.currency, amount);
         return { ok: false, reason: 'amount_mismatch' };
       }
-      changed = await this.store.markPayment(this.provider.name, ref, 'paid');
-      if (changed && this.store.grantEntitlement) await this.store.grantEntitlement(changed.user_id, changed.product_id, this.provider.name);
+      changed = await this.payAndGrant(ref);
     } else if (ev.status === 'cancelled') {
       changed = await this.store.markPayment(this.provider.name, ref, 'cancelled');
     } else if (ev.status === 'refunded') {
@@ -207,6 +236,32 @@ class Payments {
     return { ok: true, changed: !!changed };
   }
 
+  // R103 · marca pago E entrega a vantagem juntos. Se a entrega falhar, o pedido continua pendente e a próxima
+  // notificação (ou o JÁ PAGUEI) tenta de novo — nunca fica "pago sem vantagem".
+  async payAndGrant(ref) {
+    const prov = this.provider.name;
+    if (this.store.payAndGrant) {
+      const r = await this.store.payAndGrant(prov, ref, prov);
+      if (!r || !r.missing) return r || null;
+    }
+    // banco sem a 0012: caminho antigo, desfazendo o "pago" se a entrega falhar
+    const changed = await this.store.markPayment(prov, ref, 'paid');
+    if (!changed) return null;
+    try { if (this.store.grantEntitlement) await this.store.grantEntitlement(changed.user_id, changed.product_id, prov); }
+    catch (e) {
+      console.error('[pagamentos] entrega falhou — pedido volta para pendente', ref, e && e.message);
+      if (this.store.revertPaid) await this.store.revertPaid(prov, ref).catch(() => {});
+      throw e;
+    }
+    return changed;
+  }
+  // R103 · entrega o que ficou pago sem vantagem (pedidos antigos). Chamado ao iniciar e de hora em hora.
+  async reconcile() {
+    if (!this.store.grantPaidMissing) return null;
+    try { const r = await this.store.grantPaidMissing(); if (r && r.granted) console.log('[pagamentos] entregues ' + r.granted + ' pagamento(s) que estavam sem vantagem'); return r; }
+    catch (e) { console.error('[pagamentos] reconciliação', e && e.message); return null; }
+  }
+
   // Webhook HTTP do provedor: valida, consulta o pagamento na API e aplica.
   async webhook(req, rawBody) {
     const ev = await this.provider.verifyWebhook(req, rawBody);
@@ -217,4 +272,4 @@ class Payments {
   }
 }
 
-module.exports = { Payments, PRODUCTS, METHODS, createProvider };
+module.exports = { Payments, PRODUCTS, METHODS, createProvider, priceOf };

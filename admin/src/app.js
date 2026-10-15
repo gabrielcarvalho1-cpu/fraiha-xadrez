@@ -13,6 +13,7 @@ const ROUTES = [
   { id: 'players', label: 'Jogadores', ico: '☺', view: V.players, every: 0 },
   { id: 'club', label: 'Clube', ico: '◆', view: V.club, every: 15000 },
   { id: 'founder', label: 'Fundador', ico: '♛', view: V.founder, every: 15000 },
+  { id: 'sales', label: 'Vendas', ico: '$', view: V.sales, every: 30000 },
   { sep: true },
   { id: 'audit', label: 'Admin Log', ico: '≡', view: V.audit, every: 10000 },
   { id: 'system', label: 'Sistema', ico: '⚙', view: V.system, every: 15000 },

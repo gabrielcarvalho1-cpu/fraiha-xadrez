@@ -1,6 +1,6 @@
 'use strict';
 // R31: identidade premium (avatar/ícone/título/moldura validados pelo servidor), Destaque social
-// (selo visível para os outros) e liberação de direitos por pagamento (Fundador = +30 dias de Club).
+// (selo visível para os outros) e liberação de direitos por pagamento (Fundador = +90 dias de Club, R103).
 const { startServer, client, check, summary } = require('./helpers.cjs');
 const { MemoryStore, extendClub } = require('../../online_v021/accounts/store');
 const Cosmetics = require('../../online_v021/accounts/cosmetics');
@@ -27,10 +27,10 @@ const Cosmetics = require('../../online_v021/accounts/cosmetics');
   await st.createProfile('u1', 'Rei', 'warrior');
   let e = await st.grantEntitlement('u1', 'founder', 'pix');
   const days = (new Date(e.club_expires_at) - Date.now()) / 86400e3;
-  check(e.is_founder && e.club_active && days > 29.9 && days < 30.1, 'Fundador: is_founder + 30 dias de Club (%s)'.replace('%s', days.toFixed(2)));
+  check(e.is_founder && e.club_active && days > 89.9 && days < 90.1, 'Fundador: is_founder + 90 dias de Club (%s)'.replace('%s', days.toFixed(2)));
   e = await st.grantEntitlement('u1', 'club_monthly', 'pix');
   const days2 = (new Date(e.club_expires_at) - Date.now()) / 86400e3;
-  check(days2 > 59.9 && days2 < 60.1, 'Club mensal soma 30 dias ao que resta (60)');
+  check(days2 > 119.9 && days2 < 120.1, 'Club mensal soma 30 dias ao que resta (120)');
   check((await st.grantEntitlement('u1', 'xyz', 'pix')) === null, 'produto desconhecido não libera nada');
   const pay = await st.createPayment({ user_id: 'u1', product_id: 'club_monthly', method: 'pix', provider: 'test', provider_ref: 'ch_1', amount_cents: 1990, status: 'pending' });
   check(pay.status === 'pending' && (await st.getPayment('test', 'ch_1')).product_id === 'club_monthly', 'pagamento criado e consultado');

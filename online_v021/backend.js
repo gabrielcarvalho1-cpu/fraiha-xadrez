@@ -83,6 +83,11 @@ class Backend {
     this.invites = new Invites({ send: (ws, o) => this.send(ws, o), backend: this });
     this.presence = new Presence({ send: (ws, o) => this.send(ws, o), backend: this });
     this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
+    // R103 · entrega pagamentos que ficaram "pagos sem vantagem": ao iniciar e de hora em hora
+    if (this.store && this.store.persistent) {
+      const rc = setTimeout(() => this.payments.reconcile(), 15000); if (rc.unref) rc.unref();
+      const ri = setInterval(() => this.payments.reconcile(), 3600e3); if (ri.unref) ri.unref();
+    }
     this.party = new Party({ send: (ws, o) => this.send(ws, o), backend: this });   // R35: MARCHA REAL / XEQUE online
     this.leaderboard = new Leaderboard({ send: (ws, o) => this.send(ws, o), backend: this });
     this.globalChat = new GlobalChat({ send: (ws, o) => this.send(ws, o), backend: this });
