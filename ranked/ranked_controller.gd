@@ -216,7 +216,7 @@ func _on_message(msg: Dictionary):
                 game.status = "PARTIDA ENCERRADA"
                 game.queue_redraw()
                 last_result = {"match_id": match_id, "mode": mode, "mode_name": mode_name, "outcome": "", "unknown": true,
-                    "reason_text": "A partida foi encerrada enquanto você estava sem conexão."}
+                    "reason_text": "A partida foi encerrada (o servidor reiniciou ou a conexão caiu). Ninguém ganhou nem perdeu nada."}
                 finished.emit(last_result)
         "match_result":
             if String(msg.get("match_id", "")) == match_id:

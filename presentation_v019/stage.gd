@@ -1672,4 +1672,4 @@ func _on_party_message(msg: Dictionary):
         "party_none":
             for game in ["marcha", "xeque"]:
                 var ui = _party_ui(game)
-                if ui != null and bool(ui.get("online")): ui.online_lost("A partida online terminou (o servidor reiniciou ou ela expirou).")
+                if ui != null and bool(ui.get("online")): ui.online_lost("A partida online foi encerrada (o servidor reiniciou ou ela expirou). Ninguém ganhou nem perdeu nada.")

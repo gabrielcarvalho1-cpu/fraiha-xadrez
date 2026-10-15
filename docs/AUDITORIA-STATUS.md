@@ -25,7 +25,7 @@
 - [ ] Loja: avatares novos (depende de arte)
 - [x] R120 · Passe da Temporada: mensal, 30 níveis, faixa grátis + faixa Club (sem migration nova)
 - [ ] Códigos de criador, Discord, CrazyGames
-- [ ] Partidas que sobrevivem a reinício do servidor
+- [x] Reinício do servidor: decidido manter como está — a partida é encerrada e ninguém perde nada (aviso deixa isso claro)
 
 ## Depende do dono
 - [ ] MEI/CNPJ · verificação de idade · banco de testes separado · Render Starter
