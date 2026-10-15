@@ -178,6 +178,7 @@ func _back():
         "dm": close_dm()
         "invite_pick": _show("invite_friends" if not picker_game.is_empty() else invite_return)
         "invite_friends": close()
+        "ref": _show("list")
         "profile": _show("search" if not last_query.is_empty() and profile.get("from_search", false) else "list")
         _: _show("list")
 
@@ -228,6 +229,10 @@ func _on_message(msg: Dictionary):
         return
     if type == "presence_snapshot" or type == "presence_update" or type == "link_lost":
         _on_presence(msg)
+        return
+    if type == "ref_info":   # R105 · convite por link
+        ref_info = msg
+        if screen == "ref": _show("ref")
         return
     if not type.begins_with("social_"): return
     match type:
@@ -707,6 +712,7 @@ func _build_body(which: String, narrow: bool):
         "confirm": _build_confirm()
         "dm": _build_dm()
         "invite_pick": _build_invite_pick()
+        "ref": _build_ref(narrow)
         "invite_friends": _build_invite_friends()
     if reconnecting and is_instance_valid(notice) and not notice.visible: notice_text("Reconectando…", GOLD)
     dim.show(); panel.show()
@@ -718,6 +724,11 @@ func _build_list(_narrow_layout: bool):
     if not has_list:
         _label(box, "Carregando amigos…" if account.has_profile() else "Conectando sua conta ao servidor...", 15, GOLD, true)
         return
+    # R105 · convite por link (WhatsApp) com recompensa
+    var inv := _button(box, "CONVIDAR AMIGOS · GANHE 7 DIAS DE CLUB" if not _narrow_layout else "CONVIDAR · +7 DIAS DE CLUB", open_ref, true, false, "btn_verde", "ico_espadas")
+    inv.clip_text = true
+    inv.name = "OpenReferral"
+    inv.custom_minimum_size.y = 50
     var friends: Array = data["friends"]
     var groups = {"online": [], "in_match": [], "offline": []}
     for f in friends: groups.get(String(f.get("presence", "offline")), groups["offline"]).append(f)
@@ -751,6 +762,60 @@ func _build_list(_narrow_layout: bool):
         for p in data["blocked"]:
             var uid = String(p.get("user_id", ""))
             _row(p, "bloqueado", DIM_TEXT, [["DESBLOQUEAR", func(): _act("unblock", uid)]])
+
+# ---------- R105 · CONVIDAR AMIGOS (link + recompensa por indicação) ----------
+const InviteLink := preload("res://social/invite_link.gd")
+var ref_info: Dictionary = {}
+
+func open_ref():
+    if not is_open(): open()
+    ref_info = {}
+    _show("ref")
+    if not _send({"type": "ref_get"}): notice_text("Sem conexão. Tente de novo em instantes.")
+
+func _build_ref(_narrow_layout: bool):
+    _label(box, "CONVIDE SEUS AMIGOS", 22, GOLD, true).name = "RefTitle"
+    var rules: Dictionary = ref_info.get("rules", {}) if ref_info.get("rules") is Dictionary else {}
+    var games := int(rules.get("games", 5)); var fd := int(rules.get("friend_days", 7)); var pd := int(rules.get("purchase_days", 30)); var cap := int(rules.get("cap", 10))
+    var how := _label(box, "Mande o seu link. Quando o amigo criar a conta por ele e terminar %d partidas online, VOCÊS DOIS ganham %d dias de Club FRAIHA. Se ele apoiar o jogo com uma compra, você ganha mais %d dias." % [games, fd, pd], 16, TEXT, true)
+    how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    how.name = "RefRules"
+    if ref_info.is_empty():
+        _label(box, "Preparando o seu link…", 15, GOLD, true)
+        return
+    var code := String(ref_info.get("code", ""))
+    if not bool(ref_info.get("available", false)) or code.is_empty():
+        _label(box, String(ref_info.get("message", "O convite com recompensa ainda não está ligado neste servidor. Você pode chamar os amigos pelo endereço do jogo.")), 15, DIM_TEXT, true)
+        code = ""
+    var link_text := InviteLink.link(code) if not code.is_empty() else InviteLink.SITE
+    var ll := _label(box, link_text, 15, Color("9fe0a8"), true)
+    ll.name = "RefLink"
+    ll.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+    var row := HFlowContainer.new()
+    row.add_theme_constant_override("h_separation", 8)
+    row.add_theme_constant_override("v_separation", 8)
+    row.alignment = FlowContainer.ALIGNMENT_CENTER
+    box.add_child(row)
+    var wa := _button(row, "ENVIAR NO WHATSAPP", func():
+        if code.is_empty(): OS.shell_open("https://wa.me/?text=" + ("Bora jogar xadrez comigo no FRAIHA? " + InviteLink.SITE).uri_encode())
+        else: InviteLink.open_whatsapp(code), true, false, "btn_verde", "ico_balao")
+    wa.name = "RefWhatsApp"
+    var cp := _button(row, "COPIAR LINK", func():
+        DisplayServer.clipboard_set(link_text)
+        notice_text("Link copiado! Cole na conversa com seu amigo.", Color("9fe0a8")), false, false, "btn_azul")
+    cp.name = "RefCopy"
+    if OS.has_feature("web") and not code.is_empty():
+        var sh := _button(row, "COMPARTILHAR", func():
+            if not InviteLink.native_share(code):
+                InviteLink.copy(code)
+                notice_text("Link copiado! Cole onde quiser.", Color("9fe0a8")), false, false, "btn_azul")
+        sh.name = "RefShare"
+    if not code.is_empty():
+        var st := _label(box, "Amigos que entraram pelo seu link: %d  ·  já completaram %d partidas: %d  ·  prêmios este mês: %d de %d" % [int(ref_info.get("invited", 0)), games, int(ref_info.get("qualified", 0)), int(ref_info.get("rewarded_month", 0)), cap], 14, DIM_TEXT, true)
+        st.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        st.name = "RefStats"
+    var fine := _label(box, "Vale para contas novas criadas pelo link. Partidas online contra outra pessoa (Casual, Ranqueada, XEQUE e Marcha com amigos); desistências logo no começo não contam. Até %d amigos premiados por mês." % cap, 13, DIM_TEXT, true)
+    fine.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 func _build_search():
     _label(box, "Resultados para \"%s\"" % last_query, 15, GOLD)

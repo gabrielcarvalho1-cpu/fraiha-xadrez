@@ -293,6 +293,10 @@ class Party {
     { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('finished', room.game === 'xeque' ? 'xeque' : 'marcha', room.game, reason); }
     this.broadcast(room, { ev: 'end', reason });
     this.recordStats(room);
+    // R105 · indicação: mesa com pelo menos 2 pessoas (contas) conta como partida online
+    const R = this.backend && this.backend.referrals;
+    const humans = room.seats.filter(s => s.kind === 'human' && /^[0-9a-f-]{36}$/i.test(String(s.uid || '')));
+    if (R && new Set(humans.map(s => s.uid)).size >= 2) for (const s of humans) R.onGame(s.uid);
     for (const s of room.seats) if (s.kind === 'human' && this.byUser.get(s.uid) === room.id) this.byUser.delete(s.uid);
     for (const s of room.seats) if (s.kind === 'human' && this.backend && this.backend.presenceChanged) this.backend.presenceChanged(s.uid);
   }

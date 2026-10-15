@@ -224,6 +224,13 @@ class Ranked {
     }
     match.saved = saved;
     if (!this.rated && match.result) this.recordCasual(match);
+    // R105 · indicação: partida online terminada contra outra pessoa conta para a conta convidada
+    const R = this.backend && this.backend.referrals;
+    if (R && match.result && ((match.pos && match.pos.ply) || 0) >= 10) {   // pelo menos 5 lances de cada lado (desistência na hora não conta)
+      const { UUID_RE } = require('../accounts/store');
+      const ids = ['w', 'b'].map(c => String(match.players[c].userId || ''));
+      if (ids.every(id => UUID_RE.test(id)) && ids[0] !== ids[1]) for (const id of ids) R.onGame(id);
+    }
     for (const c of ['w', 'b']) {
       const uid = match.players[c].userId, ws = this.sockets.get(uid);
       if (ws && match.players[c].connected) this.send(ws, match.resultFor(c, saved));

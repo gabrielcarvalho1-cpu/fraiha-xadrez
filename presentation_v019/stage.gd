@@ -563,7 +563,18 @@ func _setup_account():
     account.server_message.connect(func(m):
         if String(m.get("type", "")) == "acct_suspended":
             if account_ui != null and account_ui.is_open(): account_ui.hide_ui()
-            hub.show_notice("CONTA SUSPENSA", String(m.get("message", "Sua conta está suspensa."))))
+            hub.show_notice("CONTA SUSPENSA", String(m.get("message", "Sua conta está suspensa.")))
+        elif String(m.get("type", "")) == "ref_reward":   # R105 · prêmio da indicação
+            hub.show_notice("PRESENTE DO CONVITE", String(m.get("message", "Você ganhou dias de Club FRAIHA!"))))
+    # R105 · aberto pelo link de convite de um amigo, ainda sem conta: boas-vindas explicando o prêmio (uma vez)
+    if not account.invite_code.is_empty() and not account.signed_in():
+        var seen := ConfigFile.new()
+        seen.load("user://convite.cfg")
+        if not bool(seen.get_value("convite", "welcomed", false)):
+            seen.set_value("convite", "welcomed", true)
+            seen.save("user://convite.cfg")
+            get_tree().create_timer(1.2).timeout.connect(func():
+                hub.show_notice("VOCÊ FOI CONVIDADO!", "Um amigo te chamou para o FRAIHA Xadrez.\n\nCrie sua conta e termine 5 partidas online: você e ele ganham 7 dias de Club FRAIHA."))
     account_chip = Button.new()
     account_chip.name = "AccountChip"
     account_chip.add_theme_font_size_override("font_size", 20)

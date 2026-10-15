@@ -21,6 +21,7 @@ const { ModeControls, CLOSED_MESSAGE } = require('./admin/controls');   // FRAIH
 const Cosmetics = require('./accounts/cosmetics');
 const Status = require('./accounts/status');   // R55 · status do perfil
 const { Reports } = require('./moderation/reports');   // R104 · denúncias e suspensão
+const { Referrals } = require('./social/referrals');   // R105 · convite por link e indicação
 
 const GUEST_TTL_MS = 24 * 3600e3;
 const SESSION_REVALIDATE_MS = 60e3;
@@ -85,6 +86,7 @@ class Backend {
     this.presence = new Presence({ send: (ws, o) => this.send(ws, o), backend: this });
     this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
     this.reports = new Reports({ backend: this });   // R104
+    this.referrals = new Referrals({ backend: this, send: (ws, o) => this.send(ws, o) });   // R105
     this.chat.reports = this.reports;
     // R103 · entrega pagamentos que ficaram "pagos sem vantagem": ao iniciar e de hora em hora
     if (this.store && this.store.persistent) {
@@ -467,6 +469,7 @@ class Backend {
         }
       }
       if (a.startsWith('payment_')) return this.payments.handle(ws, m);
+      if (a.startsWith('ref_')) return this.referrals.handle(ws, m);   // R105
       if (a.startsWith('bot_')) {
         try { return await this.bots.handle(ws, m); }
         catch (e) { if (e === CANCELLED) return; console.error('bots', a, e && e.message); return this.send(ws, { type: 'bot_error', code: 'server_error', message: 'Erro temporário no servidor. Tente novamente.' }); }
@@ -517,6 +520,7 @@ class Backend {
         const terms = typeof m.terms === 'string' && m.terms.length <= 40 ? { version: m.terms, accepted_at: new Date().toISOString() } : null;
         const r = await op.wait(() => this.store.createProfile(accountId, v.nickname, String(m.avatar_id || 'warrior'), terms));
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'profile_error' });
+        if (m.ref) await this.referrals.onProfileCreated(accountId, m.ref);   // R105 · conta nova pelo link de convite
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
         return this.presence.snapshot(ws);
       }

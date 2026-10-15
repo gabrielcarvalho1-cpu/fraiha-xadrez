@@ -3,6 +3,8 @@ extends Node
 ## Senhas vão direto para o Supabase e nunca são guardadas. Só o refresh token
 ## da sessão fica no navegador (como qualquer login web) para evitar novo login.
 signal changed
+const InviteLink := preload("res://social/invite_link.gd")
+var invite_code := ""   # R105 · código do link de convite guardado neste aparelho (vazio = nenhum)
 signal notice(text: String, is_error: bool)
 signal recovery_started
 signal password_saved                         # senha definida/alterada no Supabase (mesmo usuário)
@@ -98,6 +100,8 @@ func _set_casual_modes(list) -> bool:
     return changed_now
 
 func _ready():
+    InviteLink.capture()                     # R105 · ?convite=CODIGO na página
+    invite_code = InviteLink.stored_code()
     var config = ConfigFile.new()
     if config.load("res://online.cfg") == OK:
         supabase_url = String(config.get_value("accounts", "supabase_url", "")).trim_suffix("/")
@@ -408,6 +412,8 @@ func create_profile(nick: String, avatar := "warrior"):
         return
     var msg := {"type": "acct_create_profile", "nickname": nick.strip_edges(), "avatar_id": avatar}
     if terms_accepted: msg["terms"] = preload("res://ui_v022/legal_text.gd").ATUALIZADO   # versão aceita (data dos Termos)
+    var ref := InviteLink.stored_code()   # R105 · conta criada pelo link de convite de um amigo
+    if not ref.is_empty(): msg["ref"] = ref
     if not _send(msg):
         notice.emit("Conectando ao servidor… tente novamente em instantes.", true)
 
@@ -563,6 +569,9 @@ func _receive(msg: Dictionary):
         auth_retried = false
         _log("acct_state recebido (perfil: %s, persistente: %s)" % [msg.get("profile") is Dictionary, bool(msg.get("persistent", false))])
         profile = msg.profile if msg.get("profile") is Dictionary else {}
+        if not profile.is_empty() and not invite_code.is_empty():   # R105 · já usado (ou conta antiga): esquece
+            InviteLink.clear()
+            invite_code = ""
         ranked = msg.ranked if msg.get("ranked") is Dictionary else {}
         needs_nickname = bool(msg.get("needs_nickname", false))
         persistent_backend = bool(msg.get("persistent", false))

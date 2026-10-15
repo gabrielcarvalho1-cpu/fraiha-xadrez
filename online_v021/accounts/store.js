@@ -319,6 +319,36 @@ class MemoryStore {
   async addFriendship(a, b) { const [x, y] = [a, b].sort(); this.social.friends.add(x + '|' + y); }
   async removeFriendship(a, b) { const [x, y] = [a, b].sort(); this.social.friends.delete(x + '|' + y); }
   async addBlock(a, b) { this.social.blocks.add(a + '|' + b); }
+  // ---------- R105 · indicação (em memória: desenvolvimento/testes) ----------
+  async getRefCode(userId) { const p = this.profiles.get(userId); return p ? (p.ref_code || null) : null; }
+  async setRefCode(userId, code) {
+    for (const p of this.profiles.values()) if (p.ref_code === code) return false;
+    const p = this.profiles.get(userId); if (!p) return false;
+    if (!p.ref_code) p.ref_code = code;
+    return p.ref_code === code;
+  }
+  async findByRefCode(code) { for (const p of this.profiles.values()) if (p.ref_code === code && p.account_status !== 'deleted') return { user_id: p.user_id, nickname: p.nickname }; return null; }
+  async createReferral(referredId, referrerId) {
+    this.referrals = this.referrals || new Map();
+    if (this.referrals.has(referredId)) return null;
+    const r = { referred_id: referredId, referrer_id: referrerId, games: 0, created_at: new Date().toISOString(), qualified_at: null, rewarded_at: null, purchase_rewarded_at: null };
+    this.referrals.set(referredId, r); return { ...r };
+  }
+  async getReferral(referredId) { const r = (this.referrals || new Map()).get(referredId); return r ? { ...r } : null; }
+  // patch só se `when` bater (ex.: { rewarded_at: null }) — evita premiar duas vezes
+  async updateReferral(referredId, patch, when = {}) {
+    const r = (this.referrals || new Map()).get(referredId); if (!r) return null;
+    for (const [k, v] of Object.entries(when)) if (r[k] !== v) return null;
+    Object.assign(r, patch); return { ...r };
+  }
+  async listReferralsBy(referrerId) { return [...(this.referrals || new Map()).values()].filter(r => r.referrer_id === referrerId).map(r => ({ ...r })); }
+  async grantClubDays(userId, days, source) {
+    this.entitlements = this.entitlements || new Map();
+    const e = this.entitlements.get(userId) || { is_founder: false, club_active: false, club_expires_at: null };
+    e.club_expires_at = extendClub(e.club_active ? e.club_expires_at : null, days);
+    e.club_active = true; if (!e.club_source) e.club_source = source || 'referral';
+    this.entitlements.set(userId, e); return e.club_expires_at;
+  }
   // ---------- R104 · denúncias e suspensão (em memória: desenvolvimento/testes) ----------
   async createReport(row) {
     this.reports = this.reports || [];
@@ -720,6 +750,41 @@ class SupabaseStore {
   async addFriendship(a, b) { const [x, y] = [a, b].sort(); return this._insert('friendships', { user_a: x, user_b: y }); }
   async removeFriendship(a, b) { const [x, y] = [a, b].sort(); return this._delete('friendships', { user_a: x, user_b: y }); }
   async addBlock(a, b) { return this._insert('blocks', { blocker: a, blocked: b }); }
+  // ---------- R105 · indicação (0014) ----------
+  async getRefCode(userId) {
+    const rows = await this.req('/profiles?user_id=eq.' + encodeURIComponent(userId) + '&select=ref_code');
+    return rows[0] ? (rows[0].ref_code || null) : null;
+  }
+  async setRefCode(userId, code) {
+    try {
+      const rows = await this.req('/profiles?user_id=eq.' + encodeURIComponent(userId) + '&ref_code=is.null', { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ ref_code: code }) });
+      return !!rows[0];
+    } catch (e) { if (e.code === '23505') return false; throw e; }
+  }
+  async findByRefCode(code) {
+    const rows = await this.req('/profiles?ref_code=eq.' + encodeURIComponent(code) + '&account_status=neq.deleted&select=user_id,nickname&limit=1');
+    return rows[0] || null;
+  }
+  async createReferral(referredId, referrerId) {
+    const rows = await this.req('/referrals', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ referred_id: referredId, referrer_id: referrerId }) });
+    return rows[0] || null;
+  }
+  async getReferral(referredId) {
+    const rows = await this.req('/referrals?referred_id=eq.' + encodeURIComponent(referredId) + '&select=*');
+    return rows[0] || null;
+  }
+  async updateReferral(referredId, patch, when = {}) {
+    let q = '/referrals?referred_id=eq.' + encodeURIComponent(referredId);
+    for (const [k, v] of Object.entries(when)) q += '&' + k + (v === null ? '=is.null' : '=eq.' + encodeURIComponent(v));
+    const rows = await this.req(q, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) });
+    return rows[0] || null;
+  }
+  async listReferralsBy(referrerId) {
+    return this.req('/referrals?referrer_id=eq.' + encodeURIComponent(referrerId) + '&select=*&order=created_at.desc&limit=500');
+  }
+  async grantClubDays(userId, days, source) {
+    return this.req('/rpc/fraiha_grant_club_days', { method: 'POST', body: JSON.stringify({ p_user: userId, p_days: days, p_source: source || 'referral' }) });
+  }
   // ---------- R104 · denúncias (0013) e suspensão ----------
   async createReport(row) {
     const rows = await this.req('/reports', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });

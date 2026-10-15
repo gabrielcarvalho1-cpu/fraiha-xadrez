@@ -221,6 +221,7 @@ class Payments {
         return { ok: false, reason: 'amount_mismatch' };
       }
       changed = await this.payAndGrant(ref);
+      if (changed && this.backend.referrals) this.backend.referrals.onPurchase(changed.user_id);   // R105 · +30 dias para quem convidou
     } else if (ev.status === 'cancelled') {
       changed = await this.store.markPayment(this.provider.name, ref, 'cancelled');
     } else if (ev.status === 'refunded') {
