@@ -78,11 +78,12 @@ func _section(parent: Control, t: String, extra := "") -> HBoxContainer:
 	var l := label(t, 17, GOLD)
 	row.add_child(l)
 	if not extra.is_empty():
-		var sp := Control.new()
-		sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(sp)
-		var e := label(extra, 13, DIM, true)
+		# o texto da direita encolhe/corta antes de alargar o painel (celular estreito)
+		var e := label(extra, 11 if narrow() else 13, DIM, true)
 		e.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		e.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		e.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		e.clip_text = true
 		row.add_child(e)
 	var line := ColorRect.new()
 	line.color = Color(GOLD.r, GOLD.g, GOLD.b, 0.35)
@@ -150,7 +151,8 @@ func _balance(parent: Control, st: Dictionary, logged: bool):
 	if not client.available():
 		col.add_child(_wrap(label("Abrindo o seu cofre…" if st.is_empty() else "As Coroas ainda não estão ligadas neste servidor. Volte em breve!", 16, CREAM)))
 		return
-	var bal := label("%s COROAS" % client.fmt(int(st.get("balance", 0))), 30, GOLD)
+	var bal := label("%s COROAS" % client.fmt(int(st.get("balance", 0))), 22 if narrow() else 30, GOLD)
+	bal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bal.name = "CrownsBalanceValue"
 	bal.add_theme_constant_override("outline_size", 6)
 	bal.add_theme_color_override("font_outline_color", Color(0.16, 0.08, 0.0))

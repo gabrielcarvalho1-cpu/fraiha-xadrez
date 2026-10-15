@@ -30,14 +30,13 @@ func setup(p_hub, acc, p_client):
 	g.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	g.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	top_row.add_child(g)
-	balance_label = label("", 22, GOLD)
+	balance_label = label("", 17 if narrow() else 22, GOLD)
+	balance_label.clip_text = true
+	balance_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	balance_label.name = "StoreBalance"
 	balance_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	top_row.add_child(balance_label)
-	var sp := Control.new()
-	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_row.add_child(sp)
-	var how := button("COMO GANHAR", 13)
+	var how := button("COMO GANHAR", 11 if narrow() else 13)
 	how.pressed.connect(func(): close(); client.open_panel())
 	top_row.add_child(how)
 	var tabs := GridContainer.new()   # celular estreito: 2 × 2 (os nomes cabem inteiros)
@@ -63,10 +62,6 @@ func setup(p_hub, acc, p_client):
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(scroll)
-	var note := label("Itens só de visual: nada na loja dá vantagem no jogo. Coroas se ganham jogando.", 11, DIM, true)
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body.add_child(note)
 	client.store_changed.connect(func(): if visible: _rebuild())
 	client.changed.connect(func(): if visible: _refresh_balance())
 	client.store_result.connect(_on_result)
@@ -92,7 +87,7 @@ func _layout():
 func _refresh_balance():
 	if not client.logged_in(): balance_label.text = "ENTRE NA SUA CONTA"
 	elif not client.available() and not client.store_available(): balance_label.text = "COROAS"
-	else: balance_label.text = "%s COROAS" % client.fmt(client.balance())
+	else: balance_label.text = ("%s" if narrow() else "%s COROAS") % client.fmt(client.balance())   # celular: a coroa ao lado já diz o que é
 
 func _rebuild():
 	if scroll == null: return
@@ -118,6 +113,13 @@ func _rebuild():
 			"emote": "Reações para usar nas partidas online chegam em breve."}.get(tab, "Em breve."))
 		return
 	for it in items: grid.add_child(_card(it))
+	# aviso no fim da lista (fora dela encostava na moldura do celular)
+	var note := label("Itens só de visual: nada na loja dá vantagem no jogo. Coroas se ganham jogando.", 11, DIM, true)
+	note.name = "StoreNote"
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(note)
 
 func _info(t: String):
 	var l := label(t, 16, CREAM, true)
@@ -147,7 +149,7 @@ func _card(it: Dictionary) -> Control:
 	p.add_child(v)
 	var kind := label("TÍTULO", 11, DIM, true)
 	v.add_child(kind)
-	var name_l := label(String(it.name), 20, GOLD)
+	var name_l := label(String(it.name), 17 if narrow() else 20, GOLD)
 	name_l.add_theme_constant_override("outline_size", 5)
 	name_l.add_theme_color_override("font_outline_color", Color(0.10, 0.05, 0.0))
 	name_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

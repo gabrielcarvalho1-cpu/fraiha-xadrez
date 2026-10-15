@@ -59,6 +59,15 @@ func run():
 	check(used.size() == 1 and used[0].text == "EM USO", "título em uso marcado")
 	var falta = find_named(root, "StoreBtn_imperador")
 	check(falta.size() == 1 and falta[0].disabled, "sem saldo: FALTAM N")
+	# nada sai da caixa da moldura (celular: a moldura é estreita)
+	var box: Rect2 = cl.store_panel._body_rect.grow(1.0)
+	var fora := []
+	for n in find_named(root, "Store") + find_named(root, "StoreTab_"):
+		var r: Rect2 = n.get_global_rect()
+		if n.get_parent() is ScrollContainer or String(n.name).begins_with("StoreGrid"): continue
+		if r.size.x > 0 and (r.position.x < box.position.x or r.end.x > box.end.x): fora.append(String(n.name))
+	check(fora.is_empty(), "loja dentro da moldura (fora: %s)" % ", ".join(fora))
+	check(cl.store_panel.body.size.x <= cl.store_panel._body_rect.size.x + 1.0, "corpo não alarga (%.0f de %.0f)" % [cl.store_panel.body.size.x, cl.store_panel._body_rect.size.x])
 	await shot("01_loja_titulos")
 	find_named(root, "StoreBtn_cavaleiro")[0].pressed.emit()
 	await frames(4)

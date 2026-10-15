@@ -66,6 +66,12 @@ func run():
 	await frames(8)
 	check(find_named(root, "CrownsMissions").size() == 1, "painel com as missões do dia")
 	check(find_named(root, "Mission_play3").size() == 1, "missão feita aparece")
+	var box: Rect2 = hub.crowns_client().panel._body_rect.grow(1.0)
+	var fora := []
+	for n in find_named(root, "Crowns") + find_named(root, "Mission_"):
+		var r: Rect2 = n.get_global_rect()
+		if r.size.x > 0 and (r.position.x < box.position.x or r.end.x > box.end.x): fora.append(String(n.name))
+	check(fora.is_empty(), "painel dentro da moldura (fora: %s)" % ", ".join(fora))
 	await shot("02_painel")
 	hub.crowns_client().panel.close()
 	await frames(4)
