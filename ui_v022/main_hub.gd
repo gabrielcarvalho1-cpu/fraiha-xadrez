@@ -2604,6 +2604,7 @@ func open_club():
 var marcha = null
 var xeque = null
 func open_xeque():
+    if not await preload("res://web_content/conteudo_extra.gd").ensure("XEQUE"): return   # R115
     if xeque == null:
         xeque = load("res://xeque/xeque_ui.gd").new()
         xeque.setup(self, get_parent())
@@ -2613,6 +2614,7 @@ func open_xeque():
     xeque.open()
 
 func open_marcha():
+    if not await preload("res://web_content/conteudo_extra.gd").ensure("MARCHA REAL"): return   # R115
     if marcha == null:
         marcha = load("res://marcha/marcha_ui.gd").new()
         marcha.setup(self, get_parent())

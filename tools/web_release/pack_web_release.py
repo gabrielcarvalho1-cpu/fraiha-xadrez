@@ -34,6 +34,7 @@ import fingerprint_web
 import ambiente_web
 import gl_ids_reuse
 import audio_samples_release
+import conteudo_extra
 
 PART = 19922944
 INDEX = ["index.html", "index.js", "index.wasm", "index.pck", "index.png", "index.icon.png",
@@ -102,6 +103,53 @@ def files_needed(export_dir, web_dir, fp=None):
 
 
 AMB_META = "fraiha-ambiente"
+CONTEUDO_META = "fraiha-conteudo"
+
+
+def pck_paths(path):
+    """Lista os caminhos guardados num .pck do Godot 4 (formato 3)."""
+    import struct
+    with open(path, "rb") as f:
+        d = f.read()
+    if d[:4] != b"GDPC":
+        raise SystemExit("ERRO: %s não é um pacote Godot" % path)
+    ver = struct.unpack_from("<I", d, 4)[0]
+    if ver < 3:
+        raise SystemExit("ERRO: formato de pacote inesperado (%d) em %s" % (ver, path))
+    pos = struct.unpack_from("<Q", d, 32)[0]
+    n = struct.unpack_from("<I", d, pos)[0]; pos += 4
+    out = []
+    for _ in range(n):
+        l = struct.unpack_from("<I", d, pos)[0]; pos += 4
+        out.append(d[pos:pos + l].rstrip(b"\0").decode("utf-8").replace("res://", "")); pos += l + 36
+    return out
+
+
+def conteudo_plan(export_dir):
+    """R115 · pacote principal SEM o conteúdo extra + conteudo.pck COM ele (fail-closed nos dois sentidos)."""
+    import fnmatch
+    main = pck_paths(os.path.join(export_dir, "index.pck"))
+    def is_extra(p):
+        return any(fnmatch.fnmatchcase(p, pat) for pat in conteudo_extra.PATTERNS)
+    vazou = [p for p in main if is_extra(p)]
+    cp = os.path.join(export_dir, "conteudo.pck")
+    if not os.path.isfile(cp):
+        raise SystemExit("ERRO: conteudo.pck ausente — exporte também: --export-pack \"Web Conteudo\" <export>/conteudo.pck"
+                         + (" (o pacote principal ainda tem o conteúdo extra: rode tools/web_release/conteudo_extra.py e exporte de novo)" if vazou else ""))
+    if vazou:
+        raise SystemExit("ERRO: o pacote principal ainda tem conteúdo extra (%s…): rode tools/web_release/conteudo_extra.py e exporte de novo" % vazou[0])
+    extra = [p for p in pck_paths(cp) if p.endswith(".import") and is_extra(p)]
+    esperados = len(conteudo_extra.files())
+    if len(extra) != esperados:
+        raise SystemExit("ERRO: conteudo.pck incompleto (%d de %d arquivos)" % (len(extra), esperados))
+    name = "index-p%s.pck" % fingerprint_web._sha_files([cp])[:fingerprint_web.HASH_LEN]
+    return name, cp, len(extra)
+
+
+def inject_conteudo(html, name, size):
+    if 'name="%s"' % CONTEUDO_META in html:
+        raise SystemExit("ERRO: index.html já tem a marca do conteúdo extra")
+    return html.replace("<head>", '<head>\n<meta name="%s" content="%s" data-size="%d">' % (CONTEUDO_META, name, size), 1)
 
 
 def inject_ambiente(html, amb):
@@ -134,6 +182,10 @@ def main(argv):
     if tq.returncode != 0:
         raise SystemExit("ERRO: imagens fora da qualidade aprovada — rode tools/web_release/texture_quality.py e exporte de novo.\n" + tq.stdout[-800:])
     fp = None if legacy else fingerprint_web.plan(export_dir)
+    cont = None
+    if fp is not None:
+        cont = conteudo_plan(export_dir)          # R115 · fail-closed
+        fp[0][cont[0]] = cont[1]
     files = files_needed(export_dir, web_dir, fp)
     if fp is not None:
         html = fp[1]
@@ -142,6 +194,8 @@ def main(argv):
             html = f.read()
     html = inject_gl_recovery(html, web_dir)          # valida ANTES de criar qualquer coisa
     html = inject_ambiente(html, ambiente)
+    if cont is not None:
+        html = inject_conteudo(html, cont[0], os.path.getsize(cont[1]))
     if os.path.exists(out) and os.listdir(out):
         raise SystemExit("ERRO: pasta de saída já existe e não está vazia: " + out)
     os.makedirs(out, exist_ok=True)
@@ -150,6 +204,7 @@ def main(argv):
              "# R94 correcao GL IDs: %s - index.js %s" % (gl["estado"], gl["sha_depois"]),
              "# R99 liberacao das amostras de audio: %s - index.js %s" % (au["estado"], au["sha_depois"]),
              "# R106 imagens WebP qualidade %s; musicas 96 kbps" % "0.75",
+             "# R115 conteudo extra (baixa depois da Home): %s" % (("%s - %d arquivos" % (cont[0], cont[2])) if cont else "nao (legado)"),
              "# caminho  tamanho  SHA256 — TODOS obrigatórios no bucket (o MONTAR-UPLOAD confere cada um)"]
     if fp is not None:
         lines.insert(1, "# R55.5 nomes com SHA-256: motor %s · pacote %s · index.html sobe POR ULTIMO" % (fp[2]["executable"], fp[2]["mainPack"]))

@@ -131,6 +131,8 @@ func refresh_music():
     var theme: String = stage.game.visual_theme if stage.mode in ["local","bot","online","casual"] else "wood"
     var path: String = preload("res://cosmetics/theme_catalog.gd").get_theme(theme).music_path
     if not music_override.is_empty(): path = music_override
+    # R115 · Web: música de liga que ainda não chegou (conteúdo extra) toca a da Madeira por enquanto
+    if not ResourceLoader.exists(path): path = preload("res://cosmetics/theme_catalog.gd").get_theme("wood").music_path
     if path == music_path: return
     if web_music:
         # R84 · Web: a música vai para o <audio> do navegador em PEDAÇOS (antes ia o arquivo inteiro em base64 numa

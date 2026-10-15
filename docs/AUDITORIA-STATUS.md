@@ -18,7 +18,7 @@
 - [~] Tutorial de xadrez — cancelado (tráfego para quem já joga xadrez)
 
 ## Próximos (Fase 3, nesta ordem)
-- [ ] Carregamento mais rápido: primeira abertura com ~25 MB (resto baixa depois)
+- [x] R115 · Carregamento mais rápido: primeira abertura com ~25 MB (antes ~51 MB); XEQUE, MARCHA e ligas baixam depois
 - [ ] Loja de Coroas + torneios de XEQUE / Marcha
 - [ ] Passe de temporada
 - [ ] Códigos de criador, Discord, CrazyGames

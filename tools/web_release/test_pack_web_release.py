@@ -27,7 +27,7 @@ FAKE_JS = ("var GL={counter:1,buffers:[],textures:[],vaos:[],"
            + "".join(__import__("audio_samples_release").DEPENDE) + __import__("audio_samples_release").CREATE_ORIG)
 
 
-def make_pck(features="staging", cfg=CFG, pad=b""):
+def make_pck(features="staging", cfg=CFG, pad=b"", extra_files=None):
     """PCK mínimo do Godot 4 (formato 3) com project.binary (_custom_features) + online.cfg + um arquivo de enchimento."""
     import struct
     pb = b""
@@ -35,7 +35,7 @@ def make_pck(features="staging", cfg=CFG, pad=b""):
         k, v = b"_custom_features", features.encode()
         val = struct.pack("<II", 4, len(v)) + v + b"\0" * (-len(v) % 4)
         pb = struct.pack("<I", 1) + struct.pack("<I", len(k)) + k + struct.pack("<I", len(val)) + val
-    files = [("res://project.binary", pb), ("res://online.cfg", cfg.encode()), ("res://pad.bin", pad)]
+    files = [("res://project.binary", pb), ("res://online.cfg", cfg.encode()), ("res://pad.bin", pad)] + list(extra_files or [])
     base = 4 + 4 * 4 + 4 + 8 + 8 + 16 * 4
     data, entries, off = b"", [], 0
     for path, content in files:
@@ -50,7 +50,13 @@ def make_pck(features="staging", cfg=CFG, pad=b""):
     return head + data + d
 
 
-def fake_tree(base, with_voice=True, big=False, pck_bytes=None, features="staging", cfg=CFG):
+def make_conteudo():
+    """R115 · conteudo.pck mínimo: um .import para cada arquivo do conteúdo extra."""
+    import conteudo_extra
+    return make_pck(None, "", b"", [(f + ".import", b"x") for f in conteudo_extra.files()])
+
+
+def fake_tree(base, with_voice=True, big=False, pck_bytes=None, features="staging", cfg=CFG, conteudo=True):
     exp, web = os.path.join(base, "export"), os.path.join(base, "web")
     os.makedirs(exp); os.makedirs(os.path.join(web, "engines"))
     pck = make_pck(features, cfg, pck_bytes if pck_bytes is not None else (os.urandom(19922944 * 2 + 5) if big else b"index.pck"))
@@ -58,6 +64,8 @@ def fake_tree(base, with_voice=True, big=False, pck_bytes=None, features="stagin
         with open(os.path.join(exp, n), "wb") as f:
             f.write(pck if n == "index.pck" else (HTML % (len(pck), len(b"index.wasm"))).encode() if n == "index.html"
                     else FAKE_JS.encode() if n == "index.js" else n.encode())
+    if conteudo:
+        open(os.path.join(exp, "conteudo.pck"), "wb").write(make_conteudo())
     for n in ["stockfish-19-lite-single.js", "stockfish-19-lite-single.wasm", "COPYING-GPLv3.txt"]:
         open(os.path.join(web, "engines", n), "w").write(n)
     os.makedirs(os.path.join(web, "gl_recovery"))
@@ -122,13 +130,30 @@ class PackTest(unittest.TestCase):
                 self.assertIn(msg, r.stdout + r.stderr, nome)
                 self.assertFalse(os.path.exists(out), nome)
 
+    def test_conteudo_extra_falha_fechado(self):
+        """R115 · sem o conteudo.pck, ou com o conteúdo extra ainda dentro do pacote principal: nada é gerado."""
+        import conteudo_extra
+        with tempfile.TemporaryDirectory() as t:
+            out, r = self.run_pack(t, *fake_tree(t, conteudo=False))
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("conteudo.pck ausente", r.stdout + r.stderr)
+            self.assertFalse(os.path.exists(out))
+        with tempfile.TemporaryDirectory() as t:
+            exp, web = fake_tree(t)
+            vaz = make_pck("staging", CFG, b"index.pck", [(conteudo_extra.files()[0] + ".import", b"x")])
+            open(os.path.join(exp, "index.pck"), "wb").write(vaz)
+            out, r = self.run_pack(t, exp, web)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("ainda tem conteúdo extra", r.stdout + r.stderr)
+
     def test_presets_staging_e_producao(self):
         """export_presets.cfg: "Web Alpha" = staging e "Web Producao" = production, com as MESMAS opções."""
         import configparser
         cp = configparser.RawConfigParser(strict=False)
         cp.read(os.path.join(HERE, "../../export_presets.cfg"), encoding="utf-8")
         web = {cp.get(s, "name").strip('"'): s for s in cp.sections() if s.count(".") == 1 and cp.get(s, "platform").strip('"') == "Web"}
-        self.assertEqual(sorted(web), ["Web Alpha", "Web Producao"])
+        self.assertEqual(sorted(web), ["Web Alpha", "Web Conteudo", "Web Producao"])
+        self.assertEqual(cp.get(web.pop("Web Conteudo"), "export_filter"), '"resources"')   # R115 · só o pacote extra
         a, p = web["Web Alpha"], web["Web Producao"]
         self.assertEqual(cp.get(a, "custom_features"), '"staging"')
         self.assertEqual(cp.get(p, "custom_features"), '"production"')
@@ -176,15 +201,19 @@ class PackTest(unittest.TestCase):
             self.assertIn("# R55.5 ", man)                       # o MONTAR-UPLOAD separa o index.html por isso
             rows = [l.split() for l in man.splitlines() if l and not l.startswith("#")]
             rels = [x[0] for x in rows]
-            self.assertEqual(len(rows), 15)
+            self.assertEqual(len(rows), 16)   # R115 · + o pacote do conteúdo extra
             for legado in ["index.pck", "index.wasm", "index.js", "index.png", "index.audio.worklet.js"]:
                 self.assertNotIn(legado, rels)                 # nada com nome fixo de motor/pacote
             pck = [x for x in rels if re.fullmatch(r"index-p[0-9a-f]{16}\.pck", x)]
             exe = sorted(x for x in rels if re.fullmatch(r"index-e[0-9a-f]{16}\..+", x))
-            self.assertEqual(len(pck), 1)
+            self.assertEqual(len(pck), 2)   # principal + conteúdo extra (R115)
             self.assertEqual([x.split(".", 1)[1] for x in exe], ["audio.position.worklet.js", "audio.worklet.js", "js", "wasm"])
             raw = open(os.path.join(t, "export", "index.pck"), "rb").read()
-            self.assertEqual(pck[0], "index-p%s.pck" % hashlib.sha256(raw).hexdigest()[:16])
+            pck = ["index-p%s.pck" % hashlib.sha256(raw).hexdigest()[:16]]
+            self.assertIn(pck[0], rels)
+            cont = "index-p%s.pck" % hashlib.sha256(open(os.path.join(t, "export", "conteudo.pck"), "rb").read()).hexdigest()[:16]
+            self.assertIn(cont, rels)
+            self.assertIn('<meta name="fraiha-conteudo" content="%s" data-size=' % cont, open(os.path.join(out, "index.html"), encoding="utf-8").read())
             self.assertTrue(os.path.isfile(os.path.join(out, pck[0] + ".part02")))
             html = open(os.path.join(out, "index.html"), encoding="utf-8").read()
             cfg = json.loads(re.search(r"const GODOT_CONFIG = (\{.*?\});", html).group(1))

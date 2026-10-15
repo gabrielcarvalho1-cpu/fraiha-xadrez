@@ -120,6 +120,15 @@ func _ready():
     var audio = preload("res://audio_v025/game_audio.gd").new()
     audio.name = "GameAudio"
     add_child(audio)
+    # R115 · Web: o conteúdo extra (XEQUE, MARCHA, ligas, músicas) chega depois; quando chegar, o tema salvo
+    # (se for de uma liga) e a música voltam sozinhos
+    var conteudo = preload("res://web_content/conteudo_extra.gd").new()
+    add_child(conteudo)
+    conteudo.finished.connect(func(ok):
+        if not ok: return
+        theme_manager.revalidate()
+        audio.music_path = ""
+        audio.refresh_music())
     if theme_manager.review_requested():
         theme_manager.review_all = true
         hub.review_all = true
@@ -1652,8 +1661,8 @@ func _on_party_message(msg: Dictionary):
             if other != null and other.is_open(): other.close()
             var ui = _party_ui(game)
             if ui == null or not ui.is_open():
-                if game == "marcha": hub.open_marcha()
-                else: hub.open_xeque()
+                if game == "marcha": await hub.open_marcha()
+                else: await hub.open_xeque()   # R115 · espera o conteúdo extra, se ainda estiver chegando
                 ui = _party_ui(game)
             if ui != null: ui.start_online(msg)
         "party_event", "party_error":
