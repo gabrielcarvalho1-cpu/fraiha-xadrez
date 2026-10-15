@@ -632,6 +632,7 @@ class Backend {
         const r = await op.wait(() => this.store.deleteAccount(accountId));
         if (r && r.error) return fail(r.error, r.code || 'delete_error');
         console.log('[acct-delete]', JSON.stringify({ user_id: accountId, at: new Date().toISOString() }));
+        if (this.leaderboard) this.leaderboard.invalidate();   // R102 · some do ranking na hora
         for (const s of this.socketsOf(accountId)) { this.send(s, { type: 'acct_deleted', message: 'Sua conta foi excluída.' }); if (s !== ws) this.invalidate(s); }
         return this.invalidate(ws);
       }

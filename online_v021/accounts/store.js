@@ -56,9 +56,9 @@ class MemoryStore {
   async getModeStats(userId) { const o = emptyModeStats(); const m = (this.modeStats || new Map()).get(userId) || {}; for (const k of STAT_MODES) Object.assign(o[k], m[k] || {}); return o; }
   // R96 · RANKING: linhas brutas de um placar (o Leaderboard ordena). kind: 'ranked' | 'mode'.
   async leaderboardRows(board, kind) {
-    const out = [];
-    if (kind === 'ranked') { for (const [uid, s] of this.stats) if (s[board]) out.push({ user_id: uid, ...s[board] }); }
-    else for (const [uid, row] of (this.modeStats || new Map())) if (row[board]) out.push({ user_id: uid, ...row[board] });
+    const out = [], gone = uid => { const p = this.profiles.get(uid); return !!(p && p.account_status === 'deleted'); };
+    if (kind === 'ranked') { for (const [uid, s] of this.stats) if (s[board] && !gone(uid)) out.push({ user_id: uid, ...s[board] }); }
+    else for (const [uid, row] of (this.modeStats || new Map())) if (row[board] && !gone(uid)) out.push({ user_id: uid, ...row[board] });
     return out;
   }
   async recordModeResult(userId, mode, result) {
@@ -274,7 +274,7 @@ class MemoryStore {
   // ---------- Amigos (0002_fraiha_social) ----------
   async searchProfiles(query, limit = 20) {
     const q = query.toLowerCase(), out = [];
-    for (const p of this.profiles.values()) if (p.nickname.toLowerCase().includes(q)) out.push(pub(p, this._ent(p.user_id)));
+    for (const p of this.profiles.values()) if (p.account_status !== 'deleted' && p.nickname.toLowerCase().includes(q)) out.push(pub(p, this._ent(p.user_id)));
     return out.sort((a, b) => a.nickname.localeCompare(b.nickname)).slice(0, limit);
   }
   async getProfilesByIds(ids) { return ids.map(id => this.profiles.get(id)).filter(Boolean).map(p => pub(p, this._ent(p.user_id))); }
@@ -565,11 +565,16 @@ class SupabaseStore {
   }
   // R96 · RANKING: lê o placar inteiro de uma fila/modo (até 5000 contas; o servidor guarda em cache por 1 min).
   async leaderboardRows(board, kind, minMatches = 0) {
+    const q = kind === 'ranked'
+      ? '/ranked_stats?mode=eq.' + encodeURIComponent(board) + '&matches=gte.' + (minMatches | 0) + '&select=user_id,league,pl,wins,losses,draws,matches'
+      : '/mode_stats?mode_id=eq.' + encodeURIComponent(board) + '&select=user_id,wins,losses,draws';
+    // R102 · contas excluídas (profiles.account_status = deleted) saem do ranking: o filtro vai no banco pelo perfil
     try {
-      if (kind === 'ranked') return await this.req('/ranked_stats?mode=eq.' + encodeURIComponent(board) + '&matches=gte.' + (minMatches | 0) +
-        '&select=user_id,league,pl,wins,losses,draws,matches&limit=5000');
-      return await this.req('/mode_stats?mode_id=eq.' + encodeURIComponent(board) + '&select=user_id,wins,losses,draws&limit=5000');
-    } catch (e) { if (SCHEMA_MISSING(e)) return { not_configured: true }; throw e; }
+      const rows = await this.req(q + ',profiles!inner(account_status)&profiles.account_status=neq.deleted&limit=5000');
+      return rows.map(({ profiles, ...r }) => r);
+    } catch (e) { if (!SCHEMA_MISSING(e)) throw e; }
+    try { return await this.req(q + '&limit=5000'); }
+    catch (e) { if (SCHEMA_MISSING(e)) return { not_configured: true }; throw e; }
   }
   async recordModeResult(userId, mode, result) {
     if (!STAT_MODES.includes(mode) || !['win', 'loss', 'draw'].includes(result)) return;
@@ -606,7 +611,7 @@ class SupabaseStore {
     return (await this.req('/profiles?' + filter.replace('{cols}', base))).map(p => pub(p, null));
   }
   async searchProfiles(query, limit = 20) {
-    return this._publicProfiles('nickname=ilike.' + encodeURIComponent('*' + query + '*') + '&select={cols}&order=nickname.asc&limit=' + limit);
+    return this._publicProfiles('nickname=ilike.' + encodeURIComponent('*' + query + '*') + '&account_status=neq.deleted&select={cols}&order=nickname.asc&limit=' + limit);
   }
   async getProfilesByIds(ids) {
     const ok = ids.filter(id => UUID_RE.test(id));
