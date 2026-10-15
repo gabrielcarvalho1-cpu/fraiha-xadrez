@@ -65,6 +65,7 @@ class MercadoPago {
     this.name = 'mercadopago';
     this.token = String(env.FRAIHA_MP_ACCESS_TOKEN || '').trim();
     this.secret = String(env.FRAIHA_MP_WEBHOOK_SECRET || '').trim();
+    this.requireSignature = /^(1|true|sim)$/i.test(String(env.FRAIHA_MP_REQUIRE_SIGNATURE || '').trim()) && !!this.secret;   // R110
     this.publicKey = String(env.FRAIHA_MP_PUBLIC_KEY || '').trim();
     this.api = String(env.FRAIHA_MP_API || 'https://api.mercadopago.com').replace(/\/+$/, '');
     this.publicUrl = String(env.FRAIHA_PUBLIC_URL || '').replace(/\/+$/, '');
@@ -158,6 +159,13 @@ class MercadoPago {
     const dataId = String(url.searchParams.get('data.id') || (body.data && body.data.id) || url.searchParams.get('id') || '');
     if (!dataId || (type && type !== 'payment')) return { ignore: true };
     if (this.secret && req.headers['x-signature'] && !this.signatureOk(req, dataId)) return null;
+    // R110 · aviso SEM assinatura: com FRAIHA_MP_REQUIRE_SIGNATURE=1 é recusado. Sem a variável continua aceito
+    // (a consulta abaixo na API do Mercado Pago é a fonte da verdade, então não há fraude possível), mas fica
+    // registrado no log para conferir antes de ligar a exigência.
+    if (!req.headers['x-signature']) {
+      if (this.requireSignature) return null;
+      console.warn('[pagamentos] aviso do Mercado Pago sem assinatura (x-signature) — tipo ' + (type || '?'));
+    }
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(dataId)) return null;
     return this.lookup(dataId);
   }

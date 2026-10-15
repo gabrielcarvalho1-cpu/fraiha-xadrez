@@ -760,6 +760,13 @@ class SupabaseStore {
   async addFriendship(a, b) { const [x, y] = [a, b].sort(); return this._insert('friendships', { user_a: x, user_b: y }); }
   async removeFriendship(a, b) { const [x, y] = [a, b].sort(); return this._delete('friendships', { user_a: x, user_b: y }); }
   async addBlock(a, b) { return this._insert('blocks', { blocker: a, blocked: b }); }
+  // ---------- R110 · Admin Log no banco (0015) ----------
+  async insertAudit(e) {
+    await this.req('/admin_audit', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(e) });
+  }
+  async listAudit(limit = 500) {
+    return this.req('/admin_audit?select=*&order=at.desc&limit=' + (limit | 0));
+  }
   // ---------- R109 · Salão dos Fundadores (número e nível vêm da 0012; sem ela, pela data) ----------
   async listFounders() {
     const map = rows => rows.filter(r => r.profiles && r.profiles.account_status !== 'deleted')

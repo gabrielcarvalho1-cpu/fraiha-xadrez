@@ -23,7 +23,7 @@ class AdminService {
   constructor({ backend, env = process.env, now = () => Date.now(), metrics = null, autostart = true }) {
     this.backend = backend; this.env = env; this.now = now;
     this.access = new AdminAccess({ backend, env });
-    this.audit = new AuditLog({ now });
+    this.audit = new AuditLog({ now, store: backend.store && backend.store.persistent ? backend.store : null });   // R110 · grava no banco (0015)
     this.controls = backend.modeControls || (backend.modeControls = new ModeControls({ now }));
     this.metrics = metrics || new Metrics({ backend, now, autostart });
     backend.adminMetrics = this.metrics;
