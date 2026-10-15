@@ -46,6 +46,11 @@ func run():
 	await frames(8)
 	check(hub.legal_ui.is_open() and hub.legal_ui.text.text.begins_with("TERMOS DE USO"), "TERMOS DE USO abre com o texto")
 	await shot("termos")
+	check(hub.legal_ui.text.text.contains("arrependimento") and hub.legal_ui.text.text.contains("@"), "R103 · Termos: compras com arrependimento de 7 dias e e-mail de contato")
+	var sc = hub.legal_ui.scroll
+	sc.scroll_vertical = int(sc.get_v_scroll_bar().max_value * 0.36)
+	await frames(4)
+	await shot("termos_compras")
 	hub.legal_ui.set_tab("privacidade")
 	await frames(6)
 	check(hub.legal_ui.text.text.contains("LGPD"), "PRIVACIDADE mostra a política (LGPD)")

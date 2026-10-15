@@ -141,7 +141,7 @@ func _refresh_delete():
 	del_button.visible = true
 	del_info.text = ("Excluir a conta é PERMANENTE.\n\n" +
 		"Serão apagados: seu e-mail, nome, foto, amigos, pedidos, bloqueios, mensagens privadas, análises, progresso dos bots e personalização. Você não conseguirá mais entrar com esta conta.\n\n" +
-		"Ficam, sem nada que identifique você: partidas e placares antigos (aparecem como \"excluido_…\") e registros de pagamento pelo prazo exigido por lei. Compras do FRAIHA PREMIUM não são reembolsadas pela exclusão.\n\n" +
+		"Ficam, sem nada que identifique você: partidas e placares antigos (aparecem como \"excluido_…\") e registros de pagamento pelo prazo exigido por lei. Fundador, Club e tudo o que foi comprado são PERDIDOS e não voltam se você criar outra conta (compras feitas há menos de 7 dias: peça o reembolso pelo contato ANTES de excluir).\n\n" +
 		"Para confirmar, digite o seu nome de jogador: %s" % nick)
 	del_button.disabled = deleting or del_input.text.strip_edges().to_lower() != nick.to_lower()
 
