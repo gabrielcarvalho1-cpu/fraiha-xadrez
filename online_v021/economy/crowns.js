@@ -98,6 +98,7 @@ class Crowns {
       const bonus = STREAK_BONUS[streak % 7];
       if (bonus && await this.store.crownAward(uid, bonus, 'streak', day) !== null) { gained += bonus; lines.push(`${streak} dias seguidos +${bonus}`); }
       if (gained) await this.notify(uid, gained, lines, streak);
+      if (this.backend.seasonPass) this.backend.seasonPass.add(uid, 'daily');   // R120 · XP do passe
       return { streak, gained };
     } catch (e) { this.off(e, 'entrada'); return null; }
   }
@@ -123,11 +124,14 @@ class Crowns {
       const label = result === 'win' ? 'Vitória' : result === 'draw' ? 'Empate' : 'Partida jogada';
       const lines = [pay > 0 ? `${label} +${pay}${club ? ' (Club +25%)' : ''}` : `${label} · limite de ${MATCH_CAP} Coroas por partidas hoje`];
       // missões que completaram agora
+      let missions = 0;
       for (const x of missionsFor(day)) {
         if ((before[x.key] || 0) >= x.target || (counters[x.key] || 0) < x.target) continue;
-        if (await this.store.crownAward(uid, x.reward, 'mission', day + ':' + x.id) !== null) { gained += x.reward; lines.push(`Missão: ${x.title} +${x.reward}`); }
+        if (await this.store.crownAward(uid, x.reward, 'mission', day + ':' + x.id) !== null) { gained += x.reward; missions++; lines.push(`Missão: ${x.title} +${x.reward}`); }
       }
       await this.notify(uid, gained, lines);
+      const SP = this.backend.seasonPass;   // R120 · XP do passe (partida + missões)
+      if (SP) { await SP.add(uid, result === 'win' ? 'win' : 'play'); if (missions) await SP.add(uid, 'mission', missions); }
       return { gained, lines };
     } catch (e) { this.off(e, 'partida'); return null; }
   }

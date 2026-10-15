@@ -268,6 +268,12 @@ func _soon(parent: Control):
 	b.custom_minimum_size = Vector2(0, ts(44))
 	b.pressed.connect(func(): client.open_store("title"))
 	parent.add_child(b)
+	# R120 · passe da temporada (faixa grátis + faixa Club)
+	var pb := button("PASSE DA TEMPORADA", 15, true)
+	pb.name = "CrownsOpenPass"
+	pb.custom_minimum_size = Vector2(0, ts(44))
+	pb.pressed.connect(func(): client.open_pass())
+	parent.add_child(pb)
 	# R118 · torneio grátis de XEQUE / MARCHA com prêmio em Coroas
 	var tb := button("TORNEIO DA SEMANA", 15)
 	tb.name = "CrownsOpenTournament"

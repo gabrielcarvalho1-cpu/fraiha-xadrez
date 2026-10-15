@@ -23,7 +23,7 @@
 - [x] R118 · Torneio da Semana de XEQUE e MARCHA: grátis, prêmio em Coroas (migration 0018)
 - [x] R119 · Emotes nas partidas online (4 de graça + 8 na Loja); xadrez, XEQUE e MARCHA
 - [ ] Loja: avatares novos (depende de arte)
-- [ ] Passe de temporada
+- [x] R120 · Passe da Temporada: mensal, 30 níveis, faixa grátis + faixa Club (sem migration nova)
 - [ ] Códigos de criador, Discord, CrazyGames
 - [ ] Partidas que sobrevivem a reinício do servidor
 

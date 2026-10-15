@@ -80,6 +80,16 @@ func owned(item_id: String) -> bool:
 func store_available() -> bool:
 	return bool(store_state.get("available", false))
 
+var pass_panel = null
+## R120 · PASSE DA TEMPORADA
+func open_pass():
+	if not is_instance_valid(pass_panel):
+		pass_panel = load("res://economy/season_pass_ui.gd").new()
+		hub.add_child(pass_panel)
+		pass_panel.setup(hub, account, self)
+	if is_instance_valid(panel) and panel.is_open(): panel.close()
+	pass_panel.show_pass()
+
 var tourn_panel = null
 ## R118 · TORNEIO DA SEMANA (XEQUE / MARCHA REAL)
 func open_tournament(g := "xeque"):
