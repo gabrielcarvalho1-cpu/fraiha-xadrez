@@ -27,8 +27,8 @@ const LAYOUTS := {
         "scene": [1.7176, Vector2(-895.9, 55.5)], "board": Rect2(90, 521, 900, 778),
         "title": [Vector2(86, 86), 84], "sub": [Vector2(86, 117), 22],
         "mesa": Rect2(700, 5, 320, 157), "como": null,
-        "plates": {0: ["h", Rect2(62, 1444, 356, 136)], 1: ["v", Vector2(190, 330), 214], 2: ["v", Vector2(540, 330), 214], 3: ["v", Vector2(890, 330), 214]},
-        "turn": Rect2(350, 1361, 380, 62), "meter": Rect2(708, 1452, 300, 120),
+        "plates": {0: ["h", Rect2(62, 1444, 356, 136)], 1: ["v", Vector2(186, 340), 252], 2: ["v", Vector2(540, 340), 252], 3: ["v", Vector2(894, 340), 252]},   # R123 · placas maiores (letra legível no celular)
+        "turn": Rect2(350, 1308, 380, 60), "meter": Rect2(708, 1452, 300, 120),   # R123 · faixa da vez acima da mão (a carta escolhida sobe e cobria o SUA VEZ)
         "xeque": [Vector2(184, 1846), 0.768], "play": Rect2(405, 1805, 630, 82),
         # R88 · ícones maiores no celular em pé (84 em vez de 60) e o CHAT num lugar próprio, fora do tabuleiro
         "hint": null, "help": Rect2(296, 12, 84, 84), "menu": Rect2(388, 12, 84, 84),
@@ -184,8 +184,8 @@ func stair(r: Rect2, d: float, col: Color):
     draw_rect(Rect2(r.position.x + d, r.position.y + d, r.size.x - 2 * d, r.size.y - 2 * d), col)
     draw_rect(Rect2(r.position.x, r.position.y + 2 * d, r.size.x, r.size.y - 4 * d), col)
 
-## Painel verde com moldura dourada (placas, A MESA PEDE, COMO JOGAR, medidor).
-func panel(r: Rect2, border: Color = Color("e8b242"), glow := false, fill_top: Color = Color("154031"), fill_bot: Color = Color("0f2a1e")):
+## Painel azul (R123: antes verde) com moldura dourada (placas, A MESA PEDE, COMO JOGAR, medidor).
+func panel(r: Rect2, border: Color = Color("e8b242"), glow := false, fill_top: Color = Color("13264d"), fill_bot: Color = Color("0a1631")):
     if glow:
         for i in 5: stair(r.grow(4 + i * 3), 3, Color(border.r, border.g, border.b, 0.13 - i * 0.022))
     stair(r.grow(3), 3, Color("120a06"))
@@ -260,7 +260,7 @@ func sound_button(r: Rect2, kind: String):
     var off: bool = ui.Sound.music_muted(ui.hub) if kind == "music" else ui.Sound.effects_muted(ui.hub)
     var hov: bool = ui.hover_id == id
     if desk(): desk_square(r, hov)
-    else: panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+    else: panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("13264d"), Color("0a1631"))
     ui.Sound.glyph(self, r.grow(-6), kind, off, Color("f6ecd2") if not off else Color("8d9092"))
     hit(r, id)
 
@@ -268,7 +268,7 @@ func sound_button(r: Rect2, kind: String):
 func fullscreen_button(r: Rect2, on: bool):
     var hov: bool = ui.hover_id == "fullscreen"
     if desk(): desk_square(r, hov)
-    else: panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+    else: panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("13264d"), Color("0a1631"))
     preload("res://ui_v022/fullscreen_control.gd").draw_glyph(self, r.grow(-6), on, Color("f6ecd2"), 2.5)
     hit(r, "fullscreen")
 
@@ -279,13 +279,13 @@ func _draw_voice(lay: Dictionary):
     if vo == null or not vo.in_match() or not vo.available():
         # R77 · microfone sempre no lugar; sem voz (bots / navegador sem suporte) fica apagado e o toque explica
         var dr: Rect2 = lay.voice
-        panel(dr, Color(0.91, 0.70, 0.26, 0.45), false, Color("12382a"), Color("0b2219"))
+        panel(dr, Color(0.91, 0.70, 0.26, 0.45), false, Color("13264d"), Color("0a1631"))
         VoiceGlyph.draw_mic(self, dr.grow(-7), "DISCONNECTED", Color(0.96, 0.93, 0.82, 0.45))
         hit(dr, "voice_info")
         return
     var r: Rect2 = lay.voice
     var hov: bool = ui.hover_id == "voice"
-    panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+    panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("13264d"), Color("0a1631"))
     VoiceGlyph.draw_mic(self, r.grow(-7), vo.state, Color("f6ecd2"), vo.is_speaking(vo.my_uid))
     hit(r, "voice")
     if vo.active() or vo.state == "ERROR": hit(VoiceGlyph.draw_leave_badge(self, r), "voice_off")
@@ -293,7 +293,7 @@ func _draw_voice(lay: Dictionary):
     if vo.active() and lay.has("voice_ear"):
         # ÁUDIO RECEBIDO (fone): ouvir / não ouvir os outros, sem sair da sala nem mexer no microfone
         var er: Rect2 = lay.voice_ear
-        panel(er, Color("e8b242") if ui.hover_id != "voice_ear" else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+        panel(er, Color("e8b242") if ui.hover_id != "voice_ear" else Color("ffeea5"), false, Color("13264d"), Color("0a1631"))
         VoiceGlyph.draw_headphones(self, er.grow(-8), vo.speaker_muted, Color("f6ecd2"))
         hit(er, "voice_ear")
         if er.position.y == r.position.y: text_right = er.position.x - 10
@@ -302,7 +302,7 @@ func _draw_voice(lay: Dictionary):
 func square_button(r: Rect2, glyph: String, id: String):
     var hov: bool = ui.hover_id == id
     if desk(): desk_square(r, hov)
-    else: panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("12382a"), Color("0b2219"))
+    else: panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("13264d"), Color("0a1631"))
     if glyph == "menu":
         for i in 3: draw_rect(Rect2(r.position.x + r.size.x * 0.3, r.position.y + r.size.y * (0.36 + i * 0.13), r.size.x * 0.4, 3), Color("f6ecd2"))
     else:
@@ -680,11 +680,11 @@ func _clock_row(pos: Vector2, w: float, h: float, s: int, fs: int):
     var tw_ := tw("100%", "ui_sp", fs) + 6
     var gap := maxf(2.0, h * 0.22)
     var sw := (w - tw_ - (segs - 1) * gap) / float(segs)
-    draw_rect(Rect2(pos - Vector2(2, 2), Vector2(w - tw_ + 2, h + 4)), Color("0a1712"))
+    draw_rect(Rect2(pos - Vector2(2, 2), Vector2(w - tw_ + 2, h + 4)), Color("0a1226"))
     for i in segs:
         var sr := Rect2(pos + Vector2(i * (sw + gap), 0), Vector2(sw, h))
-        draw_rect(sr, Color("10241b"))
-        draw_rect(sr, Color("2d4a3c"), false, 1.5)
+        draw_rect(sr, Color("101d3a"))
+        draw_rect(sr, Color("2d3d5e"), false, 1.5)
         var blink: bool = ui.phase == "clock" and int(ui.result.get("loser", -1)) == s and i == used and int(ui.t * 5) % 2 == 0
         if i < lit or blink:
             draw_rect(sr.grow(-1.5), col)
@@ -708,7 +708,7 @@ func _status_chip(r: Rect2, st: Dictionary, fs := 18):
         "xeque_mate": chip(r, st.text, Color("d91f2d"), Color("ff5a52"), Color("fff3e8"), fs)
         "com_o_relogio": chip(r, st.text, Color("2a1544"), Color("b068ff"), Color("e6ccff"), fs)
         "eliminado": chip(r, st.text, Color("1c1d1d"), Color("4a4d4f"), Color("8d9092"), fs)
-        _: chip(r, st.text, Color("0a1d15"), Color("3d5a4b"), Color("c9d6cf"), fs)
+        _: chip(r, st.text, Color("0a1530"), Color("3d4f75"), Color("c9d6cf"), fs)
 
 func _draw_plate(s: int):
     if desk(): return _desk_plate(s)
@@ -893,11 +893,11 @@ func _draw_meter():
     var sw := (r.size.x - 36 - (segs - 1) * gap) / float(segs)
     var sy := r.position.y + (52 if not compact else 46)
     var shh := 26.0 if not compact else 22.0
-    draw_rect(Rect2(sx - 3, sy - 3, r.size.x - 30, shh + 6), Color("0a1712"))
+    draw_rect(Rect2(sx - 3, sy - 3, r.size.x - 30, shh + 6), Color("0a1226"))
     for i in segs:
         var sr := Rect2(sx + i * (sw + gap), sy, sw, shh)
-        draw_rect(sr, Color("10241b"))
-        draw_rect(sr, Color("2d4a3c"), false, 2.0)
+        draw_rect(sr, Color("101d3a"))
+        draw_rect(sr, Color("2d3d5e"), false, 2.0)
         if i < lit or (ui.phase == "clock" and int(ui.result.loser) == who and i == used and int(ui.t * 5) % 2 == 0):
             draw_rect(sr.grow(-2), seg_col)
             draw_rect(Rect2(sr.position.x + 2, sr.position.y + 2, sr.size.x - 4, 4), seg_col.lightened(0.35))
@@ -1032,7 +1032,7 @@ func _draw_hand():
         tex_center(tex, cpos, it.sc, it.rot, mod)
         if hand[i] == Rules.JOKER:
             var tagc := Vector2(it.c) + Vector2(0, -sz.y / 2.0 - 16)
-            chip(Rect2(tagc - Vector2(62, 15), Vector2(124, 30)), "CORINGA", Color("1d7a4a"), Color("ffd257"), Color("fff1c2"), 18)
+            chip(Rect2(tagc - Vector2(62, 15), Vector2(124, 30)), "CORINGA", Color("8a1a2c"), Color("ffd257"), Color("fff1c2"), 18)
         if my_turn:
             hit(Rect2(Vector2(it.c) - sz / 2.0, sz), "card_%d" % i)
         if ui.hover_id == "card_%d" % i and my_turn and not (i in ui.selected):
@@ -1072,7 +1072,7 @@ func _draw_reveal(big: bool):
     var tail_col := Color("c8102e")
     if bool(r.truthful):
         tail = "ERA VERDADE"
-        tail_col = Color("1f7a4d")
+        tail_col = Color("8a1a2c")
     else:
         var counts := {}
         for c in r.false_cards: counts[c] = int(counts.get(c, 0)) + 1
@@ -1525,7 +1525,7 @@ func _draw_intro():
     var al := fade_in * fade_out
     draw_rect(Rect2(Vector2(-3000, -3000), Vector2(8000, 8000)), Color(0.02, 0.03, 0.02, 0.78 * al))
     var portrait: bool = ui.layout == "portrait"
-    text("O BARALHO DESTA PARTIDA", Vector2(0, d.y * (0.2 if not portrait else 0.22)), "title", 86 if not portrait else 70, Color(1, 0.86, 0.45, al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 10, Color(0.1, 0.05, 0, al))
+    text("O BARALHO DESTA PARTIDA", Vector2(0, d.y * (0.2 if not portrait else 0.22)), "title" if not portrait else "ui_sp4", 86 if not portrait else 58, Color(1, 0.86, 0.45, al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 10, Color(0.1, 0.05, 0, al))
     # a fonte é o motor: Rules.DECK_COUNTS / Rules.HAND (a UI não guarda números próprios)
     var kinds: Array = Rules.TARGETS + [Rules.JOKER]
     var counts: Dictionary = Rules.DECK_COUNTS
@@ -1546,7 +1546,7 @@ func _draw_intro():
         draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k, ui.k))
         if kinds[i] == Rules.JOKER:
             var pul := 0.5 + 0.5 * sin(ui.t * 6.0)
-            for gl in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(6 + gl * 6 + pul * 4), Color(0.3, 1.0, 0.55, (0.20 - gl * 0.035) * al), false, 6.0)
+            for gl in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(6 + gl * 6 + pul * 4), Color(1.0, 0.35, 0.45, (0.20 - gl * 0.035) * al), false, 6.0)
         draw_rect(Rect2(-sz / 2.0 + Vector2(8, 10), sz), Color(0, 0, 0, 0.45 * al))
         draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false, Color(1, 1, 1, al))
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
@@ -1560,15 +1560,16 @@ func _draw_intro():
             var fs := 64 if not portrait else 48
             var org := Vector2(x, y + sz.y / 2.0 + 70)
             draw_set_transform(ui.origin + org * ui.k, 0.0, Vector2(ui.k * bump, ui.k * bump))
-            text(label, Vector2(-cw, 0), "ui_sp4", fs, Color("7cf0a0") if kinds[i] == Rules.JOKER else Color("ffd257"), cw * 2.0, HORIZONTAL_ALIGNMENT_CENTER, 8, Color(0.1, 0.05, 0, al))
+            text(label, Vector2(-cw, 0), "ui_sp4", fs, Color("ff8a96") if kinds[i] == Rules.JOKER else Color("ffd257"), cw * 2.0, HORIZONTAL_ALIGNMENT_CENTER, 8, Color(0.1, 0.05, 0, al))
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
     var foot_al := al * clampf((t - 1.4) / 0.4, 0.0, 1.0)
     var foot := "%d CARTAS  ·  %d PARA CADA JOGADOR" % [Rules.deck_size(), Rules.HAND]
     if portrait:
         text(foot, Vector2(0, d.y * 0.68), "ui_sp4", 32, Color(0.95, 0.92, 0.82, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))
-        text("O PEÃO VALE COMO QUALQUER PEÇA", Vector2(0, d.y * 0.68 + 46), "ui_sp4", 32, Color(0.49, 0.94, 0.63, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))
+        text("O PEÃO VALE COMO QUALQUER PEÇA", Vector2(0, d.y * 0.68 + 46), "ui_sp4", 32, Color(1.0, 0.54, 0.59, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))
     else:
-        text(foot + "  ·  O PEÃO VALE COMO QUALQUER PEÇA", Vector2(0, d.y * 0.9), "ui_sp4", 38, Color(0.95, 0.92, 0.82, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))
+        # R123 · logo abaixo do título (embaixo passava atrás do "Você")
+        text(foot + "  ·  O PEÃO VALE COMO QUALQUER PEÇA", Vector2(0, d.y * 0.2 + 74), "ui_sp4", 38, Color(0.95, 0.92, 0.82, foot_al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 6, Color(0, 0, 0, al))
 
 # ================================================================ R55 · PC: visual da referência nova
 # (tools/ui_ref/xeque/xeque_ref_r55.png). Painéis azul-marinho com moldura dourada e cantos, faixa vinho
@@ -1585,7 +1586,7 @@ const STEEL := Color("3d5a88")
 const CHIP_FILL := Color("0b1832")
 const CREAM_TXT := Color("f4efe4")
 const CARD_TEXT := {"rei": ["PEÇA", "Pode ser a peça pedida", Color("ff6a5c")], "rainha": ["PEÇA", "Pode ser a peça pedida", Color("ffd257")],
-    "cavalo": ["PEÇA", "Pode ser a peça pedida", Color("5d8eff")], "peao": ["CORINGA", "Vale como qualquer peça", Color("38c483")]}
+    "cavalo": ["PEÇA", "Pode ser a peça pedida", Color("5d8eff")], "peao": ["CORINGA", "Vale como qualquer peça", Color("e0485a")]}
 
 func desk() -> bool:
     return ui.layout == "desktop"
@@ -2051,7 +2052,7 @@ func _desk_hand():
         var mod := Color.WHITE if my_turn or g.turn != 0 else Color(0.92, 0.92, 0.92)
         card_face(String(hand[i]), c, DESK_CARD_W, 0.0, mod)
         if hand[i] == Rules.JOKER:
-            nchip(Rect2(c + Vector2(-58, -sz.y / 2.0 - 30), Vector2(116, 26)), "CORINGA", Color("1d7a4a"), Color("ffd257"), Color("fff1c2"), 17)
+            nchip(Rect2(c + Vector2(-58, -sz.y / 2.0 - 30), Vector2(116, 26)), "CORINGA", Color("8a1a2c"), Color("ffd257"), Color("fff1c2"), 17)
         if my_turn: hit(rect, "card_%d" % i)
         if ui.hover_id == "card_%d" % i and my_turn and not (i in ui.selected):
             draw_rect(rect.grow(1), Color(1, 0.93, 0.6, 0.8), false, 2.0)

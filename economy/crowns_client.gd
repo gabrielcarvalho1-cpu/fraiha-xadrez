@@ -261,6 +261,12 @@ func show_toast(gained: int, lines):
 	var sz := _toast.get_combined_minimum_size()
 	_toast.size = sz
 	var y := 92.0 if vs.x >= 900.0 else 64.0
+	# R123 · com um painel aberto (COROAS, LOJA…) o aviso desce para não cobrir o título da placa
+	if hub != null:
+		for c in hub.get_children():
+			if c.has_method("is_open") and c.get("_frame_rect") != null and c.is_open():
+				y = maxf(y, c._frame_rect.position.y + c._frame_rect.size.y * (0.19 if vs.x >= 900.0 else 0.30))
+				break
 	_toast.position = Vector2(floorf((vs.x - sz.x) * 0.5), y)
 	if _toast_tween != null and _toast_tween.is_valid(): _toast_tween.kill()
 	_toast.visible = true

@@ -402,6 +402,14 @@ func layout(board: Rect2, mobile: bool, safe: Rect2):
     for node in [title, emote_button, mute_button, report_button, close_button, input, send_button, status]:
         node.add_theme_font_size_override("font_size", fonts)
     for child in list.get_children(): child.add_theme_font_size_override("font_size", fonts)
+    # R123 · celular: os 4 botões do topo cabem na largura (antes FECHAR e ENVIAR saíam cortados da tela)
+    for node in [emote_button, mute_button, report_button, close_button, send_button]:
+        node.add_theme_font_size_override("font_size", 12 if mobile else fonts)
+        for stn in ["normal", "hover", "pressed"]:
+            var sb = node.get_theme_stylebox(stn)
+            if sb != null:
+                sb.content_margin_left = 5 if mobile else 8
+                sb.content_margin_right = 5 if mobile else 8
     close_button.visible = mobile
     title.visible = not mobile   # R119 · celular: sem espaço para o título com EMOTES na mesma linha (o painel já é o chat)
     minimize_button.visible = not mobile

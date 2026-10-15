@@ -760,6 +760,8 @@ func _build_panel() -> void:
 		l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 		l.add_theme_constant_override("outline_size", 3)
 		l.add_theme_constant_override("line_spacing", -3)
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF   # R123 · as legendas já trazem a quebra (\n)
+		l.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 		b.add_child(l)
 		var aid: String = id
 		b.pressed.connect(func(): _do_action(aid))
@@ -835,8 +837,13 @@ func _place_tiles(shown: Array, origin: Vector2, size: Vector2, gap: Vector2, co
 		l.position = Vector2(4, size.y * 0.54)
 		l.size = Vector2(size.x - 8, size.y * 0.42)
 		var fs := maxi(10, int(round(size.y * 0.17)))
-		while fs > 9 and Kit.SERIF_BOLD.get_string_size(l.text.split("\n")[0], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > size.x - 10: fs -= 1
+		var lines := l.text.split("\n")
+		if lines.size() > 1: fs = mini(fs, int(size.y * 0.42 / (lines.size() * 1.12)))   # R123 · duas linhas cabem no ladrilho
+		for ln in lines:
+			while fs > 8 and Kit.SERIF_BOLD.get_string_size(ln, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > size.x - 10: fs -= 1
 		l.add_theme_font_size_override("font_size", fs)
+		l.reset_size()
+		l.size = Vector2(size.x - 8, size.y * 0.42)   # R123 · depois da fonte (a quebra antiga deixava a legenda com 300 px de altura)
 
 ## As ações que existem AGORA nesta partida: a fonte da verdade são os botões antigos do celular (as mesmas
 ## regras de visibilidade de sempre: _process e _refresh_analysis_buttons do stage) e o controle de voz.

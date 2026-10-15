@@ -172,7 +172,7 @@ func _band(parent: Control, n: String, y: float) -> TextureRect:
 	parent.add_child(r)
 	return r
 
-func _label(parent: Control, text: String, rect: Rect2, px: float, color: Color, font: Font, align := HORIZONTAL_ALIGNMENT_CENTER, outline := 0.0) -> Label:
+func _label(parent: Control, text: String, rect: Rect2, px: float, color: Color, font: Font, align := HORIZONTAL_ALIGNMENT_CENTER, outline := 0.0, fit := true) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.clip_text = true          # sem isso o rótulo cresce até a largura do texto e passa da moldura
@@ -182,7 +182,11 @@ func _label(parent: Control, text: String, rect: Rect2, px: float, color: Color,
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.add_theme_font_override("font", font)
-	l.add_theme_font_size_override("font_size", maxi(9, int(round(px * s))))
+	var fs := maxi(9, int(round(px * s)))
+	# R123 · uma linha só: a fonte diminui até caber (antes o título era cortado: "COMUNIDADE E SUP")
+	if fit and not "\n" in text:
+		while fs > 9 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > rect.size.x - 2.0: fs -= 1
+	l.add_theme_font_size_override("font_size", fs)
 	l.add_theme_color_override("font_color", color)
 	if outline > 0.0:
 		l.add_theme_color_override("font_outline_color", Color(0.05, 0.03, 0.0, 0.9))
@@ -607,18 +611,18 @@ func _build_bots():
 		if st == "defeated":
 			_piece(panel, "../pages/ico_check", Rect2(336, y + 105, 30, 28)).modulate = OK_GREEN
 			chip_x = 372.0
-		var chip_l := _label(panel, {"defeated": "DERROTADO", "available": "DISPONÍVEL", "locked": "BLOQUEADO"}[st], R(chip_x, y + 99, 552 - chip_x, 40), 30, {"defeated": OK_GREEN, "available": Color("ffd98a"), "locked": Color("b4b8b0")}[st], Kit.SERIF_BOLD, HORIZONTAL_ALIGNMENT_CENTER if st != "defeated" else HORIZONTAL_ALIGNMENT_LEFT, 4)
+		var chip_l := _label(panel, {"defeated": "DERROTADO", "available": "DISPONÍVEL", "locked": "BLOQUEADO"}[st], R(chip_x, y + 97, 552 - chip_x, 38), 26, {"defeated": OK_GREEN, "available": Color("ffd98a"), "locked": Color("b4b8b0")}[st], Kit.SERIF_BOLD, HORIZONTAL_ALIGNMENT_CENTER if st != "defeated" else HORIZONTAL_ALIGNMENT_LEFT, 4)
 		chip_l.name = "BotStatus_" + id
 		var desc := String(b.get("description", ""))
 		if locked and i > 0: desc = "Vença o " + String(bots[i - 1].name)   # mesmo aviso da escada do PC
-		var d_l := _label(panel, desc, R(325, y + 136, 468, 66), 30, CREAM if not locked else Color("a9a594"), Kit.SERIF, HORIZONTAL_ALIGNMENT_LEFT, 3)
+		var d_l := _label(panel, desc, R(325, y + 142, 468, 56), 27, CREAM if not locked else Color("a9a594"), Kit.SERIF, HORIZONTAL_ALIGNMENT_LEFT, 3, false)   # R123 · não invade a linha da recompensa
 		d_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		d_l.size = Vector2(468, 66) * s
+		d_l.size = Vector2(468, 56) * s
 		d_l.clip_text = false
 		d_l.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 		d_l.add_theme_constant_override("line_spacing", int(round(-9 * s)))
-		var fs := 30.0
-		while fs > 22.0 and d_l.get_line_count() > 2:   # descrição longa encolhe para caber em 2 linhas
+		var fs := 27.0
+		while fs > 20.0 and d_l.get_line_count() > 2:   # descrição longa encolhe para caber em 2 linhas
 			fs -= 1.0
 			d_l.add_theme_font_size_override("font_size", maxi(8, int(round(fs * s))))
 		_piece(panel, "bots_crown", Rect2(326, y + 200, 42, 38)).modulate = dim
@@ -633,9 +637,9 @@ func _build_bots():
 		rw.size = Vector2(424, 40) * s
 		rw.add_theme_font_override("normal_font", Kit.SERIF)
 		rw.add_theme_font_override("bold_font", Kit.SERIF_BOLD)
-		var rtxt: String = LadderUI.reward_text(b.get("reward", {})) + (" (obtido)" if st == "defeated" else "")
-		var rpx := 27
-		while rpx > 18 and Kit.SERIF_BOLD.get_string_size("Recompensa:  " + rtxt, HORIZONTAL_ALIGNMENT_LEFT, -1, rpx).x > 418: rpx -= 1
+		var rtxt: String = LadderUI.reward_text(b.get("reward", {}), true) + (" ✓" if st == "defeated" else "")   # R123 · texto curto = letra maior
+		var rpx := 29
+		while rpx > 20 and Kit.SERIF_BOLD.get_string_size("Recompensa:  " + rtxt, HORIZONTAL_ALIGNMENT_LEFT, -1, rpx).x > 418: rpx -= 1
 		rw.add_theme_font_size_override("normal_font_size", maxi(8, int(round(rpx * s))))
 		rw.add_theme_font_size_override("bold_font_size", maxi(8, int(round(rpx * s))))
 		rw.add_theme_color_override("default_color", CREAM if not locked else Color("a9a594"))

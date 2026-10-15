@@ -635,7 +635,7 @@ func _advance_phase():
                 fx_flash(Color(1, 1, 1, 1.0))
                 var mc: Vector2 = view.L().mate_clock[0] if view != null else design / 2.0
                 fx_burst(mc, 90, [Color("2a2420"), Color("6b5a44"), Color("e8b242"), Color("ff5a3a"), Color("ffd257")], 1300.0, 10.0, 1100.0, "shard", 1.8)
-                fx_burst(mc, 26, [Color(0.25, 0.22, 0.2, 0.7), Color(0.4, 0.33, 0.28, 0.6)], 420.0, 60.0, -60.0, "smoke", 2.2)
+                fx_burst(mc, 14, [Color(0.55, 0.22, 0.16, 0.32), Color(0.75, 0.4, 0.25, 0.26)], 520.0, 44.0, -60.0, "smoke", 1.3)   # R123 · fumaça mais leve e quente: a torre do relógio não some num borrão cinza
                 fx_burst(mc, 40, [Color("fff1a8"), Color("ffb347")], 900.0, 5.0, 300.0, "spark", 0.9)
                 get_tree().create_timer(FX_DELAY.voice_mate).timeout.connect(func(): if phase == "mate": _cue(_mate_voice()))
                 get_tree().create_timer(FX_DELAY.mate_red_flash).timeout.connect(func(): if phase == "mate": fx_flash(Color(1.0, 0.12, 0.06, 0.75)))

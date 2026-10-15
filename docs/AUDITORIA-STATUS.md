@@ -34,4 +34,5 @@
 - [ ] Ligar FRAIHA_MP_REQUIRE_SIGNATURE=1 depois de olhar os logs
 
 ## Depois
-- [ ] Auditoria visual geral (PC e celular, inclusive cartas/mesas dentro de XEQUE e Marcha): textos fora do padrão, serrilhado, cortes, texturas
+- [x] R123 · Auditoria visual geral (PC e celular; sem tabuleiros/peças das ligas): XEQUE e Marcha sem verde (verso azul, Coringa bordô), cortes no celular (chat, Ranking, Termos, Premium, bots, ações), XEQUE-MATE legível, avisos em cartão
+- [ ] Refazer tabuleiros e peças das ligas (Ferro, Bronze, Prata…)

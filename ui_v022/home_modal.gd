@@ -108,7 +108,7 @@ func style_button(b: Button, on: bool):
 		s.shadow_color = Color(0, 0, 0, 0.45)
 		s.shadow_size = 3
 		s.shadow_offset = Vector2(0, 2)
-		for side in ["left", "right"]: s.set("content_margin_" + side, 12)
+		for side in ["left", "right"]: s.set("content_margin_" + side, 6 if narrow() else 12)   # R123 · celular: mais espaço para o texto
 		for side in ["top", "bottom"]: s.set("content_margin_" + side, 6)
 		b.add_theme_stylebox_override(pair[0], s)
 	var fg := Color("2a1a04") if on else CREAM

@@ -78,7 +78,8 @@ func setup(p_hub, acc):
 	input_style(del_input, ist)
 	del_input.text_changed.connect(func(_t): _refresh_delete())
 	del_box.add_child(del_input)
-	del_button = button("EXCLUIR MINHA CONTA PARA SEMPRE", 15)
+	del_button = button("EXCLUIR MINHA CONTA PARA SEMPRE" if not narrow() else "EXCLUIR PARA SEMPRE", 15 if not narrow() else 12)
+	del_button.clip_text = true   # R123 · no celular o texto largo empurrava o painel para fora da moldura
 	_style_danger(del_button)
 	del_button.pressed.connect(_confirm_delete)
 	del_box.add_child(del_button)

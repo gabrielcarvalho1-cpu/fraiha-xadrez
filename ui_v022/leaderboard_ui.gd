@@ -26,11 +26,13 @@ func setup(p_hub, acc):
 	account = acc
 	if account != null and account.has_signal("server_message"): account.server_message.connect(_on_message)
 	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 8)
+	tabs.add_theme_constant_override("separation", 5 if narrow() else 8)
 	body.add_child(tabs)
 	for t in TABS:
-		var b := button(t[1], 13 if narrow() else 17, t[0] == tab)
+		var b := button(t[1], 12 if narrow() else 17, t[0] == tab)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.size_flags_stretch_ratio = float(String(t[1]).length() + 4)
+		b.clip_text = true   # R123 · no celular MARCHA REAL empurrava o painel para fora da moldura
 		b.pressed.connect(func(): set_tab(t[0]))
 		tabs.add_child(b)
 		tab_buttons[t[0]] = b
@@ -158,7 +160,7 @@ func _pct(r: Dictionary) -> String:
 func _cols() -> Array:
 	# [rótulo, largura mínima, alinhamento] — o nome estica
 	var narrow := get_viewport().get_visible_rect().size.x < 520.0
-	var c := [["#", 34 if narrow else ts(44)], ["JOGADOR", 0], ["V", 34 if narrow else ts(46)], ["D", 34 if narrow else ts(46)], ["E", 30 if narrow else ts(40)], ["%", 52 if narrow else ts(66)]]
+	var c := [["#", 26 if narrow else ts(44)], ["JOGADOR", 0], ["V", 24 if narrow else ts(46)], ["D", 24 if narrow else ts(46)], ["E", 20 if narrow else ts(40)], ["%", 46 if narrow else ts(66)]]   # R123 · celular: mais espaço para o nome
 	if tab == "xadrez" and not narrow: c.insert(2, ["LIGA", ts(150)])
 	return c
 

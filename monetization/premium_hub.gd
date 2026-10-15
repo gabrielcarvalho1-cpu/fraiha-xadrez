@@ -231,6 +231,12 @@ func _relayout():
     k = 1.0 if view.x >= 1100.0 else (0.84 if view.x >= 760.0 else 0.74)
     if compact and not narrow: k = minf(k, 0.64)
     Art.stamp_cap = (view.x - 150.0) if narrow else 0.0
+    var hs = root.find_child("HeaderTestStamp", true, false)
+    if hs != null:   # R123 · celular: selo curto, sobra espaço para o título
+        hs.text = "TESTE" if narrow else "MODO TESTE"
+        hs.font_size = 12 if narrow else 15
+        hs._measure()
+        hs.queue_redraw()
     var gutter := 16.0 if mobile or narrow else 40.0
     var outer: Control = root.get_node("PremiumOuter")
     outer.offset_left = gutter
@@ -290,7 +296,7 @@ func _set_crumbs():
     for i in parts.size():
         if i > 0: crumbs.add_child(Art.Glyph.new("star", 12, Color(0.79, 0.6, 0.27, 0.8)))
         var last := i == parts.size() - 1
-        var l := Art.label(crumbs, parts[i], fs(20 if last else 15), Art.GOLD if last else Art.MUTED, Art.FONT_BOLD if last else Art.FONT_SEMI)
+        var l := Art.label(crumbs, parts[i], fs((15 if narrow else 20) if last else 15), Art.GOLD if last else Art.MUTED, Art.FONT_BOLD if last else Art.FONT_SEMI)   # R123 · celular: título inteiro (era "PREMII")
         l.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
         l.autowrap_mode = TextServer.AUTOWRAP_OFF
         l.clip_text = narrow
