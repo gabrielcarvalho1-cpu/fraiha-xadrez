@@ -14,6 +14,7 @@ const PaymentUI := preload("res://monetization/payment_mock_ui.gd")
 const PaymentRealUI := preload("res://monetization/payment_real_ui.gd")
 const PersonalizeUI := preload("res://monetization/personalize_ui.gd")
 const MyClubUI := preload("res://monetization/my_club_ui.gd")
+const PurchasesUI := preload("res://monetization/purchases_ui.gd")
 const Mobile := preload("res://ui_v022/mobile_layout.gd")
 const Showcase := preload("res://monetization/showcase.gd")
 
@@ -39,6 +40,8 @@ var view := Vector2(1920, 1080)
 var narrow := false      # celular retrato / telas estreitas: 1 coluna
 var compact := false     # pouca altura (celular paisagem)
 var k := 1.0             # escala de fonte
+var purchases: Array = []     # R107 · MINHAS COMPRAS (payment_history)
+var purchases_loaded := false
 var offer := {}          # R39 · resposta do servidor (payment_offer): vagas de Fundador, provedor pronto
 var _offer_bound = null
 
@@ -77,10 +80,23 @@ func _request_offer():
     if acc.has_method("has_profile") and acc.has_profile(): acc.send_server({"type": "payment_offer"})
 
 func _on_server(msg: Dictionary):
+    if String(msg.get("type", "")) == "payment_history":   # R107
+        purchases = msg.get("items", []) if msg.get("items") is Array else []
+        purchases_loaded = true
+        if visible and modal == null and page == "purchases": _rebuild()
+        return
     if String(msg.get("type", "")) != "payment_offer": return
     offer = msg
     if visible and modal == null and page in ["hub", "founder", "club"]: _rebuild()
 
+
+## R107 · pede ao servidor o histórico de compras da conta.
+func _request_purchases():
+    purchases_loaded = Catalog.is_mock()
+    var acc = _account()
+    if acc == null or not acc.has_method("has_profile") or not acc.has_profile(): return
+    _request_offer()   # liga o _on_server (uma vez) e atualiza a oferta
+    acc.send_server({"type": "payment_history"})
 
 func close():
     close_modal()
@@ -94,7 +110,7 @@ func is_open() -> bool:
 func back():
     if modal != null:
         close_modal()
-    elif page == entry_page and page in ["personalize", "myclub"]:
+    elif page == entry_page and page in ["personalize", "myclub", "purchases"]:
         close()
     elif page != "hub":
         show_page("hub")
@@ -104,6 +120,7 @@ func back():
 func show_page(id: String):
     close_modal()
     page = id
+    if id == "purchases": _request_purchases()
     _rebuild()
     scroll.scroll_vertical = 0
 
@@ -241,7 +258,8 @@ func _set_crumbs():
     elif page == "club": parts.append("CLUB FRAIHA")
     elif page == "personalize": parts.append("PERSONALIZAÇÃO")
     elif page == "myclub": parts.append("MEU CLUB")
-    if narrow: parts = [{"hub": "PREMIUM", "founder": "FUNDADOR", "club": "CLUB", "personalize": "PERSONALIZAR", "myclub": "MEU CLUB"}.get(page, "PREMIUM")]
+    elif page == "purchases": parts.append("MINHAS COMPRAS")
+    if narrow: parts = [{"hub": "PREMIUM", "founder": "FUNDADOR", "club": "CLUB", "personalize": "PERSONALIZAR", "myclub": "MEU CLUB", "purchases": "COMPRAS"}.get(page, "PREMIUM")]
     for i in parts.size():
         if i > 0: crumbs.add_child(Art.Glyph.new("star", 12, Color(0.79, 0.6, 0.27, 0.8)))
         var last := i == parts.size() - 1
@@ -265,6 +283,7 @@ func _rebuild():
         "club": ClubUI.build(self, column)
         "personalize": PersonalizeUI.build(self, column)
         "myclub": MyClubUI.build(self, column)
+        "purchases": PurchasesUI.build(self, column)
         _: _build_hub(column)
     if Catalog.dev_tools_enabled(): _dev_tools(column)
     var tail := Control.new()
@@ -294,6 +313,12 @@ func _build_hub(parent: VBoxContainer):
     mc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     mc.pressed.connect(func(): show_page("myclub"))
     quick.add_child(mc)
+    var mp := Art.Cta.new("MINHAS COMPRAS", "dark", 58 * maxf(k, 0.85), int(20 * maxf(k, 0.85)))
+    mp.name = "OpenPurchases"
+    mp.icon_kind = "scroll"
+    mp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    mp.pressed.connect(func(): show_page("purchases"))
+    quick.add_child(mp)
 
 func _showcase(kind: String) -> Control:
     var sc = Showcase.new(kind)
@@ -673,6 +698,7 @@ func open_payment(product_id: String):
 ## R39 · pagamento confirmado pelo SERVIDOR (webhook → acct_state): festa + boas-vindas com o que foi liberado.
 func payment_confirmed(product_id: String):
     _request_offer()
+    purchases_loaded = false
     _rebuild()
     scroll.scroll_vertical = 0
     _celebrate()

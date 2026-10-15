@@ -661,6 +661,8 @@ func _settings(content: VBoxContainer):
     hub._settings_section(content, "CONTA E PRIVACIDADE")
     var legal := _button(content, "TERMOS · PRIVACIDADE · EXCLUIR CONTA", func(): hub.open_legal("termos"))
     legal.name = "LegalMobile"
+    var buys := _button(content, "MINHAS COMPRAS", func(): hub.open_premium("purchases"))   # R107
+    buys.name = "PurchasesMobile"
     var note := _text(content, "Preferências salvas automaticamente. O botão de som da tela inicial abre o volume.", 14)
     note.name = "SettingsNoteMobile"
     note.add_theme_color_override("font_color", Color("b9b29c"))
