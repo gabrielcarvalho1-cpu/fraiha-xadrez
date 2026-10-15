@@ -20,6 +20,7 @@ var win: JavaScriptObject
 var dom_id := ""
 var _last := ""
 var _shown := false
+var _was_docked := false
 
 static func attach(line: LineEdit, chat_mode := false) -> Node:
     var helper = load("res://ui_v022/web_text_field.gd").new()
@@ -139,6 +140,15 @@ func _process(_delta):
             if bar != null: bar.style.display = "none"
         el.style.display = "block" if show else "none"
     if not show: return
+    # R104.1 · com o teclado aberto o campo sobe para a barra do topo (com o próprio ENVIAR): a linha do jogo
+    # (caixa vazia + ENVIAR) some enquanto isso — antes apareciam DOIS lugares para digitar. O espaço fica
+    # reservado (só fica transparente), então nada na tela pula quando o teclado abre ou fecha.
+    if chat:
+        var d := docked()
+        if d != _was_docked:
+            _was_docked = d
+            var row := field.get_parent() as CanvasItem
+            if row != null: row.modulate.a = 0.0 if d else 1.0
     if not docked():
         # Posição: coordenadas do viewport → pixels CSS da página (o canvas ocupa a janela).
         var xf := field.get_global_transform_with_canvas()

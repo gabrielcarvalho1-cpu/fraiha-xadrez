@@ -1,8 +1,8 @@
 extends "res://ui_v022/home_modal.gd"
 ## R96 · CHAT GLOBAL (balão no topo da Home, ao lado do troféu): uma sala para o servidor inteiro
 ## (online_v021/social/global_chat.js). Abrir = entrar na sala (recebe as últimas mensagens); fechar = sair.
-## Conta escreve; convidado só lê. Tocar numa mensagem de outra pessoa mostra SILENCIAR (só neste aparelho)
-## e DENUNCIAR (vai para a moderação).
+## Conta escreve; convidado só lê. Tocar numa mensagem de outra pessoa mostra VER PERFIL (R104.1), SILENCIAR
+## (só neste aparelho) e DENUNCIAR (vai para a moderação).
 const WebTextField = preload("res://ui_v022/web_text_field.gd")
 var scroll: ScrollContainer
 var list: VBoxContainer
@@ -23,6 +23,7 @@ func setup(p_hub, acc):
 	account = acc
 	if account != null and account.has_signal("server_message"): account.server_message.connect(_on_message)
 	online_label = label("", 13, DIM, true)
+	online_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_child(online_label)
 	body.move_child(online_label, 0)
 	scroll = ScrollContainer.new()
@@ -98,7 +99,7 @@ func _on_message(msg: Dictionary):
 			messages = (msg.get("messages", []) as Array).duplicate() if msg.get("messages") is Array else []
 			_apply_can_send(bool(msg.get("can_send", false)))
 			var n := int(msg.get("online", 0))
-			online_label.text = ("%d pessoa%s no chat agora" % [n, "" if n == 1 else "s"]) if n > 0 else ""
+			online_label.text = (("%d pessoa%s no chat agora" % [n, "" if n == 1 else "s"]) if n > 0 else "") + ("  ·  toque numa mensagem para ver o perfil" if can_send else "")
 			status.text = "" if not messages.is_empty() else "Seja o primeiro a dizer olá!"
 			_rebuild()
 		"gchat_msg":
@@ -159,10 +160,17 @@ func _message_row(m: Dictionary, mine: bool) -> Control:
 				selected = -1 if selected == id else id
 				_rebuild())
 	if selected == id and not mine:
-		var acts := HBoxContainer.new()
-		acts.add_theme_constant_override("separation", 8)
-		var mute := button("SILENCIAR", 13)
+		var acts := HFlowContainer.new()
+		acts.add_theme_constant_override("h_separation", 8)
+		acts.add_theme_constant_override("v_separation", 6)
 		var uid := String(m.get("user_id", ""))
+		# R104.1 · ver o perfil de quem escreveu (de lá dá para adicionar, convidar, bloquear ou denunciar)
+		if can_send and not uid.is_empty():   # conta (o servidor confirma pelo can_send); convidado não tem AMIGOS
+			var prof := button("VER PERFIL", 13, true)
+			prof.name = "GchatProfile"
+			prof.pressed.connect(func(): open_player(uid))
+			acts.add_child(prof)
+		var mute := button("SILENCIAR", 13)
 		mute.pressed.connect(func():
 			muted[uid] = true
 			selected = -1
@@ -179,6 +187,16 @@ func _message_row(m: Dictionary, mine: bool) -> Control:
 	sep.custom_minimum_size = Vector2(0, 1)
 	box.add_child(sep)
 	return box
+
+## Fecha o chat e abre o perfil do jogador na tela de AMIGOS.
+func open_player(uid: String):
+	selected = -1
+	close()
+	var st = hub.get_parent() if hub != null else null
+	var social = st.get("social_ui") if st != null else null
+	if social == null: return
+	social.open()
+	social.open_profile(uid)
 
 func _hour(iso: String) -> String:
 	# "2026-10-14T18:05:09.000Z" → hora local "15:05"

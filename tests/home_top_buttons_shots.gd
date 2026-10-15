@@ -90,6 +90,24 @@ func run():
 	hub.global_chat_ui.selected = 1
 	hub.global_chat_ui._rebuild()
 	await shot("chat_global")
+	# R104.1 · VER PERFIL de quem escreveu
+	var gp = hub.global_chat_ui.list.find_child("GchatProfile", true, false)
+	check(gp != null, "CHAT GLOBAL: tocar na mensagem mostra VER PERFIL")
+	if gp != null:
+		gp.pressed.emit()
+		await frames(6)
+		check(not hub.global_chat_ui.is_open() and stage.social_ui.is_open() and stage.social_ui.profile_id == "u1", "VER PERFIL abre o perfil do jogador em AMIGOS")
+		stage.social_ui.profile = {"user_id": "u1", "nickname": "LadyTorre", "avatar_id": "warrior", "presence": "online", "highest_league": 0, "relation": "none", "ranked": {}}
+		stage.social_ui._show("profile")
+		await shot("chat_global_perfil")
+		stage.social_ui.close()
+		hub.open_global_chat()
+		await frames(4)
+		acc.server_message.emit({"type": "gchat_history", "can_send": true, "online": 12, "messages": [
+			{"id": 1, "user_id": "u1", "nickname": "LadyTorre", "text": "Boa tarde, pessoal! Alguém pra uma Marcha?", "ts": "2026-10-14T18:01:00.000Z"},
+			{"id": 2, "user_id": "u2", "nickname": "Cavalo_Louco", "text": "Bora! Me chama no convite.", "ts": "2026-10-14T18:01:30.000Z"},
+			{"id": 3, "user_id": "u-me", "nickname": "Gabriel", "text": "Quem topa XEQUE depois?", "ts": "2026-10-14T18:02:10.000Z"}]})
+		await frames(4)
 	acc.server_message.emit({"type": "gchat_msg", "id": 4, "user_id": "u1", "nickname": "LadyTorre", "text": "Topo!", "ts": "2026-10-14T18:02:30.000Z"})
 	await frames(4)
 	check(hub.global_chat_ui.list.get_child_count() == 4, "mensagem nova aparece")
