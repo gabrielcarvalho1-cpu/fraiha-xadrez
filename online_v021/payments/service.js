@@ -232,10 +232,12 @@ class Payments {
       }
       changed = await this.payAndGrant(ref);
       if (changed && this.backend.referrals) this.backend.referrals.onPurchase(changed.user_id);   // R105 · +30 dias para quem convidou
+      if (changed && this.backend.creators) this.backend.creators.onPurchase({ ref, user_id: changed.user_id, product_id: row.product_id, amount_cents: amount });   // R121
     } else if (ev.status === 'cancelled') {
       changed = await this.store.markPayment(this.provider.name, ref, 'cancelled');
     } else if (ev.status === 'refunded') {
       changed = this.store.markRefund ? await this.store.markRefund(this.provider.name, ref) : null;
+      if (changed && this.backend.creators) this.backend.creators.onRefund(ref);   // R121 · comissão não paga é cancelada
       if (changed && this.store.revokeEntitlement) {
         try { await this.store.revokeEntitlement(changed.user_id, changed.product_id); }
         catch (e) { console.error('[pagamentos] REEMBOLSO SEM RETIRAR DIREITO (aplique a migração 0010)', ref, e && e.message); }

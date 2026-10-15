@@ -34,6 +34,37 @@ static func stored_code() -> String:
 	if not _valid(code) or int(Time.get_unix_time_from_system()) - at > MAX_AGE_S: return ""
 	return code
 
+## R121 · LINK DE CRIADOR: ?criador=CODIGO (3 a 20 letras/números). Guardado como o convite (30 dias) e enviado na
+## criação da conta (acct_create_profile.creator) ou, se já tiver conta, ao entrar (creator_set).
+const CREATOR_FILE := "user://criador.cfg"
+static func creator_clean(raw: String) -> String:
+	var s := raw.strip_edges().to_upper()
+	var out := ""
+	for ch in s:
+		if (ch >= "A" and ch <= "Z") or (ch >= "0" and ch <= "9"): out += ch
+	return out if out.length() >= 3 and out.length() <= 20 else ""
+
+static func capture_creator() -> String:
+	if not OS.has_feature("web"): return ""
+	var raw = JavaScriptBridge.eval("(new URLSearchParams(location.search).get('criador') || '')", true)
+	var code := creator_clean(String(raw if raw != null else ""))
+	if code.is_empty(): return ""
+	var cfg := ConfigFile.new()
+	cfg.set_value("criador", "code", code)
+	cfg.set_value("criador", "at", int(Time.get_unix_time_from_system()))
+	cfg.save(CREATOR_FILE)
+	return code
+
+static func stored_creator() -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load(CREATOR_FILE) != OK: return ""
+	var code := creator_clean(String(cfg.get_value("criador", "code", "")))
+	if int(Time.get_unix_time_from_system()) - int(cfg.get_value("criador", "at", 0)) > MAX_AGE_S: return ""
+	return code
+
+static func clear_creator():
+	if FileAccess.file_exists(CREATOR_FILE): DirAccess.remove_absolute(ProjectSettings.globalize_path(CREATOR_FILE))
+
 static func clear():
 	if FileAccess.file_exists(FILE): DirAccess.remove_absolute(ProjectSettings.globalize_path(FILE))
 

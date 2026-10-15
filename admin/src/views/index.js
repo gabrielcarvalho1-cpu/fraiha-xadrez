@@ -361,6 +361,79 @@ export function sales(ctx) {
   };
 }
 
+// ---------------------------------------------------------------- R121 · CRIADORES (Apoie um Criador)
+const SALE_ST = { due: ['A pagar', 'warn'], paid: ['Paga', 'on'], cancelled: ['Cancelada (reembolso)', 'off'], refunded_after_paid: ['Reembolsada depois de paga', 'off'] };
+function creatorDialog(c) {
+  return new Promise(resolve => {
+    const f = (label, el) => h('label', {}, label, el);
+    const code = h('input', { type: 'text', value: c ? c.code : '', placeholder: 'XADREZDOJOAO', maxlength: 20, disabled: !!c, style: 'text-transform:uppercase' });
+    const name = h('input', { type: 'text', value: c ? c.name : '', placeholder: 'Nome do criador', maxlength: 60 });
+    const pct = h('input', { type: 'number', min: 0, max: 50, value: c ? c.pct : 10 });
+    const gift = h('input', { type: 'number', min: 0, max: 5000, value: c ? c.gift_crowns : 200 });
+    const contact = h('input', { type: 'text', value: c ? c.contact : '', placeholder: 'Instagram / PIX / e-mail', maxlength: 120 });
+    const active = h('input', { type: 'checkbox', checked: c ? c.active : true });
+    const reason = h('textarea', { rows: 2, placeholder: 'Ex.: parceria fechada por WhatsApp', maxlength: 300 });
+    const close = v => { bg.remove(); resolve(v); };
+    const bg = h('div', { class: 'modal-bg', onclick: e => { if (e.target === bg) close(null); } },
+      h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
+        h('h3', {}, c ? 'Editar criador ' + c.code : 'Novo criador'),
+        h('div', { class: 'fields' }, f('Código (3 a 20 letras/números)', code), f('Nome', name), f('Comissão (% de cada compra)', pct),
+          f('Presente para quem usa o código pela 1ª vez (Coroas)', gift), f('Contato', contact), h('label', { style: 'display:flex;gap:8px;align-items:center' }, active, 'Ativo'),
+          f('Motivo (vai para o Admin Log)', reason)),
+        h('div', { class: 'actions' }, h('button', { class: 'btn ghost', onclick: () => close(null) }, 'Cancelar'),
+          h('button', { class: 'btn ok', onclick: () => close({ code: code.value.trim().toUpperCase(), name: name.value.trim(), pct: Number(pct.value), gift_crowns: Number(gift.value), contact: contact.value.trim(), active: active.checked, reason: reason.value.trim() }) }, 'Salvar'))));
+    document.body.append(bg); (c ? name : code).focus();
+  });
+}
+export function creators(ctx) {
+  const f = frame(ctx, 'Criadores', 'Apoie um Criador: o jogador usa o código do criador (vale 30 dias, renova ao digitar de novo). Cada compra paga nesse período gera a comissão do criador. Pague por fora (PIX) e marque como paga aqui.');
+  const can = () => ctx.session && ctx.session.admin && (ctx.session.admin.perms || []).includes('payments.write');
+  const save = async c => {
+    const v = await creatorDialog(c);
+    if (!v) return;
+    try { await ctx.api.post('/admin/api/creators', v); toast('Criador salvo.'); }
+    catch (e) { toast({ invalid_code: 'Código inválido (3 a 20 letras/números).', invalid_name: 'Informe o nome.', invalid_values: 'Comissão de 0 a 50% e presente de 0 a 5.000.' }[e && e.code] || 'Não foi possível salvar.'); }
+    ctx.refresh();
+  };
+  const pay = async c => {
+    const ok = await confirmAction({ title: 'Marcar comissão de ' + c.name + ' como paga', body: `${BRL(c.due_cents)} em comissões a pagar. Faça o PIX para o criador e depois confirme aqui.`, confirmWord: 'PAGO', actionLabel: 'Marcar como paga', danger: false });
+    if (!ok) return;
+    const r = await ctx.api.post('/admin/api/creators/' + c.code + '/pay', { reason: ok.reason });
+    toast(`${r.paid} venda(s) marcadas como pagas (${BRL(r.commission_cents)}).`); ctx.refresh();
+  };
+  return {
+    error: f.error,
+    async load() {
+      const d = await ctx.api.get('/admin/api/creators');
+      if (!ctx.alive()) return;
+      if (!d.available) return f.show(stateBox('error', d.error === 'migration_0019_missing' ? 'Banco sem a migração 0019 (criadores).' : 'Criadores indisponíveis neste servidor.'));
+      const tot = k => d.items.reduce((a, c) => a + (c[k] || 0), 0);
+      const item = c => h('div', { class: 'panel' },
+        h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' },
+          h('strong', {}, c.name), h('span', { class: 'badge' }, c.code), pill(c.active), h('span', { class: 'dim' }, `${c.pct}% · presente ${fmtInt(c.gift_crowns)} Coroas`),
+          c.contact ? h('span', { class: 'dim' }, c.contact) : '',
+          can() ? h('span', { style: 'margin-left:auto;display:flex;gap:8px' },
+            h('button', { class: 'btn', onclick: () => save(c) }, 'Editar'),
+            c.due_cents > 0 ? h('button', { class: 'btn ok', onclick: () => pay(c) }, 'Marcar como paga') : '') : ''),
+        h('div', { class: 'cards', style: 'margin-top:10px' },
+          card('Jogadores que usaram', { value: fmtInt(c.players), status: 'real', note: `${fmtInt(c.active_players)} apoiando agora` }),
+          card('Vendas', { value: fmtInt(c.sales), status: 'real', note: BRL(c.sold_cents) + ' vendidos' }),
+          card('A pagar', { value: c.due_cents, status: 'real', note: 'comissão ainda não paga' }, { fmt: BRL, hero: c.due_cents > 0 }),
+          card('Já pago', { value: c.paid_cents, status: 'real', note: c.clawback_cents ? `${BRL(c.clawback_cents)} de compras reembolsadas depois de pagas` : 'total pago ao criador' }, { fmt: BRL })),
+        c.recent.length ? h('div', { class: 'tablewrap' }, h('table', {}, h('thead', {}, h('tr', {}, ['Quando', 'Produto', 'Valor', 'Comissão', 'Situação'].map(t => h('th', {}, t)))),
+          h('tbody', {}, c.recent.map(r => h('tr', {}, h('td', {}, fmtDate(r.created_at)), h('td', {}, r.product_id), h('td', {}, BRL(r.amount_cents)), h('td', {}, BRL(r.commission_cents)),
+            h('td', {}, h('span', { class: 'badge ' + (SALE_ST[r.status] || ['', ''])[1] }, (SALE_ST[r.status] || [r.status])[0]))))))) : h('p', { class: 'dim' }, 'Nenhuma venda ainda.'));
+      f.show(
+        h('div', { class: 'cards' },
+          card('Criadores', { value: fmtInt(d.items.length), status: 'real', note: `${fmtInt(d.items.filter(c => c.active).length)} ativos` }),
+          card('Comissão a pagar', { value: tot('due_cents'), status: 'real', note: 'soma de todos os criadores' }, { fmt: BRL, hero: true }),
+          card('Vendido por criadores', { value: tot('sold_cents'), status: 'real', note: fmtInt(tot('sales')) + ' venda(s)' }, { fmt: BRL })),
+        can() ? h('div', { style: 'margin:10px 0' }, h('button', { class: 'btn primary', onclick: () => save(null) }, '+ Novo criador')) : '',
+        d.items.length ? h('div', {}, d.items.map(item)) : stateBox('empty', 'Nenhum criador cadastrado ainda.'));
+    },
+  };
+}
+
 // ---------------------------------------------------------------- R104 · DENÚNCIAS
 // Suspender / banir / tirar suspensão direto na ficha do jogador.
 function modBlock(ctx, p) {

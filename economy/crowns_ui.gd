@@ -274,6 +274,12 @@ func _soon(parent: Control):
 	pb.custom_minimum_size = Vector2(0, ts(44))
 	pb.pressed.connect(func(): client.open_pass())
 	parent.add_child(pb)
+	# R121 · código de criador
+	var cb := button("APOIE UM CRIADOR", 15)
+	cb.name = "CrownsOpenCreator"
+	cb.custom_minimum_size = Vector2(0, ts(44))
+	cb.pressed.connect(func(): client.open_creator())
+	parent.add_child(cb)
 	# R118 · torneio grátis de XEQUE / MARCHA com prêmio em Coroas
 	var tb := button("TORNEIO DA SEMANA", 15)
 	tb.name = "CrownsOpenTournament"

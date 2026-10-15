@@ -80,6 +80,7 @@ class AdminService {
         if (path === '/admin/api/system') return need('system.read') && out(200, this.system());
         if (path === '/admin/api/payments') return need('payments.read') && out(200, await this.payments(url.searchParams.get('status') || ''));
         if (path === '/admin/api/reports') return need('reports.read') && out(200, await this.reportsList(url.searchParams.get('status') || 'open'));
+        if (path === '/admin/api/creators') return need('payments.read') && out(200, await this.creatorsList());   // R121
         return out(404, { error: 'not_found' });
       }
       if (req.method === 'POST') {
@@ -107,6 +108,16 @@ class AdminService {
           const r = this.backend.payments ? await this.backend.payments.reconcile() : null;
           this.audit.record({ actor: admin, action: 'payments_reconcile', target: null, before: null, after: r, result: r && !r.missing ? 'ok' : 'unavailable', reason: '' });
           return out(200, { result: r || { missing: true } });
+        }
+        // R121 · criadores: cadastrar/editar e marcar comissão como paga
+        const cp = /^\/admin\/api\/creators(?:\/([A-Z0-9]{3,20})\/pay)?$/.exec(path);
+        if (cp) {
+          if (!need('payments.write')) return;
+          if (this.limited('write:' + admin.id, 20)) return out(429, { error: 'rate_limited' });
+          let body;
+          try { body = await readJson(req, 4096); }
+          catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
+          return cp[1] ? this.creatorPay(admin, cp[1], body || {}, out) : this.creatorSave(admin, body || {}, out);
         }
         // R104 · moderação: arquivar/resolver denúncia, suspender e tirar suspensão
         const rp = /^\/admin\/api\/reports\/([0-9a-fA-F-]{36})$/.exec(path);
@@ -136,6 +147,50 @@ class AdminService {
       console.error('[admin] api error', e && e.message);
       return out(500, { error: 'server_error' });
     }
+  }
+  // ---------------------------------------------------------------- R121 · CRIADORES
+  async creatorsList() {
+    const st = this.backend.store;
+    if (!st || !st.listCreators) return { available: false };
+    try {
+      const [cs, links, sales] = await Promise.all([st.listCreators(), st.listCreatorLinks(), st.listCreatorSales('')]);
+      const now = this.now();
+      const items = cs.map(c => {
+        const l = links.filter(x => x.code === c.code), s = sales.filter(x => x.code === c.code);
+        const sum = (st2, k) => s.filter(x => st2.includes(x.status)).reduce((a, x) => a + (x[k] || 0), 0);
+        return { ...c, players: l.length, active_players: l.filter(x => Date.parse(x.expires_at) > now).length,
+          sales: s.filter(x => x.status !== 'cancelled').length, sold_cents: sum(['due', 'paid', 'refunded_after_paid'], 'amount_cents'),
+          due_cents: sum(['due'], 'commission_cents'), paid_cents: sum(['paid', 'refunded_after_paid'], 'commission_cents'),
+          clawback_cents: sum(['refunded_after_paid'], 'commission_cents'),
+          recent: s.slice(0, 20).map(x => ({ created_at: x.created_at, product_id: x.product_id, amount_cents: x.amount_cents, commission_cents: x.commission_cents, status: x.status })) };
+      });
+      return { available: true, items };
+    } catch (e) {
+      if (/42P01|PGRST205|does not exist|Could not find/.test(String(e && e.code) + ' ' + String(e && e.message))) return { available: false, error: 'migration_0019_missing' };
+      throw e;
+    }
+  }
+  async creatorSave(admin, b, out) {
+    const st = this.backend.store;
+    if (!st || !st.upsertCreator) return out(503, { error: 'unavailable' });
+    const code = String(b.code || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{3,20}$/.test(code)) return out(400, { error: 'invalid_code' });
+    const name = String(b.name || '').trim().slice(0, 60);
+    if (!name) return out(400, { error: 'invalid_name' });
+    const pct = Math.round(Number(b.pct)), gift = Math.round(Number(b.gift_crowns));
+    if (!(pct >= 0 && pct <= 50) || !(gift >= 0 && gift <= 5000)) return out(400, { error: 'invalid_values' });
+    const before = await st.getCreator(code).catch(() => null);
+    const row = { code, name, pct, gift_crowns: gift, contact: String(b.contact || '').slice(0, 120), active: b.active !== false };
+    const saved = await st.upsertCreator(row);
+    this.audit.record({ actor: admin, action: before ? 'creator_update' : 'creator_create', target: { type: 'creator', id: code }, before, after: saved, result: 'ok', reason: String(b.reason || '') });
+    return out(200, { creator: saved });
+  }
+  async creatorPay(admin, code, b, out) {
+    const st = this.backend.store;
+    if (!st || !st.payCreatorSales) return out(503, { error: 'unavailable' });
+    const r = await st.payCreatorSales(code, String(b.reason || '').slice(0, 300));
+    this.audit.record({ actor: admin, action: 'creator_pay', target: { type: 'creator', id: code }, before: null, after: r, result: 'ok', reason: String(b.reason || '') });
+    return out(200, r);
   }
   // ---------------------------------------------------------------- R104 · DENÚNCIAS
   async reportsList(status) {

@@ -101,6 +101,7 @@ func _set_casual_modes(list) -> bool:
 
 func _ready():
     InviteLink.capture()                     # R105 · ?convite=CODIGO na página
+    InviteLink.capture_creator()             # R121 · ?criador=CODIGO na página
     invite_code = InviteLink.stored_code()
     var config = ConfigFile.new()
     if config.load("res://online.cfg") == OK:
@@ -414,6 +415,10 @@ func create_profile(nick: String, avatar := "warrior"):
     if terms_accepted: msg["terms"] = preload("res://ui_v022/legal_text.gd").ATUALIZADO   # versão aceita (data dos Termos)
     var ref := InviteLink.stored_code()   # R105 · conta criada pelo link de convite de um amigo
     if not ref.is_empty(): msg["ref"] = ref
+    var cr := InviteLink.stored_creator()   # R121 · conta criada pelo link de um criador
+    if not cr.is_empty():
+        msg["creator"] = cr
+        InviteLink.clear_creator()
     if not _send(msg):
         notice.emit("Conectando ao servidor… tente novamente em instantes.", true)
 

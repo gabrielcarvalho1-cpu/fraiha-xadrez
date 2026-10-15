@@ -400,6 +400,33 @@ class MemoryStore {
     return 'ok';
   }
   async crownItems(userId) { return [...((this.crownOwned || new Map()).get(userId) || [])]; }
+  // R121 · criadores (em memória)
+  async getCreator(code) { const c = (this.creators || new Map()).get(code); return c ? { ...c } : null; }
+  async listCreators() { return [...(this.creators || new Map()).values()].map(c => ({ ...c })); }
+  async upsertCreator(row) {
+    this.creators = this.creators || new Map();
+    const old = this.creators.get(row.code) || { pct: 10, gift_crowns: 200, contact: '', active: true, created_at: new Date().toISOString() };
+    const c = { ...old, ...row }; this.creators.set(row.code, c); return { ...c };
+  }
+  async getCreatorLink(uid) { const l = (this.creatorLinks || new Map()).get(uid); return l ? { ...l } : null; }
+  async setCreatorLink(uid, code, expires) { this.creatorLinks = this.creatorLinks || new Map(); this.creatorLinks.set(uid, { user_id: uid, code, linked_at: new Date().toISOString(), expires_at: expires }); }
+  async listCreatorLinks() { return [...(this.creatorLinks || new Map()).values()].map(l => ({ ...l })); }
+  async addCreatorSale(row) {
+    this.creatorSales = this.creatorSales || new Map();
+    if (this.creatorSales.has(row.payment_ref)) return null;
+    const r = { ...row, status: 'due', created_at: new Date().toISOString(), paid_at: null, paid_note: '' };
+    this.creatorSales.set(row.payment_ref, r); return { ...r };
+  }
+  async refundCreatorSale(ref) {
+    const r = (this.creatorSales || new Map()).get(ref); if (!r) return null;
+    r.status = r.status === 'due' ? 'cancelled' : r.status === 'paid' ? 'refunded_after_paid' : r.status; return { ...r };
+  }
+  async listCreatorSales(code) { return [...(this.creatorSales || new Map()).values()].filter(r => !code || r.code === code).map(r => ({ ...r })); }
+  async payCreatorSales(code, note) {
+    let n = 0, cents = 0;
+    for (const r of (this.creatorSales || new Map()).values()) if (r.code === code && r.status === 'due') { r.status = 'paid'; r.paid_at = new Date().toISOString(); r.paid_note = note || ''; n++; cents += r.commission_cents; }
+    return { paid: n, commission_cents: cents };
+  }
   // R118 · Torneio da Semana (em memória)
   async tournAdd(week, game, userId, pts, win) {
     this.tourn = this.tourn || new Map();
@@ -887,6 +914,35 @@ class SupabaseStore {
   async crownDaily(userId, day) {
     const rows = await this.req('/crown_daily?user_id=eq.' + encodeURIComponent(userId) + '&day=eq.' + encodeURIComponent(day) + '&select=counters');
     return rows[0] ? rows[0].counters : null;
+  }
+  // R121 · criadores (0019)
+  async getCreator(code) { const rows = await this.req('/creators?code=eq.' + encodeURIComponent(code) + '&select=*'); return rows[0] || null; }
+  async listCreators() { return this.req('/creators?select=*&order=created_at.asc&limit=500'); }
+  async upsertCreator(row) {
+    const rows = await this.req('/creators?on_conflict=code', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(row) });
+    return rows[0] || null;
+  }
+  async getCreatorLink(uid) { const rows = await this.req('/creator_links?user_id=eq.' + encodeURIComponent(uid) + '&select=*'); return rows[0] || null; }
+  async setCreatorLink(uid, code, expires) {
+    await this.req('/creator_links?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ user_id: uid, code, linked_at: new Date().toISOString(), expires_at: expires }) });
+  }
+  async listCreatorLinks() { return this.req('/creator_links?select=user_id,code,linked_at,expires_at&limit=10000'); }
+  async addCreatorSale(row) {
+    const rows = await this.req('/creator_sales?on_conflict=payment_ref', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify(row) });
+    return rows[0] || null;
+  }
+  async refundCreatorSale(ref) {
+    const q = '/creator_sales?payment_ref=eq.' + encodeURIComponent(ref);
+    let rows = await this.req(q + '&status=eq.due', { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'cancelled' }) });
+    if (!rows[0]) rows = await this.req(q + '&status=eq.paid', { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'refunded_after_paid' }) });
+    return rows[0] || null;
+  }
+  async listCreatorSales(code) { return this.req('/creator_sales?select=*' + (code ? '&code=eq.' + encodeURIComponent(code) : '') + '&order=created_at.desc&limit=5000'); }
+  async payCreatorSales(code, note) {
+    const rows = await this.req('/creator_sales?code=eq.' + encodeURIComponent(code) + '&status=eq.due', { method: 'PATCH', headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ status: 'paid', paid_at: new Date().toISOString(), paid_note: note || '' }) });
+    return { paid: rows.length, commission_cents: rows.reduce((s, r) => s + (r.commission_cents || 0), 0) };
   }
   // R118 · Torneio da Semana (0018)
   async tournAdd(week, game, userId, pts, win) {

@@ -26,6 +26,7 @@ const { Crowns } = require('./economy/crowns');   // R112 · Coroas
 const { Store: CrownStore } = require('./economy/store');   // R116 · Loja de Coroas
 const { Tournaments } = require('./economy/tournaments');   // R118 · Torneio da Semana
 const { SeasonPass } = require('./economy/season_pass');   // R120 · Passe da Temporada
+const { Creators } = require('./social/creators');   // R121 · Apoie um Criador
 
 const GUEST_TTL_MS = 24 * 3600e3;
 const SESSION_REVALIDATE_MS = 60e3;
@@ -96,6 +97,7 @@ class Backend {
     this.tournaments = new Tournaments({ backend: this, send: (ws, o) => this.send(ws, o) });   // R118
     this.tournaments.start();
     this.seasonPass = new SeasonPass({ backend: this, send: (ws, o) => this.send(ws, o) });   // R120
+    this.creators = new Creators({ backend: this, send: (ws, o) => this.send(ws, o) });   // R121
     this.chat.ownedEmotes = uid => this.crownStore.owned(uid);   // R119 · emotes comprados na Loja de Coroas
     this.chat.reports = this.reports;
     // R103 · entrega pagamentos que ficaram "pagos sem vantagem": ao iniciar e de hora em hora
@@ -484,6 +486,7 @@ class Backend {
       if (a.startsWith('store_')) return this.crownStore.handle(ws, m);   // R116
       if (a.startsWith('tourn_')) return this.tournaments.handle(ws, m);   // R118
       if (a.startsWith('pass_')) return this.seasonPass.handle(ws, m);   // R120
+      if (a.startsWith('creator_')) return this.creators.handle(ws, m);   // R121
       if (a.startsWith('bot_')) {
         try { return await this.bots.handle(ws, m); }
         catch (e) { if (e === CANCELLED) return; console.error('bots', a, e && e.message); return this.send(ws, { type: 'bot_error', code: 'server_error', message: 'Erro temporário no servidor. Tente novamente.' }); }
@@ -536,6 +539,7 @@ class Backend {
         const r = await op.wait(() => this.store.createProfile(accountId, v.nickname, String(m.avatar_id || 'warrior'), terms));
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'profile_error' });
         if (m.ref) await this.referrals.onProfileCreated(accountId, m.ref);   // R105 · conta nova pelo link de convite
+        if (m.creator) await this.creators.onProfileCreated(accountId, m.creator);   // R121 · conta nova pelo link de um criador
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
         this.crowns.onLogin(accountId);   // R112 · primeira entrada do dia
         return this.presence.snapshot(ws);

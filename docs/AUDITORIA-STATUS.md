@@ -24,7 +24,8 @@
 - [x] R119 · Emotes nas partidas online (4 de graça + 8 na Loja); xadrez, XEQUE e MARCHA
 - [ ] Loja: avatares novos (depende de arte)
 - [x] R120 · Passe da Temporada: mensal, 30 níveis, faixa grátis + faixa Club (sem migration nova)
-- [ ] Códigos de criador, Discord, CrazyGames
+- [x] R121 · Apoie um Criador: código/link do criador, presente de 200 Coroas, 10% de comissão, tela Criadores no Admin (migration 0019)
+- [ ] Discord, CrazyGames
 - [x] Reinício do servidor: decidido manter como está — a partida é encerrada e ninguém perde nada (aviso deixa isso claro)
 
 ## Depende do dono

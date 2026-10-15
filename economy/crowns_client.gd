@@ -69,6 +69,12 @@ func _on_account_changed():
 func request():
 	if logged_in() and account.has_method("send_server"):
 		account.send_server({"type": "crowns_get"})
+		# R121 · abriu pelo link de um criador já tendo conta: aplica o código uma vez
+		var IL := preload("res://social/invite_link.gd")
+		var cr: String = IL.stored_creator()
+		if not cr.is_empty():
+			account.send_server({"type": "creator_set", "code": cr})
+			IL.clear_creator()
 		account.send_server({"type": "store_get"})   # R116 · também diz quais títulos/itens a conta já tem
 
 func buy(item_id: String):
@@ -79,6 +85,16 @@ func owned(item_id: String) -> bool:
 
 func store_available() -> bool:
 	return bool(store_state.get("available", false))
+
+var creator_panel = null
+## R121 · APOIE UM CRIADOR
+func open_creator():
+	if not is_instance_valid(creator_panel):
+		creator_panel = load("res://economy/creator_ui.gd").new()
+		hub.add_child(creator_panel)
+		creator_panel.setup(hub, account, self)
+	if is_instance_valid(panel) and panel.is_open(): panel.close()
+	creator_panel.show_creator()
 
 var pass_panel = null
 ## R120 · PASSE DA TEMPORADA
