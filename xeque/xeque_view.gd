@@ -27,7 +27,7 @@ const LAYOUTS := {
         "scene": [1.7176, Vector2(-895.9, 55.5)], "board": Rect2(90, 521, 900, 778),
         "title": [Vector2(86, 86), 84], "sub": [Vector2(86, 117), 22],
         "mesa": Rect2(700, 5, 320, 157), "como": null,
-        "plates": {0: ["h", Rect2(62, 1444, 356, 136)], 1: ["v", Vector2(186, 340), 252], 2: ["v", Vector2(540, 340), 252], 3: ["v", Vector2(894, 340), 252]},   # R123 · placas maiores (letra legível no celular)
+        "plates": {0: ["h", Rect2(62, 1444, 356, 136)], 1: ["v", Vector2(188, 338), 226], 2: ["v", Vector2(540, 338), 226], 3: ["v", Vector2(892, 338), 226]},   # R123.1 · um pouco maiores, sem encostar no tabuleiro (cabem entre os botões do topo e a moldura)
         "turn": Rect2(350, 1308, 380, 60), "meter": Rect2(708, 1452, 300, 120),   # R123 · faixa da vez acima da mão (a carta escolhida sobe e cobria o SUA VEZ)
         "xeque": [Vector2(184, 1846), 0.768], "play": Rect2(405, 1805, 630, 82),
         # R88 · ícones maiores no celular em pé (84 em vez de 60) e o CHAT num lugar próprio, fora do tabuleiro
@@ -209,6 +209,9 @@ const Crisp := preload("res://ui_v022/crisp_tex.gd")
 func tex_center(tex: Texture2D, c: Vector2, sc: float, rot := 0.0, mod: Color = Color.WHITE):
     var sz := tex.get_size() * sc
     # R37.2 · cartas: reduzidas com Lanczos para o tamanho real na tela (texto legível com filtro NEAREST)
+    if tex != ui.CARD_BACK and ui.cards.values().has(tex) and not ui.cards_clean.is_empty():
+        card_face(ui.cards.find_key(tex), c, sz.x, rot, mod)   # R123.1 · texto e números ao vivo (nítidos)
+        return
     if tex == ui.CARD_BACK or ui.cards.values().has(tex): tex = Crisp.at(tex, sz * ui.k)
     if rot == 0.0:
         draw_texture_rect(tex, Rect2(c - sz / 2.0, sz), false, mod)
@@ -466,8 +469,9 @@ func _draw_mesa_anim():
     if t >= 0.5 and t < 1.2:
         for i in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(6 + i * 6), Color(1, 0.84, 0.35, 0.13 - i * 0.022), false, 6.0)
     draw_rect(Rect2(-sz / 2.0, sz).grow(3), Color(0, 0, 0, 0.5 * a))
-    draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false, Color(1, 1, 1, a))
+    if tex == ui.CARD_BACK or ui.cards_clean.is_empty() or a < 0.99: draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false, Color(1, 1, 1, a))
     draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+    if tex != ui.CARD_BACK and not ui.cards_clean.is_empty() and a >= 0.99: card_face(g.target, pos, sz.x, 0.0, Color.WHITE, maxf(0.04, flip))   # R123.1
     if t >= 0.45 and t < 1.3:
         var ta := clampf((t - 0.45) / 0.2, 0.0, 1.0) * (1.0 - clampf((t - 1.1) / 0.2, 0.0, 1.0))
         var label := "A MESA PEDE"
@@ -513,9 +517,9 @@ func _draw_mesa_pede():
     var cc := ipos + isz / 2.0
     draw_set_transform(ui.origin + cc * ui.k, -0.07, Vector2(ui.k, ui.k))
     draw_rect(Rect2(-isz / 2.0 + Vector2(5, 6), isz), Color(0, 0, 0, 0.45))
-    draw_texture_rect(card, Rect2(-isz / 2.0, isz), false)
     draw_rect(Rect2(-isz / 2.0, isz).grow(1), Color("ffd257"), false, 2.0)
     draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+    card_face(g.target, cc, isz.x, -0.07)   # R123.1 · nítida
     var x := ipos.x + isz.x + (14 if compact else 18)
     var big := fit(name.to_upper(), "ui", 66 if compact else 78, r.end.x - x - 12)
     text(name.to_upper(), Vector2(x, r.position.y + (101 if compact else 107)), "ui", big, Color("f6ecd2"), -1, HORIZONTAL_ALIGNMENT_LEFT, 5, Color("120a06"))
@@ -982,8 +986,9 @@ func hand_layout() -> Array:
     var mid := (n - 1) / 2.0
     for i in n:
         var off := i - mid
-        var rot := deg_to_rad(4.0 * off) if n > 1 else 0.0
-        var c: Vector2 = base + Vector2(off * step, absf(off) * absf(off) * cw * 0.024 + absf(off) * cw * 0.026)
+        # R123.1 · celular: cartas retas (inclinadas, as letras pequenas serrilhavam)
+        var rot := 0.0
+        var c: Vector2 = base + Vector2(off * step, absf(off) * cw * 0.03)
         if i in ui.selected: c.y -= cw * 0.15
         out.append({"c": c, "rot": rot, "sc": sc * 2.0})     # versões do jogo: metade do tamanho do arquivo aprovado
     return out
@@ -1064,7 +1069,11 @@ func _draw_reveal(big: bool):
         draw_rect(Rect2(-sz / 2.0, sz).grow(3), Color(0, 0, 0, 0.45))
         var lie: bool = not Rules.is_true_card(cards[i], String(r.target))
         if flip >= 1.0 and lie: draw_rect(Rect2(-sz / 2.0, sz).grow(4), Color("e02a36"), false, 4.0)
-        draw_texture_rect(Crisp.at(tex, sz * ui.k), Rect2(-sz / 2.0, sz), false)
+        if flip >= 0.5 and not ui.cards_clean.is_empty():
+            draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+            card_face(cards[i], c, sz.x, rot, Color.WHITE, maxf(0.05, wscale))   # R123.1 · nítida
+        else:
+            draw_texture_rect(Crisp.at(tex, sz * ui.k), Rect2(-sz / 2.0, sz), false)
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
     # faixa "DISSE 3 TORRES · TINHA 1 CAVALO"
     var said: String = "DISSE " + _declared(n, String(r.target))
@@ -1548,8 +1557,9 @@ func _draw_intro():
             var pul := 0.5 + 0.5 * sin(ui.t * 6.0)
             for gl in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(6 + gl * 6 + pul * 4), Color(1.0, 0.35, 0.45, (0.20 - gl * 0.035) * al), false, 6.0)
         draw_rect(Rect2(-sz / 2.0 + Vector2(8, 10), sz), Color(0, 0, 0, 0.45 * al))
-        draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false, Color(1, 1, 1, al))
+        if ui.cards_clean.is_empty() or al < 0.99: draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false, Color(1, 1, 1, al))
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+        if not ui.cards_clean.is_empty() and al >= 0.99: card_face(kinds[i], c, sz.x, rot)   # R123.1 · nítida
         # quantidade grande embaixo (entra com um pulo)
         var tn := clampf((t - 0.7 - i * 0.18) / 0.25, 0.0, 1.0)
         if tn > 0.0:
@@ -1671,18 +1681,34 @@ func card_face(kind: String, c: Vector2, w: float, rot := 0.0, mod: Color = Colo
         var tl := -px / 2.0
         var info: Array = CARD_TEXT.get(kind, ["", "", Color.WHITE])
         var name := String(Rules.NAMES.get(kind, kind)).to_upper()
-        var nf := maxi(9, int(round(94.0 * u)))
-        var room := 600.0 * u
+        # R123.1 · carta pequena (celular): só o NOME, bem maior, e o número do selo grande — sem letras miúdas
+        var tiny := px.x < 140.0
+        var nf := maxi(10 if tiny else 9, int(round((150.0 if tiny else 94.0) * u)))
+        var room := (680.0 if tiny else 600.0) * u
         while nf > 8 and tw(name, "o7", nf) > room: nf -= 1
-        var ny := tl.y + 790.0 * u + nf * 0.405
-        var ol := maxi(2, int(round(nf * 0.16)))
+        var ny := tl.y + (835.0 if tiny else 790.0) * u + nf * 0.405
+        var ol := maxi(2, int(round(nf * (0.22 if tiny else 0.16))))
         draw_string_outline(font("o7"), Vector2(tl.x, ny).round(), name, HORIZONTAL_ALIGNMENT_CENTER, px.x, nf, ol, Color(0.03, 0.02, 0.01, 0.95))
         draw_string(font("o7"), Vector2(tl.x, ny).round(), name, HORIZONTAL_ALIGNMENT_CENTER, px.x, nf, Color("fbf3dc"))
-        var wf := maxi(8, int(round(52.0 * u)))
-        draw_string(font("o7_sp3"), Vector2(tl.x, tl.y + 905.0 * u).round(), String(info[0]), HORIZONTAL_ALIGNMENT_CENTER, px.x, wf, info[2])
-        var lf := maxi(8, int(round(48.0 * u)))
-        while lf > 7 and font("o6").get_string_size(String(info[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, lf).x > 640.0 * u: lf -= 1
-        draw_string(font("o6"), Vector2(tl.x, tl.y + 958.0 * u).round(), String(info[1]), HORIZONTAL_ALIGNMENT_CENTER, px.x, lf, Color("ece2c8"))
+        if not tiny:
+            var wf := maxi(8, int(round(52.0 * u)))
+            draw_string(font("o7_sp3"), Vector2(tl.x, tl.y + 905.0 * u).round(), String(info[0]), HORIZONTAL_ALIGNMENT_CENTER, px.x, wf, info[2])
+            var lf := maxi(8, int(round(48.0 * u)))
+            while lf > 7 and font("o6").get_string_size(String(info[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, lf).x > 640.0 * u: lf -= 1
+            draw_string(font("o6"), Vector2(tl.x, tl.y + 958.0 * u).round(), String(info[1]), HORIZONTAL_ALIGNMENT_CENTER, px.x, lf, Color("ece2c8"))
+        else:
+            # faixa colorida da palavra (PEÇA vermelho/dourado/azul, CORINGA bordô) em vez da palavra miúda
+            draw_rect(Rect2(tl.x + 60.0 * u, tl.y + 900.0 * u, px.x - 120.0 * u, maxf(2.0, 26.0 * u)), info[2])
+        # número do selo (quantas há no baralho) e "DE 20", ao vivo
+        var qn := str(int(Rules.DECK_COUNTS.get(kind, 0)))
+        var qf := maxi(10 if tiny else 9, int(round((84.0 if tiny else 70.0) * u)))
+        var qc := tl + Vector2(112.0, 112.0) * u
+        draw_string(font("o7"), Vector2(qc.x - 60.0 * u, qc.y + qf * 0.36).round(), qn, HORIZONTAL_ALIGNMENT_CENTER, 120.0 * u, qf, Color("3a1d06"))
+        if not tiny:
+            var df := maxi(7, int(round(26.0 * u)))
+            var dx := tl.x + 629.0 * u
+            draw_string(font("o7_sp3"), Vector2(dx - 60.0 * u, tl.y + 96.0 * u).round(), "DE", HORIZONTAL_ALIGNMENT_CENTER, 120.0 * u, df, Color("f3e7c8"))
+            draw_string(font("o7"), Vector2(dx - 60.0 * u, tl.y + 128.0 * u).round(), str(Rules.deck_size()), HORIZONTAL_ALIGNMENT_CENTER, 120.0 * u, maxi(8, int(round(36.0 * u))), Color("f3e7c8"))
     draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
 
 # ---------------------------------------------------------------- R55 · partes da tela (PC)
@@ -2102,7 +2128,7 @@ func _steel_immediate(rr: Rect2, lt: Color, dk: Color):
         draw_colored_polygon(PackedVector2Array([p + Vector2(0, -7), p + Vector2(4, 0), p + Vector2(0, 7), p + Vector2(-4, 0)]), Color("e7b64c"))
 
 ## R55.3 · tamanhos das cartas da partida no PC (largura em px de referência): mão, revelação, A MESA PEDE.
-const PREWARM_CARD_W := [DESK_CARD_W, 150.0, 104.0]
+const PREWARM_CARD_W := [DESK_CARD_W, 150.0, 104.0, 300.0]   # R123.1 · + apresentação do baralho (cartas nítidas)
 ## Lista de reduções de carta que a partida no PC vai pedir (mesmos argumentos de card_face/Crisp.at).
 ## R61 · vale para os 3 layouts (antes só PC): o verso da distribuição é preparado na tela "Como jogar" /
 ## durante a abertura, sem leitura da GPU (Crisp decodifica a arte na CPU). Só entra o que ainda não está pronto,
@@ -2122,6 +2148,11 @@ func prewarm_jobs() -> Array:
         if seen.has(key): continue
         seen[key] = true
         if not Crisp.has(ui.CARD_BACK, px): out.append([ui.CARD_BACK, px])
+    if not d and not ui.cards_clean.is_empty():
+        for kind in ["rei", "rainha", "cavalo", "peao"]:      # R123.1 · celular: apresentação do baralho (230)
+            var tx: Texture2D = ui.cards_clean[kind]
+            var pz: Vector2 = Vector2(230.0, 230.0 * 1.4) * ui.k
+            if not Crisp.has(tx, pz): out.append([tx, pz])
     if d:
         for kind in ["rei", "rainha", "cavalo", "peao"]:      # carta a carta: cada arte é decodificada uma vez
             for w in PREWARM_CARD_W:

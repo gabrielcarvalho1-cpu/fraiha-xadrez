@@ -113,8 +113,16 @@ var cards_clean := {}            # R55 · PC: cartas limpas (tools/xeque_card_bl
 func _load_desk_art():
     if LOGO_R55 == null: LOGO_R55 = load(LOGO_R55_PATH)
     # cartas sem o texto impresso (o nome, PEÇA/CORINGA e a linha pequena são desenhados ao vivo, nítidos)
-    if cards_clean.is_empty():
-        for n in ["rei", "rainha", "cavalo", "peao"]: cards_clean[n] = load("res://xeque/art/cartas/carta_%s_limpa.png" % n)
+    _load_clean_cards(true)
+
+## R123.1 · cartas SEM texto impresso em TODOS os layouts (nome, PEÇA, legenda, número e DE 20 são
+## desenhados ao vivo, nítidos). PC: 720x1008; celular: 360x504 (menos memória).
+var _clean_big := false
+func _load_clean_cards(big: bool):
+    if not cards_clean.is_empty() and _clean_big == big: return
+    _clean_big = big
+    for n in ["rei", "rainha", "cavalo", "peao"]:
+        cards_clean[n] = load("res://xeque/art/cartas/carta_%s_limpa2%s.png" % [n, "" if big else "_cel"])
 var avatars := []
 var pieces := {}
 var clock_tex := {}
@@ -329,6 +337,7 @@ func _relayout():
     else: layout = "desktop"
     design = {"desktop": Vector2(1920, 1080), "portrait": Vector2(1080, 1920), "landscape": Vector2(1950, 900)}[layout]
     if layout == "desktop": _load_desk_art()
+    else: _load_clean_cards(false)
     k = minf(vs.x / design.x, vs.y / design.y)
     origin = (vs - design * k) / 2.0
     _redraw()
