@@ -65,7 +65,7 @@ const say = (c, id, text) => c.send({ type: 'chat_send', match_id: id, text });
   a.send({ type: 'chat_report', match_id: id });
   const rep = await a.next('chat_report_ok');
   await sleep(200);
-  check(!rep.duplicate && s.log().includes('chat_report') && s.log().includes('rajada'), 'DENUNCIAR registra a denúncia no log do servidor');
+  check(!rep.duplicate && s.log().includes('[denuncia]') && s.log().includes('"kind":"match"'), 'R104 · DENUNCIAR vai para a fila de denúncias (e o log do servidor)');
   a.send({ type: 'chat_report', match_id: id }); check((await a.next('chat_report_ok')).duplicate === true, 'denúncia repetida não duplica');
   // Reconexão: histórico da partida volta
   const tok = b.guest.token; b.close(); await sleep(400);

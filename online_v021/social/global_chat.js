@@ -59,6 +59,14 @@ class GlobalChat {
       if (!e) return fail('Mensagem não encontrada.', 'not_found');
       const who = ws.user ? ws.user.id : (ws.identity && ws.identity.id) || '?';
       this.log('[gchat-report]', JSON.stringify({ by: who, msg_id: e.id, user_id: e.user_id, nickname: e.nickname, text: e.text, ts: e.ts }));
+      // R104 · contas: também vai para a fila de denúncias do Admin (convidado não tem id fixo para denunciar)
+      const R = this.backend && this.backend.reports;
+      if (R && ws.user && e.user_id && !String(e.user_id).startsWith('guest')) {
+        const mine = this.messages.filter(x => x.user_id === e.user_id).slice(-10).map(x => x.text);
+        return R.file({ reporter: ws.user.id, reported: e.user_id, kind: 'global_chat', ref: String(e.id),
+          context: { reported_nickname: e.nickname, reporter_nickname: ws.profile && ws.profile.nickname, messages: mine } })
+          .then(() => this.send(ws, { type: 'gchat_reported', id })).catch(() => this.send(ws, { type: 'gchat_reported', id }));
+      }
       return this.send(ws, { type: 'gchat_reported', id });
     }
     return fail('Ação inválida.', 'invalid');

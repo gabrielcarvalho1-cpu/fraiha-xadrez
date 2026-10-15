@@ -20,6 +20,7 @@ const { GlobalChat } = require('./social/global_chat');    // R96 · CHAT GLOBAL
 const { ModeControls, CLOSED_MESSAGE } = require('./admin/controls');   // FRAIHA Admin: ativar/desativar modos (autoridade no servidor)
 const Cosmetics = require('./accounts/cosmetics');
 const Status = require('./accounts/status');   // R55 · status do perfil
+const { Reports } = require('./moderation/reports');   // R104 · denúncias e suspensão
 
 const GUEST_TTL_MS = 24 * 3600e3;
 const SESSION_REVALIDATE_MS = 60e3;
@@ -83,6 +84,8 @@ class Backend {
     this.invites = new Invites({ send: (ws, o) => this.send(ws, o), backend: this });
     this.presence = new Presence({ send: (ws, o) => this.send(ws, o), backend: this });
     this.payments = new Payments({ send: (ws, o) => this.send(ws, o), backend: this });
+    this.reports = new Reports({ backend: this });   // R104
+    this.chat.reports = this.reports;
     // R103 · entrega pagamentos que ficaram "pagos sem vantagem": ao iniciar e de hora em hora
     if (this.store && this.store.persistent) {
       const rc = setTimeout(() => this.payments.reconcile(), 15000); if (rc.unref) rc.unref();
@@ -488,6 +491,11 @@ class Backend {
         const existing = await this.checked(ws, revision, this.store.getProfile(user.id));
         if (existing && existing.account_status === 'deleted') {   // R97 · conta excluída não entra mais
           this.send(ws, { type: 'acct_deleted', message: 'Esta conta foi excluída.' });
+          return this.invalidate(ws);
+        }
+        const susp = existing ? await this.checked(ws, revision, this.reports.activeSuspension(existing)) : null;   // R104 · conta suspensa não entra
+        if (susp) {
+          this.send(ws, { type: 'acct_suspended', message: Reports.message(susp), until: susp.until });
           return this.invalidate(ws);
         }
         if (existing) await loginOp.wait(() => this.store.touchLogin(user.id));

@@ -191,6 +191,10 @@ func _send(msg: Dictionary) -> bool:
     return account.send_server(msg)
 
 func _act(action: String, uid: String):
+    if action == "report_dm":   # R104 · denúncia feita de dentro da conversa privada
+        if _send({"type": "social_report", "user_id": uid, "from": "dm"}): _show("dm")
+        else: notice_text("Sem conexão. Tente de novo em instantes.")
+        return
     if not _send({"type": "social_" + action, "user_id": uid}):
         notice_text("Sem conexão. Tente de novo em instantes.")
 
@@ -255,6 +259,9 @@ func _on_message(msg: Dictionary):
                 _show("profile")
                 notice_text(_ok_text(String(msg.get("action", ""))), Color("9fe0a8"))
             elif screen == "search": _show("search")
+        "social_report_ok":
+            if screen == "confirm": _show("profile")
+            notice_text("Denúncia enviada. Obrigado! A equipe FRAIHA vai analisar.", Color("9fe0a8"))
         "social_error":
             var code = String(msg.get("code", ""))
             if code == "reverse_pending":
@@ -846,6 +853,9 @@ func _build_profile(narrow: bool):
         _button(actions, "DESBLOQUEAR", func(): _act("unblock", uid))
     else:
         _button(actions, "BLOQUEAR", func(): _ask("block", uid, "BLOQUEAR JOGADOR?", "%s não poderá te enviar pedidos, mensagens ou convites, e deixa de te encontrar na busca. A amizade (se houver) é desfeita." % nickname))
+    # R104 · denunciar (perfil, nome, foto ou mensagens privadas)
+    var rep = _button(actions, "DENUNCIAR", func(): _ask("report", uid, "DENUNCIAR JOGADOR?", "A equipe FRAIHA vai analisar o perfil de %s (nome e foto) e as mensagens privadas que ele te enviou. Use para ofensa, assédio, golpe ou nome impróprio. Denúncia falsa pode gerar punição." % nickname))
+    rep.name = "ProfileReport"
 
 func _ask(action: String, uid: String, title: String, text: String):
     confirm = {"action": action, "user_id": uid, "title": title, "text": text, "return": "profile"}
@@ -856,8 +866,9 @@ func _build_confirm():
     _label(box, String(confirm.get("text", "")), 16, TEXT, true)
     var action = String(confirm.get("action", ""))
     var uid = String(confirm.get("user_id", ""))
+    var back := String(confirm.get("return", "profile"))
     _button(box, "CONFIRMAR", func(): _act(action, uid), true)
-    _button(box, "CANCELAR", func(): _show("profile"))
+    _button(box, "CANCELAR", func(): _show(back))
 
 # ---------- Layout ----------
 ## PC (não celular, janela larga): painel/modal da referência nova.
@@ -1098,6 +1109,10 @@ func _build_dm():
     nick.name = "DmPeer"
     var dm_pres = _label(col, _dm_presence_text(), 13, DIM_TEXT)
     dm_pres.name = "DmPresence"
+    var dm_rep = _button(head, "DENUNCIAR", func():
+        confirm = {"action": "report_dm", "user_id": dm_id, "title": "DENUNCIAR CONVERSA?", "text": "A equipe FRAIHA vai receber as últimas mensagens que %s te enviou para análise. Ele não fica sabendo quem denunciou." % String(dm_peer.get("nickname", "o jogador")), "return": "dm"}
+        _show("confirm"), false, true)
+    dm_rep.name = "DmReport"
     dm_scroll = ScrollContainer.new()
     preload("res://ui_v022/touch_scroll.gd").attach(dm_scroll)
     dm_scroll.name = "DmScroll"

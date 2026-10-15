@@ -63,7 +63,7 @@ func setup(service):
     mute_button = _small(head, "SILENCIAR", _toggle_mute)
     mute_button.tooltip_text = "Deixar de ver as mensagens do adversário (só para você)"
     report_button = _small(head, "DENUNCIAR", _report)
-    report_button.tooltip_text = "Enviar as mensagens do adversário para análise"
+    report_button.tooltip_text = "Denunciar o adversário (chat e voz). A equipe recebe as mensagens dele para análise."
     close_button = _small(head, "FECHAR", func(): set_mobile_open(false))
     minimize_button = _small(head, "—", func(): set_minimized(true))
     minimize_button.tooltip_text = "Minimizar o chat"

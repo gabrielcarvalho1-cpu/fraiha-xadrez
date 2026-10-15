@@ -634,6 +634,12 @@ func _receive(msg: Dictionary):
         _clear_session()
         notice.emit(String(msg.get("message", "Conta excluída.")) + " Você pode continuar jogando como convidado.", false)
         changed.emit()
+    elif type == "acct_suspended":
+        # R104 · conta suspensa pela moderação: sai da conta neste aparelho e mostra o motivo e o prazo
+        _clear_session()
+        notice.emit(String(msg.get("message", "Sua conta está suspensa.")) + " Você pode continuar jogando como convidado.", true)
+        changed.emit()
+        server_message.emit(msg)   # por último: a tela da conta abre com o aviso (account_ui)
     elif type == "guest_state":
         if msg.has("casual_modes"): _set_casual_modes(msg.get("casual_modes"))
         if not bool(msg.get("account", false)):

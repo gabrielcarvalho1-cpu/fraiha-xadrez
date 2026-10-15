@@ -141,6 +141,17 @@ class Social {
       if (this.backend.onUnfriended) this.backend.onUnfriended(me, other);
       return done('remove', null);
     }
+    if (a === 'social_report') {   // R104 · denunciar pelo perfil ou pela conversa privada
+      const kind = m.from === 'dm' ? 'dm' : 'profile';
+      let messages = [];
+      try { messages = (await st.getConversation(me, other, 40, 0)).filter(x => x.sender_id === other).slice(-20).map(x => x.body); } catch { /* sem DMs (0003) a denúncia segue sem o trecho */ }
+      op.assert();
+      const R = this.backend.reports;
+      const r = R ? await R.file({ reporter: me, reported: other, kind, reason: String(m.reason || ''),
+        context: { reporter_nickname: meProfile.nickname, reported_nickname: target.nickname, messages } }) : { ok: true };
+      if (r.error) return this.fail(ws, r.error, r.code);
+      return this.send(ws, { type: 'social_report_ok', user_id: other, from: kind });
+    }
     if (a === 'social_block') {
       await op.wait(() => st.addBlock(me, other));
       await op.wait(() => st.removeFriendship(me, other)); await op.wait(() => st.removeRequest(me, other)); await op.wait(() => st.removeRequest(other, me));

@@ -67,8 +67,15 @@ class ChatHub {
       match.reports.add(uid);
       const other = color === 'w' ? 'b' : 'w';
       const msgs = (match.chat || []).filter(e => e.from_color === other).slice(-20).map(e => e.text);
-      this.log('chat_report ' + JSON.stringify({ match_id: match.id, kind: service.kind, reporter: uid, reported: match.players[other].userId, reported_nickname: match.players[other].nickname, messages: msgs, at: new Date(this.now()).toISOString() }));
-      return this.send(ws, { type: 'chat_report_ok', match_id: match.id });
+      // R104 · vai para a fila de denúncias do Admin (tabela reports); vale para o chat E a voz da partida
+      const row = { reporter: uid, reported: match.players[other].userId, kind: 'match', ref: match.id,
+        context: { reporter_nickname: match.players[color].nickname, reported_nickname: match.players[other].nickname, mode: service.kind, messages: msgs } };
+      if (!this.reports) {
+        this.log('chat_report ' + JSON.stringify({ match_id: match.id, kind: service.kind, reporter: uid, reported: row.reported, reported_nickname: row.context.reported_nickname, messages: msgs, at: new Date(this.now()).toISOString() }));
+        return this.send(ws, { type: 'chat_report_ok', match_id: match.id });
+      }
+      return this.reports.file(row).then(() => this.send(ws, { type: 'chat_report_ok', match_id: match.id }))
+        .catch(e => { console.error('chat_report', e && e.message); this.send(ws, { type: 'chat_report_ok', match_id: match.id }); });
     }
     return fail('Ação de chat desconhecida.', 'invalid');
   }

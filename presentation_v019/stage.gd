@@ -559,6 +559,11 @@ func _setup_account():
     invite_ui.setup(account, hub.avatar_texture, func(): return party_in_match() or (mode in ["online", "ranked", "casual"] and ((mode != "ranked" or ranked.in_match()) and (mode != "casual" or casual.in_match()))))
     # R35 · MARCHA REAL / XEQUE online com amigo: o servidor manda party_* e a tela do modo joga
     account.server_message.connect(_on_party_message)
+    # R104 · conta suspensa pela moderação: aviso na moldura do jogo (motivo e prazo)
+    account.server_message.connect(func(m):
+        if String(m.get("type", "")) == "acct_suspended":
+            if account_ui != null and account_ui.is_open(): account_ui.hide_ui()
+            hub.show_notice("CONTA SUSPENSA", String(m.get("message", "Sua conta está suspensa."))))
     account_chip = Button.new()
     account_chip.name = "AccountChip"
     account_chip.add_theme_font_size_override("font_size", 20)

@@ -2531,6 +2531,15 @@ func open_leaderboard():
     leaderboard_ui.show_ranking()
 
 ## R97 · TERMOS DE USO, PRIVACIDADE e EXCLUIR CONTA (aba inicial: "termos" | "privacidade" | "excluir").
+## R104 · aviso importante na moldura do jogo (ex.: CONTA SUSPENSA).
+var notice_modal = null
+func show_notice(title: String, text: String):
+    if not is_instance_valid(notice_modal):
+        notice_modal = load("res://ui_v022/notice_modal.gd").new()
+        add_child(notice_modal)
+        notice_modal.setup(self, title)
+    notice_modal.show_notice(title, text)
+
 func open_legal(tab := "termos"):
     if not is_instance_valid(legal_ui):
         legal_ui = load("res://ui_v022/legal_ui.gd").new()

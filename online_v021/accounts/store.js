@@ -319,6 +319,30 @@ class MemoryStore {
   async addFriendship(a, b) { const [x, y] = [a, b].sort(); this.social.friends.add(x + '|' + y); }
   async removeFriendship(a, b) { const [x, y] = [a, b].sort(); this.social.friends.delete(x + '|' + y); }
   async addBlock(a, b) { this.social.blocks.add(a + '|' + b); }
+  // ---------- R104 · denúncias e suspensão (em memória: desenvolvimento/testes) ----------
+  async createReport(row) {
+    this.reports = this.reports || [];
+    const r = { report_id: require('crypto').randomUUID(), status: 'open', handled_by: null, handled_at: null, note: '', reason: '', ref: '', context: {},
+      created_at: new Date().toISOString(), ...row };
+    this.reports.push(r); return { ...r };
+  }
+  async listReports(status = 'open', limit = 100) {
+    return (this.reports || []).filter(r => !status || r.status === status).slice().reverse().slice(0, limit).map(r => ({ ...r }));
+  }
+  async countReportsAgainst(userId, sinceIso) {
+    return (this.reports || []).filter(r => r.reported_id === userId && r.created_at >= sinceIso).length;
+  }
+  async updateReport(id, patch) {
+    const r = (this.reports || []).find(x => x.report_id === id);
+    if (!r) return null;
+    Object.assign(r, patch); return { ...r };
+  }
+  async setSuspension(userId, until, reason) {
+    const p = this.profiles.get(userId); if (!p || p.account_status === 'deleted') return null;
+    Object.assign(p, until === false ? { account_status: 'active', suspended_until: null, suspension_reason: null }
+      : { account_status: 'suspended', suspended_until: until || null, suspension_reason: String(reason || '') });
+    return { ...p };
+  }
   async removeBlock(a, b) { this.social.blocks.delete(a + '|' + b); }
 
   // ---------- Mensagens privadas (0003_fraiha_dm) ----------
@@ -696,6 +720,29 @@ class SupabaseStore {
   async addFriendship(a, b) { const [x, y] = [a, b].sort(); return this._insert('friendships', { user_a: x, user_b: y }); }
   async removeFriendship(a, b) { const [x, y] = [a, b].sort(); return this._delete('friendships', { user_a: x, user_b: y }); }
   async addBlock(a, b) { return this._insert('blocks', { blocker: a, blocked: b }); }
+  // ---------- R104 · denúncias (0013) e suspensão ----------
+  async createReport(row) {
+    const rows = await this.req('/reports', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+    return rows[0];
+  }
+  async listReports(status = 'open', limit = 100) {
+    return this.req('/reports?' + (status ? 'status=eq.' + encodeURIComponent(status) + '&' : '') + 'select=*&order=created_at.desc&limit=' + (limit | 0));
+  }
+  async countReportsAgainst(userId, sinceIso) {
+    const rows = await this.req('/reports?reported_id=eq.' + encodeURIComponent(userId) + '&created_at=gte.' + encodeURIComponent(sinceIso) + '&select=report_id&limit=200');
+    return rows.length;
+  }
+  async updateReport(id, patch) {
+    const rows = await this.req('/reports?report_id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) });
+    return rows[0] || null;
+  }
+  // until: ISO (prazo), null (indeterminado) ou false (tirar a suspensão). Nunca mexe em conta excluída.
+  async setSuspension(userId, until, reason) {
+    const patch = until === false ? { account_status: 'active', suspended_until: null, suspension_reason: null }
+      : { account_status: 'suspended', suspended_until: until || null, suspension_reason: String(reason || '') };
+    const rows = await this.req('/profiles?user_id=eq.' + encodeURIComponent(userId) + '&account_status=neq.deleted', { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) });
+    return rows[0] || null;
+  }
   async removeBlock(a, b) { return this._delete('blocks', { blocker: a, blocked: b }); }
   // ---------- Mensagens privadas (0003_fraiha_dm). Ids já validados como UUID pelo serviço. ----------
   async addDirectMessage(from, to, body) {

@@ -79,6 +79,7 @@ class AdminService {
         if (path === '/admin/api/audit') return need('audit.read') && out(200, { persistent: this.audit.persistent, items: this.audit.list({ limit: url.searchParams.get('limit'), action: url.searchParams.get('action') || '' }) });
         if (path === '/admin/api/system') return need('system.read') && out(200, this.system());
         if (path === '/admin/api/payments') return need('payments.read') && out(200, await this.payments(url.searchParams.get('status') || ''));
+        if (path === '/admin/api/reports') return need('reports.read') && out(200, await this.reportsList(url.searchParams.get('status') || 'open'));
         return out(404, { error: 'not_found' });
       }
       if (req.method === 'POST') {
@@ -107,6 +108,17 @@ class AdminService {
           this.audit.record({ actor: admin, action: 'payments_reconcile', target: null, before: null, after: r, result: r && !r.missing ? 'ok' : 'unavailable', reason: '' });
           return out(200, { result: r || { missing: true } });
         }
+        // R104 · moderação: arquivar/resolver denúncia, suspender e tirar suspensão
+        const rp = /^\/admin\/api\/reports\/([0-9a-fA-F-]{36})$/.exec(path);
+        const sp = /^\/admin\/api\/players\/([0-9a-fA-F-]{36})\/(suspend|unsuspend)$/.exec(path);
+        if (rp || sp) {
+          if (!need('moderation.write')) return;
+          if (this.limited('write:' + admin.id, 30)) return out(429, { error: 'rate_limited' });
+          let body;
+          try { body = await readJson(req, 4096); }
+          catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
+          return rp ? this.reportUpdate(admin, rp[1].toLowerCase(), body || {}, out) : this.suspendPlayer(admin, sp[1].toLowerCase(), sp[2], body || {}, out);
+        }
         const em = /^\/admin\/api\/players\/([0-9a-fA-F-]{36})\/(club|founder)$/.exec(path);
         if (em) {
           if (!need('entitlements.write')) return;
@@ -124,6 +136,63 @@ class AdminService {
       console.error('[admin] api error', e && e.message);
       return out(500, { error: 'server_error' });
     }
+  }
+  // ---------------------------------------------------------------- R104 · DENÚNCIAS
+  async reportsList(status) {
+    const st = this.backend.store, { KIND_LABEL } = require('../moderation/reports');
+    if (!['open', 'dismissed', 'actioned', ''].includes(status)) status = 'open';
+    if (!st || !st.listReports) return { items: [], available: false };
+    let rows;
+    try { rows = await Q.withTimeout(st.listReports(status, 150)); }
+    catch (e) { return { items: [], available: false, error: /42P01|PGRST205|does not exist|Could not find/.test(String(e.code) + ' ' + String(e.message)) ? 'migration_0013_missing' : 'query_error' }; }
+    const ids = [...new Set(rows.flatMap(r => [r.reporter_id, r.reported_id]))];
+    const prof = new Map();
+    try { for (const p of await Q.withTimeout(st.getProfilesByIds(ids))) prof.set(p.user_id, p); } catch {}
+    // situação da conta (suspensa?) vem do perfil completo — a lista pública não traz account_status
+    const full = new Map();
+    try { for (const id of [...new Set(rows.map(r => r.reported_id))].slice(0, 60)) { const p = await Q.withTimeout(st.getProfile(id)); if (p) full.set(id, p); } } catch {}
+    const counts = new Map();
+    for (const r of rows) counts.set(r.reported_id, (counts.get(r.reported_id) || 0) + 1);
+    return { available: true, status, items: rows.map(r => {
+      const rep = { ...(prof.get(r.reported_id) || {}), ...(full.get(r.reported_id) || {}) };
+      return { report_id: r.report_id, kind: r.kind, kind_label: KIND_LABEL[r.kind] || r.kind, ref: r.ref, reason: r.reason, status: r.status, note: r.note || '',
+        created_at: r.created_at, handled_by: r.handled_by || null, handled_at: r.handled_at || null,
+        reporter: { user_id: r.reporter_id, nickname: (prof.get(r.reporter_id) || {}).nickname || (r.context && r.context.reporter_nickname) || '?' },
+        reported: { user_id: r.reported_id, nickname: rep.nickname || (r.context && r.context.reported_nickname) || '?', account_status: rep.account_status || null, suspended_until: rep.suspended_until || null },
+        reports_in_list: counts.get(r.reported_id) || 1,
+        messages: (r.context && Array.isArray(r.context.messages)) ? r.context.messages : [] };
+    }) };
+  }
+  async reportUpdate(admin, id, body, out) {
+    const status = String(body.status || '');
+    if (!['dismissed', 'actioned', 'open'].includes(status)) return out(400, { error: 'bad_status' });
+    const st = this.backend.store;
+    if (!st || !st.updateReport) return out(503, { error: 'unavailable' });
+    const patch = { status, note: String(body.note || '').slice(0, 300), handled_by: admin.name || admin.id, handled_at: status === 'open' ? null : new Date(this.now()).toISOString() };
+    let r;
+    try { r = await Q.withTimeout(st.updateReport(id, patch)); } catch (e) { return out(500, { error: 'query_error' }); }
+    if (!r) return out(404, { error: 'not_found' });
+    this.audit.record({ actor: admin, action: 'report_' + status, target: { report_id: id, reported: r.reported_id }, before: null, after: patch, result: 'ok', reason: patch.note });
+    return out(200, { report: r });
+  }
+  async suspendPlayer(admin, uid, action, body, out) {
+    const R = this.backend.reports;
+    if (!R) return out(503, { error: 'unavailable' });
+    const reason = String(body.reason || '').trim().slice(0, 200);
+    let r;
+    if (action === 'suspend') {
+      const days = body.days === null || body.days === 'indeterminado' ? null : Number(body.days);
+      if (days !== null && !(Number.isInteger(days) && days >= 1 && days <= 3650)) return out(400, { error: 'bad_days' });
+      if (!reason) return out(400, { error: 'reason_required' });
+      r = await R.suspend(uid, days, reason);
+    } else r = await R.unsuspend(uid);
+    this.audit.record({ actor: admin, action: action === 'suspend' ? 'player_suspend' : 'player_unsuspend', target: { user_id: uid }, before: null,
+      after: r.ok ? { until: r.until || null, days: body.days === undefined ? null : body.days } : null, result: r.ok ? 'ok' : r.error, reason });
+    if (!r.ok) return out(r.error === 'not_found' ? 404 : (r.error === 'migration_0013_missing' ? 503 : 500), { error: r.error });
+    if (r.ok && body.report_id && this.backend.store.updateReport) {
+      try { await this.backend.store.updateReport(String(body.report_id), { status: 'actioned', note: reason, handled_by: admin.name || admin.id, handled_at: new Date(this.now()).toISOString() }); } catch {}
+    }
+    return out(200, { ok: true, until: r.until || null });
   }
   // ---------------------------------------------------------------- R103 · VENDAS
   async payments(status) {

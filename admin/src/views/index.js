@@ -227,7 +227,8 @@ function player(ctx) {
             h('span', { class: 'k' }, 'Conta'), h('span', { class: 'v' }, p.account_status || '—'),
             h('span', { class: 'k' }, 'Plataforma'), h('span', { class: 'v' }, unavailable('PRECISA INSTRUMENTAÇÃO')),
             h('span', { class: 'k' }, 'Partida atual'), h('span', { class: 'v mono' }, w.match_id ? w.match_id.slice(0, 8) : '—'),
-            h('span', { class: 'k' }, 'Fila atual'), h('span', { class: 'v' }, w.place === 'queue' ? `${w.mode} · ${fmtDur(w.wait_ms)}` : '—'))),
+            h('span', { class: 'k' }, 'Fila atual'), h('span', { class: 'v' }, w.place === 'queue' ? `${w.mode} · ${fmtDur(w.wait_ms)}` : '—')),
+            modBlock(ctx, p)),
           h('div', { class: 'panel' }, h('h2', {}, 'Clube FRAIHA e Fundador'), h('div', { class: 'kv' },
             h('span', { class: 'k' }, 'Status'), h('span', { class: 'v' }, h('span', { class: 'badge ' + (d.club.status === 'ATIVO' ? 'gold' : entErr ? 'off' : 'unavailable'), id: 'club-status' }, d.club.status)),
             h('span', { class: 'k' }, 'Plano'), h('span', { class: 'v dim' }, d.club.plan.note),
@@ -356,6 +357,77 @@ export function sales(ctx) {
               h('td', {}, h('span', { class: 'badge ' + (PAY_ST[r.status] || ['', ''])[1] }, (PAY_ST[r.status] || [r.status])[0])),
               h('td', { class: 'mono dim' }, String(r.provider_ref || '').slice(0, 8)))))))
             : stateBox('empty', 'Nenhum pagamento ainda.')));
+    },
+  };
+}
+
+// ---------------------------------------------------------------- R104 · DENÚNCIAS
+// Suspender / banir / tirar suspensão direto na ficha do jogador.
+function modBlock(ctx, p) {
+  if (!(ctx.session && ctx.session.admin && (ctx.session.admin.perms || []).includes('moderation.write')) || p.account_status === 'deleted') return '';
+  const run = async (path, body, title, word, label, danger, text) => {
+    const ok = await confirmAction({ title, body: text, confirmWord: word, actionLabel: label, danger });
+    if (!ok) return;
+    try { await ctx.api.post('/admin/api/players/' + p.user_id + path, { ...body, reason: ok.reason }); toast('Feito.'); }
+    catch (e) { toast(e && e.code === 'migration_0013_missing' ? 'Banco sem a migração 0013.' : 'Não foi possível concluir.'); }
+    ctx.refresh();
+  };
+  if (p.account_status === 'suspended') return h('div', { style: 'margin-top:12px;display:flex;gap:8px' },
+    h('button', { class: 'btn ok', onclick: () => run('/unsuspend', {}, 'Tirar suspensão de ' + p.nickname, 'LIBERAR', 'Liberar', false, 'A conta volta a entrar no jogo na hora.') }, 'Tirar suspensão'));
+  return h('div', { style: 'margin-top:12px;display:flex;gap:8px;flex-wrap:wrap' },
+    ...[[1, '1 dia'], [7, '7 dias'], [30, '30 dias']].map(([d, t]) => h('button', { class: 'btn danger', onclick: () => run('/suspend', { days: d }, 'Suspender ' + p.nickname, 'SUSPENDER', 'Suspender', true, `Sem entrar no jogo por ${t}. É desconectado na hora.`) }, 'Suspender ' + t)),
+    h('button', { class: 'btn danger', onclick: () => run('/suspend', { days: null }, 'Banir ' + p.nickname, 'BANIR', 'Banir', true, 'Sem entrar no jogo até alguém tirar a suspensão.') }, 'Banir'));
+}
+const REP_ST = { open: ['Aberta', 'warn'], dismissed: ['Arquivada', 'off'], actioned: ['Resolvida', 'on'] };
+const SUSP = [[1, '1 dia'], [7, '7 dias'], [30, '30 dias'], [null, 'Banir (sem prazo)']];
+export function reports(ctx) {
+  const f = frame(ctx, 'Denúncias', 'Denúncias feitas no jogo (partida = chat e voz, conversa privada, perfil, CHAT GLOBAL). A voz não é gravada: só há o trecho das mensagens escritas.');
+  let filter = 'open';
+  const can = () => ctx.session && ctx.session.admin && (ctx.session.admin.perms || []).includes('moderation.write');
+  const setStatus = async (r, status) => {
+    const ok = await confirmAction({ title: status === 'dismissed' ? 'Arquivar denúncia' : 'Reabrir denúncia', body: `Denúncia contra ${r.reported.nickname}.`, confirmWord: status === 'dismissed' ? 'ARQUIVAR' : 'REABRIR', actionLabel: status === 'dismissed' ? 'Arquivar' : 'Reabrir', danger: false });
+    if (!ok) return;
+    await ctx.api.post('/admin/api/reports/' + r.report_id, { status, note: ok.reason }); toast('Denúncia atualizada.'); ctx.refresh();
+  };
+  const suspend = async (r, days, label) => {
+    const ok = await confirmAction({ title: (days ? 'Suspender ' : 'Banir ') + r.reported.nickname, body: days ? `A conta fica sem entrar no jogo por ${label}. Ela é desconectada na hora e volta sozinha no fim do prazo.` : 'A conta fica sem entrar no jogo até você tirar a suspensão na tela Jogadores ou aqui.', confirmWord: days ? 'SUSPENDER' : 'BANIR', actionLabel: days ? 'Suspender' : 'Banir', danger: true });
+    if (!ok) return;
+    try { await ctx.api.post('/admin/api/players/' + r.reported.user_id + '/suspend', { days, reason: ok.reason, report_id: r.report_id }); toast('Conta suspensa.'); }
+    catch (e) { toast(e && e.code === 'migration_0013_missing' ? 'Banco sem a migração 0013.' : 'Não foi possível suspender.'); }
+    ctx.refresh();
+  };
+  const unsuspend = async (r) => {
+    const ok = await confirmAction({ title: 'Tirar suspensão de ' + r.reported.nickname, body: 'A conta volta a entrar no jogo na hora.', confirmWord: 'LIBERAR', actionLabel: 'Liberar', danger: false });
+    if (!ok) return;
+    await ctx.api.post('/admin/api/players/' + r.reported.user_id + '/unsuspend', { reason: ok.reason }); toast('Suspensão retirada.'); ctx.refresh();
+  };
+  return {
+    error: f.error,
+    async load() {
+      const d = await ctx.api.get('/admin/api/reports?status=' + filter);
+      if (!ctx.alive()) return;
+      if (!d.available) return f.show(stateBox('error', d.error === 'migration_0013_missing' ? 'Banco sem a migração 0013 (denúncias). Até aplicar, as denúncias ficam só no log do servidor.' : 'Denúncias indisponíveis neste servidor.'));
+      const chips = [['open', 'Abertas'], ['actioned', 'Resolvidas'], ['dismissed', 'Arquivadas'], ['', 'Todas']].map(([k, t]) =>
+        h('button', { class: 'btn' + (filter === k ? ' primary' : ''), onclick: () => { filter = k; ctx.refresh(); } }, t));
+      const item = r => {
+        const susp = r.reported.account_status === 'suspended';
+        return h('div', { class: 'panel' },
+          h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' },
+            h('strong', {}, r.reported.nickname), h('span', { class: 'badge ' + (REP_ST[r.status] || ['', ''])[1] }, (REP_ST[r.status] || [r.status])[0]),
+            h('span', { class: 'badge' }, r.kind_label), susp ? h('span', { class: 'badge off' }, 'SUSPENSA' + (r.reported.suspended_until ? ' até ' + fmtDate(r.reported.suspended_until) : ' (sem prazo)')) : '',
+            r.reports_in_list > 1 ? h('span', { class: 'badge warn' }, `${r.reports_in_list} denúncias nesta lista`) : '',
+            h('span', { class: 'dim', style: 'margin-left:auto' }, `por ${r.reporter.nickname} · ${fmtAgo(r.created_at)}`)),
+          r.reason ? h('p', { class: 'muted' }, 'Motivo: ' + r.reason) : '',
+          r.messages.length ? h('div', { class: 'mono', style: 'white-space:pre-wrap;margin:8px 0;max-height:180px;overflow:auto' }, r.messages.map(t => '• ' + t).join('\n'))
+            : h('p', { class: 'dim' }, 'Sem mensagens escritas no trecho (denúncia de voz ou de perfil).'),
+          r.note ? h('p', { class: 'dim' }, `Nota: ${r.note} — ${r.handled_by || ''}`) : '',
+          can() ? h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+            h('button', { class: 'btn', onclick: () => { location.hash = '#/players/' + r.reported.user_id; } }, 'Ver jogador'),
+            ...(susp ? [h('button', { class: 'btn ok', onclick: () => unsuspend(r) }, 'Tirar suspensão')] : SUSP.map(([d, t]) => h('button', { class: 'btn danger', onclick: () => suspend(r, d, t) }, d ? 'Suspender ' + t : t))),
+            r.status === 'open' ? h('button', { class: 'btn ghost', onclick: () => setStatus(r, 'dismissed') }, 'Arquivar') : h('button', { class: 'btn ghost', onclick: () => setStatus(r, 'open') }, 'Reabrir')) : '');
+      };
+      f.show(h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px' }, ...chips),
+        d.items.length ? h('div', {}, d.items.map(item)) : stateBox('empty', filter === 'open' ? 'Nenhuma denúncia aberta.' : 'Nada por aqui.'));
     },
   };
 }
