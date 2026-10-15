@@ -158,8 +158,14 @@ static func _frames(hub, parent: VBoxContainer, mh):
     option(hub, row, "Frame_auto", _glyph("star"), "AUTOMÁTICA", pref == "auto", false, "", func(): mh.set_cosmetic("frame", "auto"))
     for id in Cosmetics.FRAMES:
         var fid: String = id
+        if Cosmetics.requirement("frame", fid) == "shop" and not Cosmetics.allowed("frame", fid, false, false): continue   # R116 · da loja: só as compradas
         var locked := not Cosmetics.allowed("frame", fid, mh.is_founder(), mh.club_active())
         option(hub, row, "Frame_" + fid, _frame_preview(mh, fid), String(Cosmetics.FRAME_NAMES[fid]).to_upper(), pref == fid, locked, Cosmetics.lock_hint("frame", fid), func(): mh.set_cosmetic("frame", fid))
+    if mh.has_method("crowns_client"):
+        var more := Art.Cta.new("MAIS MOLDURAS NA LOJA DE COROAS", "dark", 48 * maxf(hub.k, 0.8), int(16 * maxf(hub.k, 0.8)))
+        more.name = "PersonalizeShopFrames"
+        more.pressed.connect(func(): mh.crowns_client().open_store("frame"))
+        v.add_child(more)
 
 static func _frame_preview(mh, fid: String) -> Control:
     var holder := CenterContainer.new()

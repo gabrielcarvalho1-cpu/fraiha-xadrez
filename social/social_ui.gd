@@ -451,7 +451,7 @@ func _avatar(parent: Node, id: String, px: int) -> TextureRect:
 ## R41 · Moldura Club / Fundador sobre o avatar de outro jogador (dados do servidor).
 func _frame(av: Control, p: Dictionary) -> void:
     var fr := Cosmetics.public_frame(p)
-    if av == null or (fr != "club" and fr != "fundador"): return
+    if av == null or fr == "liga": return   # R116 · Club, Fundador e as molduras da Loja
     var f = preload("res://monetization/club_frame.gd").new()
     f.style = fr
     f.compact = av.custom_minimum_size.x < 60.0

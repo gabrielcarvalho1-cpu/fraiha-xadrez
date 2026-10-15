@@ -264,7 +264,7 @@ func _draw_card():
 func _decorate_photo(pr: Rect2):
     var src: Dictionary = card if not card.is_empty() else info
     var fr := "liga" if state == "bot" else Cosmetics.public_frame(src)
-    if fr == "club" or fr == "fundador":
+    if fr != "liga":   # R116 · Club, Fundador e as molduras da Loja
         if _frame_node == null:
             _frame_node = ClubFrame.new()
             _frame_node.fill_parent = false

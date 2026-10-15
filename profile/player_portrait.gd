@@ -77,7 +77,7 @@ func set_info(data: Dictionary):
         if tex == null: tex = hub.avatar_texture("warrior")
     avatar_rect.texture = tex
     # moldura premium (a "liga" fica com a borda simples do fundo)
-    if fr == "club" or fr == "fundador":
+    if fr != "liga":   # R116 · Club, Fundador e as molduras da Loja
         if frame_node == null:
             frame_node = ClubFrame.new()
             add_child(frame_node)

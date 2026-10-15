@@ -32,8 +32,9 @@ const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
 ## R116 · itens da Loja de Coroas que esta conta já tem (o servidor manda em store_state; economy/crowns_client.gd guarda).
 static var shop_owned: Array = []
 ## Molduras do retrato. "liga" = moldura da liga atual (padrão de todo jogador).
-const FRAMES := ["liga", "club", "fundador"]
-const FRAME_NAMES := {"liga": "Moldura da Liga", "club": "Moldura Club", "fundador": "Moldura Fundador"}
+## R116 · + molduras da LOJA DE COROAS (o id é o estilo de monetization/club_frame.gd)
+const FRAMES := ["liga", "club", "fundador", "prata", "rubi", "safira", "jade", "ametista", "obsidiana"]
+const FRAME_NAMES := {"liga": "Moldura da Liga", "club": "Moldura Club", "fundador": "Moldura Fundador", "prata": "Moldura de Prata", "rubi": "Moldura Rubi", "safira": "Moldura Safira", "jade": "Moldura Jade", "ametista": "Moldura Ametista", "obsidiana": "Moldura Obsidiana"}
 
 ## Que direito cada item exige: "" (todos) | "founder" | "legend" (R103 · Fundador Lendário) | "club".
 static func requirement(kind: String, id: String) -> String:

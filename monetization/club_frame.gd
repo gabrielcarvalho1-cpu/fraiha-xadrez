@@ -19,15 +19,43 @@ var style := "club":
         style = v
         queue_redraw()
 
+## R116 · molduras da LOJA DE COROAS: o mesmo desenho, com a faixa central na cor da pedra (bordas de ouro).
+## [claro, escuro, pedra dos cantos, fundo do medalhão, brilho]
+const GEMS := {
+    "prata": [Color("eef2f6"), Color("6d7884"), Color("ffffff"), Color("1a2230"), Color(0.85, 0.92, 1.0)],
+    "rubi": [Color("ff5a6e"), Color("5a0816"), Color("ff8a98"), Color("2a0710"), Color(1.0, 0.35, 0.42)],
+    "safira": [Color("5aa8ff"), Color("0c2257"), Color("9ccaff"), Color("0a1838"), Color(0.4, 0.65, 1.0)],
+    "jade": [Color("5fe0a8"), Color("0b4a35"), Color("a8f5d2"), Color("06261b"), Color(0.4, 1.0, 0.7)],
+    "ametista": [Color("c38bff"), Color("37105e"), Color("e2c4ff"), Color("1c0a30"), Color(0.75, 0.5, 1.0)],
+    "obsidiana": [Color("4a4f5c"), Color("07080b"), Color("ff6a3a"), Color("07080b"), Color(1.0, 0.45, 0.2)],
+}
+static func is_gem(s: String) -> bool:
+    return GEMS.has(s)
+
 ## Cor da faixa na posição k (0 = borda externa, 1 = interna).
 func band_color(k: float) -> Color:
+    if GEMS.has(style):
+        var g: Array = GEMS[style]
+        if style == "prata": return (g[0] as Color).lerp(g[1], absf(k - 0.3) * 1.4)
+        if k < 0.2: return Ribbon.gold_at(0.15 + k * 2.0)
+        if k > 0.82: return Ribbon.gold_at(0.35 + (k - 0.82) * 2.0)
+        return (g[0] as Color).lerp(g[1], clampf(absf(k - 0.4) * 2.2, 0.0, 1.0))
     if style != "fundador": return Ribbon.gold_at(0.08 + k * 0.84)
     if k < 0.22: return Ribbon.gold_at(0.15 + k * 2.0)
     if k > 0.8: return Ribbon.gold_at(0.35 + (k - 0.8) * 2.0)
     return Color("1b150e").lerp(Color("3a2c1a"), absf(k - 0.5) * 2.0)
 
 func medallion_color() -> Color:
+    if GEMS.has(style): return GEMS[style][3]
     return Color("140d06") if style == "fundador" else Color("0f1b32")
+
+func halo_color() -> Color:
+    if GEMS.has(style): return GEMS[style][4]
+    return Color(1.0, 0.85, 0.4)
+
+func gem_color() -> Color:
+    if GEMS.has(style): return GEMS[style][2]
+    return Color("d8423a") if style == "fundador" else Color("fff3cf")
 
 func _init():
     name = "ClubFrame"
@@ -58,8 +86,9 @@ func _draw():
         return
     var rect := Rect2(Vector2.ZERO, size)
     # halo pulsando por fora
+    var hc := halo_color()
     for i in 3:
-        draw_rect(rect.grow(2.0 + i * 3.0), Color(1.0, 0.85, 0.4, (0.16 - i * 0.045) * (0.5 + 0.5 * pulse)), false, 3.0)
+        draw_rect(rect.grow(2.0 + i * 3.0), Color(hc.r, hc.g, hc.b, (0.16 - i * 0.045) * (0.5 + 0.5 * pulse)), false, 3.0)
     # faixa de ouro metálico: anéis concêntricos de fora para dentro (gradiente)
     var n := int(ceil(b))
     for i in n:
@@ -84,8 +113,8 @@ func _draw():
         var o := cc + Vector2(dirx, diry) * b * 0.5
         Art.diamond(self, o, ds + 1.5, Color("5a3d10"))
         Art.diamond(self, o, ds, gold)
-        Art.diamond(self, o, ds * 0.5, Color("1b150e") if style == "fundador" else Color("c99a45"))
-        Art.diamond(self, o, ds * 0.22, Color("d8423a") if style == "fundador" else Color("fff3cf"))
+        Art.diamond(self, o, ds * 0.5, Color("1b150e") if style == "fundador" else (GEMS[style][1] if GEMS.has(style) else Color("c99a45")))
+        Art.diamond(self, o, ds * (0.32 if GEMS.has(style) else 0.22), gem_color())
         Art.diamond(self, o + Vector2(dirx * ds * 2.2, 0), ds * 0.45, gold)
         Art.diamond(self, o + Vector2(0, diry * ds * 2.2), ds * 0.45, gold)
     # meio das arestas laterais e inferior
@@ -101,11 +130,11 @@ func _draw():
             draw_circle(cc, cs * 0.62 + 1.5 - i * 1.3, Ribbon.gold_at(0.1 + i * 0.25))
         draw_circle(cc, cs * 0.62 - 4.0, medallion_color())
         draw_arc(cc, cs * 0.62 - 4.0, 0, TAU, 32, Color(gold.r, gold.g, gold.b, 0.6), 1.0)
-        draw_circle(cc, cs * 0.45, Color(1.0, 0.85, 0.4, 0.08 + 0.12 * pulse))
+        draw_circle(cc, cs * 0.45, Color(hc.r, hc.g, hc.b, 0.08 + 0.12 * pulse))
         if style == "fundador":
             draw_texture_rect(FOUNDER_SEAL, Rect2(cc - Vector2(cs, cs) * 0.5, Vector2(cs, cs)), false)
         else:
-            Art.icon(self, "crown", Rect2(cc - Vector2(cs, cs) * 0.36, Vector2(cs, cs) * 0.72), Color("ffe6a0"))
+            Art.icon(self, "crown", Rect2(cc - Vector2(cs, cs) * 0.36, Vector2(cs, cs) * 0.72), gem_color() if GEMS.has(style) else Color("ffe6a0"))
         # faíscas discretas
         for i in 4:
             var a := 0.5 + 0.5 * sin(t * 1.9 + i * 1.6)
@@ -117,8 +146,9 @@ func _draw():
 func _draw_round(w: float, h: float, b: float, pulse: float, gold: Color):
     var c := size / 2.0
     var r := minf(w, h) / 2.0
+    var hc := halo_color()
     for i in 3:
-        draw_arc(c, r + 2.0 + i * 3.0, 0, TAU, 72, Color(1.0, 0.85, 0.4, (0.16 - i * 0.045) * (0.5 + 0.5 * pulse)), 3.0)
+        draw_arc(c, r + 2.0 + i * 3.0, 0, TAU, 72, Color(hc.r, hc.g, hc.b, (0.16 - i * 0.045) * (0.5 + 0.5 * pulse)), 3.0)
     var n := int(ceil(b))
     for i in n:
         var k := float(i) / maxf(1.0, n - 1)
@@ -136,7 +166,7 @@ func _draw_round(w: float, h: float, b: float, pulse: float, gold: Color):
         var o := c + Vector2(cos(a), sin(a)) * (r - b / 2.0)
         Art.diamond(self, o, ds + 1.0, Color("5a3d10"))
         Art.diamond(self, o, ds, gold)
-        Art.diamond(self, o, ds * 0.4, Color("fff3cf"))
+        Art.diamond(self, o, ds * 0.4, gem_color())
     if not compact:
         var cs := clampf(r * 0.5, 16.0, 40.0)
         var cc := Vector2(c.x, -cs * 0.1)

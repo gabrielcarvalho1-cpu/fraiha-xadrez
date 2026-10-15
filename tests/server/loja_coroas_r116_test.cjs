@@ -25,8 +25,9 @@ async function fixture(t) {
   return { backend, login, of, st: backend.store };
 }
 
-test('catálogo: 10 títulos com preço, ids únicos, igual ao do cliente', () => {
+test('catálogo: 10 títulos e 6 molduras com preço, ids únicos, igual ao do cliente', () => {
   assert.equal(ITEMS.filter(i => i.kind === 'title').length, 10);
+  assert.equal(ITEMS.filter(i => i.kind === 'frame').length, 6);
   assert.equal(new Set(ITEMS.map(i => i.id)).size, ITEMS.length);
   for (const i of ITEMS) { assert.ok(i.price > 0 && i.price <= 100000); assert.match(i.id, /^[a-z0-9_]{1,40}$/); }
   const gd = fs.readFileSync(path.join(__dirname, '../../economy/crown_store_catalog.gd'), 'utf8');
@@ -74,6 +75,16 @@ test('título comprado pode ser usado; sem comprar, não; outros veem; Lendário
   assert.equal(err.code, 'cosmetic_locked'); assert.match(err.message, /Loja de Coroas/);
   assert.equal(Cosmetics.look({ title: 'imperador' }).title, 'imperador', 'outros jogadores veem o título');
   assert.equal(Cosmetics.validate({ title: 'lendario' }, { is_founder: true, founder_tier: 'founder' }, null, []).code, 'cosmetic_locked');
+  // moldura da loja: mesma regra
+  await h.st.crownAward(A, 2000, 'game', 'teste2');
+  await h.backend.handle(a, { type: 'store_buy', item: 'safira' }); await flush();
+  assert.equal(h.of(a, 'store_bought').pop().item, 'safira');
+  await new Promise(r => setTimeout(r, 850));   // limite de 800 ms entre trocas de visual
+  await h.backend.handle(a, { type: 'acct_set_cosmetics', frame: 'safira' }); await flush();
+  assert.equal(h.of(a, 'acct_cosmetics_saved').pop().frame, 'safira');
+  await h.backend.handle(b, { type: 'acct_set_cosmetics', frame: 'safira' }); await flush();
+  assert.equal(h.of(b, 'acct_cosmetics_error').pop().code, 'cosmetic_locked');
+  assert.equal(Cosmetics.look({ frame: 'safira' }).frame, 'safira');
 });
 
 test('sem a 0017: loja indisponível, sem derrubar nada', async t => {

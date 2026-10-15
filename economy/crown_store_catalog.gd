@@ -12,6 +12,12 @@ const ITEMS := [
 	{"id": "lenda_xeque", "kind": "title", "name": "Lenda do XEQUE", "price": 1200},
 	{"id": "senhor_marcha", "kind": "title", "name": "Senhor da Marcha", "price": 1200},
 	{"id": "imperador", "kind": "title", "name": "Imperador do Tabuleiro", "price": 1500},
+	{"id": "prata", "kind": "frame", "name": "Moldura de Prata", "price": 900},
+	{"id": "rubi", "kind": "frame", "name": "Moldura Rubi", "price": 1200},
+	{"id": "safira", "kind": "frame", "name": "Moldura Safira", "price": 1200},
+	{"id": "jade", "kind": "frame", "name": "Moldura Jade", "price": 1200},
+	{"id": "ametista", "kind": "frame", "name": "Moldura Ametista", "price": 1500},
+	{"id": "obsidiana", "kind": "frame", "name": "Moldura Obsidiana", "price": 2000},
 ]
 
 static func of_kind(kind: String) -> Array:

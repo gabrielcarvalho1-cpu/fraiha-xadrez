@@ -132,7 +132,8 @@ func _card(it: Dictionary) -> Control:
 	var id := String(it.id)
 	var price := int(it.price)
 	var has: bool = client.owned(id)
-	var in_use: bool = has and tab == "title" and hub.has_method("current_title") and hub.current_title() == id
+	var in_use: bool = has and ((tab == "title" and hub.has_method("current_title") and hub.current_title() == id)
+		or (tab == "frame" and hub.has_method("current_frame") and hub.current_frame() == id))
 	var p := PanelContainer.new()
 	p.name = "StoreItem_" + id
 	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -147,8 +148,9 @@ func _card(it: Dictionary) -> Control:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	p.add_child(v)
-	var kind := label("TÍTULO", 11, DIM, true)
+	var kind := label({"title": "TÍTULO", "frame": "MOLDURA DO RETRATO"}.get(tab, ""), 11, DIM, true)
 	v.add_child(kind)
+	if tab == "frame": v.add_child(_frame_preview(id))
 	var name_l := label(String(it.name), 17 if narrow() else 20, GOLD)
 	name_l.add_theme_constant_override("outline_size", 5)
 	name_l.add_theme_color_override("font_outline_color", Color(0.10, 0.05, 0.0))
@@ -190,6 +192,26 @@ func _card(it: Dictionary) -> Control:
 	b.name = "StoreBtn_" + id
 	row.add_child(b)
 	return p
+
+## a moldura no retrato do próprio jogador (como vai aparecer para todos)
+func _frame_preview(id: String) -> Control:
+	var holder := CenterContainer.new()
+	var pic := TextureRect.new()
+	pic.texture = hub.avatar_texture() if hub.has_method("avatar_texture") else null
+	var side := 66.0 if narrow() else 84.0
+	pic.custom_minimum_size = Vector2(side, side)
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	holder.add_child(pic)
+	var f = preload("res://monetization/club_frame.gd").new()
+	f.style = id
+	pic.add_child(f)
+	var pad := Control.new()   # espaço para a coroa da moldura (fica acima do retrato)
+	pad.custom_minimum_size = Vector2(0, side * 0.22)
+	var box := VBoxContainer.new()
+	box.add_child(pad)
+	box.add_child(holder)
+	return box
 
 func _buy(id: String):
 	if confirm_id == id and Time.get_ticks_msec() < confirm_until:

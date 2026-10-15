@@ -16,7 +16,8 @@ const ALL_AVATARS = [...FREE_AVATARS, ...LEGACY_AVATARS, ...Object.keys(LADDER_A
 const BADGES = ['', 'fundador', 'club_a', 'club_b', 'club_c'];
 const SHOP_TITLES = ShopCatalog.ofKind('title');        // R116 · comprados com Coroas (para sempre)
 const TITLES = ['', 'fundador', 'lendario', 'club', ...SHOP_TITLES];   // R103 · lendario = Fundador Lendário
-const FRAMES = ['liga', 'club', 'fundador'];
+const SHOP_FRAMES = ShopCatalog.ofKind('frame');        // R116 · molduras da Loja de Coroas
+const FRAMES = ['liga', 'club', 'fundador', ...SHOP_FRAMES];
 
 const need = (kind, id) => {
   if (!id || id === 'liga') return '';
