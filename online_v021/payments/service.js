@@ -108,8 +108,18 @@ class Payments {
   // Extras só para quem é Fundador de verdade (o link do grupo nunca fica no Godot).
   founderPerks(ent) { return ent && ent.is_founder && this.founderGroup ? { whatsapp_url: this.founderGroup } : null; }
 
+  // R109 · SALÃO DOS FUNDADORES: número, nome e nível de cada Fundador (público, cache de 60 s).
+  async founders() {
+    const now = this.now();
+    if (this._founders && now - this._founders.at < 60000) return this._founders.list;
+    let list = [];
+    try { list = this.store.listFounders ? await this.store.listFounders() : []; } catch (e) { console.error('[fundadores] lista', e && e.message); list = this._founders ? this._founders.list : []; }
+    this._founders = { at: now, list };
+    return list;
+  }
   async handle(ws, m) {
     const a = String(m.type || '');
+    if (a === 'payment_founders') return this.send(ws, { type: 'payment_founders', founders: await this.founders(), open: (await this.founderOpen()).open });
     if (!ws.user || !ws.profile) return this.fail(ws, 'Entre na sua conta para assinar ou comprar.', 'auth_required');
     if (a === 'payment_offer') return this.send(ws, await this.offer(ws));
     if (a === 'payment_create') {

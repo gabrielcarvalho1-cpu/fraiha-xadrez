@@ -57,6 +57,17 @@ func run():
 	await shot("11_experimentar_club")
 	pr.close_modal()
 	await frames(4)
+	# R109 · SALÃO DOS FUNDADORES
+	pr.show_page("salao")
+	var fl := []
+	var nicks := ["ReiDoPeao", "DamaDeFerro", "TorreAlta", "Gabriel", "BispoVeloz", "CavaloLouco", "PeaoValente", "XequeMate", "RoqueLongo", "GambitoRei"]
+	for i in nicks.size(): fl.append({"number": i + 1, "nickname": nicks[i], "avatar_id": "warrior", "tier": "legend" if i in [0, 4] else "founder"})
+	stage.account.server_message.emit({"type": "payment_founders", "founders": fl, "open": true})
+	await frames(8)
+	check(node("FoundersGrid") != null and node("FoundersGrid").get_child_count() == 10, "Salão lista os Fundadores")
+	await shot("12_salao")
+	pr.show_page("hub")
+	await frames(6)
 	await scroll_to("FounderPlans")
 	await shot("02_hub_fundador_planos")
 	await scroll_to("ClubShowcase")

@@ -75,6 +75,15 @@ function setup(env = {}) {
   t = setup({});
   await t.pay.handle(t.ws('eva'), { type: 'payment_offer' });
   check(t.last('payment_offer').founder_open === true && t.last('payment_offer').founder_until === null, 'sem configuração: Fundador à venda, por tempo limitado sem data');
+  // R109 · Salão dos Fundadores: lista pública por número
+  t = setup({});
+  await t.store.createProfile('11111111-1111-4111-a111-111111111111', 'SalaoUm', 'warrior');
+  await t.store.createProfile('22222222-2222-4222-a222-222222222222', 'SalaoDois', 'warrior');
+  await t.store.grantEntitlement('22222222-2222-4222-a222-222222222222', 'founder_legend', 'pix');
+  await t.store.grantEntitlement('11111111-1111-4111-a111-111111111111', 'founder', 'pix');
+  await t.pay.handle({ readyState: 1 }, { type: 'payment_founders' });
+  const fl = t.last('payment_founders');
+  check(fl && fl.founders.length === 2 && fl.founders[0].nickname === 'SalaoDois' && fl.founders[0].tier === 'legend' && fl.founders[1].number === 2, 'Salão dos Fundadores: por número, com o nível (até para quem não entrou)');
   // Título "Fundador Lendário" só para o Lendário
   const Cos = require('../../online_v021/accounts/cosmetics.js');
   check(!!Cos.validate({ title: 'lendario' }, { is_founder: true, founder_tier: 'legend' }, []).ok, 'Lendário pode usar o título Fundador Lendário');

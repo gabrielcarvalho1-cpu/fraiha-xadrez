@@ -319,6 +319,16 @@ class MemoryStore {
   async addFriendship(a, b) { const [x, y] = [a, b].sort(); this.social.friends.add(x + '|' + y); }
   async removeFriendship(a, b) { const [x, y] = [a, b].sort(); this.social.friends.delete(x + '|' + y); }
   async addBlock(a, b) { this.social.blocks.add(a + '|' + b); }
+  // ---------- R109 · Salão dos Fundadores ----------
+  async listFounders() {
+    const out = [];
+    for (const [uid, e] of (this.entitlements || new Map())) {
+      const p = this.profiles.get(uid);
+      if (!e.is_founder || !p || p.account_status === 'deleted') continue;
+      out.push({ number: e.founder_number || null, nickname: p.nickname, avatar_id: p.avatar_id, tier: e.founder_tier || 'founder' });
+    }
+    return out.sort((a, b) => (a.number || 1e9) - (b.number || 1e9));
+  }
   // ---------- R105 · indicação (em memória: desenvolvimento/testes) ----------
   async getRefCode(userId) { const p = this.profiles.get(userId); return p ? (p.ref_code || null) : null; }
   async setRefCode(userId, code) {
@@ -750,6 +760,17 @@ class SupabaseStore {
   async addFriendship(a, b) { const [x, y] = [a, b].sort(); return this._insert('friendships', { user_a: x, user_b: y }); }
   async removeFriendship(a, b) { const [x, y] = [a, b].sort(); return this._delete('friendships', { user_a: x, user_b: y }); }
   async addBlock(a, b) { return this._insert('blocks', { blocker: a, blocked: b }); }
+  // ---------- R109 · Salão dos Fundadores (número e nível vêm da 0012; sem ela, pela data) ----------
+  async listFounders() {
+    const map = rows => rows.filter(r => r.profiles && r.profiles.account_status !== 'deleted')
+      .map(r => ({ number: r.founder_number || null, nickname: r.profiles.nickname, avatar_id: r.profiles.avatar_id, tier: r.founder_tier || 'founder' }));
+    try {
+      return map(await this.req('/entitlements?is_founder=eq.true&select=founder_number,founder_tier,profiles!inner(nickname,avatar_id,account_status)&order=founder_number.asc.nullslast&limit=2000'));
+    } catch (e) {
+      if (!SCHEMA_MISSING(e)) throw e;
+      return map(await this.req('/entitlements?is_founder=eq.true&select=founder_since,profiles!inner(nickname,avatar_id,account_status)&order=founder_since.asc.nullslast&limit=2000'));
+    }
+  }
   // ---------- R105 · indicação (0014) ----------
   async getRefCode(userId) {
     const rows = await this.req('/profiles?user_id=eq.' + encodeURIComponent(userId) + '&select=ref_code');

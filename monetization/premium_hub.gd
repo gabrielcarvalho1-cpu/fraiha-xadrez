@@ -16,6 +16,7 @@ const PersonalizeUI := preload("res://monetization/personalize_ui.gd")
 const MyClubUI := preload("res://monetization/my_club_ui.gd")
 const PurchasesUI := preload("res://monetization/purchases_ui.gd")
 const PreviewBoard := preload("res://monetization/preview_board.gd")
+const FoundersHallUI := preload("res://monetization/founders_hall_ui.gd")
 const Mobile := preload("res://ui_v022/mobile_layout.gd")
 const Showcase := preload("res://monetization/showcase.gd")
 
@@ -43,6 +44,8 @@ var compact := false     # pouca altura (celular paisagem)
 var k := 1.0             # escala de fonte
 var purchases: Array = []     # R107 · MINHAS COMPRAS (payment_history)
 var purchases_loaded := false
+var founders: Array = []      # R109 · SALÃO DOS FUNDADORES (payment_founders)
+var founders_loaded := false
 var offer := {}          # R39 · resposta do servidor (payment_offer): vagas de Fundador, provedor pronto
 var _offer_bound = null
 
@@ -70,7 +73,6 @@ func _account():
     return main_hub.account if main_hub != null else null
 
 func _request_offer():
-    if Catalog.is_mock(): return
     var acc = _account()
     if acc == null: return
     if _offer_bound != acc and acc.has_signal("server_message"):
@@ -78,9 +80,15 @@ func _request_offer():
         _offer_bound = acc
         # direitos mudaram (pagamento confirmado, vencimento, outra aba): a página atrás do modal acompanha
         if main_hub.entitlements != null: main_hub.entitlements.changed.connect(func(): if visible: _rebuild())
+    if Catalog.is_mock(): return   # R109 · no modo de simulação só escuta (compras / Salão), sem pedir oferta
     if acc.has_method("has_profile") and acc.has_profile(): acc.send_server({"type": "payment_offer"})
 
 func _on_server(msg: Dictionary):
+    if String(msg.get("type", "")) == "payment_founders":   # R109
+        founders = msg.get("founders", []) if msg.get("founders") is Array else []
+        founders_loaded = true
+        if visible and modal == null and page == "salao": _rebuild()
+        return
     if String(msg.get("type", "")) == "payment_history":   # R107
         purchases = msg.get("items", []) if msg.get("items") is Array else []
         purchases_loaded = true
@@ -90,6 +98,15 @@ func _on_server(msg: Dictionary):
     offer = msg
     if visible and modal == null and page in ["hub", "founder", "club"]: _rebuild()
 
+
+## R109 · pede ao servidor a lista pública dos Fundadores.
+func _request_founders():
+    founders_loaded = false
+    var acc = _account()
+    if acc == null: return
+    _request_offer()
+    if acc.has_method("send_server") and not acc.send_server({"type": "payment_founders"}):
+        founders_loaded = true
 
 ## R107 · pede ao servidor o histórico de compras da conta.
 func _request_purchases():
@@ -122,6 +139,7 @@ func show_page(id: String):
     close_modal()
     page = id
     if id == "purchases": _request_purchases()
+    if id == "salao": _request_founders()
     _rebuild()
     scroll.scroll_vertical = 0
 
@@ -260,7 +278,8 @@ func _set_crumbs():
     elif page == "personalize": parts.append("PERSONALIZAÇÃO")
     elif page == "myclub": parts.append("MEU CLUB")
     elif page == "purchases": parts.append("MINHAS COMPRAS")
-    if narrow: parts = [{"hub": "PREMIUM", "founder": "FUNDADOR", "club": "CLUB", "personalize": "PERSONALIZAR", "myclub": "MEU CLUB", "purchases": "COMPRAS"}.get(page, "PREMIUM")]
+    elif page == "salao": parts.append("SALÃO DOS FUNDADORES")
+    if narrow: parts = [{"hub": "PREMIUM", "founder": "FUNDADOR", "club": "CLUB", "personalize": "PERSONALIZAR", "myclub": "MEU CLUB", "purchases": "COMPRAS", "salao": "SALÃO"}.get(page, "PREMIUM")]
     for i in parts.size():
         if i > 0: crumbs.add_child(Art.Glyph.new("star", 12, Color(0.79, 0.6, 0.27, 0.8)))
         var last := i == parts.size() - 1
@@ -285,6 +304,7 @@ func _rebuild():
         "personalize": PersonalizeUI.build(self, column)
         "myclub": MyClubUI.build(self, column)
         "purchases": PurchasesUI.build(self, column)
+        "salao": FoundersHallUI.build(self, column)
         _: _build_hub(column)
     if Catalog.dev_tools_enabled(): _dev_tools(column)
     var tail := Control.new()
@@ -367,7 +387,14 @@ func founder_showcase() -> Control:
     more.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     more.custom_minimum_size.x = 300 * maxf(k, 0.8)
     more.pressed.connect(func(): show_page("founder"))
-    v.add_child(_with_try(more, "fundador"))
+    var row := _with_try(more, "fundador")
+    var hall := Art.Cta.new("SALÃO DOS FUNDADORES", "dark", 50 * maxf(k, 0.85), int(17 * maxf(k, 0.85)))
+    hall.name = "OpenFoundersHall"
+    hall.icon_kind = ""
+    hall.custom_minimum_size.x = 280 * maxf(k, 0.8)
+    hall.pressed.connect(func(): show_page("salao"))
+    row.add_child(hall)
+    v.add_child(row)
     return sc
 
 func club_showcase() -> Control:
@@ -472,6 +499,7 @@ func founder_plans() -> Control:
         "Salão do Fundador (universo exclusivo)",
         "%d dias de Club FRAIHA inclusos" % Catalog.FOUNDER_CLUB_DAYS,
         "Grupo dos Fundadores no WhatsApp",
+        "Seu número e nome no Salão dos Fundadores",
     ], c1, closed or owned, "gold"))
     var c2 := ""
     if legend: c2 = "VOCÊ JÁ É LENDÁRIO"
