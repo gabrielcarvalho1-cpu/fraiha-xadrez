@@ -326,7 +326,7 @@ func _build_mais():
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	glow.material = add
 	panel.add_child(glow)
-	var art := _band(panel, "mais_panel", 0)
+	var art := _band(panel, "mais_panel_r122", 0)   # R122 · com a linha COMUNIDADE
 	panel.size.y = art.size.y
 	var gsz := Vector2(_w * 1.7, art.size.y * 1.35)
 	glow.size = gsz
@@ -334,12 +334,13 @@ func _build_mais():
 	var tw := glow.create_tween().set_loops()
 	tw.tween_property(glow, "modulate:a", 0.55, 1.6).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(glow, "modulate:a", 1.0, 1.6).set_trans(Tween.TRANS_SINE)
-	var rows := [["VOLTAR", 612.0, 770.0], ["CONFIGURAÇÕES", 806.0, 962.0], ["CONHEÇA O FRAIHA", 1000.0, 1157.0], ["SAIR", 1194.0, 1350.0]]
+	var rows := [["VOLTAR", 612.0, 770.0], ["CONFIGURAÇÕES", 806.0, 962.0], ["CONHEÇA O FRAIHA", 1000.0, 1157.0], ["COMUNIDADE", 1194.0, 1350.0], ["SAIR", 1388.0, 1544.0]]
 	for row in rows:
 		var title: String = row[0]
 		var r := Rect2(92, float(row[1]) - MAIS_Y0, 716, float(row[2]) - float(row[1]))
 		var action: Callable
 		if title == "VOLTAR": action = func(): hub.back()
+		elif title == "COMUNIDADE": action = preload("res://social/community_link.gd").open   # R122 · Discord
 		else:
 			var src = mobile._source_button(title)
 			action = func(): if src != null: src.pressed.emit()

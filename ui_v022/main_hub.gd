@@ -1815,7 +1815,7 @@ var about_icon: TextureRect
 var about_lead: Label
 var about_topic := 0
 ## R53 · tópicos do CONHEÇA O FRAIHA (fonte única: PC e celular)
-const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Esta é uma build de teste. Compartilhe suas observações sobre interface, peças e partidas com o responsável pelo projeto.\n\nAinda não há comunidade ou suporte conectados pelo jogo.\n\nEstratégia para ir mais longe."]]
+const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente.\n\nToque em COMUNIDADE (na tela inicial ou no MAIS, no celular) ou acesse discord.gg/27WRsrUGa6 para entrar no nosso servidor no Discord: desafios, Torneio da Semana, novidades e salas de voz.\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
 
 func _build_about_page():
     var topics: Array = ABOUT_TOPICS
@@ -2486,7 +2486,8 @@ func attach_screen_mode(sm):
         fullscreen_button.name = "FullscreenButton"
         fullscreen_button.size = Vector2(62, 62)
         fullscreen_button.position = Vector2(434, 16)
-        fullscreen_button.set_over_art(ref_mode)
+        if ref_mode: fullscreen_button.set_frame(TOP_FRAME_PC, 14.0)   # R122 · moldura azul
+        else: fullscreen_button.set_over_art(false)
         fullscreen_button.pressed.connect(func(): if screen_mode != null: screen_mode.toggle())
         canvas.add_child(fullscreen_button)
     sm.changed.connect(func(_on): refresh_fullscreen_button())
@@ -2522,9 +2523,26 @@ func make_top_button(glyph: String, tip: String, action: Callable, side := 62.0)
     b.set_frame(TOP_FRAME_CEL if side != 62.0 else TOP_FRAME_PC, 14.0)   # R113 · moldura dos botões de som / tela cheia
     return b
 
+## R122 · COMUNIDADE: botão largo (duas pessoas + "COMUNIDADE") na moldura dos botões do topo; abre o Discord.
+const CommunityLink := preload("res://social/community_link.gd")
+func make_community_button(sz: Vector2, frame: Texture2D, font_px: int) -> Button:
+    var b: Button = preload("res://ui_v022/hud_button.gd").make("community", "COMUNIDADE")
+    b.name = "CommunityButton"
+    b.icon_box = sz.y * 0.9
+    b.size = sz
+    b.custom_minimum_size = sz
+    b.tooltip_text = CommunityLink.TIP
+    b.clip_text = true
+    b.add_theme_font_override("font", FONT_CINZEL)
+    b.add_theme_font_size_override("font_size", font_px)
+    b.add_theme_color_override("font_color", Color("f4ce7f"))
+    b.set_frame(frame, 14.0 if frame == TOP_FRAME_PC else 16.0)
+    b.pressed.connect(CommunityLink.open)
+    return b
+
 ## R113 · moldura dos botões do topo, recortada da arte da Home (PC: som em 363,17; celular: som em 730,45)
-const TOP_FRAME_PC := preload("res://ui_v022/assets/r113/moldura_botao_topo_pc.png")
-const TOP_FRAME_CEL := preload("res://ui_v022/assets/r113/moldura_botao_topo_cel.png")
+const TOP_FRAME_PC := preload("res://ui_v022/assets/r113/moldura_botao_topo_pc_azul.png")   # R122 · miolo azul
+const TOP_FRAME_CEL := preload("res://ui_v022/assets/r113/moldura_botao_topo_cel_azul.png")   # R122 · miolo azul
 
 ## R112 · COROAS: um controlador só (estado do servidor, botões de saldo, painel e aviso "+N COROAS").
 var crowns = null
@@ -3272,10 +3290,14 @@ func _build_reference_chrome():
     gchat_button.position = Vector2(574, 16)
     canvas.add_child(gchat_button)
     # R112 · COROAS: saldo ao lado do chat (toque abre o painel)
-    var crown_chip: Button = crowns_client().make_chip(62.0, 118.0)
+    var crown_chip: Button = crowns_client().make_chip(62.0, 62.0)   # R122 · quadrado como os outros
     crown_chip.set_frame(TOP_FRAME_PC, 14.0)
     crown_chip.position = Vector2(644, 16)
     canvas.add_child(crown_chip)
+    # R122 · COMUNIDADE (Discord): canto de baixo à direita, espelhando o cartão ENTRAR / CRIAR CONTA
+    var community := make_community_button(Vector2(262, 64), TOP_FRAME_PC, 22)
+    community.position = Vector2(1388, 856)
+    canvas.add_child(community)
     _refresh_sound_button()
     var clip = Control.new()
     clip.name = "RefPortraitClip"
@@ -3466,8 +3488,13 @@ func _sync_chrome():
     var ref = _is_ref_art(canvas.get_node("ForestArtwork").texture)
     ref_mode = ref
     # R36: na arte v7 os quadrados de som / tela cheia já estão desenhados (o botão só põe o ícone)
+    # R122 · agora com a moldura azul por cima (igual ao troféu, chat, coroas e comunidade)
     for b in [sound_button, fullscreen_button]:
-        if is_instance_valid(b): b.set_over_art(ref)
+        if not is_instance_valid(b): continue
+        if ref: b.set_frame(TOP_FRAME_PC, 14.0)
+        else:
+            b.framed = false
+            b.set_over_art(false)
     if is_instance_valid(presentation_frame): presentation_frame.queue_redraw()
     for n in ref_nodes: n.visible = ref
     close_status_editor()   # R55

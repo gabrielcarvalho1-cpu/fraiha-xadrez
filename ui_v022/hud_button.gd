@@ -1,7 +1,7 @@
 extends Button
 ## Botão do HUD da partida no estilo FRAIHA: fundo verde-escuro, moldura dourada, cravos nos
 ## cantos e ícone desenhado em pixel (sem depender de fonte com símbolos).
-## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off", "trophy", "chat", "crown". hint: tecla (ex.: "ESC").
+## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off", "trophy", "chat", "crown", "community". hint: tecla (ex.: "ESC").
 const GOLD := Color("f4ce7f")
 const GOLD_DIM := Color("b99555")
 const INK := Color("10141e")
@@ -9,6 +9,10 @@ var glyph := ""
 var hint := ""
 var icon_only := false
 var icon_box := 54.0   # largura reservada ao ícone à esquerda (botões com texto)
+## R122 · botão quadrado com um número pequeno embaixo do ícone (saldo de Coroas)
+var sub_text := ""
+var sub_font: Font = null
+var sub_size := 14
 
 ## R36 · Home v7: o quadrado (moldura dourada e fundo) já está na arte; o botão só desenha o ícone
 ## e uma luz suave no hover/clique.
@@ -109,6 +113,9 @@ func _draw():
     var box := minf(size.y, icon_box)
     var center := Vector2(icon_box / 2.0 + 2.0, size.y / 2.0) if not icon_only else size / 2.0
     var r := box * 0.22
+    if not sub_text.is_empty():   # R122 · ícone sobe e diminui; o número fica embaixo
+        center = Vector2(size.x / 2.0, size.y * 0.37)
+        r = box * 0.17
     var w := maxf(2.0, box / 18.0)
     match glyph:
         "fullscreen", "exit_fullscreen":
@@ -183,10 +190,28 @@ func _draw():
             draw_rect(Rect2(c0 + Vector2(-r * 1.0, r * 0.62), Vector2(r * 2.0, r * 0.3)), col)
             for p in [Vector2(-r * 1.05, -r * 0.65), Vector2(0, -r * 0.95), Vector2(r * 1.05, -r * 0.65)]: draw_circle(c0 + p, r * 0.17, col)
             for k in [-0.5, 0.0, 0.5]: draw_circle(c0 + Vector2(r * k, r * 0.25), r * 0.11, INK)
+        "community":
+            # R122 · COMUNIDADE: duas pessoas (cabeça + ombros), a de trás um pouco menor.
+            for spec in [[Vector2(r * 0.55, -r * 0.1), 0.82, true], [Vector2(-r * 0.3, r * 0.05), 1.0, false]]:
+                var p: Vector2 = center + spec[0]
+                var k: float = spec[1]
+                if not spec[2]:   # contorno escuro separa a pessoa da frente da de trás
+                    draw_circle(p + Vector2(0, -r * 0.55 * k), r * 0.42 * k, INK)
+                    draw_arc(p + Vector2(0, r * 0.75 * k), r * 0.85 * k, PI, TAU, 18, INK, w * 1.6)
+                draw_circle(p + Vector2(0, -r * 0.55 * k), r * 0.34 * k, col)
+                var sh := PackedVector2Array()
+                for i in 13: sh.append(p + Vector2(0, r * 0.75 * k) + Vector2(cos(PI + PI * i / 12.0), sin(PI + PI * i / 12.0)) * r * 0.78 * k)
+                draw_colored_polygon(sh, col)
         "restart":
             draw_arc(center, r * 0.85, deg_to_rad(-70), deg_to_rad(220), 20, col, w)
             var end := center + Vector2(cos(deg_to_rad(-70)), sin(deg_to_rad(-70))) * r * 0.85
             draw_colored_polygon(PackedVector2Array([end + Vector2(-r * 0.45, -r * 0.15), end + Vector2(r * 0.15, -r * 0.45), end + Vector2(r * 0.1, r * 0.25)]), col)
+    if not sub_text.is_empty():
+        var f: Font = sub_font if sub_font != null else get_theme_default_font()
+        var tw := f.get_string_size(sub_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_size).x
+        var pos := Vector2((size.x - tw) / 2.0, size.y * 0.80)
+        draw_string_outline(f, pos, sub_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_size, 4, INK)
+        draw_string(f, pos, sub_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_size, GOLD)
     if not hint.is_empty():
         # Tecla como uma pequena "plaquinha".
         var font := get_theme_default_font()

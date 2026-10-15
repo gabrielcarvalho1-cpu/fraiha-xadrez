@@ -161,6 +161,10 @@ func make_chip(h: float, w: float) -> Button:
 	b.add_theme_font_override("font", FONT)
 	b.add_theme_font_size_override("font_size", int(clampf(h * 0.4, 13.0, 26.0)))
 	b.add_theme_color_override("font_color", GOLD)
+	if w <= h * 1.2:   # R122 · quadrado: coroa em cima e o saldo pequeno embaixo
+		b.icon_only = true
+		b.sub_font = FONT
+		b.text = ""
 	b.pressed.connect(open_panel)
 	chips.append(b)
 	_refresh_chips()
@@ -172,8 +176,15 @@ func _refresh_chips():
 		if not is_instance_valid(b):
 			chips.erase(b)
 			continue
-		b.text = t
 		b.tooltip_text = "Coroas: %s" % t
+		if b.sub_font != null:   # R122 · botão quadrado
+			b.sub_text = t
+			var ss := int(clampf(b.size.y * 0.24, 11.0, 20.0))
+			while ss > 9 and FONT.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, ss).x > b.size.x - 12.0: ss -= 1
+			b.sub_size = ss
+			b.queue_redraw()
+			continue
+		b.text = t
 		# o número diminui até caber (1.285 ou 12.345 no mesmo botão)
 		var room: float = b.size.x - b.icon_box - 8.0
 		var fs := int(clampf(b.size.y * 0.4, 13.0, 26.0))

@@ -60,7 +60,7 @@ func run():
 		"rules": {"win": 10, "play": 3, "match_cap": 150, "club_bonus_pct": 25, "daily": 10, "streak3": 20, "streak7": 50, "min_moves": 5}}
 	acc.server_message.emit(st)
 	await frames(6)
-	check(find_named(root, "CrownsTopButton").any(func(b): return b.text == "1.285"), "saldo 1.285 no botão")
+	check(find_named(root, "CrownsTopButton").any(func(b): return b.text == "1.285" or b.sub_text == "1.285"), "saldo 1.285 no botão")
 	await shot("01_home")
 	hub.crowns_client().open_panel()
 	await frames(8)
