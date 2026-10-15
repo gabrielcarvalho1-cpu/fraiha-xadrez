@@ -1254,6 +1254,10 @@ func avatar_lock_hint(id: String) -> String:
 func is_founder() -> bool:
     return entitlements != null and entitlements.founder()
 
+## R103 · Fundador Lendário (só direito REAL do servidor).
+func is_legend() -> bool:
+    return entitlements != null and bool(entitlements.real.is_founder) and String(entitlements.real.get("founder_tier", "")) == "legend"
+
 func choose_avatar(id: String):
     if id not in AvatarCatalog.ids(): return
     if not avatar_unlocked(id) and id != avatar_id:
@@ -2759,7 +2763,7 @@ func current_badge() -> String:
     return Cosmetics.effective("badge", badge_pref, is_founder(), club_active())
 
 func current_title() -> String:
-    return Cosmetics.effective("title", title_pref, is_founder(), club_active())
+    return Cosmetics.effective("title", title_pref, is_founder(), club_active(), is_legend())
 
 func current_frame() -> String:
     return Cosmetics.effective("frame", frame_pref, is_founder(), club_active())
@@ -2771,7 +2775,7 @@ func current_badge_texture(small := true) -> Texture2D:
 func set_cosmetic(kind: String, id: String) -> bool:
     var options: Array = Cosmetics.BADGES if kind == "badge" else (Cosmetics.TITLES if kind == "title" else Cosmetics.FRAMES)
     if id != "auto" and id not in options: return false
-    if id != "auto" and not Cosmetics.allowed(kind, id, is_founder(), club_active()): return false
+    if id != "auto" and not Cosmetics.allowed(kind, id, is_founder(), club_active(), is_legend()): return false
     match kind:
         "badge": badge_pref = id
         "title": title_pref = id
@@ -2814,7 +2818,7 @@ func public_cosmetics() -> Dictionary:
     var c: bool = entitlements != null and bool(entitlements.real.club_active)
     var av := avatar_id
     if not avatar_unlocked(av) or (AvatarCatalog.is_founder_avatar(av) and not f) or (AvatarCatalog.is_club_avatar(av) and not c): av = "warrior"
-    return {"avatar_id": av, "badge": Cosmetics.effective("badge", badge_pref, f, c), "title": Cosmetics.effective("title", title_pref, f, c), "frame": Cosmetics.effective("frame", frame_pref, f, c)}
+    return {"avatar_id": av, "badge": Cosmetics.effective("badge", badge_pref, f, c), "title": Cosmetics.effective("title", title_pref, f, c, is_legend()), "frame": Cosmetics.effective("frame", frame_pref, f, c)}
 
 # ---------- Home "referência" (arte oficial com moldura, perfil, conta, versão e Ranqueado desenhados) ----------
 # Na arte FOREST_V2 os painéis e botões já estão desenhados; aqui só entra o conteúdo vivo

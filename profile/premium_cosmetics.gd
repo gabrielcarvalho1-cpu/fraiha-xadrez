@@ -21,29 +21,32 @@ const BADGE_ART_SMALL := {
     "club_c": "res://monetization/art/club_badge_c_small.png",
 }
 ## Títulos exibidos sob o nome. "" = nenhum.
-const TITLES := ["", "fundador", "club"]
-const TITLE_TEXT := {"": "", "fundador": "Fundador do Reino", "club": "Membro do Club FRAIHA"}
+const TITLES := ["", "fundador", "lendario", "club"]
+const TITLE_TEXT := {"": "", "fundador": "Fundador do Reino", "lendario": "Fundador Lendário", "club": "Membro do Club FRAIHA"}
 ## Molduras do retrato. "liga" = moldura da liga atual (padrão de todo jogador).
 const FRAMES := ["liga", "club", "fundador"]
 const FRAME_NAMES := {"liga": "Moldura da Liga", "club": "Moldura Club", "fundador": "Moldura Fundador"}
 
-## Que direito cada item exige: "" (todos) | "founder" | "club".
+## Que direito cada item exige: "" (todos) | "founder" | "legend" (R103 · Fundador Lendário) | "club".
 static func requirement(kind: String, id: String) -> String:
     if id.is_empty() or id == "liga": return ""
+    if id == "lendario": return "legend"
     if id == "fundador": return "founder"
     if kind == "badge" and id.begins_with("club_"): return "club"
     if id == "club": return "club"
     return ""
 
-static func allowed(kind: String, id: String, founder: bool, club: bool) -> bool:
+static func allowed(kind: String, id: String, founder: bool, club: bool, legend := false) -> bool:
     match requirement(kind, id):
         "founder": return founder
+        "legend": return founder and legend
         "club": return club
     return true
 
 static func lock_hint(kind: String, id: String) -> String:
     match requirement(kind, id):
         "founder": return "Exclusivo do Pacote Fundador"
+        "legend": return "Exclusivo do Fundador Lendário"
         "club": return "Exclusivo do Club FRAIHA"
     return ""
 
@@ -53,7 +56,8 @@ static func auto_badge(founder: bool, club: bool) -> String:
     if club: return "club_a"
     return ""
 
-static func auto_title(founder: bool, club: bool) -> String:
+static func auto_title(founder: bool, club: bool, legend := false) -> String:
+    if founder and legend: return "lendario"
     if founder: return "fundador"
     if club: return "club"
     return ""
@@ -64,13 +68,13 @@ static func auto_frame(founder: bool, club: bool) -> String:
     return "liga"
 
 ## Preferência ("auto" = automático) → item efetivo, respeitando os direitos atuais.
-static func effective(kind: String, pref: String, founder: bool, club: bool) -> String:
+static func effective(kind: String, pref: String, founder: bool, club: bool, legend := false) -> String:
     if pref == "auto" or (kind == "frame" and pref.is_empty()):
         match kind:
             "badge": return auto_badge(founder, club)
-            "title": return auto_title(founder, club)
+            "title": return auto_title(founder, club, legend)
             _: return auto_frame(founder, club)
-    if not allowed(kind, pref, founder, club):
+    if not allowed(kind, pref, founder, club, legend):
         return "liga" if kind == "frame" else ""
     return pref
 

@@ -75,6 +75,12 @@ function setup(env = {}) {
   t = setup({});
   await t.pay.handle(t.ws('eva'), { type: 'payment_offer' });
   check(t.last('payment_offer').founder_open === true && t.last('payment_offer').founder_until === null, 'sem configuração: Fundador à venda, por tempo limitado sem data');
+  // Título "Fundador Lendário" só para o Lendário
+  const Cos = require('../../online_v021/accounts/cosmetics.js');
+  check(!!Cos.validate({ title: 'lendario' }, { is_founder: true, founder_tier: 'legend' }, []).ok, 'Lendário pode usar o título Fundador Lendário');
+  check(Cos.validate({ title: 'lendario' }, { is_founder: true, founder_tier: 'founder' }, []).code === 'cosmetic_locked', 'Fundador comum não usa o título Lendário');
+  check(Cos.effective({ profile_title: 'lendario' }, { is_founder: true, founder_tier: 'founder' }).title === '', 'título Lendário some se o direito não for Lendário');
+  check(Cos.effective({ profile_title: 'lendario' }, { is_founder: true, founder_tier: 'legend' }).title === 'lendario', 'outros jogadores veem o título Lendário');
   console.error = quiet;
   console.log(`OFERTAS_R103 CHECKS=${checks} FAILURES=${fails}`); process.exitCode = fails ? 1 : 0;
 })().catch(e => { console.log(e); process.exitCode = 1; });

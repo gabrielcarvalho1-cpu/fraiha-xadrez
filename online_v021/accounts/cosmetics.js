@@ -13,17 +13,19 @@ for (const b of LADDER.bots) if (b.reward && b.reward.type === 'avatar') LADDER_
 const ALL_AVATARS = [...FREE_AVATARS, ...LEGACY_AVATARS, ...Object.keys(LADDER_AVATARS), ...FOUNDER_AVATARS, ...CLUB_AVATARS];
 
 const BADGES = ['', 'fundador', 'club_a', 'club_b', 'club_c'];
-const TITLES = ['', 'fundador', 'club'];
+const TITLES = ['', 'fundador', 'lendario', 'club'];   // R103 · lendario = Fundador Lendário
 const FRAMES = ['liga', 'club', 'fundador'];
 
 const need = (kind, id) => {
   if (!id || id === 'liga') return '';
+  if (id === 'lendario') return 'legend';
   if (id === 'fundador') return 'founder';
   if (kind === 'badge' && id.startsWith('club_')) return 'club';
   if (id === 'club') return 'club';
   return '';
 };
-const has = (req, ent) => req === '' || (req === 'founder' ? !!(ent && ent.is_founder) : !!(ent && ent.club_active));
+const has = (req, ent) => req === '' || (req === 'founder' ? !!(ent && ent.is_founder)
+  : req === 'legend' ? !!(ent && ent.is_founder && ent.founder_tier === 'legend') : !!(ent && ent.club_active));
 
 // Valida um pedido acct_set_cosmetics. ent = getEntitlements; defeated = bots vencidos (ou null se a
 // escada não estiver configurada no banco). Devolve { ok, values } ou { error, code, field }.
@@ -44,7 +46,7 @@ function validate(m, ent, defeated) {
     if (m[field] === undefined) continue;
     const v = String(m[field] || (kind === 'frame' ? 'liga' : ''));
     if (!list.includes(v)) return { error: 'Opção inválida.', code: 'cosmetic_invalid', field };
-    if (!has(need(kind, v), ent)) return { error: 'Item exclusivo (' + (need(kind, v) === 'founder' ? 'Pacote Fundador' : 'Club FRAIHA') + ').', code: 'cosmetic_locked', field };
+    if (!has(need(kind, v), ent)) return { error: 'Item exclusivo (' + ({ founder: 'Pacote Fundador', legend: 'Fundador Lendário' }[need(kind, v)] || 'Club FRAIHA') + ').', code: 'cosmetic_locked', field };
     out[field] = v;
   }
   if (!Object.keys(out).length) return { error: 'Nada para alterar.', code: 'cosmetic_invalid' };
@@ -54,7 +56,7 @@ function validate(m, ent, defeated) {
 // O que os OUTROS jogadores veem: itens guardados, mas só enquanto o direito estiver ativo
 // (Club vencido → some o selo/moldura do Club; a escolha fica salva para quando voltar).
 function effective(p, ent) {
-  const active = ent ? { is_founder: !!ent.is_founder, club_active: !!ent.club_active && (!ent.club_expires_at || new Date(ent.club_expires_at) > new Date()) } : { is_founder: false, club_active: false };
+  const active = ent ? { is_founder: !!ent.is_founder, founder_tier: ent.founder_tier || null, club_active: !!ent.club_active && (!ent.club_expires_at || new Date(ent.club_expires_at) > new Date()) } : { is_founder: false, club_active: false };
   const pick = (kind, v, fallback) => (v && has(need(kind, v), active)) ? v : fallback;
   let avatar = p.avatar_id || 'warrior';
   if ((FOUNDER_AVATARS.includes(avatar) && !active.is_founder) || (CLUB_AVATARS.includes(avatar) && !active.club_active)) avatar = 'warrior';
