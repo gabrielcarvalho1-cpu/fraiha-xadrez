@@ -75,7 +75,7 @@ static func option(hub, parent: Node, node_name: String, preview: Control, title
     var nl := Art.label(v, title, hub.fs(14), Art.GOLD if not locked else Art.MUTED, Art.FONT_SEMI, HORIZONTAL_ALIGNMENT_CENTER)
     nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var state := "EM USO" if selected else ("BLOQUEADO" if locked else "ESCOLHER")
-    var sl := Art.label(v, state, hub.fs(12), Color("8fe08a") if selected else (Color("e89a7a") if locked else Art.CREAM), null, HORIZONTAL_ALIGNMENT_CENTER)
+    var sl := Art.label(v, state, hub.fs(12), Art.CHECK if selected else (Color("e89a7a") if locked else Art.CREAM), null, HORIZONTAL_ALIGNMENT_CENTER)
     sl.name = "State"
     sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
     if locked and not hint.is_empty():

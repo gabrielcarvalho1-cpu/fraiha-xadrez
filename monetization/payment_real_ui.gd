@@ -227,7 +227,7 @@ func _pix(v: VBoxContainer):
     copy.shimmer = true
     copy.pressed.connect(copy_code)
     info.add_child(copy)
-    copied_label = Art.label(info, "", hub.fs(15), Color("8fe08a"))
+    copied_label = Art.label(info, "", hub.fs(15), Art.CHECK)
     copied_label.name = "PixCopied"
     if not String(charge.get("ticket_url", "")).is_empty():
         var open := Art.Cta.new("ABRIR NO MERCADO PAGO", "dark", 48, 16)

@@ -416,7 +416,7 @@ func club_showcase() -> Control:
     chips.add_child(Art.Stamp.new("SEM RENOVAÇÃO AUTOMÁTICA", "info", int(14 * maxf(k, 0.9))))
     var t := Art.label(v, "CLUB FRAIHA", _title_px("CLUB FRAIHA"), Art.GOLD, Art.FONT_BOLD)
     _shadow(t, 9)
-    var tag := Art.label(v, "JOGUE.  ENTENDA.  EVOLUA.", fs(24), Color("bfe8a8"), Art.FONT_BOLD)
+    var tag := Art.label(v, "JOGUE.  ENTENDA.  EVOLUA.", fs(24), Art.acc_text(), Art.FONT_BOLD)
     _shadow(tag, 5)
     var sub := Art.label(v, "Análise ilimitada das suas partidas, treino dos seus erros e evolução acompanhada.", fs(20), Art.CREAM)
     _shadow(sub, 5)
@@ -564,7 +564,7 @@ func plan_card(product_id: String, variant: String, title: String, ribbon: Strin
         var r := HBoxContainer.new()
         r.add_theme_constant_override("separation", 8)
         v.add_child(r)
-        var g := Art.Glyph.new("check", 22 * maxf(k, 0.85), Color("8fe08a"), false)
+        var g := Art.Glyph.new("check", 22 * maxf(k, 0.85), Art.CHECK, false)
         g.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
         r.add_child(g)
         var l := Art.label(r, line, fs(18), Art.CREAM)
@@ -652,8 +652,8 @@ func fair_play_note() -> Control:
     var row := HBoxContainer.new()
     row.alignment = BoxContainer.ALIGNMENT_CENTER
     row.add_theme_constant_override("separation", 8)
-    row.add_child(Art.Glyph.new("shield", 22, Color("8fe08a")))
-    var l := Art.label(row, "FRAIHA não é pay-to-win: nada aqui altera PL, matchmaking, tempo, regras ou resultado.", fs(16), Color("bfe8a8"))
+    row.add_child(Art.Glyph.new("shield", 22, Art.CHECK))
+    var l := Art.label(row, "FRAIHA não é pay-to-win: nada aqui altera PL, matchmaking, tempo, regras ou resultado.", fs(16), Art.acc_text())
     l.size_flags_horizontal = Control.SIZE_EXPAND_FILL if narrow else Control.SIZE_SHRINK_CENTER
     l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     if not narrow: l.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -692,7 +692,7 @@ func price_block(product_id: String, monthly: bool) -> Control:
 func status_badge(text: String) -> Control:
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation", 8)
-    row.add_child(Art.Glyph.new("check", 26, Color("8fe08a"), false))
+    row.add_child(Art.Glyph.new("check", 26, Art.CHECK, false))
     var s := Art.Stamp.new(text, "ok", 14 if not narrow else 12)
     s.name = "StatusBadge"
     row.add_child(s)
@@ -740,7 +740,7 @@ func benefit_card(parent: Node, icon_kind: String, title: String, desc: String, 
     var head := HBoxContainer.new()
     head.add_theme_constant_override("separation", 6)
     v.add_child(head)
-    var chk := Art.Glyph.new("check", 18, Color("8fe08a") if variant != "parchment" else Color("2f6b2a"))
+    var chk := Art.Glyph.new("check", 18, Art.CHECK if variant != "parchment" else Color("2f6b2a"))
     chk.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
     chk.custom_minimum_size.y = 24
     head.add_child(chk)

@@ -81,7 +81,7 @@ static func _hero(hub, parent: VBoxContainer, active: String):
     var t := Art.label(v, "CLUB FRAIHA", hub.fs(48), Art.GOLD, Art.FONT_BOLD)
     t.add_theme_constant_override("outline_size", 8)
     t.add_theme_color_override("font_outline_color", Color(0.05, 0.12, 0.05, 0.95))
-    Art.label(v, "JOGUE.  ENTENDA.  EVOLUA.", hub.fs(26), Color("bfe8a8"), Art.FONT_BOLD)
+    Art.label(v, "JOGUE.  ENTENDA.  EVOLUA.", hub.fs(26), Art.acc_text(), Art.FONT_BOLD)
     if not active.is_empty():
         var go := HFlowContainer.new()
         go.add_theme_constant_override("h_separation", 12)

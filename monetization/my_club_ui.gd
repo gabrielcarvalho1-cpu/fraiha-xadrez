@@ -33,7 +33,7 @@ static func build(hub, parent: VBoxContainer):
     var t := Art.label(hv, "MEU CLUB", hub.fs(46), Art.GOLD, Art.FONT_BOLD)
     t.add_theme_constant_override("outline_size", 8)
     t.add_theme_color_override("font_outline_color", Color(0.05, 0.12, 0.05, 0.95))
-    Art.label(hv, "JOGUE.  ENTENDA.  EVOLUA.", hub.fs(22), Color("bfe8a8"), Art.FONT_BOLD)
+    Art.label(hv, "JOGUE.  ENTENDA.  EVOLUA.", hub.fs(22), Art.acc_text(), Art.FONT_BOLD)
     if not hub.club_owned():
         Art.label(hv, "Estatísticas avançadas, relatório semanal, histórico detalhado, treinos e desafios são exclusivos do Club FRAIHA.", hub.fs(19), Art.CREAM)
         var cta := Art.Cta.new("CONHECER CLUB FRAIHA", "green", 62 * maxf(hub.k, 0.85), int(21 * maxf(hub.k, 0.85)))
@@ -153,7 +153,7 @@ static func _stats(hub, parent: VBoxContainer, list: Array):
         Art.label(col, String(Insights.PHASE_NAMES[p]).to_upper(), hub.fs(14), Art.MUTED, Art.FONT_SEMI)
         Art.label(col, "%d erros" % int(s.phases[p]), hub.fs(22), Color("f2a070") if p == s.weakest_phase else Art.CREAM, Art.FONT_BOLD)
     if not String(s.weakest_phase).is_empty():
-        Art.label(v, "Ponto forte: %s  ·  Ponto fraco: %s" % [Insights.PHASE_NAMES[s.strongest_phase], Insights.PHASE_NAMES[s.weakest_phase]], hub.fs(17), Color("bfe8a8"))
+        Art.label(v, "Ponto forte: %s  ·  Ponto fraco: %s" % [Insights.PHASE_NAMES[s.strongest_phase], Insights.PHASE_NAMES[s.weakest_phase]], hub.fs(17), Art.acc_text())
 
 static func _challenges(hub, parent: VBoxContainer, list: Array):
     var v: VBoxContainer = hub.section(parent, "DESAFIOS CLUB DA SEMANA", "trophy", "founder")
@@ -171,7 +171,7 @@ static func _challenges(hub, parent: VBoxContainer, list: Array):
         var row := HBoxContainer.new()
         row.add_theme_constant_override("separation", 12)
         f.add_child(row)
-        row.add_child(Art.Glyph.new("check" if c.done else "trophy", 40, Color("8fe08a") if c.done else Art.GOLD_MID, true))
+        row.add_child(Art.Glyph.new("check" if c.done else "trophy", 40, Art.CHECK if c.done else Art.GOLD_MID, true))
         var cv := VBoxContainer.new()
         cv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         row.add_child(cv)
@@ -183,7 +183,7 @@ static func _challenges(hub, parent: VBoxContainer, list: Array):
         bar.show_percentage = false
         bar.custom_minimum_size.y = 10
         cv.add_child(bar)
-        Art.label(cv, ("CONCLUÍDO" if c.done else "%d / %d" % [int(c.progress), int(c.goal)]), hub.fs(13), Color("8fe08a") if c.done else Art.MUTED)
+        Art.label(cv, ("CONCLUÍDO" if c.done else "%d / %d" % [int(c.progress), int(c.goal)]), hub.fs(13), Art.CHECK if c.done else Art.MUTED)
     v.add_child(Art.Stamp.new("%d DE %d DESAFIOS CONCLUÍDOS" % [done, items.size()], "ok" if done == items.size() else "info", 14))
 
 static func _training(hub, parent: VBoxContainer, list: Array):

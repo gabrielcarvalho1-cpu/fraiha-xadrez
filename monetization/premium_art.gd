@@ -15,6 +15,15 @@ const BLACK := Color("07100b")
 const PARCH := Color("e9d7a8")
 const INK := Color("3a2a12")
 const EMBER := Color("e0703c")
+## R111 · cor de destaque do Club e dos selos (no lugar do verde): "azul" (padrão) ou "bordo".
+static var TOM := OS.get_environment("FRAIHA_TOM_PREMIUM") if OS.get_environment("FRAIHA_TOM_PREMIUM") in ["azul", "bordo"] else "azul"
+static func acc_top() -> Color: return Color("2f5aa8") if TOM == "azul" else Color("8e2236")
+static func acc_bottom() -> Color: return Color("0e1f45") if TOM == "azul" else Color("3d0812")
+static func acc_pill() -> Color: return Color(0.09, 0.17, 0.40, 0.96) if TOM == "azul" else Color(0.36, 0.06, 0.12, 0.96)
+static func acc_text() -> Color: return Color("bcd4ff") if TOM == "azul" else Color("ffc4cc")
+static func acc_gem() -> Color: return Color("5aa8ff") if TOM == "azul" else Color("ff5a6e")
+static func acc_gem_dark() -> Color: return Color("1d4c99") if TOM == "azul" else Color("7a1020")
+const CHECK := Color("f1d58a")
 ## Largura máxima dos selos (0 = livre). O Premium define isto em telas estreitas.
 static var stamp_cap := 0.0
 
@@ -218,7 +227,7 @@ class Frame extends PanelContainer:
             queue_redraw()
     func _palette() -> Dictionary:
         match variant:
-            "club": return {"top": Color("131a12"), "bottom": Color("060905"), "gem": Color("3fd38a"), "gem_dark": Color("0d6b3c")}
+            "club": return {"top": Color("12141a"), "bottom": Color("050608"), "gem": PremiumArtRef.acc(4), "gem_dark": PremiumArtRef.acc(5)}
             "parchment": return {"top": Color("ead9a8"), "bottom": Color("d8c08a"), "gem": Color("8a6224"), "gem_dark": Color("5a3d12")}
             "test": return {"top": Color("2a1208"), "bottom": Color("140703"), "gem": Color("f2a070"), "gem_dark": Color("8a3a18")}
             "reward": return {"top": Color("2a1d08"), "bottom": Color("0e0904"), "gem": Color("ff5a4a"), "gem_dark": Color("8a1712")}
@@ -301,6 +310,15 @@ class Frame extends PanelContainer:
 
 # Referência estática usada dentro das classes internas.
 class PremiumArtRef:
+    static func acc(i: int) -> Color:
+        var A = load("res://monetization/premium_art.gd")
+        match i:
+            0: return A.acc_top()
+            1: return A.acc_bottom()
+            2: return A.acc_pill()
+            3: return A.acc_text()
+            4: return A.acc_gem()
+            _: return A.acc_gem_dark()
     static func diamond(ci: CanvasItem, c: Vector2, r: float, col: Color):
         ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]), col)
 
@@ -373,9 +391,9 @@ class Stamp extends Control:
     func _colors() -> Array:
         match tone:
             "new": return [Color("f6c85a"), Color("3a2408"), Color("fff1c0")]
-            "info": return [Color(0.08, 0.30, 0.16, 0.95), Color("f1d58a"), Color("f1d58a")]
+            "info": return [PremiumArtRef.acc(2), Color("f1d58a"), Color("f1d58a")]
             "soon": return [Color(0.12, 0.13, 0.10, 0.92), Color("c9c2a8"), Color("8c8569")]
-            "ok": return [Color(0.10, 0.36, 0.18, 0.96), Color("eaffd8"), Color("8fe08a")]
+            "ok": return [PremiumArtRef.acc(2), Color("fff1c0"), Color("f1d58a")]
             _: return [Color(0.42, 0.10, 0.05, 0.95), Color("ffe2c8"), Color("f2a070")]
     func _draw():
         var col := _colors()
@@ -434,8 +452,8 @@ class Cta extends Button:
         match style:
             "gold":
                 top = Color("f2cf6e"); bottom = Color("a8741f"); ink = Color("2a1a04")
-            "green":
-                top = Color("2f8a4a"); bottom = Color("0f3d1d")
+            "green":   # R111 · não é mais verde: azul (ou bordô) do jogo
+                top = PremiumArtRef.acc(0); bottom = PremiumArtRef.acc(1)
             "ember":
                 top = Color("b4462a"); bottom = Color("5a1b0c")
             _:
