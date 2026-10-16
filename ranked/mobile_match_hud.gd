@@ -17,6 +17,7 @@ const VoiceGlyph := preload("res://voice/voice_glyph.gd")
 const Kit := preload("res://ui_kit/kit.gd")
 const FONT_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")
 const SkinRef := preload("res://ranked/board_skin.gd")
+const LeaguePixel := preload("res://cosmetics/league_pixel.gd")
 const ART := "res://ranked/art/mob_hud_%s.png"
 const GOLD := Color("f4ce7f")
 const CREAM := Color("f3ede0")
@@ -234,7 +235,8 @@ func apply() -> void:
 	var vs: Vector2 = vp.get_visible_rect().size
 	var safe: Rect2 = MobileLayout.safe_rect(vp)
 	orient = "p" if MobileLayout.is_portrait(vp) else "l"
-	wood = String(stage.game.visual_theme) == "wood"
+	var th := String(stage.game.visual_theme)
+	wood = th == "wood" or LeaguePixel.has(th)   # R135 · ligas usam o cenário/molduras da Madeira (só casas e peças mudam)
 	on = true
 	layer.show()
 	# a interface antiga do celular sai de cena (os botões continuam existindo: são a fonte das ações)
@@ -247,7 +249,12 @@ func apply() -> void:
 	if env != null: _rec(env, "visible", not wood)
 	var g = stage.game
 	_rec(g, "hide_status", true)
-	_rec(g, "piece_override", SkinRef.PECAS if wood else {})   # Madeira: as peças pixel art da arte; outro tema: as dele
+	if th == "wood": _rec(g, "piece_override", SkinRef.PECAS)   # Madeira: as peças pixel art da arte
+	elif LeaguePixel.has(th):   # R135 · liga: casas e peças em pixel art da liga
+		_rec(g, "piece_override", LeaguePixel.pieces(th))
+		_rec(g, "board_tiles", LeaguePixel.tiles(th))
+		if is_instance_valid(stage.theme_manager) and stage.theme_manager.iron_arena != null: _rec(stage.theme_manager.iron_arena, "visible", false)
+	else: _rec(g, "piece_override", {})
 	var board: Rect2
 	if orient == "p": board = _layout_portrait(vs, safe)
 	else: board = _layout_landscape(vs, safe)
@@ -965,7 +972,8 @@ func refresh_actions() -> void:
 func _process(_d) -> void:
 	if stage == null: return
 	# entrou/saiu de uma partida no celular, ou o tema mudou: o layout do stage refaz tudo (1 vez)
-	if wanted() != on or (on and (String(stage.game.visual_theme) == "wood") != wood):
+	var th_now := String(stage.game.visual_theme)
+	if wanted() != on or (on and (th_now == "wood" or LeaguePixel.has(th_now)) != wood):
 		stage._layout()
 		return
 	if not on: return

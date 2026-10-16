@@ -12,6 +12,8 @@ var piece_textures := {}
 ## R50 · peças próprias de uma pele (só a do Ranked Madeira usa): código -> [Texture2D, Rect2 da parte desenhada do sprite].
 ## Desenhadas na proporção original do PNG, numa escala única para todas as peças (sem esticar, sem filtro).
 var piece_override := {}
+var board_tiles: Texture2D = null   # R135 · liga com o layout da Madeira: casas em pixel art (8x8 na textura)
+var board_corners: Array = []       # R135 · enfeites dourados dos cantos, POR CIMA das casas
 var piece_sprite_scale := 0.84      # unidades do tabuleiro (casa = 75) por pixel do sprite
 const PIECE_SPRITE_BASE := 28.0     # base do desenho, abaixo do centro da casa
 var visual_theme := "wood"
@@ -469,7 +471,7 @@ func _draw_status_and_settings(font):
         draw_string(font,panel.position+Vector2(16,125),"Alt+Enter • alternar",HORIZONTAL_ALIGNMENT_LEFT,-1,11,Color("#d5ccb9"))
 
 func _draw():
-    if visual_theme != "wood":
+    if visual_theme != "wood" and board_tiles == null:
         var edge = Rect2(ORIGIN-Vector2(10,10),Vector2(BOARD+20,BOARD+20))
         draw_rect(edge,Color("161e25"))
         draw_rect(edge,Color("929a9c"),false,3)
@@ -483,7 +485,7 @@ func _draw():
                 draw_rect(Rect2(corner-Vector2(7,7),Vector2(14,14)),Color("e4b775"))
                 draw_rect(Rect2(corner-Vector2(3,3),Vector2(6,6)),Color("6c421d"))
     var cosmetic = preload("res://cosmetics/theme_catalog.gd").get_theme(visual_theme)
-    if cosmetic.get("free_arena",false):
+    if cosmetic.get("free_arena",false) and board_tiles == null:
         preload("res://cosmetics/league_board.gd").draw_frame(self,ORIGIN,BOARD,visual_theme,cosmetic.rim)
     var check_sq := _check_square()
     for y in range(8):
@@ -496,7 +498,11 @@ func _draw():
                 # com os destaques encaixados na casa) — a arte de fundo fica só como moldura
                 var dc := display_cell(c)
                 draw_texture_rect_region(_casas_madeira(), r, Rect2(Vector2(dc) * 80.0, Vector2(80, 80)))
-            if visual_theme != "wood":
+            if board_tiles != null:
+                var cell := board_tiles.get_width() / 8.0
+                var dc2 := display_cell(c)
+                draw_texture_rect_region(board_tiles, r, Rect2(Vector2(dc2) * cell, Vector2(cell, cell)))
+            elif visual_theme != "wood":
                 # Cosmetic steel tiles share the exact existing input grid.
                 draw_rect(r,board_palette[(x+y)%2])
                 draw_line(r.position,r.position+Vector2(TILE,0),Color(1,1,1,0.13),2)
@@ -519,7 +525,8 @@ func _draw():
             if c==selected:
                 draw_rect(r.grow(-4),Color("#f3d25c"),false,5)
 
-    if visual_theme == "wood" and mobile_presentation:
+    for cn in board_corners: draw_texture_rect_region(cn[0], cn[2], cn[1])   # R135 · enfeites por cima das casas
+    if (visual_theme == "wood" or board_tiles != null) and mobile_presentation:
         # R87 · fio escuro na borda da grade: esconde a sobra da arte entre as casas e a moldura
         draw_rect(Rect2(ORIGIN, Vector2(BOARD, BOARD)).grow(2.0), Color("3a2412"), false, 5.0)
     # Sem letras/números: arena limpa como a referência (exceto no LABORATÓRIO, opcional).
