@@ -40,8 +40,13 @@ func _process(delta):
     elif not arrows.is_empty() or mark_class != "":
         queue_redraw()
 
+## R128 · tabuleiro igual ao da partida Madeira: a mesma arte (moldura de tronco + casas de grama/areia)
+const BOARD_ART := "res://analysis/art/tabuleiro_madeira.png"   # tools/art/analise_tabuleiro_madeira_r128.py
+const FRAME := 0.06916 * 8.0      # moldura de cada lado, em casas (48 px de moldura / 694 px de grade na arte)
+var _board_tex: Texture2D = null
+
 func tile() -> float:
-    return minf(size.x, size.y) / 8.0
+    return minf(size.x, size.y) / (8.0 + 2.0 * FRAME)
 
 func origin() -> Vector2:
     var t := tile() * 8.0
@@ -104,15 +109,17 @@ func clear_marks():
 func _draw():
     var t := tile()
     var o := origin()
-    # moldura
-    draw_rect(Rect2(o - Vector2(6, 6), Vector2(t * 8 + 12, t * 8 + 12)), Color("3a2a12"))
-    draw_rect(Rect2(o - Vector2(6, 6), Vector2(t * 8 + 12, t * 8 + 12)), Color("c99a45"), false, 2.0)
+    # R128 · moldura e casas = arte do tabuleiro Madeira da partida (o padrão claro/escuro é o mesmo virado ou não)
+    if _board_tex == null: _board_tex = load(BOARD_ART)
+    var fm := FRAME * t
+    if _board_tex != null:
+        draw_texture_rect(_board_tex, Rect2(o - Vector2(fm, fm), Vector2(t * 8.0 + fm * 2.0, t * 8.0 + fm * 2.0)), false)
     for y in 8:
         for x in 8:
             var c := Vector2i(x, y)
             var d := display(c)
             var r := Rect2(o + Vector2(d) * t, Vector2(t, t))
-            draw_rect(r, Color("cbb273") if (x + y) % 2 == 0 else Color("557a3e"))
+            if _board_tex == null: draw_rect(r, Color("cbb273") if (x + y) % 2 == 0 else Color("557a3e"))
             if c == last_from or c == last_to: draw_rect(r.grow(-2), Color(1.0, 0.78, 0.2, 0.28))
             if highlight.has(c): draw_rect(r.grow(-2), highlight[c])
             if c == selected: draw_rect(r.grow(-3), Color("f3d25c"), false, 3.0)
@@ -121,12 +128,13 @@ func _draw():
                 else: draw_circle(r.get_center(), t * 0.11, Color(0.95, 0.83, 0.35, 0.8))
     # coordenadas
     var f := get_theme_default_font()
-    var fs := maxi(9, int(t * 0.18))
+    var fs := maxi(9, int(t * 0.2))
+    var ink := Color(0.1, 0.12, 0.08, 0.85)   # mesma tinta das coordenadas da partida Madeira
     for i in 8:
         var file := "abcdefgh"[7 - i if flipped else i]
         var rank := str(i + 1 if flipped else 8 - i)
-        draw_string(f, o + Vector2(i * t + 3, t * 8 - 3), file, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.45))
-        draw_string(f, o + Vector2(t * 8 - fs * 0.8, i * t + fs + 2), rank, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.45))
+        draw_string(f, o + Vector2(i * t + t - t * 0.2, t * 8 - t * 0.06), file, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)
+        draw_string(f, o + Vector2(t * 0.06, i * t + t * 0.24), rank, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)
     if pos == null: return
     for sq in pos.board:
         var code: String = pos.board[sq]
