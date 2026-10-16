@@ -95,11 +95,14 @@ func run():
         stage.mode = "casual"
         stage._layout()
         var ui = stage.casual_ui
-        var rs: Array = [ui.strips.top.bg.get_global_rect(), ui.strips.bottom.bg.get_global_rect(), Rect2(ui.resign_button.position, ui.resign_button.size)]
-        var clear := true
-        for r in rs:
-            if mh.top_rect.intersects(r) or mh.bottom_rect.intersects(r): clear = false
-        check(clear and absf(mh.top_rect.position.x - ui.strips.top.bg.position.x) < 1.0, "online/ranqueada: faixas abaixo do nome do adversário e acima do seu, sem cobrir relógio nem RENDER-SE")
+        # R127 · layout atual do PC: a linha "Material" fica DENTRO do cartão de cada jogador (abaixo do nome/relógio)
+        var tb: Rect2 = ui.strips.top.bg.get_global_rect()
+        var bb: Rect2 = ui.strips.bottom.bg.get_global_rect()
+        var rsg := Rect2(ui.resign_button.position, ui.resign_button.size)
+        var inside: bool = tb.grow(2).encloses(mh.top_rect) and bb.grow(2).encloses(mh.bottom_rect)
+        var lower_half: bool = mh.top_rect.position.y > tb.get_center().y and mh.bottom_rect.position.y > bb.get_center().y
+        var no_resign: bool = not (ui.resign_button.visible and (mh.top_rect.intersects(rsg) or mh.bottom_rect.intersects(rsg)))
+        check(inside and lower_half and no_resign, "online/ranqueada: Material dentro do cartão de cada jogador, abaixo do nome e do relógio, sem cobrir RENDER-SE")
         stage.mode = keep_mode
         stage._layout()
         stage.return_to_home()

@@ -49,6 +49,7 @@ func run():
     root.mode = Window.MODE_WINDOWED
     root.size = size
     root.content_scale_size = size
+    OS.set_environment("FRAIHA_SERVER_URL", "")   # R127 · sem servidor (como o mobile_pages_test): a lista não se remonta no meio do teste quando a conexão cai
     await process_frame
     stage = load("res://presentation_v019/stage.tscn").instantiate()
     root.add_child(stage)

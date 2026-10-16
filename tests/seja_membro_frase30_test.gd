@@ -86,8 +86,9 @@ func run():
 	await frames(4)
 	var prem = hub.premium
 	check(prem != null and prem.visible and prem.page == "hub", "[%s] SEJA MEMBRO abre FRAIHA PREMIUM (geral)" % tag)
-	var bf := cta(prem, "CONHECER PACOTE FUNDADOR") if prem != null else null
-	var bc := cta(prem, "CONHECER CLUB FRAIHA") if prem != null else null
+	var bf: Node = prem.find_child("OpenFounder", true, false) if prem != null else null
+	var bc: Node = prem.find_child("OpenClub", true, false) if prem != null else null
+	# R127 · botões renomeados no R108 ("VER TODOS OS BENEFÍCIOS"): procura pelo nome do nó
 	check(bf != null and bc != null, "[%s] FRAIHA PREMIUM mostra Fundador e Club" % tag)
 	await shot("2_premium")
 	if bf != null:
@@ -96,7 +97,7 @@ func run():
 		await shot("3_fundador")
 		prem.back_button.pressed.emit(); await frames(4)
 		check(prem.visible and prem.page == "hub", "[%s] VOLTAR do Fundador volta para FRAIHA PREMIUM" % tag)
-	bc = cta(prem, "CONHECER CLUB FRAIHA")
+	bc = prem.find_child("OpenClub", true, false)
 	if bc != null:
 		prem.scroll.ensure_control_visible(bc); await frames(2)
 		bc.pressed.emit(); await frames(4)
