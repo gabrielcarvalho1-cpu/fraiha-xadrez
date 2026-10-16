@@ -581,6 +581,8 @@ func _keep() -> void:
     # R51 · o botão antigo ANALISAR PARTIDA (barra de cima) cobria os ícones da arte: com a pele ele não aparece
     # (contra o bot: ANALISAR no lugar do DESISTIR; no Ranked: no painel de resultado; no celular: menu ⋮)
     if kind == "pc" and stage.desk_analyze != null and stage.desk_analyze.visible: stage.desk_analyze.visible = false
+    # R136 · idem o antigo REINICIAR (seta circular): o stage o religava depois do 1º lance e ele cobria a barra da voz
+    if stage.desk_restart != null and stage.desk_restart.visible: stage.desk_restart.visible = false
     var ui = match_ui()
     if ui != null:
         var M: Dictionary = MOB if kind == "mob" else PC

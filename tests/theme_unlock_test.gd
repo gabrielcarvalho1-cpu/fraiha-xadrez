@@ -28,11 +28,12 @@ func run():
         stage.hub._preview_league()
         check(tm.active_theme == "wood" and _saved() == "wood", id+" bloqueada não aplica")
     check(not tm.apply_theme("iron") and not tm.apply_piece_set("iron"), "apply direto de Ferro recusado")
-    check(stage.hub.league_details.text.begins_with("Bloqueada · alcance esta liga no Ranked"), "texto de bloqueio")
+    var pc_page: bool = is_instance_valid(stage.hub.league_details)   # celular: a página do PC não é montada
+    if pc_page: check(stage.hub.league_details.text.begins_with("Bloqueada · alcance esta liga no Ranked"), "texto de bloqueio")
     # 4. Madeira e peças clássicas sempre disponíveis
     stage.hub._select_league("madeira")
     check(tm.active_theme == "wood", "Madeira selecionável")
-    check(not stage.hub.league_preview_button.visible, "TESTAR UNIVERSO oculto na Madeira")
+    if pc_page: check(not stage.hub.league_preview_button.visible, "TESTAR UNIVERSO oculto na Madeira")
     check(tm.apply_piece_set("classic"), "peças clássicas disponíveis")
     # 2. conta nova (0 PL, highest 0)
     acc.access_token = "t"; acc.user_id = "u"; acc.server_ready = true

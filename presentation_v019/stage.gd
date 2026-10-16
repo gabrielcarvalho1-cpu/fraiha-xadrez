@@ -439,7 +439,7 @@ func _refresh_desk_hud():
         match_plaque.set_info(bot_controller.bot_id if not String(bot_controller.bot_id).is_empty() else bot_controller.difficulty, bot_level_name, bot_side_name, king)
     desk_panel.visible = in_match and not mobile
     desk_person.visible = mode in ["local", "online", "bot"]
-    desk_restart.visible = mode in ["local", "online", "bot"] and game.game_started
+    desk_restart.visible = mode in ["local", "online", "bot"] and game.game_started and not (board_skin != null and board_skin.on)   # R136: com a pele não existe
     _refresh_analysis_buttons()
     if desk_person.visible:
         desk_portrait.texture = hub.avatar_texture()

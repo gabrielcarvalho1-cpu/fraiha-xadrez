@@ -1,5 +1,6 @@
 extends SceneTree
 const Catalog = preload("res://cosmetics/theme_catalog.gd")
+const MobileLayout = preload("res://ui_v022/mobile_layout.gd")
 var checks := 0
 var failures := 0
 var stage
@@ -85,7 +86,29 @@ func run():
     click(world.square_center(Vector2i(0,6)))
     click(world.square_center(Vector2i(0,7)))
     check(world.promotion_pending,"Black flipped board opens promotion")
-    click(Vector2(320,520))
+    if stage.mobile_promotion != null and MobileLayout.active(root):
+        # celular: a escolha é o painel do palco (botões Dama/Torre/Bispo/Cavalo), tocado de verdade.
+        # O teste abre a partida direto (sem conta): a tela de login do início ainda estaria por cima.
+        if stage.account_ui.is_open(): stage.account_ui.hide_ui()
+        await process_frame
+        stage._layout()
+        await process_frame
+        var dama: Button = null
+        for b in stage.mobile_promotion.find_children("*", "Button", true, false):
+            if b.text == "Dama": dama = b
+        check(stage.mobile_promotion.visible and dama != null and dama.is_visible_in_tree(), "celular: painel da promoção aparece")
+        if dama != null:
+            var at: Vector2 = dama.get_global_rect().get_center()
+            for down in [true, false]:
+                var ev := InputEventMouseButton.new()
+                ev.button_index = MOUSE_BUTTON_LEFT
+                ev.pressed = down
+                ev.position = at
+                ev.global_position = at
+                root.push_input(ev, true)
+                await process_frame
+    else:
+        click(Vector2(320,520))
     check(bot.rules.piece(Vector2i(0,7)) == "bQ" and not world.promotion_pending,"promotion dialog stays upright and functional")
     stage.open_home()
     stage._start_local()
@@ -124,10 +147,14 @@ func run():
     for cue in audio.streams:
         check(audio.streams[cue] != null and audio.streams[cue].get_length() > 0.05,"audio loads "+cue)
     stage._start_local()
-    await process_frame
+    # alguns quadros para o GameAudio registrar a partida nova antes do 1º lance (um jogador nunca lança no mesmo quadro)
+    for _i in 4: await process_frame
     click(world.square_center(Vector2i(4,6)))
     click(world.square_center(Vector2i(4,4)))
-    await process_frame
+    # o som chega no _process do GameAudio: espera alguns quadros (no celular o som da promoção anterior ainda podia ser o último)
+    for _i in 30:
+        await process_frame
+        if audio.last_cue == "metal": break
     check(audio.last_cue == "metal","new move triggers theme sound")
     stage.open_home()
     check(hub.league_profile.snapshot() == before,"tested games leave competitive profile unchanged")

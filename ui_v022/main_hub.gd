@@ -2080,6 +2080,8 @@ func _select_league(id: String, apply_theme_now := true):
     var unlocked = league_unlocked(id)
     # R51e · só um clique de verdade na liga troca cenário/peças; abrir a página não mexe na escolha do jogador
     if unlocked and apply_theme_now: theme_preview_requested.emit(LeagueCatalog.theme_for(id))
+    # R136 · no celular a página das Ligas do PC não é montada (a do celular se redesenha sozinha): sem ela, nada a atualizar
+    if not is_instance_valid(league_detail_title): return
     var entry = LeagueCatalog.entry(id,league_profile.data)
     league_detail_title.text = "LIGA " + entry.display_name.to_upper() + "  ·  0–100 PL"
     if is_instance_valid(league_chip): league_detail_title.text = "Liga " + entry.display_name + "  ·  0–100 PL"
