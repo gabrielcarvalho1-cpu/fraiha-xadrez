@@ -12,6 +12,7 @@ signal friends_requested
 signal premove_changed(enabled: bool)
 signal cosmetics_changed   # R31: ícone/título/moldura/avatar mudaram (a conta sincroniza com o servidor)
 
+const ConteudoExtra = preload("res://web_content/conteudo_extra.gd")   # R137
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
@@ -2075,6 +2076,10 @@ func _zoom_preview(on: bool):
     _preview_tween = create_tween()
     _preview_tween.tween_property(league_scene_preview, "scale", Vector2.ONE * (PREVIEW_ZOOM if on else 1.0), 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
+## R137 · o conteúdo extra (Web) chegou: redesenha a prévia da liga aberta na página das Ligas
+func refresh_league_preview():
+    if is_instance_valid(league_detail_title) and not selected_league.is_empty(): _select_league(selected_league, false)
+
 ## R136 · tema que está valendo nas partidas (o lobby é sempre Madeira; ver apply_theme)
 var current_league_theme := "wood"
 var _theme_confirmed := false
@@ -2123,6 +2128,12 @@ func _select_league(id: String, apply_theme_now := true, done := Callable()):
         league_preview_pieces[i].texture = textures.get("w"+ThemeCatalog.PIECE_ORDER[i])
     preview_caption.text = "CENÁRIO E PEÇAS · "+entry.display_name.to_upper() if available else "VISUAIS EM DESENVOLVIMENTO"
     if is_instance_valid(league_chip): preview_caption.text = ("Cenário e Peças  ·  " + entry.display_name) if available else "Visuais em desenvolvimento"
+    # R137 · Web: cenário e peças de Bronze → Challenger vêm no CONTEÚDO EXTRA (2º pacote, baixa depois da Home).
+    # Antes de chegar, o quadro ficava vazio e não voltava sozinho: avisa, pede o download já e, quando chegar,
+    # o stage chama refresh_league_preview()
+    if available and league_scene_preview.texture == null and not ConteudoExtra.is_ready():
+        preview_caption.text = ("Carregando cenário e peças…  ·  " + entry.display_name) if is_instance_valid(league_chip) else "CARREGANDO CENÁRIO E PEÇAS… · " + entry.display_name.to_upper()
+        if ConteudoExtra.instance != null and is_instance_valid(ConteudoExtra.instance): ConteudoExtra.instance.start()
     league_preview_button.visible = DEV_PREVIEW_BUTTON and available and unlocked
     if not is_instance_valid(league_chip):
         for key in league_buttons:

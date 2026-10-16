@@ -128,6 +128,7 @@ func _ready():
     conteudo.finished.connect(func(ok):
         if not ok: return
         theme_manager.revalidate()
+        if hub.has_method("refresh_league_preview"): hub.refresh_league_preview()   # R137: prévia das Ligas aparece sozinha
         audio.music_path = ""
         audio.refresh_music())
     if theme_manager.review_requested():
