@@ -1544,16 +1544,33 @@ func _draw_fx():
         var st: float = ui.slam.t
         var sc := 1.0 + 2.2 * pow(maxf(0.0, 1.0 - st / 0.22), 2.0)
         var al := clampf(1.0 - (st - 1.0) / 0.6, 0.0, 1.0)
-        var cc := Vector2(d.x / 2.0, d.y * 0.42)
+        var logo_slam: bool = String(ui.slam.text) == "XEQUE!" and ui.slam_tex != null   # R126 · arte: um pouco mais alto (não cobre a placa da revelação)
+        var cc := Vector2(d.x / 2.0, d.y * (0.36 if logo_slam else 0.42))
         draw_set_transform(ui.origin + cc * ui.k, -0.06, Vector2(ui.k * sc, ui.k * sc))
         var txt: String = ui.slam.text
         var col: Color = ui.slam.col
         var fs := 210 if ui.layout != "portrait" else 170
         for i in 3: draw_rect(Rect2(-d.x, -fs * 0.62 - i * 6, d.x * 2, fs * 1.1 + i * 12), Color(0.1, 0.0, 0.0, 0.10 * al))
-        text(txt, Vector2(-d.x / 2.0 + 8, fs * 0.36 + 8), "title", fs, Color(0, 0, 0, 0.55 * al), d.x, HORIZONTAL_ALIGNMENT_CENTER)
-        text(txt, Vector2(-d.x / 2.0, fs * 0.36), "title", fs, Color(col.r, col.g, col.b, al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 16, Color(0.16, 0.02, 0.0, al))
+        var sub_y := fs * 0.36 + 70
+        if logo_slam:
+            # R126 · anúncio "XEQUE!" na arte do dono (no lugar das letras)
+            var lr := _slam_rect()
+            var lt: Texture2D = Crisp.at(ui.slam_tex, lr.size * ui.k)
+            draw_texture_rect(lt, Rect2(lr.position + Vector2(10, 12), lr.size), false, Color(0, 0, 0, 0.5 * al))
+            draw_texture_rect(lt, lr, false, Color(1, 1, 1, al))
+            var fl := clampf(1.0 - st / 0.35, 0.0, 1.0)   # clarão ao bater na tela
+            if fl > 0.0: draw_texture_rect(lt, lr, false, Color(1.6, 1.3, 1.0, 0.55 * fl * al))
+            sub_y = lr.end.y + 44
+            if String(ui.slam.sub) != "":   # faixa escura atrás do "DE FULANO" (não mistura com as cartas reveladas)
+                var sw: float = ui.fonts["ui_sp4"].get_string_size(String(ui.slam.sub), HORIZONTAL_ALIGNMENT_LEFT, -1, 44).x + 64.0
+                var band := Rect2(Vector2(-sw / 2.0, sub_y - 44), Vector2(sw, 60))
+                draw_rect(band, Color(0.22, 0.03, 0.06, 0.92 * al))
+                draw_rect(band, Color(0.85, 0.66, 0.3, al), false, 3.0)
+        else:
+            text(txt, Vector2(-d.x / 2.0 + 8, fs * 0.36 + 8), "title", fs, Color(0, 0, 0, 0.55 * al), d.x, HORIZONTAL_ALIGNMENT_CENTER)
+            text(txt, Vector2(-d.x / 2.0, fs * 0.36), "title", fs, Color(col.r, col.g, col.b, al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 16, Color(0.16, 0.02, 0.0, al))
         if String(ui.slam.sub) != "":
-            text(String(ui.slam.sub), Vector2(-d.x / 2.0, fs * 0.36 + 70), "ui_sp4", 44, Color(1, 0.94, 0.8, al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 8, Color(0.16, 0.02, 0.0, al))
+            text(String(ui.slam.sub), Vector2(-d.x / 2.0, sub_y), "ui_sp4", 44, Color(1, 0.94, 0.8, al), d.x, HORIZONTAL_ALIGNMENT_CENTER, 8, Color(0.16, 0.02, 0.0, al))
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
     # tensão do relógio: borda vermelha pulsando no ritmo do coração
     if ui.phase == "clock":
@@ -1561,6 +1578,12 @@ func _draw_fx():
         for i in 8: draw_rect(Rect2(Vector2(-i * 14, -i * 14), d + Vector2(i * 28, i * 28)), Color(0.8, 0.05, 0.05, (0.10 + 0.18 * hb) * (1.0 - i / 8.0)), false, 30.0)
     # clarão
     if ui.flash_col.a > 0.01: draw_rect(big, ui.flash_col)
+
+## R126 · retângulo do anúncio "XEQUE!" (centrado no carimbo; no celular em pé ocupa quase a largura toda)
+func _slam_rect() -> Rect2:
+    var w := 1180.0 if ui.layout != "portrait" else 1000.0
+    var h := w * float(ui.slam_tex.get_height()) / float(ui.slam_tex.get_width())
+    return Rect2(Vector2(-w / 2.0, -h / 2.0 - 60.0), Vector2(w, h))
 
 ## Apresentação do baralho (antes da 1ª rodada): as 4 cartas entram em leque com a quantidade de cada uma.
 func _draw_intro():
@@ -2185,6 +2208,7 @@ func prewarm_jobs() -> Array:
             var tx: Texture2D = ui.cards_clean[kind]
             var pz: Vector2 = Vector2(230.0, 230.0 * 1.4) * ui.k
             if not Crisp.has(tx, pz): out.append([tx, pz])
+    if ui.slam_tex != null and not Crisp.has(ui.slam_tex, _slam_rect().size * ui.k): out.append([ui.slam_tex, _slam_rect().size * ui.k])   # R126 · anúncio XEQUE!
     if d:
         # R125 · logo nova e botão XEQUE (estados) no tamanho exato da tela
         if ui.LOGO_R55 != null and not Crisp.has(ui.LOGO_R55, Vector2(342, 211) * ui.k): out.append([ui.LOGO_R55, Vector2(342, 211) * ui.k])

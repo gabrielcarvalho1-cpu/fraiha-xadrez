@@ -71,6 +71,11 @@ func run():
 		await shot("x04c_anim_%02d" % k)
 	ui.human_challenge()
 	await frames(2)
+	for st in [0.06, 0.3, 0.8]:   # R126 · anúncio XEQUE! (arte do dono)
+		if not ui.slam.is_empty():
+			ui.slam.t = st
+			ui._redraw()
+			await shot("x04d_anuncio_%02d" % int(st * 100))
 	ui._process(0.6)
 	await shot("x05_xeque_revela")
 	ui._advance_phase()

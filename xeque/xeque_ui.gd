@@ -173,6 +173,7 @@ var shake_amp := 0.0
 var flash_col := Color(1, 1, 1, 0)
 var particles: Array = []         # {p, v, life, max, col, size, kind}
 var slam := {}                    # {text, sub, t, col}
+var slam_tex: Texture2D = null    # R126 · arte do anúncio "XEQUE!" (arte do dono); sem ela cai no texto
 var over_t := 0.0
 ## apresentação do baralho antes da 1ª rodada (quantas cartas de cada peça existem)
 const INTRO_T := 3.2
@@ -213,9 +214,11 @@ func _load_art():
     for n in ["rei", "rainha", "cavalo", "peao"]: cards[n] = load("res://xeque/art/cartas/carta_%s.png" % n)
     for s in ["neutro", "pulsando", "perigo", "quase", "disparado"]: clock_tex[s] = load("res://xeque/art/relogio/relogio_%s.png" % s)
     for s in ["normal", "hover", "pressionado", "desabilitado", "ativado"]: xeque_tex[s] = load("res://xeque/art/interface/botao_xeque_r125_%s.png" % s)   # R125 · arte nova do dono (864x520)
+    slam_tex = load("res://xeque/art/interface/xeque_anuncio_r126.png")
 
 func _release_art():
     cards.clear(); clock_tex.clear(); xeque_tex.clear(); cards_clean.clear(); _sfx.clear()
+    slam_tex = null
     _card_back = null
     LOGO_R55 = null
     avatars = []
