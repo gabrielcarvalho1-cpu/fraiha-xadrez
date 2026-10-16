@@ -13,10 +13,10 @@ const LAYOUTS := {
         "scene": [1.1832, Vector2(-29.2, -112.6)], "board": Rect2(650, 208, 620, 536),
         "title": [Vector2(20, 92), 96], "sub": [Vector2(20, 127), 23],
         # R55 · referência nova (tools/ui_ref/xeque/xeque_ref_r55.png): tela = ref × 1,156 + (−5,8; −20,8)
-        "mesa": Rect2(29, 166, 387, 218), "como": Rect2(29, 399, 387, 357),
+        "mesa": Rect2(29, 214, 387, 218), "como": Rect2(29, 447, 387, 357),   # R125 · descem: logo nova é mais alta
         "plates": {0: ["h", Rect2(35, 887, 368, 133)], 1: ["v", Vector2(515, 475), 180], 2: ["hc", Rect2(817, 6, 293, 104)], 3: ["v", Vector2(1406, 475), 180]},
         "turn": Rect2(1535, 22, 355, 69), "meter": Rect2(1522, 155, 370, 146),
-        "xeque": [Vector2(1718, 636), 0.92], "xeque_rect": Rect2(1541, 573, 355, 127), "play": Rect2(1536, 721, 362, 90),
+        "xeque": [Vector2(1718, 636), 0.92], "xeque_rect": Rect2(1532, 478, 362, 218), "play": Rect2(1536, 721, 362, 90),   # R125 · botão novo (arte 1,66:1)
         "hint": [Vector2(1718, 875), 24], "help": Rect2(1763, 975, 58, 58), "menu": Rect2(1834, 975, 58, 58),
         "music": Rect2(1621, 975, 58, 58), "fx": Rect2(1692, 975, 58, 58), "full": Rect2(1550, 975, 58, 58), "voice": Rect2(1479, 975, 58, 58), "voice_ear": Rect2(1408, 975, 58, 58),
         "hand": [Vector2(960, 930), 0.212], "pile": [Vector2(960, 478), 0.128], "clock": [Vector2(960, 333), 0.22],
@@ -928,12 +928,46 @@ func _draw_xeque_button(active: bool):
         state = "normal"
         if ui.pressed_id == "xeque": state = "pressionado"
         elif ui.hover_id == "xeque": state = "hover"
+    # R125 · arte nova (864x520): mesma altura do botão antigo (202 × escala)
+    var hgt: float = 202.0 * float(x[1])
+    var sz := Vector2(hgt * 864.0 / 520.0, hgt)
+    var rr := Rect2(Vector2(x[0]) - sz / 2.0, sz)
+    if state == "pressionado": rr.position.y += 3
+    _xeque_art(rr, state, enabled)
+    if enabled and ui.phase == "": hit(rr.grow(-sz.y * 0.08), "xeque")
+
+## R125 · botão XEQUE na arte do dono. Na SUA VEZ (XEQUE possível) ele "chama": respira, brilha e um reflexo
+## passa por cima — para ficar claro que é um botão e que dá para apertar agora.
+func _xeque_art(rr: Rect2, state: String, enabled: bool):
     var tex: Texture2D = ui.xeque_tex[state]
-    var sc: float = x[1]
-    var pulse := 1.0
-    if state == "ativado": pulse = 1.0 + 0.03 * sin(ui.t * 10.0)
-    tex_center(tex, x[0], sc * pulse)
-    if enabled and ui.phase == "": hit(Rect2(x[0] - Vector2(432, 202) * sc * 0.45, Vector2(432, 202) * sc * 0.9), "xeque")
+    var call: bool = enabled and ui.phase == "" and state in ["normal", "hover"]
+    var p := 0.5 + 0.5 * sin(ui.t * 4.2)
+    var r := rr
+    if call:
+        var sc := 1.0 + 0.05 * p
+        r = Rect2(rr.get_center() - rr.size * sc / 2.0, rr.size * sc)
+        # halo dourado atrás (a própria arte, maior e transparente)
+        for i in 3:
+            var g := r.grow(8.0 + i * 9.0 + p * 8.0)
+            draw_texture_rect(Crisp.at(tex, g.size * ui.k), g, false, Color(1.0, 0.85, 0.4, (0.32 - i * 0.09) * (0.45 + 0.55 * p)))
+    elif state == "ativado":
+        var q := 0.5 + 0.5 * sin(ui.t * 10.0)
+        for i in 3:
+            var g2 := rr.grow(6.0 + i * 7.0)
+            draw_texture_rect(Crisp.at(tex, g2.size * ui.k), g2, false, Color(1.0, 0.25, 0.2, (0.2 - i * 0.05) * (0.6 + 0.4 * q)))
+    draw_texture_rect(Crisp.at(tex, r.size * ui.k), r, false)
+    if call:   # a arte "acende" no pico da respiração
+        draw_texture_rect(Crisp.at(ui.xeque_tex["hover"], r.size * ui.k), r, false, Color(1, 1, 1, 0.85 * p))
+    if call:
+        # reflexo de luz passando sobre o texto (a cada ~2,4 s)
+        var ph := fmod(ui.t, 2.4) / 2.4
+        if ph < 0.45:
+            var cx := r.position.x + r.size.x * (0.2 + 0.6 * ph / 0.45)
+            var top := r.position.y + r.size.y * 0.3
+            var bot := r.position.y + r.size.y * 0.72
+            var w := r.size.x * 0.07
+            draw_colored_polygon(PackedVector2Array([Vector2(cx, top), Vector2(cx + w, top), Vector2(cx + w - r.size.x * 0.06, bot), Vector2(cx - r.size.x * 0.06, bot)]), Color(1, 0.97, 0.85, 0.28 * sin(ph / 0.45 * PI)))
+    if call or state == "ativado": queue_redraw()
 
 func _draw_play_button():
     if desk(): return _desk_play_button()
@@ -1326,7 +1360,10 @@ func _tutorial_art(a: Rect2, kind: String):
             draw_texture_rect(ui.cards["rainha"], Rect2(x3, c.y - h3 / 2.0, w3, h3), false)
             draw_texture_rect(ui.cards["rei"], Rect2(x3 + w3 + 8, c.y - h3 / 2.0, w3, h3), false)
             var bsc := minf(0.42, (x3 - a.position.x - 60) / 380.0)
-            tex_center(ui.xeque_tex["normal"], Vector2(a.position.x + 10 + 216 * bsc, c.y), bsc)
+            var bh := minf(a.size.y - 6, 202.0 * bsc * 1.25)   # R125 · arte nova (1,66:1)
+            var bw := bh * 864.0 / 520.0
+            var br2 := Rect2(a.position.x + 10, c.y - bh / 2.0, bw, bh)
+            draw_texture_rect(Crisp.at(ui.xeque_tex["normal"], br2.size * ui.k), br2, false)
             arrow(Vector2(x3 - 44, c.y + 12), Color("e8b242"))
         "clocks":
             var names2 := ["neutro", "perigo", "quase"]   # 6 posições: neutro → em perigo → quase disparando
@@ -1712,10 +1749,15 @@ func card_face(kind: String, c: Vector2, w: float, rot := 0.0, mod: Color = Colo
     draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
 
 # ---------------------------------------------------------------- R55 · partes da tela (PC)
+const LOGO_PLAQUE := [0.1951, 0.8086, 0.6112, 0.0747]   # R125 · placa preta da logo (fração da imagem; tools/art/xeque_logo_botao_r125.py)
 func _desk_title():
-    draw_texture_rect(ui.LOGO_R55, Rect2(36, 0, 340, 130), false)
+    # R125 · logo nova; a rodada vai na placa preta da própria arte, escrita ao vivo
+    var lr := Rect2(16, 2, 342, 211)
+    draw_texture_rect(Crisp.at(ui.LOGO_R55, lr.size * ui.k), lr, false)
+    var pq := Rect2(lr.position.x + LOGO_PLAQUE[0] * lr.size.x, lr.position.y + LOGO_PLAQUE[1] * lr.size.y, LOGO_PLAQUE[2] * lr.size.x, LOGO_PLAQUE[3] * lr.size.y)
     var sub := "RODADA %d · BLEFE DE CARTAS" % ui.g.round_no
-    otext(sub, Vector2(46, 141), "o7_sp3", fit(sub, "o7_sp3", 18, 316), Color("ecc35e"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
+    var sf := fit(sub, "o7_sp3", 17, pq.size.x - 8)
+    text(sub, Vector2(pq.position.x, pq.get_center().y + sf * 0.4), "o7_sp3", sf, Color("f0c968"), pq.size.x, HORIZONTAL_ALIGNMENT_CENTER, 2, Color(0, 0, 0, 0.9))
 
 func _desk_mesa_pede():
     var r: Rect2 = L().mesa
@@ -1982,17 +2024,7 @@ func _desk_xeque_button(active: bool):
     if state == "ativado":
         var p := 0.5 + 0.5 * sin(ui.t * 10.0)
         for i in 5: draw_rect(rr.grow(4 + i * 4), Color(1.0, 0.25, 0.2, (0.22 - i * 0.04) * (0.6 + 0.4 * p)), false, 4.0)
-    var lt: Color = {"normal": Color("9aa1aa"), "hover": Color("b4bbc4"), "pressionado": Color("80868f"), "desabilitado": Color("5d6268"), "ativado": Color("b8a0a0")}[state]
-    var dk: Color = {"normal": Color("50565e"), "hover": Color("5f666f"), "pressionado": Color("3f444b"), "desabilitado": Color("33363b"), "ativado": Color("6e3a3a")}[state]
-    # R55.2 · placa de aço (borda, degradê, filete pontilhado e rebites) pré-composta por estado (desk_paint.gd)
-    var plate: Dictionary = DeskPaint.steel(rr, ui.k, lt, dk)
-    if plate.is_empty(): _steel_immediate(rr, lt, dk)      # R55.3 · ainda na fila: desenho original
-    else: draw_texture_rect(plate.tex, plate.rect, false)
-    var fs := 92
-    var tcol := Color("f4f6f9") if state != "desabilitado" else Color("9ca0a6")
-    var by := rr.get_center().y + fs * 0.405
-    text("XEQUE", Vector2(rr.position.x + 3, by + 5), "o7_sp3", fs, Color(0, 0, 0, 0.45), rr.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-    otext("XEQUE", Vector2(rr.position.x, by), "o7_sp3", fs, tcol, rr.size.x, HORIZONTAL_ALIGNMENT_CENTER, 7)
+    _xeque_art(rr, state, enabled)
     if enabled and ui.phase == "": hit(r, "xeque")
 
 func _desk_play_button():
@@ -2154,6 +2186,12 @@ func prewarm_jobs() -> Array:
             var pz: Vector2 = Vector2(230.0, 230.0 * 1.4) * ui.k
             if not Crisp.has(tx, pz): out.append([tx, pz])
     if d:
+        # R125 · logo nova e botão XEQUE (estados) no tamanho exato da tela
+        if ui.LOGO_R55 != null and not Crisp.has(ui.LOGO_R55, Vector2(342, 211) * ui.k): out.append([ui.LOGO_R55, Vector2(342, 211) * ui.k])
+        var xr: Rect2 = L().xeque_rect
+        for st in ["desabilitado", "normal"]:
+            var tx: Texture2D = ui.xeque_tex.get(st)
+            if tx != null and not Crisp.has(tx, xr.size * ui.k): out.append([tx, xr.size * ui.k])
         for kind in ["rei", "rainha", "cavalo", "peao"]:      # carta a carta: cada arte é decodificada uma vez
             for w in PREWARM_CARD_W:
                 var tex: Texture2D = ui.cards_clean.get(kind, ui.cards.get(kind))

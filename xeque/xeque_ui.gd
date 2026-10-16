@@ -43,7 +43,7 @@ const FONT_UI := preload("res://xeque/art/fontes/Jersey20-Regular.woff2")
 const FONT_TITLE := preload("res://xeque/art/fontes/Jacquard24-Regular.woff2")
 const FONT_OS7 := preload("res://marcha/art/fonts/oswald-latin-700-normal.woff")   # R55
 const FONT_OS6 := preload("res://marcha/art/fonts/oswald-latin-600-normal.woff")
-const LOGO_R55_PATH := "res://xeque/art/interface/logo_r55.png"   # R55.4 · só no layout do PC
+const LOGO_R55_PATH := "res://xeque/art/interface/logo_r125.png"   # R125 · logo nova (a rodada é escrita ao vivo na placa)   # R55.4 · só no layout do PC
 var LOGO_R55: Texture2D = null
 ## R78 · fundos grandes (8 MB cada na memória) só carregam quando a tela aparece e saem ao fechar o XEQUE
 var _tutorial_bg: Texture2D = null
@@ -212,7 +212,7 @@ func _load_art():
     if not cards.is_empty(): return
     for n in ["rei", "rainha", "cavalo", "peao"]: cards[n] = load("res://xeque/art/cartas/carta_%s.png" % n)
     for s in ["neutro", "pulsando", "perigo", "quase", "disparado"]: clock_tex[s] = load("res://xeque/art/relogio/relogio_%s.png" % s)
-    for s in ["normal", "hover", "pressionado", "desabilitado", "ativado"]: xeque_tex[s] = load("res://xeque/art/interface/botao_xeque_%s.png" % s)
+    for s in ["normal", "hover", "pressionado", "desabilitado", "ativado"]: xeque_tex[s] = load("res://xeque/art/interface/botao_xeque_r125_%s.png" % s)   # R125 · arte nova do dono (864x520)
 
 func _release_art():
     cards.clear(); clock_tex.clear(); xeque_tex.clear(); cards_clean.clear(); _sfx.clear()

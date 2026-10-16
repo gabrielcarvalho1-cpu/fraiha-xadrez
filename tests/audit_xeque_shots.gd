@@ -63,6 +63,12 @@ func run():
 	ui._begin_turn()
 	ui._process(3.0); ui._process(3.0)
 	await frames(3)
+	await shot("x04b_xeque_disponivel")
+	var t0: float = ui.t
+	for k in 12:
+		ui.t = t0 + k * 0.125
+		ui._redraw()
+		await shot("x04c_anim_%02d" % k)
 	ui.human_challenge()
 	await frames(2)
 	ui._process(0.6)
