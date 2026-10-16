@@ -86,6 +86,12 @@ func run():
 		check(font.get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, b.get_theme_font_size("font_size")).x <= b.size.x - b.icon_box - 16.0, "texto COMUNIDADE cabe")
 		check(b.framed, "COMUNIDADE com a moldura azul")
 		b.pressed.emit()
+	await frames(6)
+	check(opened.is_empty(), "R124: não abre direto — pergunta antes")
+	var nm = hub.notice_modal
+	check(nm != null and nm.is_open() and nm.yes_button.visible and "Discord" in nm.text_label.text, "R124: pergunta se quer ir para o Discord")
+	await shot("03_pergunta_discord")
+	if nm != null: nm.yes_button.pressed.emit()
 	check(opened == [CL.URL], "abre o convite do Discord %s" % str(opened))
 	check(String(CL.URL).begins_with("https://discord.gg/"), "link é convite do Discord")
 	print("RESULTADO: %s" % ("OK" if fails == 0 else "%d FALHA(S)" % fails))

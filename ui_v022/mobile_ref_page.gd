@@ -344,7 +344,7 @@ func _build_mais():
 		var r := Rect2(92, float(row[1]) - MAIS_Y0, 716, float(row[2]) - float(row[1]))
 		var action: Callable
 		if title == "VOLTAR": action = func(): hub.back()
-		elif title == "COMUNIDADE": action = preload("res://social/community_link.gd").open   # R122 · Discord
+		elif title == "COMUNIDADE": action = func(): hub.open_community()   # R122 · Discord (R124: pergunta antes)
 		else:
 			var src = mobile._source_button(title)
 			action = func(): if src != null: src.pressed.emit()

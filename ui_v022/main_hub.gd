@@ -2537,7 +2537,7 @@ func make_community_button(sz: Vector2, frame: Texture2D, font_px: int) -> Butto
     b.add_theme_font_size_override("font_size", font_px)
     b.add_theme_color_override("font_color", Color("f4ce7f"))
     b.set_frame(frame, 14.0 if frame == TOP_FRAME_PC else 16.0)
-    b.pressed.connect(CommunityLink.open)
+    b.pressed.connect(open_community)   # R124 · pergunta antes de abrir o Discord
     return b
 
 ## R113 · moldura dos botões do topo, recortada da arte da Home (PC: som em 363,17; celular: som em 730,45)
@@ -2571,6 +2571,18 @@ func show_notice(title: String, text: String):
         add_child(notice_modal)
         notice_modal.setup(self, title)
     notice_modal.show_notice(title, text)
+
+## R124 · pergunta antes de sair do jogo (ex.: COMUNIDADE abre o Discord numa aba nova)
+func ask(title: String, text: String, yes_text: String, no_text: String, action: Callable):
+    if not is_instance_valid(notice_modal):
+        notice_modal = load("res://ui_v022/notice_modal.gd").new()
+        add_child(notice_modal)
+        notice_modal.setup(self, title)
+    notice_modal.ask(title, text, yes_text, no_text, action)
+
+func open_community():
+    ask("COMUNIDADE", "Você vai sair do jogo e abrir o servidor FRAIHA Xadrez no Discord: desafios, Torneio da Semana, novidades e suporte.\n\nQuer abrir o Discord agora?",
+        "ABRIR DISCORD", "AGORA NÃO", CommunityLink.open)
 
 func open_legal(tab := "termos"):
     if not is_instance_valid(legal_ui):

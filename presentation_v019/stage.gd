@@ -88,6 +88,7 @@ func _enter_tree():
     MobileLayout.configure_window(get_window())
 
 func _ready():
+    preload("res://ui_v022/fonts_msdf.gd").apply()   # R124 · letras nítidas em qualquer escala
     get_tree().auto_accept_quit = false
     bot_controller = preload("res://bot/controller.gd").new()
     bot_controller.name = "BotController"

@@ -40,3 +40,7 @@ renderer/rendering_method.mobile="gl_compatibility"
 
 general/default_playback_type.web=1
 driver/output_latency.web=60
+
+[gui]
+
+theme/default_font_multichannel_signed_distance_field=true

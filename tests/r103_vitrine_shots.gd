@@ -29,7 +29,7 @@ func run():
 		var p := OS.get_environment("SHOT_SIZE").split("x")
 		size = Vector2i(int(p[0]), int(p[1]))
 	root.size = size
-	root.content_scale_size = size
+	root.content_scale_size = Vector2i(1920, 1080) if OS.get_environment("SHOT_REAL") != "" else size   # SHOT_REAL: escala do jogo de verdade (base 1920x1080)
 	OS.set_environment("FRAIHA_SERVER_URL", "")
 	var stage = load("res://presentation_v019/stage.tscn").instantiate()
 	root.add_child(stage)
@@ -74,6 +74,8 @@ func run():
 	await shot("03_hub_club")
 	await scroll_to("ClubPlans")
 	await shot("04_hub_club_planos")
+	await scroll_to("OpenPersonalize")
+	await shot("04b_hub_atalhos")
 	pr.show_page("founder")
 	await frames(8)
 	await shot("05_fundador_topo")
