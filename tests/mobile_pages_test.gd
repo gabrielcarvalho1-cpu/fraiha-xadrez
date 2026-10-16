@@ -45,6 +45,10 @@ func reveal(c: Control):
 
 func run():
 	var args := OS.get_cmdline_user_args()
+	if not args.has("--mobile-test"):   # R127 · teste só do celular: no PC avisa e sai (antes travava até o tempo esgotar)
+		print("PULADO: mobile_pages_test é só do celular — rode com -- --mobile-test")
+		quit(0)
+		return
 	var size := Vector2i(390, 844)
 	var i := args.find("--size")
 	if i >= 0:

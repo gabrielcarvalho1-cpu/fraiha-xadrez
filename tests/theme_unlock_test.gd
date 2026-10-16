@@ -9,6 +9,8 @@ func _saved() -> String:
     return String(c.get_value("visual","theme",""))
 func _initialize(): call_deferred("run")
 func run():
+    # R127 · cenário do teste: convidado com um tema antigo (Prata) salvo — antes dependia do arquivo de quem rodava
+    var seed = ConfigFile.new(); seed.set_value("visual", "theme", "silver"); seed.save("user://visual_theme.cfg")
     var viewport = SubViewport.new()
     viewport.size = Vector2i(1600,900)
     root.add_child(viewport)

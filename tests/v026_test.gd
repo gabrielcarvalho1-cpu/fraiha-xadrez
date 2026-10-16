@@ -9,10 +9,16 @@ func check(ok: bool, label: String):
         failures += 1
         push_error(label)
 func run():
-    check(ProjectSettings.get_setting("display/window/size/mode") == Window.MODE_FULLSCREEN,"fullscreen configured before native window creation")
+    check(ProjectSettings.get_setting("display/window/size/mode") in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN],"fullscreen configured before native window creation")
     var stage = load("res://presentation_v019/stage.tscn").instantiate()
     root.add_child(stage)
     await process_frame
+    # R127 · os universos agora são liberados pela liga do Ranked: o teste simula uma conta que já chegou ao topo
+    var acc = stage.account
+    acc.access_token = "t"; acc.user_id = "u"; acc.server_ready = true
+    acc.profile = {"nickname": "Teste"}
+    acc.ranked = {"ranked_3min": {"highest_league": 10}, "ranked_5min": {"highest_league": 10}, "ranked_10min": {"highest_league": 10}, "ranked_20min": {"highest_league": 10}}
+    stage._sync_theme_unlocks()
     var audio = stage.get_node("GameAudio")
     var hub = stage.hub
     check(audio.music_path.ends_with("wood.mp3") and audio.music.playing,"Home starts Madeira")

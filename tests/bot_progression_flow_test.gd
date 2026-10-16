@@ -110,7 +110,9 @@ func run():
     await finish("bronze", "loss", "MATE")
     await dismiss_overlay()
     # R54 · PC: derrota agora abre a tela de resultado (revanche / analisar / início) — sem progresso
-    check(modal.is_open() and panel_text().contains("ENFRENTAR O BOT NOVAMENTE") and not bp.is_defeated("bronze"), "derrota: tela de resultado, sem progresso")
+    # R127 · celular: sem painel de derrota (volta ao tabuleiro; INÍCIO no rodapé) — conferido como no empate
+    var desk_loss: bool = not preload("res://ui_v022/mobile_layout.gd").active(root.get_viewport())
+    check((modal.is_open() and panel_text().contains("ENFRENTAR O BOT NOVAMENTE") if desk_loss else not modal.is_open()) and not bp.is_defeated("bronze"), "derrota: tela de resultado (PC), sem progresso")
     modal.close()
     await finish("bronze", "draw", "AFOGAMENTO")
     await dismiss_overlay()

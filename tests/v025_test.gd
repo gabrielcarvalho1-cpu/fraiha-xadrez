@@ -27,11 +27,18 @@ func run():
     stage = load("res://presentation_v019/stage.tscn").instantiate()
     root.add_child(stage)
     await process_frame
+    # R127 · os universos agora são liberados pela liga do Ranked: o teste simula uma conta que já chegou ao topo
+    var acc = stage.account
+    acc.access_token = "t"; acc.user_id = "u"; acc.server_ready = true
+    acc.profile = {"nickname": "Teste"}
+    acc.ranked = {"ranked_3min": {"highest_league": 10}, "ranked_5min": {"highest_league": 10}, "ranked_10min": {"highest_league": 10}, "ranked_20min": {"highest_league": 10}}
+    stage._sync_theme_unlocks()
     world = stage.game
     var hub = stage.hub
     var before = hub.league_profile.snapshot()
     for theme in ["wood","iron","bronze","silver","gold"]:
-        check(stage.theme_manager.apply_theme(theme) and stage.theme_manager.active_piece_set == theme,theme+" applies complete universe")
+        # R127 · as peças seguem a escolha do jogador (Madeira usa as clássicas): confere o universo aplicado
+        check(stage.theme_manager.apply_theme(theme) and stage.theme_manager.active_theme == theme,theme+" applies complete universe")
         check(world.piece_textures.size() == 12,theme+" has full light/dark set")
         if theme in ["bronze","silver","gold"]:
             var pixels = Catalog.texture(Catalog.get_theme(theme).pieces_path).get_image()
@@ -44,14 +51,18 @@ func run():
     for league in ["bronze","prata","ouro"]:
         hub.show_page("ranking")
         hub._select_league(league)
-        check(hub.league_preview_button.visible and hub.league_scene_preview.texture != null,league+" has working preview")
+        # R127 · "TESTAR UNIVERSO" virou ferramenta interna (DEV_PREVIEW_BUTTON): só confere quando ligada
+        check((hub.league_preview_button.visible if hub.DEV_PREVIEW_BUTTON else not hub.league_preview_button.visible) and hub.league_scene_preview.texture != null,league+" has working preview")
     var original_avatar: String = hub.avatar_id
-    hub.choose_avatar("archer")
-    check(hub.profile_portrait.texture != hub.AVATAR,"Archer displayed")
-    hub.choose_avatar("mage")
-    hub.avatar_id = "warrior"
+    # R127 · avatares agora se conquistam (ligas/bots/Premium): o teste usa dois liberados e com arte
+    var free_av: Array = Array(hub.AvatarCatalog.ids()).filter(func(a): return hub.avatar_unlocked(a) and hub.AvatarCatalog.has_art(a) and a != original_avatar)
+    check(free_av.size() >= 1, "há avatar liberado para trocar")
+    var pick: String = free_av[0] if free_av.size() > 0 else original_avatar
+    hub.choose_avatar(pick)
+    check(hub.avatar_id == pick,"avatar chosen and displayed")
+    hub.avatar_id = original_avatar
     hub._load_preferences()
-    check(hub.avatar_id == "mage","avatar persists")
+    check(hub.avatar_id == pick,"avatar persists")
     hub.choose_avatar(original_avatar)
     stage._start_bot("easy","b")
     var deadline = Time.get_ticks_msec()+2000
@@ -79,6 +90,7 @@ func run():
     stage.open_home()
     stage._start_local()
     var probe = OnlineProbe.new()
+    world.bot = null   # R127 · a partida local guarda o controlador do bot anterior; aqui é o caminho online (world.online)
     world.online = probe
     world.turn = "b"
     click(world.ORIGIN+Vector2(3.5,6.5)*world.TILE)

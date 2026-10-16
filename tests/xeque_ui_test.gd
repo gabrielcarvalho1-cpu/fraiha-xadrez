@@ -229,6 +229,7 @@ func run():
     # ---------- formatos ----------
     hub.open_xeque()
     var ML := preload("res://ui_v022/mobile_layout.gd")
+    ML._active_cache = 0        # R127 · formatos de PC conferidos como PC (com --mobile-test o teste já começa como celular)
     for sz in [Vector2i(1080, 1920), Vector2i(1950, 900), Vector2i(1920, 1080)]:
         root.size = sz
         await frames(3)

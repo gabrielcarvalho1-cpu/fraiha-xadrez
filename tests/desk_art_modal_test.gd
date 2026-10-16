@@ -141,7 +141,7 @@ func run():
 	ui.controller.last_result = {"match_id": mid, "mode": "ranked_3min", "mode_name": "Relâmpago", "outcome": "draw", "reason_text": "Afogamento"}
 	ui._show("result")
 	await frames(3)
-	check(not da.is_open() and ui.panel.visible, "empate continua na tela própria")
+	check(da.is_open() and da.kind == "result_draw", "R124 · empate na tela de EMPATE (mesma arte da vitória/derrota)")
 	ui.close_panel()
 	stage.open_home()
 	await frames(4)

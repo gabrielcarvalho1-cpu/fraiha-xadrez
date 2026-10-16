@@ -94,7 +94,9 @@ func run():
 	pr.offer = {"type": "payment_offer", "founder_open": false, "founder_until": "2026-12-14T23:59:59-03:00"}
 	pr.show_page("hub")
 	await frames(8)
-	check(node("BecomeFounder") == null and node("BecomeFounderOff") != null, "oferta encerrada: botão desligado")
+	# R127 · no modo de simulação a oferta fica sempre aberta (premium_hub.founder_open); só confere no modo real
+	if preload("res://monetization/monetization_catalog.gd").is_mock(): print("PULADO (simulação): oferta encerrada — rode com FRAIHA_PAYMENT_MODE=real")
+	else: check(node("BecomeFounder") == null and node("BecomeFounderOff") != null, "oferta encerrada: botão desligado")
 	await scroll_to("FounderShowcase")
 	await shot("08_fundador_encerrado")
 	print("RESULT %s" % ("OK" if fails == 0 else "%d FALHAS" % fails))
