@@ -55,7 +55,7 @@ func run():
         # R136 · a liga com outro tema pergunta antes (SIM/NÃO): aqui só confere a prévia, responde NÃO
         if is_instance_valid(hub.notice_modal) and hub.notice_modal.visible: hub.notice_modal.ok_button.pressed.emit()
         # R127 · "TESTAR UNIVERSO" virou ferramenta interna (DEV_PREVIEW_BUTTON): só confere quando ligada
-        check((hub.league_preview_button.visible if hub.DEV_PREVIEW_BUTTON else not hub.league_preview_button.visible) and hub.league_scene_preview.texture != null,league+" has working preview")
+        check(not hub.league_preview_button.visible and is_instance_valid(hub.league_rewards) and hub.league_rewards.find_child("RewardBoard", true, false) != null, league+" shows its rewards (R139)")
     var original_avatar: String = hub.avatar_id
     # R127 · avatares agora se conquistam (ligas/bots/Premium): o teste usa dois liberados e com arte
     var free_av: Array = Array(hub.AvatarCatalog.ids()).filter(func(a): return hub.avatar_unlocked(a) and hub.AvatarCatalog.has_art(a) and a != original_avatar)

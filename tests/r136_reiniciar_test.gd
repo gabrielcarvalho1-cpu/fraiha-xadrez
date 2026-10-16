@@ -23,8 +23,13 @@ func run():
 	await frames(25)
 	if stage.account_ui.is_open(): stage.account_ui.close()
 	stage.account._receive({"type": "leagues_preview", "enabled": true})
-	for t in ["wood", "gold"]:
-		check(stage.theme_manager.apply_theme(t), "tema %s" % t)
+	# R139 · padrão único: só a Madeira (com e sem cor nas casas)
+	if "--mobile-test" in OS.get_cmdline_user_args():
+		print("RESULT 0/0 OK (só PC: o REINICIAR é da barra do PC)")
+		quit(0)
+		return
+	for t in ["madeira", "ouro"]:
+		stage.hub.set_board_colors(t, "")
 		stage._start_bot("bronze", "w")
 		await frames(30)
 		var g = stage.game

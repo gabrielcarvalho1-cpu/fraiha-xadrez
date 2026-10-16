@@ -183,12 +183,11 @@ func run():
 	check(await tap_hot("LIGA MADEIRA") and hub.selected_league == "madeira", "toque na MADEIRA escolhe a liga")
 	var row_m: TextureRect = rp.find_child("LeagueRow_madeira", true, false)
 	check(row_m != null and String(row_m.texture.resource_path).ends_with("ligas_mid_sel.png"), "liga escolhida em destaque (moldura dourada)")
-	var cp_before: String = hub.current_piece_set
-	check(await tap_hot("PEÇAS CLÁSSICAS") and hub.current_piece_set != cp_before, "PEÇAS CLÁSSICAS alterna o conjunto (%s → %s)" % [cp_before, hub.current_piece_set])
+	# R139 · a linha PEÇAS CLÁSSICAS virou TABULEIRO E PEÇAS (as clássicas estão lá dentro)
+	check(await tap_hot("TABULEIRO E PEÇAS") and hub.board_colors_ui != null and hub.board_colors_ui.visible, "TABULEIRO E PEÇAS abre a escolha de cores")
+	if hub.board_colors_ui != null: hub.board_colors_ui.close()
 	var sub: Label = rp.find_child("ClassicPiecesSubMobile", true, false)
-	check(sub != null and sub.text == ("Em uso · toque para desligar" if hub.current_piece_set == "classic" else "Usar o conjunto original"), "estado das peças clássicas acompanha")
-	await tap_hot("PEÇAS CLÁSSICAS")
-	check(hub.current_piece_set == cp_before, "segundo toque volta ao conjunto anterior")
+	check(sub != null and sub.text == "Cores das casas e das peças", "linha TABULEIRO E PEÇAS com o texto novo")
 	rp.scroll.scroll_vertical = 0
 	await frames(3)
 	check(await tap_hot("VOLTAR") and hub.page == "main" and not rp.visible, "VOLTAR das Ligas volta à Home")

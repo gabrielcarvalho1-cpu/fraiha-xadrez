@@ -44,7 +44,7 @@ func run():
         stage.hub._select_league(id)
         # R53 · o botão "TESTAR UNIVERSO" virou ferramenta interna (DEV_PREVIEW_BUTTON = false): só aparece quando ligado.
         if is_instance_valid(stage.hub.league_preview_button):   # celular: a página das Ligas do PC não é montada
-            check(stage.hub.league_preview_button.visible == stage.hub.DEV_PREVIEW_BUTTON and stage.hub.league_scene_preview.texture != null,id+" league preview")
+            check(is_instance_valid(stage.hub.league_rewards) and stage.hub.league_rewards.find_child("RewardBadge", true, false) != null, id+" league rewards (R139)")
     check(stage.hub.ranked.ratings == original,"preview leaves PL unchanged")
     check(stage.theme_manager.apply_theme("wood"),"return to original theme")
     acc.profile = {}

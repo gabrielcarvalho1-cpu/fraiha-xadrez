@@ -135,10 +135,13 @@ func _ready():
         theme_manager.review_all = true
         hub.review_all = true
         print("CONFERÊNCIA VISUAL: todas as ligas abertas só para olhar (nada é salvo)")
-    if hub.has_signal("theme_preview_requested"):
-        hub.theme_preview_requested.connect(theme_manager.choose_theme)
-    if hub.has_signal("piece_set_requested"):
-        hub.piece_set_requested.connect(theme_manager.choose_piece_set)
+    # R139 · as Ligas não trocam mais cenário/peças (padrão Madeira); o jogador escolhe só as CORES em
+    # TABULEIRO E PEÇAS. Quem usava as Peças Clássicas continua com elas.
+    if theme_manager.migrated_classic and hub.get("piece_color_pref") == "original":
+        hub.piece_color_pref = "classicas"
+        hub._save_preferences()
+    if hub.has_signal("board_colors_changed"):
+        hub.board_colors_changed.connect(func(): _layout())
     if hub.has_method("on_theme_changed"):
         theme_manager.theme_changed.connect(hub.on_theme_changed)
         hub.on_theme_changed(theme_manager.active_theme, theme_manager.active_piece_set)

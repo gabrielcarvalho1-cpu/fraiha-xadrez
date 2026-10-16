@@ -33,7 +33,14 @@ const MOB_SIZE := Vector2(888, 1772)
 const FONT_BOLD := preload("res://account/fonts/Cinzel-Bold.woff")
 const FONT_SEMI := preload("res://account/fonts/Cinzel-SemiBold.woff")
 const MobileLayout := preload("res://ui_v022/mobile_layout.gd")
-const LeaguePixel := preload("res://cosmetics/league_pixel.gd")
+const BoardColors := preload("res://cosmetics/board_colors.gd")   # R139
+
+## R139 · peças da partida com a cor escolhida; "classicas" = o conjunto original do jogo (sem override)
+static func colored_pieces(hub, base: Dictionary) -> Dictionary:
+    if hub == null or not hub.has_method("effective_piece_color"): return base
+    var id: String = hub.effective_piece_color()
+    if id == BoardColors.CLASSICAS: return {}
+    return BoardColors.pieces(id, base)
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
 ## R55 · painel CONFIGURAÇÕES da partida no PC (arte do dono: tools/ui_ref/config/configuracoes_ref.png)
 const SETTINGS_FRAME_PATH := "res://ranked/art/desk_settings_frame.png"   # R55.4 · só no PC (1º uso)
@@ -128,7 +135,7 @@ func wanted() -> bool:
     # R51 · contra o computador usa o mesmo layout do Ranked Madeira (a partida força o tema Madeira)
     if not stage.mode in ["ranked", "casual", "bot"] or not stage.game.visible: return false   # R54 · Casual = mesma arte do Ranked
     var th := String(stage.game.visual_theme)
-    if th != "wood" and not LeaguePixel.has(th): return false   # R135 · ligas usam o mesmo layout (casas/peças da liga)
+    if th != "wood": return false   # R139 · padrão único: as partidas são todas no visual da Madeira
     # R53 · no celular (em pé e deitado) a partida usa o HUD novo (ranked/mobile_match_hud.gd)
     if MobileLayout.active(stage.get_viewport()): return false
     return true
@@ -311,12 +318,10 @@ func apply() -> void:
     g.update_presentation(Rect2(-g.position / g.scale.x, vs / g.scale.x))
     _rec(g, "hide_status", true)
     var th := String(g.visual_theme)
-    if th == "wood": _rec(g, "piece_override", PECAS)
-    else:
-        _rec(g, "piece_override", LeaguePixel.pieces(th))
-        _rec(g, "board_tiles", LeaguePixel.tiles(th))
-        _rec(g, "board_corners", LeaguePixel.corners(g.ORIGIN, g.BOARD) if not mobile else [])
-        if is_instance_valid(stage.theme_manager) and stage.theme_manager.iron_arena != null: _rec(stage.theme_manager.iron_arena, "visible", false)
+    if th == "wood":
+        # R139 · cores escolhidas em TABULEIRO E PEÇAS (a arte é a da Madeira; só a cor muda)
+        _rec(g, "piece_override", colored_pieces(stage.hub, PECAS))
+        _rec(g, "board_color_material", BoardColors.board_material(stage.hub.effective_board_color()) if stage.hub.has_method("effective_board_color") else null)
     g.queue_redraw()
     _skin_strips(M)
     _skin_material(M)

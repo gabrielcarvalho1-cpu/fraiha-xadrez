@@ -396,7 +396,7 @@ func founder_showcase() -> Control:
         chips.add_child(st)
     var t := Art.label(v, "PACOTE FUNDADOR", _title_px("PACOTE FUNDADOR"), Art.GOLD, Art.FONT_BOLD)
     _shadow(t, 9)
-    var sub := Art.label(v, "Entre para a história do FRAIHA. Selo, título, peças e salão exclusivos, para sempre na sua conta.", fs(21), Art.CREAM)
+    var sub := Art.label(v, "Entre para a história do FRAIHA. Selo, título, tabuleiro e peças exclusivos, para sempre na sua conta.", fs(21), Art.CREAM)
     _shadow(sub, 5)
     if founder_owned():
         var n := founder_number()
@@ -473,15 +473,17 @@ func open_preview(theme_id: String):
     var v := VBoxContainer.new()
     v.add_theme_constant_override("separation", 10)
     f.add_child(v)
-    var title := "UNIVERSO FUNDADOR" if theme_id == "fundador" else "ACADEMIA CLUB"
+    var title := "TABULEIRO E PEÇAS DO FUNDADOR" if theme_id == "fundador" else "TABULEIRO E PEÇAS DO CLUB"   # R139
     var tl := Art.label(v, title, fs(30), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
     tl.name = "PreviewTitle"
     var w := minf(view.x - (70.0 if narrow else 60.0), 1000.0)
     var h := minf(view.y - (230.0 if not narrow else 260.0), w * (0.62 if not narrow else 1.05))
-    var board = PreviewBoard.new(theme_id)
+    # R139 · padrão único: o tabuleiro da Madeira com as cores exclusivas (no lugar do antigo universo)
+    var board = preload("res://cosmetics/board_colors_preview.gd").new(theme_id, theme_id)
+    board.name = "PreviewBoard"
     board.custom_minimum_size = Vector2(w, h)
     v.add_child(board)
-    var d := Art.label(v, ("Peças em ouro e obsidiana e o Salão do Fundador: são seus para sempre, junto com selo, título e moldura." if theme_id == "fundador" else "Peças em marfim e esmeralda na Academia Club: liberadas enquanto o Club estiver ativo."), fs(16), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
+    var d := Art.label(v, ("Tabuleiro e peças em dourado e ébano: são seus para sempre, junto com selo, título e moldura." if theme_id == "fundador" else "Tabuleiro e peças em esmeralda: liberados enquanto o Club estiver ativo."), fs(16), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
     d.custom_minimum_size.x = w
     var row := HBoxContainer.new()
     row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -516,8 +518,8 @@ func founder_plans() -> Control:
     else: c1 = "QUERO SER FUNDADOR"
     row.add_child(plan_card("founder", "founder", "FUNDADOR", "", [
         "Selo, título e moldura de Fundador",
-        "Avatar Fundador e peças douradas",
-        "Salão do Fundador (universo exclusivo)",
+        "Avatar exclusivo de Fundador",
+        "Tabuleiro e peças exclusivos do Fundador",
         "%d dias de Club FRAIHA inclusos" % Catalog.FOUNDER_CLUB_DAYS,
         "Grupo dos Fundadores no WhatsApp",
         "Seu número e nome no Salão dos Fundadores",
@@ -814,10 +816,10 @@ func payment_confirmed(product_id: String):
     var lines := []
     if founder:
         if num > 0: lines.append("Você é o Fundador #%d do FRAIHA" % num)
-        lines += ["Selo e título \"%s\"" % ("Fundador Lendário" if legend else "Fundador do Reino"), "Avatar e moldura exclusivos de Fundador", "Universo e peças do Fundador",
+        lines += ["Selo e título \"%s\"" % ("Fundador Lendário" if legend else "Fundador do Reino"), "Avatar e moldura exclusivos de Fundador", "Tabuleiro e peças do Fundador",
             ("1 ano" if legend else "%d dias" % Catalog.FOUNDER_CLUB_DAYS) + " de Club FRAIHA inclusos", "Grupo dos Fundadores no WhatsApp"]
     else:
-        lines = ["Análises ilimitadas", "MEU CLUB: estatísticas, treino dos seus erros e desafios", "Selo, avatares, moldura, universo e peças do Club"]
+        lines = ["Análises ilimitadas", "MEU CLUB: estatísticas, treino dos seus erros e desafios", "Selo, avatares, moldura, tabuleiro e peças do Club"]
     var body := "Pagamento confirmado pelo Mercado Pago. Já está liberado na sua conta:\n\n• " + "\n• ".join(lines)
     if main_hub != null and main_hub.entitlements != null:
         var exp := String(main_hub.entitlements.club_expires_at())

@@ -14,6 +14,7 @@ var iron_arena: Sprite2D
 var unlock_index := 0
 var saved_theme := "wood"
 var saved_piece_set := ""      # R31: conjunto de peças escolhido ("" = o do cenário)
+var migrated_classic := false  # R139 · quem usava as Peças Clássicas continua com elas (agora em TABULEIRO E PEÇAS)
 ## R37.3 · CONFERÊNCIA VISUAL (endereço com ?conferir=ligas, ou --conferir-ligas no PC): todos os cenários
 ## e peças das ligas abrem para olhar, só nesta sessão. Nada é salvo nem liberado na conta.
 var review_all := false
@@ -45,9 +46,13 @@ func setup(presentation: Node):
     stage.add_child(iron_arena)
     var config = ConfigFile.new()
     config.load("user://visual_theme.cfg")
-    var initial = String(config.get_value("visual","theme","wood"))
-    saved_theme = initial if Catalog.THEME_DATA.has(initial) else "wood"
-    saved_piece_set = String(config.get_value("visual","pieces",""))
+    # R139 · PADRÃO ÚNICO: todas as partidas usam o visual da Madeira; o jogador só troca as CORES de casas e
+    # peças (cosmetics/board_colors.gd). Escolhas antigas de cenário/peças de liga não valem mais.
+    saved_theme = "wood"
+    saved_piece_set = ""
+    migrated_classic = String(config.get_value("visual","pieces","")) == "classic"
+    if String(config.get_value("visual","theme","wood")) != "wood" or String(config.get_value("visual","pieces","")) != "":
+        _write_config()   # escolha antiga regravada como o padrão
     # Até a conta confirmar os desbloqueios, abre sempre em Madeira (sem apagar a escolha salva).
     apply_theme(saved_theme if is_unlocked(saved_theme) else "wood", false)
     if hub != null and hub.get("entitlements") != null and hub.entitlements.has_signal("changed"):

@@ -652,6 +652,9 @@ func _settings(content: VBoxContainer):
         hub._toggle_premove()
         paint_premove.call())
     paint_premove.call()
+    # R139 · TABULEIRO E PEÇAS (cores das casas e das peças)
+    var bc: TextureButton = hub._page_button(content, 1, "TABULEIRO E PEÇAS", "Cores das casas e das peças", func(): hub.open_board_colors())
+    bc.name = "BoardColorsMobile"
     # R53 · TELA CHEIA saiu do MAIS (o painel da referência tem só VOLTAR / CONFIGURAÇÕES / CONHEÇA / SAIR)
     if hub.screen_mode != null and hub.screen_mode.supported():
         hub._settings_section(content, "TELA")

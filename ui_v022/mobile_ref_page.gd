@@ -496,7 +496,7 @@ func _build_ranking():
 		var classic := k == entries.size()
 		var id: String = "" if classic else String(entries[k].league_id)
 		var unlocked: bool = classic or hub.league_unlocked(id)
-		var selected: bool = (hub.current_piece_set == "classic") if classic else (unlocked and id == hub.selected_league)
+		var selected: bool = false if classic else (unlocked and id == hub.selected_league)
 		var mid := TextureRect.new()
 		mid.name = "LeagueRow_" + (id if not classic else "classic")
 		mid.texture = tex("ligas_mid_" + ("sel" if selected else ("on" if unlocked else "off")))
@@ -531,7 +531,7 @@ func _build_ranking():
 			crest.size = Vector2(152, 102) * s
 		crest.name = "LeagueCrest_" + (id if not classic else "classic")
 		panel.add_child(crest)
-		var title: String = "PEÇAS CLÁSSICAS" if classic else String(entries[k].display_name).to_upper()
+		var title: String = "TABULEIRO E PEÇAS" if classic else String(entries[k].display_name).to_upper()   # R139
 		var col: Color = Color("f3d48c") if unlocked else Color("c9c6bb")
 		var px := 40.0
 		var room := 225.0
@@ -544,17 +544,24 @@ func _build_ranking():
 		name_l.name = "LeagueName_" + (id if not classic else "classic")
 		name_l.add_theme_constant_override("line_spacing", int(round(-8 * s)))
 		if classic:
-			var on: bool = hub.current_piece_set == "classic"
-			var sub := _label(panel, "Em uso · toque para desligar" if on else "Usar o conjunto original", R(284, y + 56, 290, 34), 26, Color("cfe7a8") if on else CREAM, Kit.SERIF, HORIZONTAL_ALIGNMENT_LEFT, 0)
+			var sub := _label(panel, "Cores das casas e das peças", R(284, y + 56, 290, 34), 26, CREAM, Kit.SERIF, HORIZONTAL_ALIGNMENT_LEFT, 0)
 			sub.name = "ClassicPiecesSubMobile"
 			name_l.position.y = (y + 10) * s
 			name_l.size.y = 50 * s
-			_hot(panel, mid, Rect2(86, y, 706, LIGA_ROW_H), y, "PEÇAS CLÁSSICAS", func():
-				hub._toggle_classic_pieces()
-				refresh())
+			_hot(panel, mid, Rect2(86, y, 706, LIGA_ROW_H), y, "TABULEIRO E PEÇAS", func(): hub.open_board_colors())
+			# R139 · o selo da arte diz "DISPONÍVEL": aqui ele vira "ABRIR" (a linha abre a escolha de cores)
+			var cover := ColorRect.new()
+			cover.name = "BoardColorsChipCover"
+			cover.color = Color("021a43")
+			cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			cover.position = Vector2(86 + 474, y + 38) * s
+			cover.size = Vector2(150, 28) * s
+			panel.add_child(cover)
+			var ab := _label(panel, "ABRIR", R(86 + 466, y + 32, 166, 40), 26, Color("ffd98a"), Kit.SERIF_BOLD, HORIZONTAL_ALIGNMENT_CENTER, 4)
+			ab.name = "BoardColorsChip"
 		else:
 			_hot(panel, mid, Rect2(86, y, 706, LIGA_ROW_H), y, "LIGA " + title.replace("\n", " "), func():
-				hub._select_league(id, true, refresh)   # R136: com a caixa SIM/NÃO, redesenha de novo depois do SIM
+				hub._select_league(id)
 				refresh())
 	_band(panel, "ligas_end", LIGA_TOP_H + rows * LIGA_ROW_H)
 	panel.size.y = (LIGA_TOP_H + rows * LIGA_ROW_H + LIGA_END_H) * s

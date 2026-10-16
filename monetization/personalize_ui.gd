@@ -27,7 +27,7 @@ static func build(hub, parent: VBoxContainer):
     var t := Art.label(hv, "PERSONALIZAÇÃO", hub.fs(30 if hub.narrow else 44), Art.GOLD, Art.FONT_BOLD)
     t.add_theme_constant_override("outline_size", 8)
     t.add_theme_color_override("font_outline_color", Color(0.16, 0.08, 0.0, 0.95))
-    Art.label(hv, "Escolha como o reino vê você: ícone, título, moldura, universo e peças.", hub.fs(19), Art.CREAM)
+    Art.label(hv, "Escolha como o reino vê você: ícone, título, moldura, tabuleiro e peças.", hub.fs(19), Art.CREAM)
     var who := "Fundador + Club" if mh != null and mh.is_founder() and mh.club_active() else ("Fundador" if mh != null and mh.is_founder() else ("Club FRAIHA" if mh != null and mh.club_active() else "Jogador"))
     hv.add_child(Art.Stamp.new("SEUS DIREITOS: " + who.to_upper(), "ok" if who != "Jogador" else "info", 14))
     if mh == null:
@@ -36,8 +36,7 @@ static func build(hub, parent: VBoxContainer):
     _badges(hub, parent, mh)
     _titles(hub, parent, mh)
     _frames(hub, parent, mh)
-    _universes(hub, parent, mh)
-    _pieces(hub, parent, mh)
+    _board_colors(hub, parent, mh)   # R139 · no lugar de UNIVERSO e CONJUNTO DE PEÇAS
     _lab(hub, parent, mh)
     parent.add_child(hub.fair_play_note())
 
@@ -185,6 +184,32 @@ static func _frame_preview(mh, fid: String) -> Control:
         cf.compact = false
         pic.add_child(cf)
     return holder
+
+## R139 · TABULEIRO E PEÇAS: padrão único (Madeira); Fundador e Club têm cores exclusivas de casas e peças.
+static func _board_colors(hub, parent: VBoxContainer, mh):
+    var v: VBoxContainer = hub.section(parent, "TABULEIRO E PEÇAS", "castle", "club")
+    v.get_parent().name = "PersonalizeBoardColors"
+    Art.label(v, "O tabuleiro é o da Madeira para todos; você escolhe as cores das casas e das peças. Fundador e Club têm cores exclusivas.", hub.fs(16), Art.MUTED)
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation", 16)
+    v.add_child(row)
+    var pv = preload("res://cosmetics/board_colors_preview.gd").new(mh.effective_board_color(), mh.effective_piece_color())
+    pv.name = "PersonalizeBoardPreview"
+    var st = mh.get_parent()
+    if st != null and st.get("theme_manager") != null: pv.classic_pieces = st.theme_manager.classic_pieces
+    pv.custom_minimum_size = Vector2(1, 1) * (150.0 if hub.narrow else 190.0)
+    row.add_child(pv)
+    var go := Art.Cta.new("ESCOLHER CORES", "gold", 52, 15 if hub.narrow else 17)
+    go.name = "PersonalizeBoardColorsOpen"
+    go.icon_kind = ""
+    go.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    go.custom_minimum_size.x = 170 if hub.narrow else 230
+    go.pressed.connect(func(): mh.open_board_colors())
+    row.add_child(go)
+    if mh.has_signal("board_colors_changed"):
+        var upd := func(): pv.set_colors(mh.effective_board_color(), mh.effective_piece_color())
+        mh.board_colors_changed.connect(upd)
+        pv.tree_exiting.connect(func(): if mh.board_colors_changed.is_connected(upd): mh.board_colors_changed.disconnect(upd))
 
 static func _universes(hub, parent: VBoxContainer, mh):
     var tm = theme_manager(hub)

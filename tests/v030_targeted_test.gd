@@ -44,10 +44,8 @@ func run():
     for i in range(3): await process_frame
     for id in ["madeira","ferro","bronze","prata","ouro","platina","esmeralda","diamante","mestre","grande_mestre","challenger"]:
         stage.hub._select_league(id)
-        # R136 · trocar o tema pergunta antes (SIM/NÃO): responde SIM
-        if is_instance_valid(stage.hub.notice_modal) and stage.hub.notice_modal.visible: stage.hub.notice_modal.yes_button.pressed.emit()
-        var theme = preload("res://league/catalog.gd").theme_for(id)
-        check(stage.theme_manager.active_theme == theme,"select applies " + id)
+        # R139 · padrão único: escolher a liga não troca o visual (o jogador escolhe só as cores)
+        check(stage.theme_manager.active_theme == "wood" and not (is_instance_valid(stage.hub.notice_modal) and stage.hub.notice_modal.visible),"select keeps Madeira " + id)
         # R134 · a TELA INICIAL é sempre a da Madeira, em qualquer liga
         check(stage.hub.canvas.get_node("ForestArtwork").texture == null or stage.hub.canvas.get_node("ForestArtwork").texture == stage.hub.FOREST,"Home background Madeira com " + id)
     check(stage.hub.avatar_texture("paladin") != null,"Paladin loads")

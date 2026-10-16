@@ -12,6 +12,7 @@ signal friends_requested
 signal premove_changed(enabled: bool)
 signal cosmetics_changed   # R31: ícone/título/moldura/avatar mudaram (a conta sincroniza com o servidor)
 
+const BoardColors = preload("res://cosmetics/board_colors.gd")   # R139
 const ConteudoExtra = preload("res://web_content/conteudo_extra.gd")   # R137
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 0.0
@@ -745,7 +746,7 @@ func _build_pages():
     # R31: ícone, título, moldura, universo e peças exclusivos (Fundador / Club).
     var personalize := RefPage.hotspot(profile_panel, Rect2(1487, 775, 203, 58), func(): open_premium("personalize"), "OpenPersonalize")
     personalize.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    personalize.tooltip_text = "Ícone, título, moldura, universo e peças"
+    personalize.tooltip_text = "Ícone, título, moldura, tabuleiro e peças"
     # avisos (bloqueado, aplicado…) na coluna da esquerda, abaixo das abas
     avatar_note = RefPage.text(profile_panel, "", Rect2(104, 440, 200, 380), 17, MUTED, false)
     avatar_note.name = "AvatarNote"
@@ -962,6 +963,27 @@ func _build_settings_page():
     var ps := RefPage.text(panel, "", Rect2(346, 848, 820, 40), 28, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
     premove_button.set_meta("ref_labels", [pt, ps])
     _refresh_premove_button()
+    # R139 · TABULEIRO E PEÇAS: placa na linha do título PARTIDA (a arte não tem outra linha livre)
+    var bc_btn := Button.new()
+    bc_btn.name = "SettingsBoardColors"
+    bc_btn.text = "TABULEIRO E PEÇAS  ›"
+    bc_btn.focus_mode = Control.FOCUS_NONE
+    bc_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    bc_btn.add_theme_font_override("font", FONT_CINZEL)
+    bc_btn.add_theme_font_size_override("font_size", 24)
+    for pair in [["normal", Color("15213a")], ["hover", Color("1f3156")], ["pressed", Color("0e182b")]]:
+        var bst := StyleBoxFlat.new()
+        bst.bg_color = pair[1]
+        bst.border_color = Color("c99a45")
+        bst.set_border_width_all(2)
+        bst.set_corner_radius_all(3)
+        bc_btn.add_theme_stylebox_override(pair[0], bst)
+    bc_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+    for k in ["font_color", "font_hover_color", "font_pressed_color"]: bc_btn.add_theme_color_override(k, Color("f4ce7f"))
+    bc_btn.position = Vector2(880, 712)
+    bc_btn.size = Vector2(442, 50)
+    bc_btn.pressed.connect(open_board_colors)
+    panel.add_child(bc_btn)
     var note := Label.new()
     note.name = "SettingsNote"
     note.text = "Preferências salvas automaticamente. O botão de som da tela inicial silencia tudo."
@@ -1817,7 +1839,7 @@ var about_icon: TextureRect
 var about_lead: Label
 var about_topic := 0
 ## R53 · tópicos do CONHEÇA O FRAIHA (fonte única: PC e celular)
-const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o cenário e as peças daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nNa página Ligas, veja o universo de cada liga. Madeira já está disponível; as demais são liberadas conforme você alcança a liga no Ranked. As peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente.\n\nToque em COMUNIDADE (na tela inicial ou no MAIS, no celular) ou acesse discord.gg/27WRsrUGa6 para entrar no nosso servidor no Discord: desafios, Torneio da Semana, novidades e salas de voz.\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
+const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o brasão, a moldura e a cor de tabuleiro daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nEm TABULEIRO E PEÇAS (Configurações ou Ligas) escolha as cores das casas e das peças: várias são grátis, cada liga conquistada no Ranked libera a cor dela e as peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente.\n\nToque em COMUNIDADE (na tela inicial ou no MAIS, no celular) ou acesse discord.gg/27WRsrUGa6 para entrar no nosso servidor no Discord: desafios, Torneio da Semana, novidades e salas de voz.\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
 
 func _build_about_page():
     var topics: Array = ABOUT_TOPICS
@@ -2013,9 +2035,40 @@ func _build_ranking():
     league_preview_button = _button(panel,2,"TESTAR UNIVERSO","Prévia de desenvolvimento · sem alterar PL",Vector2(968,700),_preview_league,Vector2(334,60))
     league_preview_button.visible = DEV_PREVIEW_BUTTON
     RefPage.hotspot(panel, Rect2(97, 808, 471, 80), back, "RankingBack")
-    classic_btn = RefPage.hotspot(panel, Rect2(597, 808, 444, 80), _toggle_classic_pieces, "ClassicPieces")
+    # R139 · o botão PEÇAS CLÁSSICAS da arte vira TABULEIRO E PEÇAS (cores das casas e das peças; as clássicas
+    # estão lá dentro): uma placa da cor do botão cobre o título pintado
+    classic_btn = RefPage.hotspot(panel, Rect2(597, 808, 444, 80), open_board_colors, "ClassicPieces")
     classic_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    classic_sub = RefPage.text(panel, "Usar o conjunto original", Rect2(690, 849, 290, 30), 20, Color("efe6cf"), false)
+    var cover := ColorRect.new()
+    cover.name = "BoardColorsTitleCover"
+    cover.color = Color("10203f")
+    cover.position = Vector2(682, 813)
+    cover.size = Vector2(312, 70)
+    cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    panel.add_child(cover)
+    # R139 · o aviso pintado ("a maior liga alcançada libera cenário e peças") ganha o texto novo
+    var info_cover := ColorRect.new()
+    info_cover.name = "LeagueInfoCover"
+    info_cover.color = Color(0.008, 0.043, 0.11)
+    info_cover.position = Vector2(1130, 824)
+    info_cover.size = Vector2(432, 58)
+    info_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    panel.add_child(info_cover)
+    for li in 2:
+        var info := Label.new()
+        info.name = "LeagueInfoText%d" % li
+        info.text = ["Ligas conquistadas no Ranked. Cada ritmo tem PL próprio;", "a liga libera brasão, moldura e a cor de tabuleiro dela."][li]
+        info.add_theme_font_size_override("font_size", 15)
+        info.add_theme_color_override("font_color", Color("d9d2bf"))
+        info.clip_text = true
+        info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        info.position = Vector2(1134, 826 + li * 26)
+        info.size = Vector2(428, 26)
+        panel.add_child(info)
+    var bct := RefPage.text(panel, "TABULEIRO E PEÇAS", Rect2(682, 812, 312, 38), 26, Color("f5cf72"), true)
+    bct.name = "BoardColorsTitle"
+    bct.add_theme_font_override("font", FONT_CINZEL)
+    classic_sub = RefPage.text(panel, "Cores das casas e das peças", Rect2(682, 849, 312, 30), 20, Color("efe6cf"), false)
     classic_sub.name = "ClassicPiecesSub"
     classic_frame = Panel.new()
     classic_frame.add_theme_stylebox_override("panel", league_sel_frame.get_theme_stylebox("panel"))
@@ -2041,13 +2094,9 @@ func on_theme_changed(_theme_id: String, piece_set_id: String):
     _refresh_classic_state()
 
 func _refresh_classic_state():
+    # R139 · o botão agora abre TABULEIRO E PEÇAS: o texto é fixo
     if not is_instance_valid(classic_sub): return
-    var on := current_piece_set == "classic"
-    classic_sub.text = "Em uso · clique para desligar" if on else "Usar o conjunto original"
-    classic_sub.add_theme_color_override("font_color", Color("cfe7a8") if on else Color("efe6cf"))
-    classic_sub.add_theme_font_size_override("font_size", 18 if on else 20)
-    classic_btn.tooltip_text = "Voltar às peças da liga" if on else "Usar as peças clássicas"
-    classic_frame.visible = on
+    classic_sub.text = "Cores das casas e das peças"
 
 func _refresh_ranking_header():
     if not is_instance_valid(ranking_header): return
@@ -2090,27 +2139,128 @@ func _fit_league_texts():
         if dpx <= 16 or league_desc.get_line_count() <= 3: break   # até a linha dourada cabem 3 linhas
         dpx -= 1
 
+## R139 · quadro RECOMPENSAS da página das Ligas (PC): brasão · moldura no avatar · cor do tabuleiro
+var league_rewards: Control = null
+func _show_league_rewards(id: String, nome: String):
+    var panel: Control = league_scene_preview.get_parent()
+    if not is_instance_valid(league_rewards):
+        league_rewards = Control.new()
+        league_rewards.name = "LeagueRewards"
+        league_rewards.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        league_rewards.position = Vector2(950, 520)
+        league_rewards.size = Vector2(616, 252)
+        panel.add_child(league_rewards)
+        # fundo liso por cima das caixas pintadas do antigo "Cenário e Peças"
+        var under := ColorRect.new()
+        under.name = "LeagueRewardsUnder"
+        under.color = Color(0.012, 0.05, 0.11)
+        under.position = Vector2(940, 512)
+        under.size = Vector2(636, 266)
+        under.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        panel.add_child(under)
+        panel.move_child(under, league_rewards.get_index())
+    for c in league_rewards.get_children(): c.queue_free()
+    var cw := 616.0 / 3.0
+    var pic := 150.0
+    var items := [["BRASÃO", "badge"], ["MOLDURA NO AVATAR", "frame"], ["TABULEIRO " + nome.to_upper() if id != "madeira" else "TABULEIRO PADRÃO", "board"]]
+    for i in 3:
+        var box := Rect2(Vector2(i * cw + (cw - pic) / 2.0, 8), Vector2(pic, pic))
+        var kind: String = items[i][1]
+        if kind == "badge":
+            var t := TextureRect.new()
+            t.name = "RewardBadge"
+            t.texture = ThemeCatalog.badge_texture(id)
+            t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+            t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+            t.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+            t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            t.position = box.position
+            t.size = box.size
+            league_rewards.add_child(t)
+        elif kind == "frame":
+            var holder := Control.new()
+            holder.name = "RewardFrame"
+            holder.position = box.position + Vector2(12, 12)
+            holder.size = box.size - Vector2(24, 24)
+            holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            league_rewards.add_child(holder)
+            var av := TextureRect.new()
+            av.texture = avatar_texture()
+            av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+            av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+            av.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+            av.set_anchors_preset(Control.PRESET_FULL_RECT)
+            av.offset_left = 4; av.offset_top = 4; av.offset_right = -4; av.offset_bottom = -4
+            av.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            holder.add_child(av)
+            var lf = preload("res://profile/league_frame.gd").new()
+            lf.league_id = id
+            holder.add_child(lf)
+        else:
+            var bt := TextureRect.new()
+            bt.name = "RewardBoard"
+            var at := AtlasTexture.new()
+            at.atlas = BoardColors.casas()
+            at.region = Rect2(0, 0, 320, 320)
+            bt.texture = at
+            bt.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+            bt.stretch_mode = TextureRect.STRETCH_SCALE
+            bt.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+            bt.material = BoardColors.board_material(id) if BoardColors.board(id)[0] == id else null
+            bt.position = box.position + Vector2(10, 10)
+            bt.size = box.size - Vector2(20, 20)
+            bt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            league_rewards.add_child(bt)
+            var line := Panel.new()
+            var st := StyleBoxFlat.new()
+            st.draw_center = false
+            st.border_color = Color("c99a45")
+            st.set_border_width_all(2)
+            line.add_theme_stylebox_override("panel", st)
+            line.position = bt.position - Vector2(2, 2)
+            line.size = bt.size + Vector2(4, 4)
+            line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            league_rewards.add_child(line)
+        var cap := Label.new()
+        cap.text = String(items[i][0])
+        cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        cap.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+        cap.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        cap.add_theme_font_override("font", FONT_CINZEL)
+        cap.add_theme_font_size_override("font_size", 19)
+        cap.add_theme_color_override("font_color", Color("efe6cf"))
+        cap.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
+        cap.add_theme_constant_override("outline_size", 3)
+        cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        cap.position = Vector2(i * cw + 6, pic + 16)
+        cap.custom_minimum_size = Vector2(cw - 12, 0)
+        cap.size = Vector2(cw - 12, 60)
+        league_rewards.add_child(cap)
+
 ## R137 · o conteúdo extra (Web) chegou: redesenha a prévia da liga aberta na página das Ligas
 func refresh_league_preview():
     if is_instance_valid(league_detail_title) and not selected_league.is_empty(): _select_league(selected_league, false)
 
+## R139 · recompensas de cada liga (no lugar de cenário/tabuleiro/peças próprios)
+const LEAGUE_MOTTO := {"madeira": "Floresta, equilíbrio e o começo da sua jornada.", "ferro": "Fortaleza, disciplina e as primeiras batalhas.",
+    "bronze": "Conquista, prestígio e novos horizontes.", "prata": "Elegância, conhecimento e novos desafios.", "ouro": "Maestria, poder e grandes vitórias.",
+    "platina": "Precisão fria e jogadas refinadas.", "esmeralda": "Raízes antigas e estratégia que cresce.", "diamante": "Brilho raro de quem não erra.",
+    "mestre": "Domínio do jogo e respeito do reino.", "grande_mestre": "A elite do reino.", "challenger": "O topo: poucos chegam aqui."}
+func league_rewards_text(id: String) -> String:
+    var motto := String(LEAGUE_MOTTO.get(id, ""))
+    if id == "madeira": return motto + "\nRecompensas: brasão da Madeira, moldura de liga no avatar e o tabuleiro padrão."
+    var nome := String(BoardColors.board(id)[1]) if BoardColors.board(id)[0] == id else id.capitalize()
+    return motto + "\nRecompensas: brasão e moldura de liga no avatar e a cor de tabuleiro " + nome + "."
+
 ## R136 · tema que está valendo nas partidas (o lobby é sempre Madeira; ver apply_theme)
 var current_league_theme := "wood"
 var _theme_confirmed := false
-func _select_league(id: String, apply_theme_now := true, done := Callable()):
-    # R136 · trocar o tema das partidas pergunta antes (o dono: "não fala nada, fica meio aleatório")
-    if apply_theme_now and not _theme_confirmed and league_unlocked(id) and LeagueCatalog.theme_for(id) != current_league_theme:
-        var nome: String = LeagueCatalog.entry(id, league_profile.data).display_name
-        ask("LIGA " + nome.to_upper(), "Você deseja ativar o tema de peças e tabuleiro da Liga " + nome + " nas suas partidas?", "SIM", "NÃO", func():
-            _theme_confirmed = true
-            _select_league(id, true)
-            _theme_confirmed = false
-            if done.is_valid(): done.call())
-        return
+func _select_league(id: String, _apply_theme_now := true, done := Callable()):
+    # R139 · PADRÃO ÚNICO: escolher uma liga só mostra os detalhes e as recompensas dela (brasão, moldura de liga
+    # no avatar e a cor de tabuleiro da liga); o visual da partida é sempre o da Madeira (cores em TABULEIRO E PEÇAS)
     selected_league = id
     var unlocked = league_unlocked(id)
-    # R51e · só um clique de verdade na liga troca cenário/peças; abrir a página não mexe na escolha do jogador
-    if unlocked and apply_theme_now: theme_preview_requested.emit(LeagueCatalog.theme_for(id))
+    if done.is_valid(): done.call()
     # R136 · no celular a página das Ligas do PC não é montada (a do celular se redesenha sozinha): sem ela, nada a atualizar
     if not is_instance_valid(league_detail_title): return
     var entry = LeagueCatalog.entry(id,league_profile.data)
@@ -2119,12 +2269,7 @@ func _select_league(id: String, apply_theme_now := true, done := Callable()):
     league_detail_badge.texture = ThemeCatalog.badge_texture(id)
     var theme: String = entry.environment_theme
     var available = ThemeCatalog.THEME_DATA.has(theme)
-    var description = "Floresta, equilíbrio e o começo da sua jornada.\nRecompensas: cenário natural, tabuleiro de grama e terra e peças de marfim e ardósia." if id == "madeira" else "Fortaleza, montanhas e forjas.\nRecompensas: arena de pedra, tabuleiro de aço e peças de ferro."
-    if id == "bronze": description = "Conquista, prestígio e novos horizontes.\nRecompensas: cidadela ao pôr do sol, tabuleiro e peças de bronze."
-    elif id == "prata": description = "Elegância, conhecimento e novos desafios.\nRecompensas: palácio de mármore, tabuleiro e peças de prata."
-    elif id == "ouro": description = "Maestria, poder e grandes vitórias.\nRecompensas: reino dourado, tabuleiro real e peças de ouro."
-    if available and ThemeCatalog.get_theme(theme).has("description"): description = ThemeCatalog.get_theme(theme).description + "\nRecompensas: cenário, tabuleiro e conjunto de peças próprios."
-    if not available: description = "Recompensas visuais em desenvolvimento.\nSeu emblema já faz parte da jornada."
+    var description := league_rewards_text(id)
     league_details.text = ("Disponível" if unlocked else LOCKED_TEXT)+"\n"+description+"\n\nConquiste esta liga no Ranked: cada ritmo tem PL próprio e a promoção acontece a cada 100 PL."
     if is_instance_valid(league_chip):
         league_chip.text = "Disponível" if unlocked else "Bloqueada"
@@ -2137,19 +2282,12 @@ func _select_league(id: String, apply_theme_now := true, done := Callable()):
             var xr: Array = LIGA_TILES[i]
             league_sel_frame.position = Vector2(float(xr[0]) + 1, LIGA_TILE_Y.x + 1)
             league_sel_frame.size = Vector2(float(xr[1] - xr[0]) - 1, LIGA_TILE_Y.y - LIGA_TILE_Y.x - 1)
-    var textures = ThemeCatalog.piece_textures(theme) if available else {}
-    league_scene_preview.texture = ThemeCatalog.texture(ThemeCatalog.get_theme(theme).arena_path) if available else null
-    for i in range(league_preview_pieces.size()):
-        league_preview_pieces[i].texture = textures.get("w"+ThemeCatalog.PIECE_ORDER[i])
-    preview_caption.text = "CENÁRIO E PEÇAS · "+entry.display_name.to_upper() if available else "VISUAIS EM DESENVOLVIMENTO"
-    if is_instance_valid(league_chip): preview_caption.text = ("Cenário e Peças  ·  " + entry.display_name) if available else "Visuais em desenvolvimento"
-    # R137 · Web: cenário e peças de Bronze → Challenger vêm no CONTEÚDO EXTRA (2º pacote, baixa depois da Home).
-    # Antes de chegar, o quadro ficava vazio e não voltava sozinho: avisa, pede o download já e, quando chegar,
-    # o stage chama refresh_league_preview()
-    if available and league_scene_preview.texture == null and not ConteudoExtra.is_ready():
-        preview_caption.text = ("Carregando cenário e peças…  ·  " + entry.display_name) if is_instance_valid(league_chip) else "CARREGANDO CENÁRIO E PEÇAS… · " + entry.display_name.to_upper()
-        if ConteudoExtra.instance != null and is_instance_valid(ConteudoExtra.instance): ConteudoExtra.instance.start()
-    league_preview_button.visible = DEV_PREVIEW_BUTTON and available and unlocked
+    # R139 · no lugar de "Cenário e Peças": RECOMPENSAS da liga (brasão, moldura no avatar e cor do tabuleiro)
+    league_scene_preview.visible = false
+    for pc in league_preview_pieces: pc.visible = false
+    preview_caption.text = ("Recompensas  ·  " + entry.display_name) if is_instance_valid(league_chip) else "RECOMPENSAS · " + entry.display_name.to_upper()
+    _show_league_rewards(id, entry.display_name)
+    league_preview_button.visible = false   # R139 · sem cenários de liga
     if not is_instance_valid(league_chip):
         for key in league_buttons:
             league_buttons[key].modulate = Color.WHITE if key == id else Color(0.78,0.82,0.79)
@@ -2796,6 +2934,31 @@ func _load_preferences():
     title_pref = String(config.get_value("profile","title","auto"))
     frame_pref = String(config.get_value("profile","frame",""))
     lab_coords = bool(config.get_value("lab","coordinates",false))
+    board_color_pref = String(config.get_value("board","casas",BoardColors.MADEIRA))
+    piece_color_pref = String(config.get_value("board","pecas",BoardColors.ORIGINAL))
+
+## R139 · TABULEIRO E PEÇAS: cores escolhidas (cosmetics/board_colors.gd). O que estiver bloqueado (liga ainda não
+## conquistada, Club vencido…) cai para o padrão sem apagar a escolha.
+signal board_colors_changed
+var board_color_pref := "madeira"
+var piece_color_pref := "original"
+func effective_board_color() -> String:
+    return board_color_pref if BoardColors.board_unlocked(board_color_pref, self) else BoardColors.MADEIRA
+func effective_piece_color() -> String:
+    return piece_color_pref if BoardColors.pieces_unlocked(piece_color_pref, self) else BoardColors.ORIGINAL
+func set_board_colors(board_id: String, piece_id: String):
+    if not board_id.is_empty() and BoardColors.board_unlocked(board_id, self): board_color_pref = board_id
+    if not piece_id.is_empty() and BoardColors.pieces_unlocked(piece_id, self): piece_color_pref = piece_id
+    _save_preferences()
+    board_colors_changed.emit()
+
+var board_colors_ui = null
+func open_board_colors():
+    if not is_instance_valid(board_colors_ui):
+        board_colors_ui = load("res://ui_v022/board_colors_ui.gd").new()
+        add_child(board_colors_ui)
+        board_colors_ui.setup(self)
+    board_colors_ui.open()
 
 func _save_preferences():
     var config = ConfigFile.new()
@@ -2811,6 +2974,8 @@ func _save_preferences():
     config.set_value("profile","title",title_pref)
     config.set_value("profile","frame",frame_pref)
     config.set_value("lab","coordinates",lab_coords)
+    config.set_value("board","casas",board_color_pref)
+    config.set_value("board","pecas",piece_color_pref)
     config.save(PREFS)
 
 func _build_ranked():
