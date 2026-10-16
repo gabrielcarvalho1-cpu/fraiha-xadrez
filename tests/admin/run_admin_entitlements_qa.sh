@@ -12,5 +12,6 @@ sleep 5
 python3 tests/admin/admin_entitlements_ui_test.py "${1:-/tmp/admin_ent_shots}"; RC=$?
 python3 tests/admin/admin_ranked_modes_ui_test.py "${1:-/tmp/admin_ent_shots}" || RC=1
 python3 tests/admin/admin_casual_modes_ui_test.py "${1:-/tmp/admin_ent_shots}" || RC=1
+python3 tests/admin/admin_leagues_preview_ui_test.py "${1:-/tmp/admin_ent_shots}" || RC=1
 kill $SRV $SEED 2>/dev/null
 exit $RC

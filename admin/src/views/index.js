@@ -110,6 +110,29 @@ export function queues(ctx) {
     } catch (e) { if (!ctx.alive() || (e instanceof ApiError && e.kind === 'revoked')) return; toast(e instanceof ApiError ? e.text : 'Falha ao aplicar', 'err'); }
     if (ctx.alive()) ctx.refresh();
   }
+  // R128 · LIBERAR TODAS AS LIGAS (teste visual): cenários, tabuleiros e peças de todas as ligas para TODOS os jogadores.
+  async function toggleLeagues(lg) {
+    const enable = !lg.enabled;
+    const ok = await confirmAction({ title: enable ? 'Liberar todas as ligas' : 'Voltar ao normal (liga conquistada)',
+      body: enable ? 'Todos os jogadores passam a ver e usar os cenários, tabuleiros e peças de TODAS as ligas (Ferro ao Challenger), na hora, sem nova versão. Só aparência: PL, liga e Ranked não mudam. Fundador e Club continuam exclusivos.'
+        : 'Cada jogador volta a ter só os visuais da maior liga que conquistou no Ranked. Quem estava usando um visual não conquistado volta para a Madeira.',
+      confirmWord: 'ligas', actionLabel: enable ? 'Liberar ligas' : 'Voltar ao normal', danger: !enable });
+    if (!ok || !ctx.alive()) return;
+    try {
+      const r = await ctx.api.post('/admin/api/leagues-preview', { enabled: enable, reason: ok.reason, confirm: ok.confirm });
+      toast(r.changed ? (enable ? 'TODAS AS LIGAS LIBERADAS para todos · o jogo aplica na hora · registrado no Admin Log' : 'Ligas de volta ao normal · registrado no Admin Log') : 'Nada mudou (já estava assim) · registrado no Admin Log');
+    } catch (e) { if (!ctx.alive() || (e instanceof ApiError && e.kind === 'revoked')) return; toast(e instanceof ApiError ? e.text : 'Falha ao aplicar', 'err'); }
+    if (ctx.alive()) ctx.refresh();
+  }
+  const leaguesPanel = lg => lg ? h('div', { class: 'qcard' + (lg.enabled ? '' : ' off'), dataset: { family: 'leagues' }, style: 'margin-top:16px' },
+    h('div', { class: 'qhead' }, h('span', { class: 't' }, 'Ligas · teste visual'), h('span', { class: 'badge ' + (lg.enabled ? 'on' : 'off') }, lg.enabled ? 'TODAS LIBERADAS' : 'NORMAL')),
+    h('p', { class: 'dim', style: 'font-size:13px;margin:8px 0' }, lg.enabled ? 'Todos os jogadores estão com os cenários, tabuleiros e peças de todas as ligas.' : 'Cada jogador tem só os visuais da liga que conquistou no Ranked.',
+      ' Só aparência: PL, liga e Ranked não mudam. Fundador e Club continuam exclusivos.'),
+    h('div', { class: 'qfoot' },
+      h('span', { class: 'dim', style: 'font-size:12px' }, lg.changed_at ? `${lg.enabled ? 'liberado' : 'normal'} por ${lg.changed_by ? lg.changed_by.name : '?'} · ${fmtAgo(lg.changed_at)}` : (lg.enabled ? 'ligado pelo padrão do servidor (FRAIHA_LEAGUES_PREVIEW)' : 'sem alterações desde o início do servidor')),
+      canWrite ? h('button', { class: 'btn ' + (lg.enabled ? 'danger' : 'ok'), onclick: () => toggleLeagues(lg), dataset: { action: 'leagues-toggle' } }, lg.enabled ? 'Voltar ao normal' : 'Liberar todas as ligas')
+        : h('button', { class: 'btn', disabled: true, title: 'Seu papel é só leitura' }, 'Somente leitura')),
+    h('div', { class: 'dim', style: 'font-size:11px;margin-top:6px' }, 'Ao reiniciar o servidor volta para ', lg.boot_default === 'FRAIHA_LEAGUES_PREVIEW' ? 'LIBERADO (variável FRAIHA_LEAGUES_PREVIEW no Render).' : 'NORMAL (para manter liberado após reinício: FRAIHA_LEAGUES_PREVIEW=1 no Render).')) : '';
   const modeStats = m => [m.waiting ? `${m.waiting} na fila` : 'fila vazia', m.longest_wait_ms !== null && m.longest_wait_ms !== undefined ? `maior ${fmtDur(m.longest_wait_ms)}` : '',
     m.avg_wait_ms !== null && m.avg_wait_ms !== undefined ? `média ${fmtDur(m.avg_wait_ms)}` : '', `${m.active_matches || 0} partida(s)`, `${m.active_players || 0} jogando`].filter(Boolean).join(' · ');
   const modeRows = q => h('div', { class: 'modes' },
@@ -140,6 +163,7 @@ export function queues(ctx) {
             h('span', { class: 'dim', style: 'font-size:12px' }, q.changed_at ? `${q.enabled ? 'ativado' : 'desativado'} por ${q.changed_by ? q.changed_by.name : '?'} · ${fmtAgo(q.changed_at)}` : 'sem alterações desde o início do servidor'),
             canWrite ? h('button', { class: 'btn ' + (q.enabled ? 'danger' : 'ok'), onclick: () => toggle(q), dataset: { action: 'toggle' } }, q.enabled ? 'Desativar fila' : 'Ativar fila')
               : h('button', { class: 'btn', disabled: true, title: 'Seu papel é só leitura' }, 'Somente leitura'))))),
+        leaguesPanel(d.leagues),
         h('div', { class: 'panel' }, h('h2', {}, 'Futuro (arquitetura preparada)'),
           h('p', { class: 'muted' }, 'Agendar ativação/desativação, eventos, horários especiais e modo manutenção: ', unavailable())));
     },
@@ -508,9 +532,9 @@ export function reports(ctx) {
 // ---------------------------------------------------------------- ADMIN LOG
 export function audit(ctx) {
   const f = frame(ctx, 'Admin Log', 'Toda ação administrativa real é registrada pelo SERVIDOR antes de responder.');
-  const ACT = { 'queue.disable': 'desativou', 'queue.enable': 'ativou', 'queue.mode_disable': 'desativou ritmo', 'queue.mode_enable': 'ativou ritmo', clube_grant: 'concedeu Clube', clube_change: 'alterou Clube', clube_revoke: 'revogou Clube', founder_grant: 'concedeu Fundador', founder_revoke: 'revogou Fundador' };
+  const ACT = { 'queue.disable': 'desativou', 'queue.enable': 'ativou', 'queue.mode_disable': 'desativou ritmo', 'queue.mode_enable': 'ativou ritmo', clube_grant: 'concedeu Clube', clube_change: 'alterou Clube', clube_revoke: 'revogou Clube', founder_grant: 'concedeu Fundador', founder_revoke: 'revogou Fundador', 'leagues.preview_on': 'liberou todas as ligas', 'leagues.preview_off': 'voltou as ligas ao normal' };
   const st = x => !x ? '—' : 'enabled' in x ? (x.enabled ? 'ativo' : 'desativado') : `Clube ${x.club}${x.club_expires_at ? ' até ' + new Date(x.club_expires_at).toLocaleDateString('pt-BR') : x.club === 'ATIVO' ? ' sem expiração' : ''} · Fundador ${x.founder ? 'SIM' : 'NÃO'}`;
-  const tgt = t => !t ? '—' : t.mode ? `${FAMILY_LABEL[t.family]} ${t.mode.replace(/^(ranked|casual)_/, '')}` : t.family ? FAMILY_LABEL[t.family] : t.user_id ? `${t.nickname || '?'} (${t.user_id.slice(0, 8)})` : JSON.stringify(t);
+  const tgt = t => !t ? '—' : t.mode ? `${FAMILY_LABEL[t.family]} ${t.mode.replace(/^(ranked|casual)_/, '')}` : t.family ? FAMILY_LABEL[t.family] : t.type === 'leagues' ? 'Ligas (visual, todos)' : t.user_id ? `${t.nickname || '?'} (${t.user_id.slice(0, 8)})` : JSON.stringify(t);
   return {
     error: f.error,
     async load() {

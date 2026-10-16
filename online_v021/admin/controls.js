@@ -52,7 +52,23 @@ class ModeControls {
     }
     this.rankedModes = this.modes.ranked;   // compatibilidade
     this.listeners = [];
+    // R128 · LIGAS LIBERADAS (teste visual): todos os jogadores veem/usam cenários, tabuleiros e peças de TODAS as ligas.
+    // Só aparência: não muda PL, liga, Ranked nem Fundador/Club. Em memória (reinício volta ao padrão FRAIHA_LEAGUES_PREVIEW).
+    const lp = String((env && env.FRAIHA_LEAGUES_PREVIEW) || '').trim().toLowerCase();
+    const bootOn = ['1', 'true', 'sim', 'on'].includes(lp);
+    this.leagues = { enabled: bootOn, changed_at: null, changed_by: null, reason: bootOn ? 'padrão do servidor (FRAIHA_LEAGUES_PREVIEW)' : '' };
+    this.leagueListeners = [];
   }
+  leaguesPreview() { return !!this.leagues.enabled; }
+  leaguesSnapshot() { return { ...this.leagues, boot_default: this.leagues.reason.startsWith('padrão do servidor') ? 'FRAIHA_LEAGUES_PREVIEW' : 'desligado' }; }
+  setLeaguesPreview(enabled, actor, reason = '') {
+    const before = { ...this.leagues };
+    const after = { enabled: !!enabled, changed_at: new Date(this.now()).toISOString(), changed_by: actor || null, reason: String(reason || '').slice(0, 300) };
+    this.leagues = after;
+    for (const fn of this.leagueListeners) { try { fn(after, before); } catch (e) { console.error('[admin] leagues listener', e && e.message); } }
+    return { before, after };
+  }
+  onLeaguesChange(fn) { this.leagueListeners.push(fn); }
   static modeIds(family) { return MODE_SETS[family] ? Object.keys(MODE_SETS[family]) : []; }
   static rankedModeIds() { return ModeControls.modeIds('ranked'); }
   static hasModes(family) { return !!MODE_SETS[family]; }

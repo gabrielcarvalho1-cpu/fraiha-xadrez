@@ -636,6 +636,8 @@ func _sync_theme_unlocks():
         confirmed = account.server_ready and account.needs_nickname # conta nova
     else:
         confirmed = account.refresh_token.is_empty() and not account.redirect_pending # convidado
+    # R128 · Admin liberou todas as ligas (teste visual): cenários/tabuleiros/peças de todas; PL e liga continuam os reais
+    if account.leagues_preview: index = preload("res://league/catalog.gd").IDS.size() - 1
     hub.set_ranked_unlock(index)
     hub.apply_ranked_standing(account.ranked if account.has_profile() else {})   # cartão da Home = liga/PL do Ranked
     if is_instance_valid(theme_manager): theme_manager.sync_unlocks(index, confirmed)

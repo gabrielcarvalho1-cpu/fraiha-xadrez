@@ -99,6 +99,16 @@ func _set_casual_modes(list) -> bool:
     casual_modes_known = true
     return changed_now
 
+## R128 · LIGAS LIBERADAS pelo Admin (teste visual): cenários, tabuleiros e peças de TODAS as ligas para todos.
+## Fonte: servidor (acct_state / guest_state / 'leagues_preview'). Só aparência: PL, liga e Ranked não mudam.
+var leagues_preview := false
+
+func _set_leagues_preview(v) -> bool:
+    var on := bool(v)
+    if on == leagues_preview: return false
+    leagues_preview = on
+    return true
+
 func _ready():
     InviteLink.capture()                     # R105 · ?convite=CODIGO na página
     InviteLink.capture_creator()             # R121 · ?criador=CODIGO na página
@@ -569,6 +579,11 @@ func _link_lost():
 
 func _receive(msg: Dictionary):
     var type = String(msg.get("type", ""))
+    if type == "leagues_preview":
+        if _set_leagues_preview(msg.get("enabled", false)): changed.emit()
+        return
+    if (type == "acct_state" or type == "guest_state") and msg.has("leagues_preview"):
+        if _set_leagues_preview(msg.get("leagues_preview")) and type == "guest_state": changed.emit()   # acct_state já emite changed
     if type == "acct_state":
         server_ready = true
         auth_retried = false

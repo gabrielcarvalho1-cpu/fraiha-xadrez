@@ -93,6 +93,14 @@ class AdminService {
           catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
           return this.setFamilyMode(admin, rm[1], rm[2], body, out);
         }
+        if (path === '/admin/api/leagues-preview') {   // R128 · LIBERAR TODAS AS LIGAS (só visual) para todos os jogadores
+          if (!need('queues.write')) return;
+          if (this.limited('write:' + admin.id, 20)) return out(429, { error: 'rate_limited' });
+          let body;
+          try { body = await readJson(req, 4096); }
+          catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
+          return this.setLeaguesPreview(admin, body, out);
+        }
         const qm = /^\/admin\/api\/queues\/([a-z]+)$/.exec(path);
         if (qm) {
           if (!need('queues.write')) return;
@@ -332,7 +340,8 @@ class AdminService {
         active_matches: real(ms.length), active_players: real(ms.reduce((n, m) => n + m.players.filter(p => p.uid).length, 0)),
         by_mode: q ? Object.entries(q.reduce((o, e) => (o[e.mode] = (o[e.mode] || 0) + 1, o), {})).map(([mode, n]) => ({ mode, waiting: n })) : [] });
     }
-    return { at: new Date(this.now()).toISOString(), rule: 'Desativar impede novas entradas e novos pareamentos; quem estava na fila sai com aviso; partidas em andamento continuam.', persistent: false, queues: out };
+    return { at: new Date(this.now()).toISOString(), rule: 'Desativar impede novas entradas e novos pareamentos; quem estava na fila sai com aviso; partidas em andamento continuam.', persistent: false, queues: out,
+      leagues: this.controls.leaguesSnapshot() };   // R128 · ligas liberadas (teste visual)
   }
   // Por ritmo (filas reais do servidor): status, na fila, maior espera, tempo médio (1 h), partidas e jogadores ativos.
   modeRows(family, q, ms) {
@@ -430,6 +439,25 @@ class AdminService {
     return out(200, { mode: snap(), open_modes: open(), changed: true, audit_id: a.id });
   }
   setRankedMode(admin, mode, body, out) { return this.setFamilyMode(admin, 'ranked', mode, body, out); }
+  // R128 · LIGAS LIBERADAS: cenários, tabuleiros e peças de todas as ligas para TODOS (teste visual). Não muda PL/liga/Ranked.
+  setLeaguesPreview(admin, body, out) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return out(400, { error: 'bad_request', detail: 'corpo JSON obrigatório' });
+    const extra = Object.keys(body).filter(k => !['enabled', 'reason', 'confirm'].includes(k));
+    if (extra.length) return out(400, { error: 'bad_request', detail: 'campos não permitidos: ' + extra.slice(0, 5).join(', ') });
+    if (typeof body.enabled !== 'boolean') return out(400, { error: 'bad_request', detail: 'enabled (boolean) obrigatório' });
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (reason.length < 3) return out(400, { error: 'reason_required' });
+    if (String(body.confirm || '') !== 'ligas') return out(400, { error: 'confirmation_required', detail: 'confirm deve ser "ligas"' });
+    const action = body.enabled ? 'leagues.preview_on' : 'leagues.preview_off';
+    const cur = this.controls.leaguesSnapshot();
+    if (cur.enabled === body.enabled) {
+      const a = this.audit.record({ actor: admin, action, target: { type: 'leagues' }, before: { enabled: cur.enabled }, after: { enabled: cur.enabled }, result: 'noop', reason });
+      return out(200, { leagues: cur, changed: false, audit_id: a.id });
+    }
+    const { before, after } = this.controls.setLeaguesPreview(body.enabled, { id: admin.id, name: admin.name }, reason);
+    const a = this.audit.record({ actor: admin, action, target: { type: 'leagues' }, before: { enabled: before.enabled }, after: { enabled: after.enabled }, result: 'ok', reason });
+    return out(200, { leagues: this.controls.leaguesSnapshot(), changed: true, audit_id: a.id });
+  }
   setQueue(admin, family, body, out) {
     if (!ModeControls.families().includes(family)) return out(404, { error: 'unknown_queue' });
     if (!body || typeof body.enabled !== 'boolean') return out(400, { error: 'bad_request', detail: 'enabled (boolean) obrigatório' });

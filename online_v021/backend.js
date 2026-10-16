@@ -118,6 +118,7 @@ class Backend {
       if (family === 'ranked') this.broadcastRankedModes();   // o jogo mostra só os ritmos abertos (sem nova build)
       if (family === 'casual') this.broadcastCasualModes();   // idem na tela JOGAR ONLINE (contas e convidados)
     });
+    this.modeControls.onLeaguesChange(() => this.broadcastLeaguesPreview());   // R128 · ligas liberadas: o jogo aplica na hora
     this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o), backend: this }) : null;
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
   }
@@ -274,6 +275,12 @@ class Backend {
     const msg = { type: 'casual_modes', modes: this.casualModesOpen() };
     for (const set of this.online.values()) for (const ws of set) { if (ws.readyState === undefined || ws.readyState === 1) this.send(ws, msg); }
   }
+  // R128 · LIGAS LIBERADAS (teste visual, Admin): todos os conectados (contas e convidados) recebem na hora.
+  leaguesPreview() { return !!(this.modeControls && this.modeControls.leaguesPreview()); }
+  broadcastLeaguesPreview() {
+    const msg = { type: 'leagues_preview', enabled: this.leaguesPreview() };
+    for (const set of this.online.values()) for (const ws of set) { if (ws.readyState === undefined || ws.readyState === 1) this.send(ws, msg); }
+  }
   // Avisa TODAS as contas conectadas quais ritmos do Ranked estão abertos (a tela JOGAR RANQUEADO se refaz).
   broadcastRankedModes() {
     const msg = { type: 'ranked_modes', modes: this.rankedModesOpen() };
@@ -348,7 +355,7 @@ class Backend {
     const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile), status: Status.of(profile) } : null;
     this.send(ws, { type: 'acct_state', user_id: u.id, email: u.email, provider: u.provider, profile: pubProfile,
       needs_nickname: !profile, ranked, persistent: !!this.store.persistent, backend: this.kind,
-      ranked_modes: this.rankedModesOpen(), casual_modes: this.casualModesOpen(),
+      ranked_modes: this.rankedModesOpen(), casual_modes: this.casualModesOpen(), leagues_preview: this.leaguesPreview(),
       entitlements: entitlements ? { is_founder: !!entitlements.is_founder, club_active: !!entitlements.club_active, club_expires_at: entitlements.club_expires_at || null,
         founder_tier: entitlements.is_founder ? (entitlements.founder_tier || 'founder') : null, founder_number: entitlements.is_founder ? (entitlements.founder_number || null) : null } : null,
       founder_perks: this.payments ? this.payments.founderPerks(entitlements) : null,
@@ -358,7 +365,7 @@ class Backend {
   }
   // Convidado: identidade só em memória, recuperável pelo token (reconexão ao Casual).
   guestAuth(ws, m) {
-    if (ws.user && ws.profile) return this.send(ws, { type: 'guest_state', account: true, nickname: ws.profile.nickname, casual_modes: this.casualModesOpen() });
+    if (ws.user && ws.profile) return this.send(ws, { type: 'guest_state', account: true, nickname: ws.profile.nickname, casual_modes: this.casualModesOpen(), leagues_preview: this.leaguesPreview() });
     const now = Date.now();
     if (ws.guestAuthAt && now - ws.guestAuthAt < 2000) return this.send(ws, { type: 'guest_error', message: 'Aguarde um instante.' });
     this.invalidate(ws);
@@ -373,7 +380,7 @@ class Backend {
     g.seen = now;
     ws.guest = g;
     this.setIdentity(ws, { id: g.id, nickname: g.nickname, avatar: 'warrior', guest: true });
-    this.send(ws, { type: 'guest_state', token, nickname: g.nickname, casual_modes: this.casualModesOpen() });
+    this.send(ws, { type: 'guest_state', token, nickname: g.nickname, casual_modes: this.casualModesOpen(), leagues_preview: this.leaguesPreview() });
     if (this.casual) this.casual.onAuthenticated(ws);
   }
   sweepGuests() {
