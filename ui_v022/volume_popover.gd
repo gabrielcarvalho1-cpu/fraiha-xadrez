@@ -20,6 +20,7 @@ var canvas: Control
 func _init():
 	layer = 120
 	visible = false
+	preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC fecha
 	canvas = Control.new()
 	canvas.name = "VolumePopover"
 	canvas.set_anchors_preset(Control.PRESET_FULL_RECT)

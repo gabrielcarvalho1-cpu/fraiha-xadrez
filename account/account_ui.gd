@@ -46,6 +46,7 @@ var frame                      # compat: antes era a moldura desenhada; hoje apo
 func setup(service):
     account = service
     layer = 60
+    preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC em tudo
     dim = ColorRect.new()
     dim.name = "AccountDim"
     dim.color = Color(0.029, 0.038, 0.057, 0.78)
@@ -107,6 +108,18 @@ func setup(service):
 
 func is_open() -> bool:
     return dim.visible
+
+## R129 · ESC = o "Voltar" da página (criar conta/esqueci a senha → Entrar; definir senha → Sua conta);
+## o nome de jogador é obrigatório (ESC não pula); no resto, fecha como CONTINUAR / Jogar como convidado.
+func esc_open() -> bool:
+    return is_open()
+
+func esc_close():
+    match page:
+        "signup", "recover": _show("login")
+        "set_password": _show("account")
+        "nickname": pass
+        _: close()
 
 func open(target := "", info := "", for_ranked := false):
     return_to_ranked = for_ranked

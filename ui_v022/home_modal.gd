@@ -36,6 +36,7 @@ func build(p_hub, p_title: String):
 	hub = p_hub
 	layer = 96
 	visible = false
+	preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC fecha (= X do painel)
 	shade = ColorRect.new()
 	shade.color = Color(0, 0, 0, 0.62)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)

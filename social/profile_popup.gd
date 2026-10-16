@@ -43,6 +43,7 @@ var _seal_node: TextureRect       # R41 · selo no canto da foto
 func _init():
     layer = 96
     name = "ProfilePopup"
+    preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC fecha
 
 func _ready():
     view = Control.new()

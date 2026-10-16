@@ -27,6 +27,7 @@ var narrow := false
 
 func _init(p_engine):
     layer = 66
+    preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC em tudo (fecha só a janela de cima)
     name = "TrainingUI"
     engine = p_engine
 
@@ -67,6 +68,9 @@ func close():
     visible = false
     root.visible = false
     closed.emit()
+
+func esc_open() -> bool:
+    return visible
 
 func _input(event):
     if visible and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:

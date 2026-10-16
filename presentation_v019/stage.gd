@@ -1184,9 +1184,15 @@ func _setup_screen_mode():
 class EscGuard extends Node:
     var screen_mode
     func _input(event):
-        if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE and screen_mode != null and screen_mode.esc_belongs_to_fullscreen():
+        if not (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE): return
+        if screen_mode != null and screen_mode.esc_belongs_to_fullscreen():
             # Esc em tela cheia = só sair da tela cheia (o navegador já faz; garante caso a tecla chegue ao jogo).
             if not event.echo: screen_mode.exit()
+            get_viewport().set_input_as_handled()
+            return
+        # R129 · ESC em tudo: fecha a janela aberta mais de cima (conta, avisos, painéis, perfis, pagamento...)
+        if event.echo: return
+        if preload("res://ui_v022/esc_stack.gd").handle(get_tree()):
             get_viewport().set_input_as_handled()
 
 func _input(event):

@@ -76,6 +76,7 @@ var reconnecting := false
 func setup(service, avatar_callable: Callable = Callable()):
     account = service
     avatar_for = avatar_callable
+    preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC em tudo (fecha só a janela de cima)
     layer = 66   # R35.1: por cima das telas dos modos (MARCHA REAL / XEQUE), que convidam daqui
     dim = ColorRect.new()
     dim.color = Color(0.029, 0.038, 0.057, 0.82)
@@ -170,6 +171,12 @@ func _input(event):
     if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
         _back()
         get_viewport().set_input_as_handled()
+
+func esc_open() -> bool:
+    return is_open()
+
+func esc_close():
+    _back()
 
 func _back():
     match screen:

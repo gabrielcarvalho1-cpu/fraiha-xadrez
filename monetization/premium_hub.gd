@@ -51,6 +51,7 @@ var _offer_bound = null
 
 func _init(monetization_state = null):
     layer = 60
+    preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC em tudo (fecha só a janela de cima)
     name = "PremiumHub"
     state = monetization_state if monetization_state != null else StateScript.new()
     gateway = Gateway.new(state)
@@ -142,6 +143,12 @@ func show_page(id: String):
     if id == "salao": _request_founders()
     _rebuild()
     scroll.scroll_vertical = 0
+
+func esc_open() -> bool:
+    return visible
+
+func esc_close():
+    back()
 
 func _input(event):
     if not visible: return

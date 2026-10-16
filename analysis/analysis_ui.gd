@@ -47,6 +47,7 @@ var move_buttons := {}
 
 func _init(p_engine, p_access, p_hub):
     layer = 65
+    preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC em tudo (fecha só a janela de cima)
     name = "AnalysisUI"
     engine = p_engine
     access = p_access
@@ -105,6 +106,13 @@ func _run():
     if rep.is_empty() or not visible: return
     report = rep
     _show_page("report")
+
+func esc_open() -> bool:
+    return visible
+
+func esc_close():
+    if trying: _end_try()
+    else: close()
 
 func _input(event):
     if not visible: return

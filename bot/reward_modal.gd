@@ -38,6 +38,7 @@ func _ready():
     if not preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):   # R55.4 · PC: mesmas artes já carregadas
         for p in [ART_WIN_PATH, ART_LOSS_PATH, ART_CROWN_PATH]: load(p)
     layer = 60
+    preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC fecha
 
 ## Próximo bot da escada (ordem oficial do bot_ladder.json); "" depois do Challenger.
 static func next_of(bot_id: String) -> String:

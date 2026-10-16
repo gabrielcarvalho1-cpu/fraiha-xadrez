@@ -32,6 +32,7 @@ var preview_size := 320.0
 func _init():
     layer = 70
     name = "AvatarEditor"
+    preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC fecha
 
 func _ready():
     _build()

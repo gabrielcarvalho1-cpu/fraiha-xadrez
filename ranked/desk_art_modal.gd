@@ -30,6 +30,7 @@ var below := 0.0                # R98 · faixa extra embaixo da arte (em px da r
 
 func _init():
 	name = "DeskArtModal"
+	preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC = o botão de voltar/cancelar da tela
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
@@ -83,6 +84,22 @@ func close():
 
 func is_open() -> bool:
 	return visible and art != null
+
+## R129 · ESC aperta o botão de VOLTAR/CANCELAR da tela aberta (desistir → CONTINUAR JOGANDO; resultado →
+## VOLTAR; bot → VOLTAR PARA O INÍCIO). Tela sem esse botão (ex.: adversário encontrado) não é fechada pelo ESC.
+const ESC_BUTTONS := ["DeskContinue", "DeskBack", "DeskBotHome", "DeskSettingsClose", "DeskClose"]
+func _esc_button() -> Button:
+	for id in ESC_BUTTONS:
+		var b = get_node_or_null(id)
+		if b is Button and b.is_visible_in_tree() and not b.disabled: return b
+	return null
+
+func esc_open() -> bool:
+	return is_open() and is_visible_in_tree() and _esc_button() != null
+
+func esc_close():
+	var b := _esc_button()
+	if b != null: b.pressed.emit()
 
 # ---------------------------------------------------------------- peças vivas
 func label(text: String, r: Rect2, px: float, color := CREAM, font: Font = FONT_BODY, align := HORIZONTAL_ALIGNMENT_CENTER, wrap := false) -> Label:

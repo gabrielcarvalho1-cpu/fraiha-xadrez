@@ -31,6 +31,7 @@ var _shake := 0.0
 
 func _init():
     layer = 60
+    preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC em tudo (fecha só a janela de cima)
     name = "GameResultOverlay"
 
 func _ready():
@@ -186,6 +187,12 @@ func _on_input(event: InputEvent):
     if (event is InputEventMouseButton and event.pressed) or (event is InputEventScreenTouch and event.pressed):
         root.accept_event()
         hide_result()
+
+func esc_open() -> bool:
+    return _showing
+
+func esc_close():
+    hide_result()
 
 func _input(event):
     if _showing and event is InputEventKey and event.pressed and event.keycode in [KEY_ESCAPE, KEY_ENTER, KEY_SPACE]:
