@@ -1179,10 +1179,12 @@ func _setup_screen_mode():
     var guard = EscGuard.new()
     guard.name = "EscGuard"
     guard.screen_mode = screen_mode
+    guard.stage = self
     get_tree().root.add_child.call_deferred(guard)
 
 class EscGuard extends Node:
     var screen_mode
+    var stage
     func _input(event):
         if not (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE): return
         if screen_mode != null and screen_mode.esc_belongs_to_fullscreen():
@@ -1194,6 +1196,18 @@ class EscGuard extends Node:
         if event.echo: return
         if preload("res://ui_v022/esc_stack.gd").handle(get_tree()):
             get_viewport().set_input_as_handled()
+            return
+        # R132 · nada para fechar: na TELA CHEIA o ESC tira a tela cheia (o jogo segura o Esc com Keyboard Lock,
+        # então o navegador não sai sozinho). Exceção: página da Home aberta → o ESC volta para a Home primeiro.
+        if screen_mode != null and screen_mode.is_on() and stage != null:
+            var on_page: bool = String(stage.mode) == "home" and stage.hub != null and String(stage.hub.page) not in ["main", ""]
+            var party_mode := false   # XEQUE / MARCHA REAL abertos: o ESC é do menu do modo
+            if stage.hub != null:
+                for m in [stage.hub.get("xeque"), stage.hub.get("marcha")]:
+                    if m != null and is_instance_valid(m) and m.get("visible") == true: party_mode = true
+            if not on_page and not party_mode and not (stage.navigation_dialog != null and stage.navigation_dialog.visible):
+                screen_mode.exit()
+                get_viewport().set_input_as_handled()
 
 func _input(event):
     # R42.2: tela cheia SÓ pelo botão de expandir (sem pedido automático no 1º clique).

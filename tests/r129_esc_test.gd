@@ -92,5 +92,20 @@ func run():
 	await esc()
 	await frames(6)
 	check(not stage.reward_modal.is_open() and stage.mode == "home", "painel de DERROTA: ESC = VOLTAR PARA O INÍCIO (%s)" % stage.mode)
+	# ---- R132 · tela cheia: janela aberta fecha primeiro; sem nada aberto, o ESC tira a tela cheia
+	var sm = stage.screen_mode
+	sm.enter(); await frames(12)
+	if sm.is_on():
+		hub.show_notice("AVISO", "Na tela cheia."); await frames(4)
+		await esc()
+		check(not hub.notice_modal.is_open() and sm.is_on(), "tela cheia + aviso: ESC fecha o aviso e continua em tela cheia")
+		hub.show_page("ranking"); await frames(4)
+		await esc()
+		check(hub.page == "main" and sm.is_on(), "tela cheia + página da Home: ESC volta para a Home primeiro")
+		await esc()
+		await frames(12)
+		check(not sm.is_on(), "tela cheia sem nada aberto: ESC TIRA a tela cheia")
+	else:
+		print("PULADO: tela cheia indisponível neste ambiente")
 	print("RESULT " + ("%d/%d OK" % [checks, checks] if failures == 0 else "%d FALHAS" % failures))
 	quit(0 if failures == 0 else 1)
