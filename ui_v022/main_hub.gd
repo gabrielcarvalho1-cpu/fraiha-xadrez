@@ -2300,6 +2300,10 @@ func show_page(id: String):
     _sync_side_art(id)
 
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
+    # R134 · a TELA INICIAL é sempre a da Madeira (lobby completo); a liga muda só a PARTIDA (tabuleiro, peças, cenário)
+    var league_theme := theme_id
+    texture = FOREST
+    theme_id = "wood"
     if texture != null and texture.resource_path == FOREST_LEGACY_PATH: texture = FOREST   # temas que usavam a Home da floresta passam a usar a arte oficial
     if texture != null:
         _desk_theme_tex = texture if texture.resource_path != FOREST_PATH else null
@@ -2327,8 +2331,8 @@ func apply_theme(texture: Texture2D, theme_id: String = "wood"):
             canvas.move_child(logo,1)
         if logo != null: logo.visible = needs_logo
         pages.main.get_node("ThemeMenuFrame").visible = needs_logo
-        selected_league = ThemeCatalog.get_theme(theme_id).get("unlock_league","madeira")
-        if selected_league == "wood": selected_league = "madeira"
+        selected_league = ThemeCatalog.get_theme(league_theme).get("unlock_league","madeira")
+        if selected_league == "wood" or selected_league == "": selected_league = "madeira"
 
 func back():
     show_page("bot" if page == "bot_side" else "main")
