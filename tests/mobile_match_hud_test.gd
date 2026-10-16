@@ -109,15 +109,15 @@ func actions_checks(what: String):
 		if av[id]: expect.append(id)
 	expect.sort(); var got := shown.duplicate(); got.sort()
 	check(got == expect, "%s: ladrilhos = ações que existem agora %s" % [what, str(got)])
-	# MÚSICA e EFEITOS: a preferência de verdade muda e volta
+	# MÚSICA e EFEITOS: R133 · abrem o controle de VOLUME (deslizante, igual XEQUE/MARCHA); ESC/fechar volta
 	var ModeSound = load("res://ui_v022/mode_sound.gd")
-	for pair in [["music", "music_muted"], ["fx", "effects_muted"]]:
-		var b: Button = hud.panel.find_child("Action_" + pair[0], true, false)
-		var before: bool = ModeSound.call(pair[1], stage.hub)
+	for id in ["music", "fx"]:
+		var b: Button = hud.panel.find_child("Action_" + id, true, false)
 		await tap(b)
-		check(ModeSound.call(pair[1], stage.hub) != before and hud.is_open(), "%s: %s alterna de verdade" % [what, pair[0]])
-		await tap(b)
-		check(ModeSound.call(pair[1], stage.hub) == before, "%s: %s volta" % [what, pair[0]])
+		var pop = stage.hub.get_meta("volume_popover") if stage.hub.has_meta("volume_popover") else null
+		check(pop != null and pop.visible and String(pop.kind) == id and hud.is_open(), "%s: %s abre o controle de volume" % [what, id])
+		if pop != null: pop.close()
+		await frames(3)
 	# MARCAR e TELA CHEIA: o toque chega ao botão antigo (a ação de sempre)
 	for pair in [["mark", stage.mobile_mark], ["full", stage.mobile_fullscreen]]:
 		var b: Button = hud.panel.find_child("Action_" + pair[0], true, false)
@@ -227,6 +227,13 @@ func run():
 		if not stage.result_overlay.visible: break
 		await frames(1)
 	await frames(4)
+	# R133 · celular: derrota contra o bot abre o painel de DERROTA (revanche / analisar / início), igual ao PC
+	for w in 60:
+		if stage.reward_modal.is_open(): break
+		await frames(1)
+	check(stage.reward_modal.is_open(), "bot: derrota abre o painel com ENFRENTAR DE NOVO / ANALISAR (celular)")
+	stage.reward_modal.close()
+	await frames(3)
 	await tap(hud.nav_buttons.actions if hud.orient == "p" else hud.corner.tab)
 	rs = hud.panel.find_child("Action_resign", true, false)
 	var az: Button = hud.panel.find_child("Action_analyze", true, false)

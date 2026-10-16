@@ -939,8 +939,13 @@ func setting_state(id: String) -> Array:
 func toggle_setting(id: String) -> void:
     if not bool(setting_state(id)[1]): return
     match id:
-        "music": ModeSound.toggle_music(stage.hub)
-        "fx": ModeSound.toggle_effects(stage.hub)
+        "music", "fx":   # R133 · volume com controle deslizante
+            var gb = stage.desk_music if id == "music" else stage.desk_fx
+            var r := Rect2(stage.get_viewport().get_visible_rect().size.x - 300, 70, 60, 60)
+            if gb != null and gb.is_visible_in_tree():
+                var xf: Transform2D = gb.get_global_transform_with_canvas()
+                r = Rect2(xf.origin, gb.size * xf.get_scale())
+            ModeSound.volume_popup(stage.hub, id, r)
         "mic":
             var vo = stage.get("voice")
             if vo != null: vo.press()

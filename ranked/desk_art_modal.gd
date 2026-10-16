@@ -68,6 +68,7 @@ func clear():
 	_bar_fill = null
 	kind = ""
 	below = 0.0
+	side_trim = 0.0
 
 func show_modal():
 	visible = true
@@ -194,9 +195,13 @@ func _ease(t: float) -> float:
 	return 1.0 - pow(1.0 - t, 3.0)
 
 # ---------------------------------------------------------------- layout
+var side_trim := 0.0           # R133 · fração transparente de cada lado da arte (celular: a parte visível ocupa a largura)
+
 func scale_k() -> float:
 	var vp := get_viewport_rect().size
-	return minf(vp.y * frac / (ref.y + below), vp.x * 0.94 / ref.x)
+	var wfrac := 0.94
+	if vp.x < 700.0 and side_trim > 0.0: wfrac = 0.98 / (1.0 - 2.0 * side_trim)   # celular em pé
+	return minf(vp.y * frac / (ref.y + below), vp.x * wfrac / ref.x)
 
 func art_rect() -> Rect2:
 	var vp := get_viewport_rect().size

@@ -339,12 +339,12 @@ func _build_desk_panel(overlay: CanvasLayer):
         var sb := HudButton.make("sound_on")
         sb.name = "DeskMusic" if kind == "music" else "DeskEffects"
         sb.glyph = ""
-        sb.tooltip_text = "Música: ligar / desligar" if kind == "music" else "Efeitos sonoros: ligar / desligar"
+        sb.tooltip_text = "Volume da música" if kind == "music" else "Volume dos efeitos"
         sb.custom_minimum_size = Vector2(54, 54)
         sb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-        sb.pressed.connect(func():
-            if kind == "music": ModeSound.toggle_music(hub)
-            else: ModeSound.toggle_effects(hub)
+        sb.pressed.connect(func():   # R133 · volume com controle deslizante (igual XEQUE/MARCHA/Home), não só liga/desliga
+            var xf := sb.get_global_transform_with_canvas()
+            ModeSound.volume_popup(hub, kind, Rect2(xf.origin, sb.size * xf.get_scale()))
             sb.queue_redraw())
         sb.draw.connect(func():
             var off: bool = ModeSound.music_muted(hub) if kind == "music" else ModeSound.effects_muted(hub)
@@ -1570,12 +1570,12 @@ func _on_match_finished(record):
     elif res == "loss": result_overlay.show_result("defeat")
     elif res == "draw": result_overlay.show_result("draw")   # R124 · EMPATE também tem tela
     # R124 · PC: empate contra o bot abre o painel de resultado (jogar de novo / analisar / início)
-    if res == "draw" and String(record.mode) == "bot" and reward_modal != null and not MobileLayout.active(get_viewport()):
+    if res == "draw" and String(record.mode) == "bot" and reward_modal != null:   # R133 · celular também
         var bid2 := String(bot_controller.bot_id) if not String(bot_controller.bot_id).is_empty() else String(bot_controller.difficulty)
         var shown_name2 := bot_level_name
         _after_result_overlay(func(): if mode == "bot": reward_modal.show_draw(bid2, shown_name2, String(record.result_reason)))
     # R54 · PC: derrota contra o bot abre a tela de resultado (revanche / analisar / início) depois da animação
-    if res == "loss" and String(record.mode) == "bot" and reward_modal != null and not MobileLayout.active(get_viewport()):
+    if res == "loss" and String(record.mode) == "bot" and reward_modal != null:   # R133 · celular também (revanche / analisar / início)
         var bid := String(bot_controller.bot_id) if not String(bot_controller.bot_id).is_empty() else String(bot_controller.difficulty)
         var shown_name := bot_level_name
         _after_result_overlay(func(): if mode == "bot": reward_modal.show_defeat(bid, shown_name))

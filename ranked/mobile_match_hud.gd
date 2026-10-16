@@ -914,8 +914,13 @@ func _do_action(id: String) -> void:
 		"analyze":
 			close_actions()
 			st.mobile_analyze.pressed.emit()
-		"music": ModeSound.toggle_music(st.hub)
-		"fx": ModeSound.toggle_effects(st.hub)
+		"music", "fx":   # R133 · volume com controle deslizante (igual XEQUE/MARCHA/Home)
+			var tb: Control = null
+			for t in tiles: if t[0].is_visible_in_tree() and String(t[1]) == id: tb = t[0]
+			var r := Rect2(st.get_viewport().get_visible_rect().size / 2.0, Vector2(60, 60))
+			if tb != null:
+				r = tb.get_global_rect()   # o painel AÇÕES está numa CanvasLayer sem deslocamento: global = tela
+			ModeSound.volume_popup(st.hub, id, r)
 		"mic": if mv != null: mv.mic.pressed.emit()
 		"ear": if mv != null: mv.ear.pressed.emit()
 		"leave": if mv != null: mv.off.pressed.emit()

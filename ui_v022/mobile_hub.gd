@@ -594,7 +594,7 @@ func _profile(content: VBoxContainer, width := 0.0):
             hub.profile_name.text = hub.player_name
             hub._save_preferences()
         )
-    for mode in hub.Ranked.MODES: _text(content,hub.ranked.summary(mode),17)
+    # R133 · sem as linhas de estatística por ritmo (pedido do dono: desnecessárias no Perfil)
 
 func _ranking(content: VBoxContainer):
     var grid = _grid(content,3)

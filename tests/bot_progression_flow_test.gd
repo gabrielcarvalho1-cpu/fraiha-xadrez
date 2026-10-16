@@ -112,13 +112,13 @@ func run():
     # R54 · PC: derrota agora abre a tela de resultado (revanche / analisar / início) — sem progresso
     # R127 · celular: sem painel de derrota (volta ao tabuleiro; INÍCIO no rodapé) — conferido como no empate
     var desk_loss: bool = not preload("res://ui_v022/mobile_layout.gd").active(root.get_viewport())
-    check((modal.is_open() and panel_text().contains("ENFRENTAR O BOT NOVAMENTE") if desk_loss else not modal.is_open()) and not bp.is_defeated("bronze"), "derrota: tela de resultado (PC), sem progresso")
+    check(modal.is_open() and panel_text().contains("ENFRENTAR O BOT NOVAMENTE") and not bp.is_defeated("bronze"), "derrota: tela de resultado (PC e celular, R133), sem progresso")
     modal.close()
     await finish("bronze", "draw", "AFOGAMENTO")
     await dismiss_overlay()
     # R124 · PC: empate abre o painel de EMPATE (enfrentar de novo / analisar / início) — sem progresso
     var desk_mode: bool = not preload("res://ui_v022/mobile_layout.gd").active(root.get_viewport())
-    check((modal.is_open() and panel_text().contains("ENFRENTAR O BOT NOVAMENTE") if desk_mode else not modal.is_open()) and not bp.is_defeated("bronze"), "empate: painel de EMPATE (PC), sem progresso")
+    check(modal.is_open() and panel_text().contains("ENFRENTAR O BOT NOVAMENTE") and not bp.is_defeated("bronze"), "empate: painel de EMPATE (PC e celular, R133), sem progresso")
     modal.close()
     # vitória que não é xeque-mate (ex.: tempo) não conta para a escada
     await finish("bronze", "win", "TEMPO")

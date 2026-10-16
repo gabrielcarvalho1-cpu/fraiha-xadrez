@@ -182,6 +182,7 @@ func _desk(tex: Texture2D) -> Control:
     d.name = "DeskBotResult"
     add_child(d)
     d.begin(tex, Vector2(1254, 1254), "bot", true)
+    d.side_trim = 56.0 / 940.0   # R133 · as artes do bot têm 56/940 px transparentes de cada lado
     root = d
     return d
 
@@ -243,7 +244,6 @@ func _desk_victory(bot_id: String, bot: Dictionary, reward: Dictionary, fresh: b
 ## O bot que venceu aparece com o brasão da liga; nada é desbloqueado.
 func show_defeat(bot_id: String, display_name := ""):
     close()
-    if not _desktop(): return
     shown_bot = bot_id
     next_bot = next_of(bot_id)
     var bot := Ladder.bot(bot_id)
@@ -266,7 +266,6 @@ func show_defeat(bot_id: String, display_name := ""):
 ## R124 · EMPATE contra o bot (afogamento, repetição, material insuficiente, 50 lances…): mesmo painel da derrota.
 func show_draw(bot_id: String, display_name := "", reason := ""):
     close()
-    if not _desktop(): return
     shown_bot = bot_id
     next_bot = next_of(bot_id)
     var bot := Ladder.bot(bot_id)
