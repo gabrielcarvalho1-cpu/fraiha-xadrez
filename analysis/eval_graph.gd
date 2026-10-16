@@ -43,8 +43,8 @@ static func _y_of(signed_pawns: float) -> float:
 func _draw():
     var w := size.x
     var h := size.y
-    draw_rect(Rect2(Vector2.ZERO, size), Color(0.028, 0.047, 0.085, 0.9))
-    draw_rect(Rect2(Vector2.ZERO, size), Color("c99a45"), false, 1.5)
+    draw_rect(Rect2(Vector2.ZERO, size), Color(0.025, 0.021, 0.017, 0.95))   # R130 · mesmo tom dos painéis da análise
+    draw_rect(Rect2(Vector2.ZERO, size), Color("d9b25f", 0.45), false, 1.0)
     if moves.is_empty(): return
     var n := moves.size()
     var step := w / float(n)

@@ -18,6 +18,7 @@ var engine
 var analyzer
 var access
 var hub                       # main_hub (Premium, entitlements)
+var eval_bar                  # R130 · barra de avaliação ao lado do tabuleiro
 var record
 var report := {}
 var page := ""
@@ -416,76 +417,138 @@ func _page_report():
     var human: String = String(report.human_color)
     var me: Dictionary = report.players.get(human if human != "" else "w", {})
     var opp: Dictionary = report.players.get("b" if human == "w" else "w", {})
-    # Resumo
-    var sum := Art.Frame.new("parchment", 22)
+    # R130 · RESUMO = DUELO: os dois jogadores (retrato + nome), o resultado no meio e a precisão em anéis dourados
+    var AA := preload("res://analysis/analysis_art.gd")
+    var sum := MarginContainer.new()
     sum.name = "SummaryPanel"
+    sum.custom_minimum_size.y = 250 if narrow else 330
     column.add_child(sum)
+    sum.add_child(AA.Backdrop.new(load("res://analysis/art/duelo_fundo.png")))
+    var pad := MarginContainer.new()
+    for side_m in ["left", "right"]: pad.add_theme_constant_override("margin_" + side_m, 14 if narrow else 34)
+    for side_m in ["top", "bottom"]: pad.add_theme_constant_override("margin_" + side_m, 16 if narrow else 22)
+    sum.add_child(pad)
     var sv := VBoxContainer.new()
-    sv.add_theme_constant_override("separation", 10)
-    sum.add_child(sv)
-    var title_row := HBoxContainer.new()
-    title_row.add_theme_constant_override("separation", 10)
-    sv.add_child(title_row)
-    title_row.add_child(Art.Glyph.new("scroll", 34, Art.INK))
-    var tl := Art.label(title_row, "SUA PARTIDA", fs(26), Art.INK, Art.FONT_BOLD)
-    tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    sv.add_theme_constant_override("separation", 14)
+    pad.add_child(sv)
     var res: String = {"win": "VITÓRIA", "loss": "DERROTA", "draw": "EMPATE"}.get(String(report.result), "")
-    if res != "": title_row.add_child(Art.Stamp.new(res, "ok" if report.result == "win" else ("test" if report.result == "loss" else "soon"), 13))
+    var res_col: Color = {"win": Color("8ff0a4"), "loss": Color("ff7a66"), "draw": Color("dfe6f0")}.get(String(report.result), Art.GOLD)
+    var duel := HBoxContainer.new()
+    duel.name = "DuelRow"
+    duel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    duel.add_theme_constant_override("separation", 8)
+    sv.add_child(duel)
+    var names := Export.names(record)
+    var my_name: String = names[1] if human == "b" else names[0]
+    var opp_name: String = names[0] if human == "b" else names[1]
+    var ring_side := 112.0 if narrow else 168.0
+    for side in ["me", "center", "opp"]:
+        if side == "center":
+            var cv := VBoxContainer.new()
+            cv.alignment = BoxContainer.ALIGNMENT_END
+            cv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            cv.add_theme_constant_override("separation", 2)
+            duel.add_child(cv)
+            var plate := MarginContainer.new()
+            plate.add_theme_constant_override("margin_top", 6)
+            plate.add_theme_constant_override("margin_bottom", 8)
+            cv.add_child(plate)
+            plate.add_child(AA.ResultPlate.new())
+            var pv := VBoxContainer.new()
+            pv.add_theme_constant_override("separation", 0)
+            plate.add_child(pv)
+            if res != "":
+                var rl := AA.big(pv, res, fs(44 if not narrow else 26), res_col, Color(0, 0, 0, 0.9))
+                rl.name = "DuelResult"
+            var mode_names := {"bot": "Contra o computador", "casual": "Online casual", "ranked": "Ranqueada", "local": "Local", "friend": "Amigo"}
+            AA.caps(pv, "%s  ·  %s" % [String(mode_names.get(String(record.mode), "Partida")).to_upper(), Export.date_text(record)], fs(14), Color("f3dfae"), HORIZONTAL_ALIGNMENT_CENTER)
+            continue
+        var data: Dictionary = me if side == "me" else opp
+        var col := VBoxContainer.new()
+        col.alignment = BoxContainer.ALIGNMENT_CENTER
+        col.add_theme_constant_override("separation", 10)
+        col.custom_minimum_size.x = 150 if narrow else 300
+        duel.add_child(col)
+        var head := HBoxContainer.new()
+        head.alignment = BoxContainer.ALIGNMENT_CENTER
+        head.add_theme_constant_override("separation", 12)
+        col.add_child(head)
+        head.add_child(AA.Portrait.new(_portrait_tex(side == "me"), 44.0 if narrow else 64.0, 1.22 if side == "me" else 1.0))
+        var nv := VBoxContainer.new()
+        nv.alignment = BoxContainer.ALIGNMENT_CENTER
+        nv.add_theme_constant_override("separation", -2)
+        head.add_child(nv)
+        AA.caps(nv, "VOCÊ" if side == "me" else "ADVERSÁRIO", fs(14), Color("f5c451") if side == "me" else Color("cfd9e8"))
+        var nl := AA.big(nv, my_name if side == "me" else opp_name, fs(26 if not narrow else 18), Color("fff6dc"), Color(0, 0, 0, 0.7), HORIZONTAL_ALIGNMENT_LEFT)
+        if narrow:
+            nl.clip_text = true
+            nl.custom_minimum_size.x = 80
+        var rc := CenterContainer.new()
+        col.add_child(rc)
+        var ring := AA.Ring.new(float(data.get("accuracy", 0.0)), ring_side if narrow else ring_side * k, Color("f5c451") if side == "me" else Color("dfe6f0"))
+        ring.label.name = "AccuracyMe" if side == "me" else "AccuracyOpp"
+        rc.add_child(ring)
+    # momentos: fora do painel da arte, cartões limpos (fundo escuro, filete fino, ícone colorido)
+    var after_sum := VBoxContainer.new()
+    after_sum.add_theme_constant_override("separation", 10)
+    column.add_child(after_sum)
+    sv = after_sum
     if bool(report.get("partial", false)):
         var note := "Análise parcial: a partida foi registrada a partir de uma reconexão (lances anteriores não entram)."
         if bool(report.get("start_fen_approx", false)): note += " Posição reconstruída sem histórico: roque e en passant foram considerados indisponíveis."
-        Art.label(sv, note, fs(13), Color("8a4a1a"))
-    var acc_row: BoxContainer = HBoxContainer.new()
-    acc_row.add_theme_constant_override("separation", 26)
-    sv.add_child(acc_row)
-    for pair in [["VOCÊ", me, "AccuracyMe"], ["ADVERSÁRIO", opp, "AccuracyOpp"]]:
-        var cell := VBoxContainer.new()
-        cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        acc_row.add_child(cell)
-        Art.label(cell, pair[0], fs(13), Art.INK.lightened(0.25), Art.FONT_SEMI)
-        Art.label(cell, "PRECISÃO", fs(12), Art.INK.lightened(0.35))
-        var al := Art.label(cell, "%.1f%%" % float(pair[1].get("accuracy", 0.0)), fs(40), Art.INK, Art.FONT_BOLD)
-        al.name = pair[2]
-        al.text = al.text.replace(".", ",")
+        var nl2 := Art.label(sv, note, fs(14), Color("f2b07a"))
+        nl2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    # momentos: cartões clicáveis (estrela dourada / alvo em brasa)
     var moments: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
-    moments.add_theme_constant_override("separation", 20)
+    moments.add_theme_constant_override("separation", 14)
     sv.add_child(moments)
-    for pair in [["MELHOR MOMENTO", int(me.get("best_moment", -1)), "star"], ["PONTO CRÍTICO", int(me.get("critical", -1)), "target"]]:
+    for pair in [["MELHOR MOMENTO", int(me.get("best_moment", -1)), "star", Color("9de5a0")], ["PONTO CRÍTICO", int(me.get("critical", -1)), "target", Color("f2924f")]]:
         var ply: int = int(pair[1])
         if ply < 0: continue
-        # Botão flat com o conteúdo em HBox ancorado: os labels não quebram (uma linha cada).
         var b := Button.new()
-        b.flat = true
+        b.name = "Moment_" + String(pair[2])
         b.focus_mode = Control.FOCUS_NONE
+        b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
         b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        var bs := StyleBoxFlat.new()
+        bs.bg_color = Color(0.045, 0.04, 0.035, 0.94)
+        bs.border_color = Color("d9b25f", 0.55)
+        bs.set_border_width_all(1)
+        bs.set_corner_radius_all(6)
+        b.add_theme_stylebox_override("normal", bs)
+        var bh := bs.duplicate()
+        bh.bg_color = Color(0.09, 0.12, 0.2, 0.95)
+        b.add_theme_stylebox_override("hover", bh)
+        b.add_theme_stylebox_override("pressed", bh)
         b.pressed.connect(func(): _goto(ply))
         moments.add_child(b)
         var hb := HBoxContainer.new()
         hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        hb.add_theme_constant_override("separation", 8)
+        hb.add_theme_constant_override("separation", 12)
         hb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        hb.offset_left = 16
         b.add_child(hb)
-        hb.add_child(Art.Glyph.new(pair[2], 30, Art.INK))
-        var col := VBoxContainer.new()
-        col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        hb.add_child(col)
-        var l1 := Art.label(col, pair[0], fs(12), Art.INK.lightened(0.3))
-        l1.autowrap_mode = TextServer.AUTOWRAP_OFF
+        hb.add_child(Art.Glyph.new(pair[2], 30, pair[3], false))
+        var cl := VBoxContainer.new()
+        cl.alignment = BoxContainer.ALIGNMENT_CENTER
+        cl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        cl.add_theme_constant_override("separation", 0)
+        hb.add_child(cl)
+        var l1 := AA.caps(cl, pair[0], fs(14), pair[3])
+        l1.mouse_filter = Control.MOUSE_FILTER_IGNORE
         var mv: Dictionary = report.moves[ply]
-        var l2 := Art.label(col, "Lance %d · %s" % [ply / 2 + 1, mv.san], fs(18), Art.INK, Art.FONT_BOLD)
+        var l2 := Art.label(cl, "Lance %d · %s" % [ply / 2 + 1, mv.san], fs(22), Art.CREAM, Art.FONT_BOLD)
         l2.autowrap_mode = TextServer.AUTOWRAP_OFF
-        b.custom_minimum_size = Vector2(0, 52)
-        var want := maxf(l1.get_minimum_size().x, l2.get_minimum_size().x) + 30.0 + 16.0
-        b.custom_minimum_size.x = want
+        l2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        b.custom_minimum_size = Vector2(maxf(l1.get_minimum_size().x, l2.get_minimum_size().x) + 90.0, 70)
     # Gráfico
-    var gf := Art.Frame.new("dark", 14)
+    var gf := preload("res://analysis/analysis_art.gd").panel(16)
     gf.name = "GraphPanel"
     column.add_child(gf)
     var gv := VBoxContainer.new()
     gv.add_theme_constant_override("separation", 6)
     gf.add_child(gv)
-    Art.label(gv, "AVALIAÇÃO AO LONGO DA PARTIDA", fs(15), Art.GOLD, Art.FONT_SEMI)
+    preload("res://analysis/analysis_art.gd").caps(gv, "AVALIAÇÃO AO LONGO DA PARTIDA", fs(16), Art.GOLD)
     graph = EvalGraph.new()
     graph.name = "EvalGraph"
     graph.custom_minimum_size = Vector2(0, 150 if narrow else 190)
@@ -503,10 +566,20 @@ func _page_report():
     rev.add_child(left)
     board = ReviewBoard.new()
     board.name = "ReviewBoard"
-    var side_px := minf(column.custom_minimum_size.x - 8.0, 420.0) if narrow else 520.0
+    var side_px := minf(column.custom_minimum_size.x - 40.0, 420.0) if narrow else 520.0
     board.custom_minimum_size = Vector2(side_px, side_px)
     board.flipped = human == "b"
-    left.add_child(board)
+    # R130 · barra de AVALIAÇÃO ao lado do tabuleiro (Brancas claro / Pretas escuro), acompanha o lance
+    var brow := HBoxContainer.new()
+    brow.add_theme_constant_override("separation", 8)
+    left.add_child(brow)
+    eval_bar = preload("res://analysis/analysis_art.gd").EvalBar.new()
+    eval_bar.name = "EvalBar"
+    eval_bar.flipped = board.flipped
+    eval_bar.custom_minimum_size = Vector2(22 if narrow else 28, side_px * 0.86)
+    eval_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    brow.add_child(eval_bar)
+    brow.add_child(board)
     var nav := HBoxContainer.new()
     nav.add_theme_constant_override("separation", 6)
     left.add_child(nav)
@@ -527,7 +600,7 @@ func _page_report():
     rev.add_child(detail)
     # Lista de lances: anotação padrão (igual para todos), sem rótulos de classificação.
     # Botões para guardar a partida: copiar o texto, salvar .txt ou salvar um print.
-    var lf := Art.Frame.new("dark", 12)
+    var lf := preload("res://analysis/analysis_art.gd").panel(16)
     lf.name = "MoveListPanel"
     column.add_child(lf)
     var lv := VBoxContainer.new()
@@ -536,7 +609,7 @@ func _page_report():
     var lh := HBoxContainer.new()
     lh.add_theme_constant_override("separation", 10)
     lv.add_child(lh)
-    var lt := Art.label(lh, "LANCES DA PARTIDA", fs(15), Art.GOLD, Art.FONT_SEMI)
+    var lt := preload("res://analysis/analysis_art.gd").caps(lh, "LANCES DA PARTIDA", fs(16), Art.GOLD)
     lt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     Art.label(lv, "%s (brancas) × %s (pretas) · %s" % [Export.names(record)[0], Export.names(record)[1], Export.date_text(record)], fs(13), Art.MUTED)
     var grid := GridContainer.new()
@@ -605,7 +678,7 @@ func _page_report():
     sp.pressed.connect(func(): _save_screenshot(exp_status))
     # Treine meus erros
     var trainable := _trainable(human)
-    var tf := Art.Frame.new("club", 20)
+    var tf := preload("res://analysis/analysis_art.gd").panel(22)
     tf.name = "TrainPanel"
     column.add_child(tf)
     var tv := VBoxContainer.new()
@@ -624,6 +697,20 @@ func _page_report():
     column.add_child(tail)
     # começa no ponto crítico (ou no primeiro lance)
     _goto(int(me.get("critical", -1)) if int(me.get("critical", -1)) >= 0 else -1, false)
+
+## R130 · retrato do duelo: o seu avatar; o adversário = brasão da liga do bot (ou o avatar padrão).
+func _portrait_tex(mine: bool) -> Texture2D:
+    if mine:
+        if hub != null and hub.has_method("avatar_texture"): return hub.avatar_texture(String(hub.get("avatar_id")))
+        return null
+    if String(record.mode) == "bot":
+        var Ladder = load("res://bot/bot_ladder.gd")
+        for id in Ladder.ids():
+            var bot: Dictionary = Ladder.bot(id)
+            if String(bot.get("name", "")).to_upper() == String(record.opponent_name).to_upper():
+                return load("res://cosmetics/theme_catalog.gd").badge_texture(String(bot.get("league", id)))
+    if hub != null and hub.has_method("avatar_texture"): return hub.avatar_texture("warrior")
+    return null
 
 func _move_cell(text: String, size: int, bold: bool) -> Label:
     var l := Art.label(null, text, size, Art.MUTED, Art.FONT_SEMI if bold else null)
@@ -668,6 +755,9 @@ func _goto(ply: int, animate := true):
         var mv := Notation.uci_to_move(String(m.uci))
         board.show_fen(String(m.fen_after), animate, mv.from, mv.to)
     if is_instance_valid(graph): graph.set_selected(ply)
+    if is_instance_valid(eval_bar):
+        if ply < 0: eval_bar.set_eval(0.2, "")
+        else: eval_bar.set_eval(float(report.moves[ply].signed_after), String(report.moves[ply].text_after))
     for i in move_buttons:
         var b: Button = move_buttons[i]
         b.modulate = Color(1.3, 1.25, 1.0) if i == ply else Color.WHITE
@@ -678,7 +768,7 @@ func _fill_detail():
     for c in detail.get_children():
         detail.remove_child(c)
         c.queue_free()
-    var f := Art.Frame.new("dark", 18)
+    var f := preload("res://analysis/analysis_art.gd").panel(22)
     f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     detail.add_child(f)
     var v := VBoxContainer.new()
@@ -690,13 +780,14 @@ func _fill_detail():
         return
     var m: Dictionary = report.moves[cur_ply]
     var mine: bool = String(report.human_color) == "" or m.color == report.human_color
-    var hl := Art.label(v, "LANCE %d" % (cur_ply / 2 + 1), fs(14), Art.MUTED, Art.FONT_SEMI)
+    var AA := preload("res://analysis/analysis_art.gd")
+    var hl := AA.caps(v, "LANCE %d" % (cur_ply / 2 + 1), fs(15), Art.GOLD)
     hl.name = "DetailPly"
-    Art.label(v, ("VOCÊ JOGOU:" if mine else "ADVERSÁRIO JOGOU:"), fs(13), Art.MUTED)
+    AA.caps(v, ("VOCÊ JOGOU" if mine else "ADVERSÁRIO JOGOU"), fs(14), Art.MUTED)
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation", 10)
     v.add_child(row)
-    var sl := Art.label(row, String(m.san), fs(34), Art.CREAM, Art.FONT_BOLD)
+    var sl := AA.big(row, String(m.san), fs(38), Art.CREAM, Color(0.05, 0.03, 0.01, 0.85), HORIZONTAL_ALIGNMENT_LEFT)
     sl.name = "DetailSan"
     sl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     sl.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -706,15 +797,15 @@ func _fill_detail():
     ev.columns = 2
     ev.add_theme_constant_override("h_separation", 24)
     v.add_child(ev)
-    Art.label(ev, "ANTES", fs(13), Art.MUTED)
-    Art.label(ev, "DEPOIS", fs(13), Art.MUTED)
-    var eb := Art.label(ev, String(m.text_before), fs(26), Art.GOLD, Art.FONT_BOLD)
+    AA.caps(ev, "ANTES", fs(14), Art.MUTED)
+    AA.caps(ev, "DEPOIS", fs(14), Art.MUTED)
+    var eb := AA.big(ev, String(m.text_before), fs(28), Art.GOLD, Color(0.05, 0.03, 0.01, 0.85), HORIZONTAL_ALIGNMENT_LEFT)
     eb.name = "DetailBefore"
-    var ea := Art.label(ev, String(m.text_after), fs(26), Art.GOLD, Art.FONT_BOLD)
+    var ea := AA.big(ev, String(m.text_after), fs(28), Art.GOLD, Color(0.05, 0.03, 0.01, 0.85), HORIZONTAL_ALIGNMENT_LEFT)
     ea.name = "DetailAfter"
     if not String(m.best_san).is_empty() and String(m.best) != String(m.uci):
-        Art.label(v, "MELHOR:", fs(13), Art.MUTED)
-        var bl := Art.label(v, String(m.best_san), fs(24), Color("9de5a0"), Art.FONT_BOLD)
+        AA.caps(v, "MELHOR LANCE", fs(14), Art.MUTED)
+        var bl := AA.big(v, String(m.best_san), fs(26), Color("9de5a0"), Color(0.02, 0.06, 0.03, 0.85), HORIZONTAL_ALIGNMENT_LEFT)
         bl.name = "DetailBest"
     var buttons: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
     buttons.add_theme_constant_override("separation", 8)
