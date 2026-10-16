@@ -421,7 +421,7 @@ func _page_report():
     var AA := preload("res://analysis/analysis_art.gd")
     var sum := MarginContainer.new()
     sum.name = "SummaryPanel"
-    sum.custom_minimum_size.y = 250 if narrow else 330
+    sum.custom_minimum_size.y = 290 if narrow else 330
     column.add_child(sum)
     sum.add_child(AA.Backdrop.new(load("res://analysis/art/duelo_fundo.png")))
     var pad := MarginContainer.new()
@@ -438,17 +438,22 @@ func _page_report():
     duel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     duel.add_theme_constant_override("separation", 8)
     sv.add_child(duel)
+    # R133 · celular: os dois jogadores lado a lado em cima e o resultado embaixo (3 colunas não cabem)
+    var duel_center: BoxContainer = duel
+    if narrow:
+        duel_center = VBoxContainer.new()
+        sv.add_child(duel_center)
     var names := Export.names(record)
     var my_name: String = names[1] if human == "b" else names[0]
     var opp_name: String = names[0] if human == "b" else names[1]
-    var ring_side := 112.0 if narrow else 168.0
+    var ring_side := 108.0 if narrow else 168.0
     for side in ["me", "center", "opp"]:
         if side == "center":
             var cv := VBoxContainer.new()
             cv.alignment = BoxContainer.ALIGNMENT_END
             cv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
             cv.add_theme_constant_override("separation", 2)
-            duel.add_child(cv)
+            duel_center.add_child(cv)
             var plate := MarginContainer.new()
             plate.add_theme_constant_override("margin_top", 6)
             plate.add_theme_constant_override("margin_bottom", 8)
@@ -467,22 +472,28 @@ func _page_report():
         var col := VBoxContainer.new()
         col.alignment = BoxContainer.ALIGNMENT_CENTER
         col.add_theme_constant_override("separation", 10)
-        col.custom_minimum_size.x = 150 if narrow else 300
+        col.custom_minimum_size.x = 0 if narrow else 300
+        if narrow: col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         duel.add_child(col)
         var head := HBoxContainer.new()
         head.alignment = BoxContainer.ALIGNMENT_CENTER
         head.add_theme_constant_override("separation", 12)
         col.add_child(head)
-        head.add_child(AA.Portrait.new(_portrait_tex(side == "me"), 44.0 if narrow else 64.0, 1.22 if side == "me" else 1.0))
+        head.add_child(AA.Portrait.new(_portrait_tex(side == "me"), 34.0 if narrow else 64.0, 1.22 if side == "me" else 1.0))
         var nv := VBoxContainer.new()
         nv.alignment = BoxContainer.ALIGNMENT_CENTER
         nv.add_theme_constant_override("separation", -2)
         head.add_child(nv)
         AA.caps(nv, "VOCÊ" if side == "me" else "ADVERSÁRIO", fs(14), Color("f5c451") if side == "me" else Color("cfd9e8"))
-        var nl := AA.big(nv, my_name if side == "me" else opp_name, fs(26 if not narrow else 18), Color("fff6dc"), Color(0, 0, 0, 0.7), HORIZONTAL_ALIGNMENT_LEFT)
+        var nl := AA.big(nv, my_name if side == "me" else opp_name, fs(26) if not narrow else 15, Color("fff6dc"), Color(0, 0, 0, 0.7), HORIZONTAL_ALIGNMENT_LEFT)
         if narrow:
             nl.clip_text = true
-            nl.custom_minimum_size.x = 80
+            nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+            nl.custom_minimum_size.x = 70
+            nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            nv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            head.alignment = BoxContainer.ALIGNMENT_BEGIN
+            head.add_theme_constant_override("separation", 6)
         var rc := CenterContainer.new()
         col.add_child(rc)
         var ring := AA.Ring.new(float(data.get("accuracy", 0.0)), ring_side if narrow else ring_side * k, Color("f5c451") if side == "me" else Color("dfe6f0"))
