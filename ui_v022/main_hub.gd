@@ -2039,11 +2039,18 @@ func _build_ranking():
     # estão lá dentro): uma placa da cor do botão cobre o título pintado
     classic_btn = RefPage.hotspot(panel, Rect2(597, 808, 444, 80), open_board_colors, "ClassicPieces")
     classic_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    var cover := ColorRect.new()
+    # o fundo do próprio botão (uma faixa vazia da arte, esticada) cobre o título antigo: sem retângulo aparente
+    var cover := TextureRect.new()
     cover.name = "BoardColorsTitleCover"
-    cover.color = Color("10203f")
-    cover.position = Vector2(682, 813)
-    cover.size = Vector2(312, 70)
+    var strip := AtlasTexture.new()
+    strip.atlas = RefPage.tex("ligas_bg")
+    strip.region = Rect2(700, 813, 6, 70)
+    cover.texture = strip
+    cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    cover.stretch_mode = TextureRect.STRETCH_SCALE
+    cover.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+    cover.position = Vector2(690, 813)
+    cover.size = Vector2(296, 70)
     cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
     panel.add_child(cover)
     # R139 · o aviso pintado ("a maior liga alcançada libera cenário e peças") ganha o texto novo
@@ -2936,6 +2943,8 @@ func _load_preferences():
     lab_coords = bool(config.get_value("lab","coordinates",false))
     board_color_pref = String(config.get_value("board","casas",BoardColors.MADEIRA))
     piece_color_pref = String(config.get_value("board","pecas",BoardColors.ORIGINAL))
+    effective_board_color()
+    effective_piece_color()
 
 ## R139 · TABULEIRO E PEÇAS: cores escolhidas (cosmetics/board_colors.gd). O que estiver bloqueado (liga ainda não
 ## conquistada, Club vencido…) cai para o padrão sem apagar a escolha.
@@ -2943,13 +2952,17 @@ signal board_colors_changed
 var board_color_pref := "madeira"
 var piece_color_pref := "original"
 func effective_board_color() -> String:
-    return board_color_pref if BoardColors.board_unlocked(board_color_pref, self) else BoardColors.MADEIRA
+    BoardColors.current_board = board_color_pref if BoardColors.board_unlocked(board_color_pref, self) else BoardColors.MADEIRA
+    return BoardColors.current_board
 func effective_piece_color() -> String:
-    return piece_color_pref if BoardColors.pieces_unlocked(piece_color_pref, self) else BoardColors.ORIGINAL
+    BoardColors.current_pieces = piece_color_pref if BoardColors.pieces_unlocked(piece_color_pref, self) else BoardColors.ORIGINAL
+    return BoardColors.current_pieces
 func set_board_colors(board_id: String, piece_id: String):
     if not board_id.is_empty() and BoardColors.board_unlocked(board_id, self): board_color_pref = board_id
     if not piece_id.is_empty() and BoardColors.pieces_unlocked(piece_id, self): piece_color_pref = piece_id
     _save_preferences()
+    effective_board_color()
+    effective_piece_color()
     board_colors_changed.emit()
 
 var board_colors_ui = null

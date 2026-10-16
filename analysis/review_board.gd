@@ -32,7 +32,14 @@ func _ready():
     resized.connect(queue_redraw)
     set_process(true)
 
+var _colors_key := ""
 func _process(delta):
+    # R139 · cores do tabuleiro: só refaz quando a escolha muda
+    var key := BoardColors.current_board + "|" + str(size) + "|" + str(flipped)
+    if key != _colors_key:
+        _colors_key = key
+        _sync_colors()
+        queue_redraw()
     pulse += delta
     if anim_t < 1.0:
         anim_t = minf(1.0, anim_t + delta * 4.5)
@@ -112,7 +119,7 @@ func _draw():
     # R128 · moldura e casas = arte do tabuleiro Madeira da partida (o padrão claro/escuro é o mesmo virado ou não)
     if _board_tex == null: _board_tex = load(BOARD_ART)
     var fm := FRAME * t
-    if _board_tex != null:
+    if _board_tex != null and not (is_instance_valid(_colors) and _colors.visible):
         draw_texture_rect(_board_tex, Rect2(o - Vector2(fm, fm), Vector2(t * 8.0 + fm * 2.0, t * 8.0 + fm * 2.0)), false)
     for y in 8:
         for x in 8:
@@ -157,7 +164,56 @@ func _draw():
         var w := f.get_string_size(mark_glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, gf).x
         draw_string(f, c + Vector2(-w / 2.0, gf * 0.36), mark_glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, gf, Color(0.05, 0.05, 0.05))
 
+## R139 · PADRÃO ÚNICO: as peças e as cores escolhidas em TABULEIRO E PEÇAS (as mesmas da partida)
+const BoardColors := preload("res://cosmetics/board_colors.gd")
+const SkinRef := preload("res://ranked/board_skin.gd")
+var _colors: Node2D = null
+var _art: Node2D = null
+func _sync_colors():
+    var mat := BoardColors.board_material(BoardColors.current_board)
+    if mat == null:
+        if is_instance_valid(_colors):
+            _colors.visible = false
+            _art.visible = false
+        return
+    if not is_instance_valid(_colors):
+        # duas camadas ATRÁS do tabuleiro (show_behind_parent): a arte (moldura) e, por cima dela, as casas coloridas;
+        # destaques, setas e peças continuam por cima, desenhados pelo próprio tabuleiro
+        _art = Node2D.new()
+        _art.name = "BoardArt"
+        _art.show_behind_parent = true
+        _art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+        _art.draw.connect(func():
+            var t := tile()
+            var fm := FRAME * t
+            if _board_tex != null: _art.draw_texture_rect(_board_tex, Rect2(origin() - Vector2(fm, fm), Vector2(t * 8.0 + fm * 2.0, t * 8.0 + fm * 2.0)), false))
+        add_child(_art)
+        _colors = Node2D.new()
+        _colors.name = "BoardColors"
+        _colors.show_behind_parent = true
+        _colors.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+        _colors.draw.connect(_draw_colors)
+        add_child(_colors)
+    _colors.material = mat
+    _colors.visible = true
+    _art.visible = true
+    _art.queue_redraw()
+    _colors.queue_redraw()
+func _draw_colors():
+    # casas coloridas por cima da arte (a moldura de tronco continua); destaques e peças vêm na camada de cima
+    var tex = BoardColors.casas()
+    var t: float = tile()
+    var o: Vector2 = origin()
+    for y in 8:
+        for x in 8:
+            var d: Vector2i = display(Vector2i(x, y))
+            _colors.draw_texture_rect_region(tex, Rect2(o + Vector2(d.x, d.y) * t, Vector2(t, t)), Rect2(Vector2(d.x, d.y) * 80.0, Vector2(80, 80)), Color(1.0 if (d.x + d.y) % 2 == 0 else 0.0, 0, 0, 1))
+
 func _piece(c: Vector2, code: String, t: float):
+    if BoardColors.current_pieces != BoardColors.CLASSICAS:
+        var d := BoardColors.pieces(BoardColors.current_pieces, SkinRef.PECAS)
+        preload("res://cosmetics/board_colors_preview.gd").draw_piece(self, d, code, Rect2(c - Vector2(t, t) / 2.0, Vector2(t, t)))
+        return
     var tex: Texture2D = textures.get(code)
     if tex == null: return
     var heights := {"P": 46.0, "R": 54.0, "N": 57.0, "B": 60.0, "Q": 64.0, "K": 66.0}

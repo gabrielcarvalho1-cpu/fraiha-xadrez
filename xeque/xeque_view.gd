@@ -515,11 +515,10 @@ func _draw_mesa_pede():
     var isz := card.get_size() * (ih / card.get_size().y)
     var ipos := r.position + Vector2(pad + 4, (40 if compact else 48))
     var cc := ipos + isz / 2.0
-    draw_set_transform(ui.origin + cc * ui.k, -0.07, Vector2(ui.k, ui.k))
-    draw_rect(Rect2(-isz / 2.0 + Vector2(5, 6), isz), Color(0, 0, 0, 0.45))
-    draw_rect(Rect2(-isz / 2.0, isz).grow(1), Color("ffd257"), false, 2.0)
-    draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
-    card_face(g.target, cc, isz.x, -0.07)   # R123.1 · nítida
+    # R139 · carta reta (inclinada, o filtro "pixel" a deixava serrilhada) e alinhada ao pixel da tela: nítida
+    draw_rect(Rect2(cc - isz / 2.0 + Vector2(5, 6), isz), Color(0, 0, 0, 0.45))
+    draw_rect(Rect2(cc - isz / 2.0, isz).grow(1), Color("ffd257"), false, 2.0)
+    card_face(g.target, cc, isz.x, 0.0)
     var x := ipos.x + isz.x + (14 if compact else 18)
     var big := fit(name.to_upper(), "ui", 66 if compact else 78, r.end.x - x - 12)
     text(name.to_upper(), Vector2(x, r.position.y + (101 if compact else 107)), "ui", big, Color("f6ecd2"), -1, HORIZONTAL_ALIGNMENT_LEFT, 5, Color("120a06"))
@@ -944,11 +943,10 @@ func _xeque_art(rr: Rect2, state: String, enabled: bool):
     var p := 0.5 + 0.5 * sin(ui.t * 4.2)
     var r := rr
     if call:
-        var sc := 1.0 + 0.05 * p
-        r = Rect2(rr.get_center() - rr.size * sc / 2.0, rr.size * sc)
-        # halo dourado atrás (a própria arte, maior e transparente)
+        # R139 · sem "respirar" no tamanho: cada tamanho novo trocava a textura reduzida (degraus de 4 px) e a arte
+        # parecia piscar. Agora o tamanho é fixo e só o brilho pulsa (halo e a arte acesa), liso.
         for i in 3:
-            var g := r.grow(8.0 + i * 9.0 + p * 8.0)
+            var g := r.grow(8.0 + i * 9.0)
             draw_texture_rect(Crisp.at(tex, g.size * ui.k), g, false, Color(1.0, 0.85, 0.4, (0.32 - i * 0.09) * (0.45 + 0.55 * p)))
     elif state == "ativado":
         var q := 0.5 + 0.5 * sin(ui.t * 10.0)
@@ -1793,9 +1791,9 @@ func _desk_mesa_pede():
     otext("A MESA PEDE", Vector2(r.position.x + 23, r.position.y + 36), "o7_sp3", 18, Color("f7cf5c"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3)
     var name: String = String(Rules.NAMES[g.target]).to_upper()
     var plural: String = Rules.PLURAL[g.target]
-    # a carta da rodada, levemente inclinada, com moldura dourada fina
+    # a carta da rodada — R139: reta (inclinada, o filtro "pixel" deixava as bordas serrilhadas)
     var cc := Vector2(r.position.x + 81, r.position.y + 126)
-    card_face(String(g.target), cc, 104.0, -0.05)
+    card_face(String(g.target), cc, 104.0, 0.0)
     var x := r.position.x + 148
     var big := fit(name, "o7", 60, r.end.x - x - 14)
     otext(name, Vector2(x, r.position.y + 122), "o7", big, Color("f8ecd0"), -1, HORIZONTAL_ALIGNMENT_LEFT, 5)

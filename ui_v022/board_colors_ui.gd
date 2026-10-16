@@ -238,8 +238,10 @@ func _draw_pair(c: Control, id: String):
 	var h := c.size.y
 	# dois reis lado a lado, a mesma escala da partida (célula = 80% da altura, base perto do pé da amostra)
 	var cell := h * 0.95
-	_draw_piece(c, d, "wK", Rect2(Vector2(c.size.x / 2.0 - cell * 0.92, h * 0.5 - cell * 0.62), Vector2(cell, cell)))
-	_draw_piece(c, d, "bK", Rect2(Vector2(c.size.x / 2.0 - cell * 0.08, h * 0.5 - cell * 0.62), Vector2(cell, cell)))
+	# base dos reis perto do pé da amostra (centrados na altura)
+	var top := h * 0.97 - cell * 0.5 - cell * 28.0 / 75.0
+	_draw_piece(c, d, "wK", Rect2(Vector2(c.size.x / 2.0 - cell * 0.92, top), Vector2(cell, cell)))
+	_draw_piece(c, d, "bK", Rect2(Vector2(c.size.x / 2.0 - cell * 0.08, top), Vector2(cell, cell)))
 
 func _draw_piece(c: CanvasItem, d: Dictionary, code: String, cell: Rect2):
 	preload("res://cosmetics/board_colors_preview.gd").draw_piece(c, d, code, cell)   # R139 · mesma conta da partida
@@ -266,6 +268,7 @@ func _layout():
 	else: side = minf(_body_rect.size.y - ts(16) * 2.4, _body_rect.size.x * 0.42)
 	preview.custom_minimum_size = Vector2(side, side)
 	preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	preview.size_flags_vertical = Control.SIZE_SHRINK_BEGIN   # sempre quadrada: casas e peças na mesma grade
 	_list_w = _body_rect.size.x if vertical else _body_rect.size.x - side - 22.0
 	casas_grid.columns = _cols()
 	pecas_grid.columns = _cols()

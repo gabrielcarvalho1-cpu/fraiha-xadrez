@@ -7,6 +7,11 @@ extends RefCounted
 ## Casas: shader cosmetics/board_colors.gdshader sobre visual_v018/casas_madeira.png.
 ## Peças: cosmetics/cores_pecas/<id>/ (geradas por tools/art/cores_madeira_r139.py).
 
+## escolha que vale agora (já sem o que estiver bloqueado) — atualizada pelo hub; lida por quem não tem o hub
+## à mão (tabuleiro da ANÁLISE e do TREINO)
+static var current_board := "madeira"
+static var current_pieces := "original"
+
 const MADEIRA := "madeira"
 const ORIGINAL := "original"
 const CLASSICAS := "classicas"
@@ -101,8 +106,12 @@ static func board_material(id: String) -> ShaderMaterial:
 	_mats[id] = m
 	return m
 
+## guardada: quem desenha com draw_texture_* não segura a textura; se ela sair da memória entre o desenho e a
+## tela, a casa sai lisa (branca no shader)
+static var _casas: Texture2D = null
 static func casas() -> Texture2D:
-	return load(CASAS_PATH)
+	if _casas == null: _casas = load(CASAS_PATH)
+	return _casas
 
 ## Peças: dict code -> [Texture2D, Rect2] no formato do piece_override do tabuleiro, a partir das peças da Madeira
 ## (base) com a cor escolhida. {} = usa a base sem mudar. "classicas" é tratado por quem chama.

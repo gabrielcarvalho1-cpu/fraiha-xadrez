@@ -42,7 +42,7 @@ func _draw_color_layer():
         for x in range(8):
             var c := Vector2i(x, y)
             var dc := display_cell(c)
-            _color_layer.draw_texture_rect_region(tex, Rect2(ORIGIN + Vector2(dc) * TILE, Vector2(TILE, TILE)), Rect2(Vector2(dc) * 80.0, Vector2(80, 80)))
+            _color_layer.draw_texture_rect_region(tex, Rect2(ORIGIN + Vector2(dc) * TILE, Vector2(TILE, TILE)), Rect2(Vector2(dc) * 80.0, Vector2(80, 80)), Color(1.0 if (dc.x + dc.y) % 2 == 0 else 0.0, 0, 0, 1))
 var piece_sprite_scale := 0.84      # unidades do tabuleiro (casa = 75) por pixel do sprite
 const PIECE_SPRITE_BASE := 28.0     # base do desenho, abaixo do centro da casa
 var visual_theme := "wood"
