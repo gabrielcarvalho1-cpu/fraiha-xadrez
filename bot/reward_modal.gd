@@ -14,6 +14,7 @@ const DeskArt = preload("res://ranked/desk_art_modal.gd")   # R54 · PC: telas n
 ## R55.4 · artes SÓ do PC (R54): carregadas no primeiro uso (telas do PC), nunca no celular.
 const ART_WIN_PATH := "res://ranked/art/desk_bot_win.png"
 const ART_LOSS_PATH := "res://ranked/art/desk_bot_loss.png"
+const ART_DRAW_PATH := "res://ranked/art/desk_bot_draw.png"   # R124
 const ART_CROWN_PATH := "res://ranked/art/desk_icon_crown.png"
 const MobileLayout = preload("res://ui_v022/mobile_layout.gd")
 
@@ -255,6 +256,30 @@ func show_defeat(bot_id: String, display_name := ""):
         info = "Vença o %s para liberar o %s." % [bname, String(Ladder.bot(next_bot).get("name", ""))]
     d.label(info, Rect2(200, 590, 855, 110), 38, Color("efd9a6"), DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_CENTER, true).name = "DeskBotInfo"
     d.label("Analise a partida para ver onde o jogo virou.", Rect2(230, 712, 795, 60), 34, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskBotTip"
+    _desk_buttons(d, "ENFRENTAR O BOT NOVAMENTE", func():
+        var target := shown_bot
+        close()
+        replay_requested.emit(target), "replay")
+    d.show_modal()
+
+## R124 · EMPATE contra o bot (afogamento, repetição, material insuficiente, 50 lances…): mesmo painel da derrota.
+func show_draw(bot_id: String, display_name := "", reason := ""):
+    close()
+    if not _desktop(): return
+    shown_bot = bot_id
+    next_bot = next_of(bot_id)
+    var bot := Ladder.bot(bot_id)
+    var bname := String(bot.get("name", display_name if not display_name.is_empty() else "COMPUTADOR"))
+    var d = _desk(load(ART_DRAW_PATH))
+    d.label("NINGUÉM VENCEU CONTRA " + bname, Rect2(250, 322, 755, 52), 40, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBotSub"
+    if not bot.is_empty():
+        d.image(ThemeCatalog.badge_texture(String(bot.get("league", bot_id))), Rect2(522, 358, 210, 206)).name = "DeskBotShield"
+    var why := reason.strip_edges()
+    if "—" in why: why = why.get_slice("—", 1).strip_edges()
+    var info := ("Empate por %s. " % why.to_lower()) if not why.is_empty() and why.to_upper() != "EMPATE" else ""
+    info += "Para avançar no Desafio das Ligas é preciso vencer."
+    d.label(info, Rect2(200, 590, 855, 110), 36, Color("efd9a6"), DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_CENTER, true).name = "DeskBotInfo"
+    d.label("Analise a partida para ver onde a vitória escapou.", Rect2(230, 712, 795, 60), 34, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskBotTip"
     _desk_buttons(d, "ENFRENTAR O BOT NOVAMENTE", func():
         var target := shown_bot
         close()

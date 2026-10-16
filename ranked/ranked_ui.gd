@@ -23,6 +23,7 @@ const DeskArt = preload("res://ranked/desk_art_modal.gd")   # R54 · telas do PC
 const DESK_ART := {"resign": "res://ranked/art/desk_resign_modal.png", "found": "res://ranked/art/desk_found.png",
 	"win_ranked": "res://ranked/art/desk_win_ranked.png", "win_casual": "res://ranked/art/desk_win_casual.png",
 	"loss_ranked": "res://ranked/art/desk_loss_ranked.png", "loss_casual": "res://ranked/art/desk_loss_casual.png",
+	"draw_ranked": "res://ranked/art/desk_draw_ranked.png", "draw_casual": "res://ranked/art/desk_draw_casual.png",   # R124
 	"resign_btn": "res://ranked/art/desk_resign_btn.png"}
 var _desk_tex := {}
 func desk_tex(key: String) -> Texture2D:
@@ -580,7 +581,7 @@ func _show(which: String):
 
 ## R54 · PC (Web desktop): DESISTIR?, ADVERSÁRIO ENCONTRADO e VITÓRIA/DERROTA na arte de referência
 ## (ranked/desk_art_modal.gd). Mesmo padrão em bot, Casual e Ranqueada; Casual não mostra PL.
-## Empate, partida encerrada sem resultado e subida de liga continuam nas telas próprias.
+## R124 · empate também usa a arte (EMPATE); partida encerrada sem resultado e subida de liga continuam nas telas próprias.
 func _desk_art(which: String) -> bool:
     if desk_art == null or Mobile.active(get_viewport()): return false
     var d = desk_art
@@ -613,15 +614,15 @@ func _desk_art(which: String) -> bool:
         "result":
             var r: Dictionary = controller.last_result
             var outcome := String(r.get("outcome", ""))
-            if bool(r.get("unknown", false)) or not outcome in ["win", "loss"]: return false
+            if bool(r.get("unknown", false)) or not outcome in ["win", "loss", "draw"]: return false   # R124 · empate também
             if rated() and bool(r.get("promoted", false)): return false
             var win := outcome == "win"
-            d.begin(desk_tex("%s_%s" % ["win" if win else "loss", "ranked" if rated() else "casual"]), Vector2(1122, 1402), "result_" + outcome)
+            d.begin(desk_tex("%s_%s" % [{"win": "win", "loss": "loss", "draw": "draw"}[outcome], "ranked" if rated() else "casual"]), Vector2(1122, 1402), "result_" + outcome)   # R124 · arte EMPATE (geometria da derrota)
             var sub_y := 540.0 if win else 532.0
             d.label("%s · %s" % [String(r.get("mode_name", "")).to_upper(), String(r.get("reason_text", ""))], Rect2(230, sub_y, 662, 56), 46, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskResultSub"
             if rated():
                 var change := int(r.get("pl_change", 0))
-                d.label(("%+d PL" % change) if change != 0 else "0 PL", Rect2(360, 598 if win else 594, 402, 104), 104, DeskArt.GOLD if win else DeskArt.RED, DeskArt.FONT_TITLE).name = "DeskResultPl"
+                d.label(("%+d PL" % change) if change != 0 else "0 PL", Rect2(360, 598 if win else 594, 402, 104), 104, DeskArt.GOLD if win else (DeskArt.CREAM if outcome == "draw" else DeskArt.RED), DeskArt.FONT_TITLE).name = "DeskResultPl"
                 var after_league := int(r.get("league_after", 0))
                 var after_pl := int(r.get("pl_after", 0))
                 var league_txt: String = LEAGUES[after_league].to_upper()

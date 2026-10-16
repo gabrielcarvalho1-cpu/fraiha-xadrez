@@ -10,6 +10,7 @@ signal dismissed(result: String)
 
 const VICTORY_ART := "res://presentation_v019/results/victory.png"   # R77 · só carrega no fim da partida
 const DEFEAT_ART := "res://presentation_v019/results/defeat.png"
+const DRAW_ART := "res://presentation_v019/results/draw.png"      # R124 · EMPATE (prata)
 const AUTO_HIDE := 6.0        # segundos até sumir sozinho (0 = só ao clicar)
 const ART_HEIGHT := 0.68      # fração da altura da tela ocupada pela arte
 const ART_MAX_WIDTH := 0.92   # nunca mais largo que isto da tela
@@ -115,11 +116,11 @@ func _layout():
     hint.position = Vector2(0, art.position.y + art.size.y + 8.0)
 
 # ---------------------------------------------------------------- mostrar / esconder
-## result: "victory" | "defeat". Qualquer outro valor é ignorado.
+## result: "victory" | "defeat" | "draw". Qualquer outro valor é ignorado.
 func show_result(p_result: String):
-    if p_result not in ["victory", "defeat"]: return
+    if p_result not in ["victory", "defeat", "draw"]: return
     result = p_result
-    art.texture = load(VICTORY_ART if result == "victory" else DEFEAT_ART)
+    art.texture = load({"victory": VICTORY_ART, "defeat": DEFEAT_ART, "draw": DRAW_ART}[result])
     _layout()
     _parts.clear()
     t = 0.0
@@ -130,19 +131,19 @@ func show_result(p_result: String):
     set_process(true)
     var mat: ShaderMaterial = backdrop.material
     mat.set_shader_parameter("amount", 0.0)
-    mat.set_shader_parameter("tint", Color(0.000, 0.010, 0.029) if result == "victory" else Color(0.06, 0.0, 0.0))
+    mat.set_shader_parameter("tint", Color(0.06, 0.0, 0.0) if result == "defeat" else Color(0.000, 0.010, 0.029))
     glow.modulate = Color(1, 1, 1, 0)
     glow.scale = Vector2(0.2, 0.2)
     art.modulate = Color(1, 1, 1, 0)
-    art.scale = Vector2(0.8, 0.8) if result == "victory" else Vector2(1.18, 1.18)
+    art.scale = Vector2(1.18, 1.18) if result == "defeat" else Vector2(0.8, 0.8)
     hint.modulate = Color(1, 1, 1, 0)
     flash.color.a = 0.0
     var tw := create_tween()
     tw.set_parallel(true)
     # 1) fundo escurece e desfoca
     tw.tween_method(func(v): mat.set_shader_parameter("amount", v), 0.0, 1.0, 0.45).set_ease(Tween.EASE_OUT)
-    if result == "victory":
-        # 2) brilho dourado se abrindo atrás
+    if result != "defeat":
+        # 2) brilho dourado (empate: prateado) se abrindo atrás
         tw.tween_property(glow, "modulate:a", 1.0, 0.6).set_delay(0.15)
         tw.tween_property(glow, "scale", Vector2.ONE, 0.9).set_delay(0.15).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
         # 3) arte cresce 80% → 100% com leve impacto ao chegar
@@ -215,6 +216,7 @@ func _process(delta):
     # vitória: confetes e faíscas continuam caindo enquanto aberto; derrota: brasas subindo
     if _showing and t > 0.8:
         if result == "victory" and randf() < delta * 26.0: _spawn_confetti(1)
+        elif result == "draw" and randf() < delta * 10.0: _spawn_confetti(1)
         elif result == "defeat" and randf() < delta * 18.0: _spawn_ember(1)
     glow.queue_redraw()
     particles.queue_redraw()
@@ -226,17 +228,19 @@ func _impact(strength: float):
 func _draw_glow():
     var c := glow.size / 2.0
     var r := minf(glow.size.x, glow.size.y) / 2.0
-    if result == "victory":
+    if result != "defeat":
+        var dr := result == "draw"   # R124 · empate: o mesmo brilho, em prata/azul
         for i in 3:
-            glow.draw_circle(c, r * (0.55 - i * 0.12), Color(1.0, 0.82, 0.35, 0.10 + 0.04 * sin(t * 2.0 + i)))
+            var gc := Color(0.72, 0.82, 1.0) if dr else Color(1.0, 0.82, 0.35)
+            glow.draw_circle(c, r * (0.55 - i * 0.12), Color(gc.r, gc.g, gc.b, 0.10 + 0.04 * sin(t * 2.0 + i)))
         var n := 18
         for i in n:
             var a0 := t * 0.25 + TAU * i / n
             var wdt := 0.10 + 0.04 * sin(t * 1.7 + i * 1.3)
             var len := r * (0.95 + 0.08 * sin(t * 2.3 + i))
             var pts := PackedVector2Array([c, c + Vector2(cos(a0 - wdt), sin(a0 - wdt)) * len, c + Vector2(cos(a0 + wdt), sin(a0 + wdt)) * len])
-            glow.draw_colored_polygon(pts, Color(1.0, 0.85, 0.4, 0.07 + 0.03 * sin(t * 3.0 + i * 0.7)))
-        glow.draw_circle(c, r * 0.32, Color(1.0, 0.93, 0.7, 0.14 + 0.06 * sin(t * 2.6)))
+            glow.draw_colored_polygon(pts, Color(0.78, 0.86, 1.0, 0.07 + 0.03 * sin(t * 3.0 + i * 0.7)) if dr else Color(1.0, 0.85, 0.4, 0.07 + 0.03 * sin(t * 3.0 + i * 0.7)))
+        glow.draw_circle(c, r * 0.32, Color(0.9, 0.94, 1.0, 0.14 + 0.06 * sin(t * 2.6)) if dr else Color(1.0, 0.93, 0.7, 0.14 + 0.06 * sin(t * 2.6)))
     else:
         for i in 4:
             glow.draw_circle(c, r * (0.6 - i * 0.12), Color(0.9, 0.08, 0.04, 0.09 + 0.03 * sin(t * 3.0 + i)))
@@ -255,7 +259,7 @@ func _burst_confetti():
         var a := randf() * TAU
         var sp := randf_range(180.0, 520.0)
         _parts.append({"pos": _art_center(), "vel": Vector2(cos(a), sin(a)) * sp, "grav": Vector2(0, 240), "drag": 1.6, "life": randf_range(0.6, 1.3),
-            "col": Color(1.0, randf_range(0.8, 0.95), randf_range(0.4, 0.7)), "size": randf_range(2.0, 4.5), "kind": "spark", "rot": 0.0, "spin": 0.0})
+            "col": Color(randf_range(0.8, 0.95), randf_range(0.88, 0.97), 1.0) if result == "draw" else Color(1.0, randf_range(0.8, 0.95), randf_range(0.4, 0.7)), "size": randf_range(2.0, 4.5), "kind": "spark", "rot": 0.0, "spin": 0.0})
 
 func _spawn_confetti(n: int):
     var vs := root.get_viewport_rect().size
@@ -264,9 +268,9 @@ func _spawn_confetti(n: int):
         var from_top := randf() < 0.6
         var pos := Vector2(randf_range(ac.x - art.size.x * 0.65, ac.x + art.size.x * 0.65), randf_range(ac.y - art.size.y * 0.8, ac.y - art.size.y * 0.3)) if from_top else ac + Vector2(randf_range(-80, 80), randf_range(-60, 60))
         var vel := Vector2(randf_range(-90, 90), randf_range(-40, 60)) if from_top else Vector2(randf_range(-320, 320), randf_range(-420, -120))
-        var gold := randf() < 0.55
+        var gold := randf() < 0.55 and result != "draw"   # R124 · empate: confete prata e azul
         _parts.append({"pos": pos, "vel": vel, "grav": Vector2(0, randf_range(160, 260)), "drag": 1.2, "life": randf_range(2.0, 3.5),
-            "col": Color(1.0, randf_range(0.75, 0.9), randf_range(0.25, 0.45)) if gold else Color(randf_range(0.15, 0.3), randf_range(0.4, 0.6), 1.0),
+            "col": Color(1.0, randf_range(0.75, 0.9), randf_range(0.25, 0.45)) if gold else (Color.from_hsv(0.6, randf_range(0.0, 0.15), randf_range(0.8, 1.0)) if result == "draw" and randf() < 0.6 else Color(randf_range(0.15, 0.3), randf_range(0.4, 0.6), 1.0)),
             "size": randf_range(5.0, 10.0), "kind": "confetti", "rot": randf() * TAU, "spin": randf_range(-6.0, 6.0)})
         if vs.y <= 0.0: break
 

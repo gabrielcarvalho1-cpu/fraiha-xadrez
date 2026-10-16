@@ -113,8 +113,11 @@ func run():
     check(modal.is_open() and panel_text().contains("ENFRENTAR O BOT NOVAMENTE") and not bp.is_defeated("bronze"), "derrota: tela de resultado, sem progresso")
     modal.close()
     await finish("bronze", "draw", "AFOGAMENTO")
-    await frames(5)
-    check(not modal.is_open() and not bp.is_defeated("bronze"), "empate: sem painel e sem progresso")
+    await dismiss_overlay()
+    # R124 · PC: empate abre o painel de EMPATE (enfrentar de novo / analisar / início) — sem progresso
+    var desk_mode: bool = not preload("res://ui_v022/mobile_layout.gd").active(root.get_viewport())
+    check((modal.is_open() and panel_text().contains("ENFRENTAR O BOT NOVAMENTE") if desk_mode else not modal.is_open()) and not bp.is_defeated("bronze"), "empate: painel de EMPATE (PC), sem progresso")
+    modal.close()
     # vitória que não é xeque-mate (ex.: tempo) não conta para a escada
     await finish("bronze", "win", "TEMPO")
     await dismiss_overlay()

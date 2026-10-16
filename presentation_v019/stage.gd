@@ -1537,7 +1537,7 @@ func _on_online_result(msg: Dictionary):
     recorder.finish_online(String(msg.get("match_id", "")), String(msg.get("outcome", "")), String(msg.get("reason_text", msg.get("reason", ""))))
 
 ## Fim de partida: usa o RESULTADO REAL do registro (vencedor comparado com a cor do jogador —
-## nunca só "brancas"/"pretas"). Partida local (dois humanos) e empates não abrem a tela.
+## nunca só "brancas"/"pretas"). Partida local (dois humanos) não abre a tela; empate abre a tela de EMPATE (R124).
 func _on_match_finished(record):
     if match_history != null: match_history.add(record)
     if record == null or result_overlay == null: return
@@ -1545,6 +1545,12 @@ func _on_match_finished(record):
     var res := String(record.result)
     if res == "win": result_overlay.show_result("victory")
     elif res == "loss": result_overlay.show_result("defeat")
+    elif res == "draw": result_overlay.show_result("draw")   # R124 · EMPATE também tem tela
+    # R124 · PC: empate contra o bot abre o painel de resultado (jogar de novo / analisar / início)
+    if res == "draw" and String(record.mode) == "bot" and reward_modal != null and not MobileLayout.active(get_viewport()):
+        var bid2 := String(bot_controller.bot_id) if not String(bot_controller.bot_id).is_empty() else String(bot_controller.difficulty)
+        var shown_name2 := bot_level_name
+        _after_result_overlay(func(): if mode == "bot": reward_modal.show_draw(bid2, shown_name2, String(record.result_reason)))
     # R54 · PC: derrota contra o bot abre a tela de resultado (revanche / analisar / início) depois da animação
     if res == "loss" and String(record.mode) == "bot" and reward_modal != null and not MobileLayout.active(get_viewport()):
         var bid := String(bot_controller.bot_id) if not String(bot_controller.bot_id).is_empty() else String(bot_controller.difficulty)

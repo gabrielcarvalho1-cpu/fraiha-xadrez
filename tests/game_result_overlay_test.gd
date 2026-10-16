@@ -84,9 +84,12 @@ func run():
     check(rec.result == "win" and ov.visible and ov.result == "victory", "tela VITÓRIA para o humano de brancas quando as brancas vencem")
     ov.hide_result()
     await wait(0.6)
-    # 4) empate → nenhuma tela
+    # 4) R124 · empate → tela de EMPATE
     rec = await end_bot("w", ["e2e4", "e7e5"], "EMPATE — AFOGAMENTO")
-    check(rec.result == "draw" and not ov.visible, "empate não abre a tela")
+    check(rec.result == "draw" and ov.visible and ov.result == "draw", "empate abre a tela de EMPATE")
+    ov.hide_result()
+    await wait(0.6)
+    if stage.reward_modal != null: stage.reward_modal.close()
     # 5) partida local (dois humanos) → nenhuma tela
     stage._start_local()
     for i in range(4): await process_frame
@@ -100,7 +103,7 @@ func run():
     check(rec.finished and not ov.visible, "partida local não abre a tela")
     # 6) valor inválido ignorado; componente reutilizável
     ov.show_result("banana")
-    check(not ov.visible, "show_result só aceita victory | defeat")
+    check(not ov.visible, "show_result só aceita victory | defeat | draw")
     ov.show_result("victory")
     check(ov.visible and ov.result == "victory", "show_result('victory') direto (componente reutilizável)")
     ov.hide_result()
