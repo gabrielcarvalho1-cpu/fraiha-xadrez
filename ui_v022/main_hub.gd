@@ -2075,7 +2075,19 @@ func _zoom_preview(on: bool):
     _preview_tween = create_tween()
     _preview_tween.tween_property(league_scene_preview, "scale", Vector2.ONE * (PREVIEW_ZOOM if on else 1.0), 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
-func _select_league(id: String, apply_theme_now := true):
+## R136 · tema que está valendo nas partidas (o lobby é sempre Madeira; ver apply_theme)
+var current_league_theme := "wood"
+var _theme_confirmed := false
+func _select_league(id: String, apply_theme_now := true, done := Callable()):
+    # R136 · trocar o tema das partidas pergunta antes (o dono: "não fala nada, fica meio aleatório")
+    if apply_theme_now and not _theme_confirmed and league_unlocked(id) and LeagueCatalog.theme_for(id) != current_league_theme:
+        var nome: String = LeagueCatalog.entry(id, league_profile.data).display_name
+        ask("LIGA " + nome.to_upper(), "Você deseja ativar o tema de peças e tabuleiro da Liga " + nome + " nas suas partidas?", "SIM", "NÃO", func():
+            _theme_confirmed = true
+            _select_league(id, true)
+            _theme_confirmed = false
+            if done.is_valid(): done.call())
+        return
     selected_league = id
     var unlocked = league_unlocked(id)
     # R51e · só um clique de verdade na liga troca cenário/peças; abrir a página não mexe na escolha do jogador
@@ -2304,6 +2316,7 @@ func show_page(id: String):
 func apply_theme(texture: Texture2D, theme_id: String = "wood"):
     # R134 · a TELA INICIAL é sempre a da Madeira (lobby completo); a liga muda só a PARTIDA (tabuleiro, peças, cenário)
     var league_theme := theme_id
+    current_league_theme = league_theme
     texture = FOREST
     theme_id = "wood"
     if texture != null and texture.resource_path == FOREST_LEGACY_PATH: texture = FOREST   # temas que usavam a Home da floresta passam a usar a arte oficial

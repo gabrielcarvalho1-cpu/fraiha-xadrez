@@ -51,7 +51,7 @@ func setup(p_hub, title: String):
 		close()
 		if _yes_action.is_valid(): _yes_action.call())
 	row.add_child(yes_button)
-	col.remove_child(ok_button)
+	if ok_button.get_parent() != null: ok_button.get_parent().remove_child(ok_button)   # R136: sem erro no console
 	row.add_child(ok_button)
 	yes_button.hide()
 

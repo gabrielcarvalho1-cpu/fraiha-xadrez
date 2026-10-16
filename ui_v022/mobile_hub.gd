@@ -601,7 +601,7 @@ func _ranking(content: VBoxContainer):
     for entry in hub.LeagueCatalog.entries(hub.league_profile.data):
         var id: String = entry.league_id
         _button(grid,entry.display_name if hub.league_unlocked(id) else entry.display_name + " · BLOQUEADA",func():
-            hub._select_league(id)
+            hub._select_league(id, true, func(): show_page.call_deferred("ranking"))
             show_page.call_deferred("ranking")
         )
     _text(content,hub.league_detail_title.text,20)

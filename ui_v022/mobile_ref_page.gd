@@ -554,7 +554,7 @@ func _build_ranking():
 				refresh())
 		else:
 			_hot(panel, mid, Rect2(86, y, 706, LIGA_ROW_H), y, "LIGA " + title.replace("\n", " "), func():
-				hub._select_league(id)
+				hub._select_league(id, true, refresh)   # R136: com a caixa SIM/NÃO, redesenha de novo depois do SIM
 				refresh())
 	_band(panel, "ligas_end", LIGA_TOP_H + rows * LIGA_ROW_H)
 	panel.size.y = (LIGA_TOP_H + rows * LIGA_ROW_H + LIGA_END_H) * s

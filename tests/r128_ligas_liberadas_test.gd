@@ -38,6 +38,11 @@ func run():
 	check(hub.league_unlocked("challenger"), "página das ligas: Challenger disponível")
 	hub.show_page("ranking")
 	hub._select_league("ouro")
+	# R136 · trocar o tema pergunta antes: o jogador responde SIM
+	await frames(3)
+	check(is_instance_valid(hub.notice_modal) and hub.notice_modal.visible, "R136: escolher Ouro pergunta (SIM/NÃO)")
+	if is_instance_valid(hub.notice_modal): hub.notice_modal.yes_button.pressed.emit()
+	await frames(3)
 	await shot("1_ligas_ouro")
 	check(tm.active_theme == "gold", "escolher Ouro aplica o universo Ouro (%s)" % tm.active_theme)
 	stage._start_bot("madeira", "w")

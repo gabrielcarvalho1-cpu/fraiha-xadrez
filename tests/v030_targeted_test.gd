@@ -39,21 +39,27 @@ func run():
     for pair in [["e2","e4"],["a7","a6"],["e4","e5"],["d7","d5"]]: check(c._apply(move(pair[0],pair[1])),"Bot bridge setup")
     check(c.request_move(Vector2i(4,3),Vector2i(3,2)) and not stage.game.pieces.has(Vector2i(3,3)),"Bot human EP shares engine")
     stage.open_home()
+    # R127 · as ligas se liberam no Ranked: o teste usa o "Liberar todas as ligas" do admin (R128)
+    stage.account._receive({"type": "leagues_preview", "enabled": true})
+    for i in range(3): await process_frame
     for id in ["madeira","ferro","bronze","prata","ouro","platina","esmeralda","diamante","mestre","grande_mestre","challenger"]:
         stage.hub._select_league(id)
+        # R136 · trocar o tema pergunta antes (SIM/NÃO): responde SIM
+        if is_instance_valid(stage.hub.notice_modal) and stage.hub.notice_modal.visible: stage.hub.notice_modal.yes_button.pressed.emit()
         var theme = preload("res://league/catalog.gd").theme_for(id)
         check(stage.theme_manager.active_theme == theme,"select applies " + id)
-        var data = preload("res://cosmetics/theme_catalog.gd").get_theme(theme)
-        var expected:String = data.arena_path if data.get("free_arena",false) else data.home_path
-        check(stage.hub.canvas.get_node("ForestArtwork").texture.resource_path == expected,"Home background " + id)
+        # R134 · a TELA INICIAL é sempre a da Madeira, em qualquer liga
+        check(stage.hub.canvas.get_node("ForestArtwork").texture == null or stage.hub.canvas.get_node("ForestArtwork").texture == stage.hub.FOREST,"Home background Madeira com " + id)
     check(stage.hub.avatar_texture("paladin") != null,"Paladin loads")
     # R29: o Perfil virou galeria (todos os avatares da coleção; cartões sem moldura de liga)
-    check(stage.hub.avatar_choices.size() == preload("res://profile/avatar_catalog.gd").ids().size(),"avatar gallery shows every avatar")
+    if not "--mobile-test" in OS.get_cmdline_user_args():   # celular: a galeria é a página própria do celular
+        check(stage.hub.avatar_choices.size() == preload("res://profile/avatar_catalog.gd").ids().size(),"avatar gallery shows every avatar")
     for page in ["main","ranking","profile"]:
         stage.hub.show_page(page)
         for i in range(4): await process_frame
         await RenderingServer.frame_post_draw
-        viewport.get_texture().get_image().save_png(OS.get_cmdline_user_args()[0]+"/"+page+".png")
+        var out_dir := OS.get_cmdline_user_args()[0] if OS.get_cmdline_user_args().size() > 0 and not OS.get_cmdline_user_args()[0].begins_with("--") else ""
+        if out_dir != "": viewport.get_texture().get_image().save_png(out_dir+"/"+page+".png")
     viewport.queue_free()
     await process_frame
     print("V030 FAILURES=",failures)

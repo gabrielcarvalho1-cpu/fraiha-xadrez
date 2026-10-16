@@ -52,6 +52,8 @@ func run():
     for league in ["bronze","prata","ouro"]:
         hub.show_page("ranking")
         hub._select_league(league)
+        # R136 · a liga com outro tema pergunta antes (SIM/NÃO): aqui só confere a prévia, responde NÃO
+        if is_instance_valid(hub.notice_modal) and hub.notice_modal.visible: hub.notice_modal.ok_button.pressed.emit()
         # R127 · "TESTAR UNIVERSO" virou ferramenta interna (DEV_PREVIEW_BUTTON): só confere quando ligada
         check((hub.league_preview_button.visible if hub.DEV_PREVIEW_BUTTON else not hub.league_preview_button.visible) and hub.league_scene_preview.texture != null,league+" has working preview")
     var original_avatar: String = hub.avatar_id
