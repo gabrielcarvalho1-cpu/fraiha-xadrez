@@ -1975,7 +1975,7 @@ func _build_ranking():
         status.name = "LeagueStatus_" + id
         league_status_labels[id] = status
         league_buttons[id] = button
-    league_detail_badge = RefPage.image(panel, null, Rect2(52, 412, 300, 436))   # a arte do brasão tem margem própria; R137: até x=352 (as asas da Challenger cobriam o texto)
+    league_detail_badge = RefPage.image(panel, null, Rect2(111, 412, 227, 436))   # R137: menor e centrado entre a moldura dourada da esquerda e o texto (as asas da Challenger passavam das duas)
     league_detail_badge.name = "LeagueDetailBadge"
     league_detail_title = RefPage.text(panel, "", Rect2(352, 478, 540, 56), 40, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
     league_detail_title.add_theme_font_override("font", FONT_CINZEL)

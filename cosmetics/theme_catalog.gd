@@ -98,14 +98,21 @@ static func piece_textures(id: String) -> Dictionary:
     piece_cache[id] = result
     return result
 
+## R137 · brasões em cosmetics/assets/badges.png (mesma ordem de BADGE_ORDER), medidos na arte com 4 px de folga
+const BADGE_RECTS := [Rect2(68, 6, 253, 318), Rect2(450, 6, 254, 317), Rect2(834, 6, 252, 318), Rect2(1218, 5, 256, 319), Rect2(38, 333, 312, 323), Rect2(428, 334, 297, 322), Rect2(810, 334, 302, 322), Rect2(1198, 333, 295, 325), Rect2(47, 662, 293, 341), Rect2(425, 661, 302, 351), Rect2(776, 662, 369, 350)]
+const BADGE_BOX := Vector2(384, 356)
+
 static func badge_texture(league_id: String) -> Texture2D:
     var index = BADGE_ORDER.find(league_id)
     if index < 0: return null
     var atlas = texture("res://cosmetics/assets/badges.png")
     if atlas == null: return null
-    var cell = atlas.get_size() / Vector2(4,3)
     var sprite := AtlasTexture.new()
     sprite.atlas = atlas
-    sprite.region = Rect2(Vector2(index%4,floori(index/4.0))*cell,cell)
+    # R137 · recorte de cada brasão pela posição real na arte (as células 4x3 cortavam o topo das coroas da
+    # 2ª e 3ª fileiras e pegavam a ponta do brasão de baixo); a margem deixa todos do mesmo tamanho e centrados
+    var r: Rect2 = BADGE_RECTS[index]
+    sprite.region = r
+    sprite.margin = Rect2((BADGE_BOX - r.size) / 2.0, BADGE_BOX - r.size)
     sprite.filter_clip = true
     return sprite
