@@ -281,6 +281,7 @@ func _decorate_photo(pr: Rect2):
     if _seal_node == null:
         _seal_node = TextureRect.new()
         _seal_node.name = "CardBadge"
+        _seal_node.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR   # R138 · ícone nítido
         _seal_node.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         _seal_node.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
         _seal_node.mouse_filter = Control.MOUSE_FILTER_IGNORE

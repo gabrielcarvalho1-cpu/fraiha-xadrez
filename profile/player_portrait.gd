@@ -55,6 +55,7 @@ func _init():
     add_child(avatar_rect)
     seal_rect = TextureRect.new()
     seal_rect.name = "PortraitBadge"
+    seal_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR   # R138 · ícone nítido (sem o filtro "pixel" do jogo)
     seal_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     seal_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     seal_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE

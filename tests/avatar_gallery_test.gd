@@ -53,7 +53,9 @@ func run():
     check(g.state_of("warrior") == "selected", "Guerreiro selecionado por padrão (destaque)")
     check(g.state_of("archer") == "unlocked", "Arqueira inicial liberada")
     check(g.state_of("madeira_reward") == "locked" and g.state_of("ferro_reward") == "locked", "Rei de Madeira/Torre de Ferro bloqueados sem vitórias")
-    check(String(g.cards["madeira_reward"].tooltip_text).contains("BLOQUEADO") and String(g.cards["madeira_reward"].tooltip_text).contains("BOT MADEIRA"), "bloqueado: dica BLOQUEADO · Derrote o BOT MADEIRA")
+    # dica do mouse (tooltip) só existe no PC: no celular a galeria é a página própria do celular
+    var pc: bool = not "--mobile-test" in OS.get_cmdline_user_args()
+    if pc: check(String(g.cards["madeira_reward"].tooltip_text).contains("BLOQUEADO") and String(g.cards["madeira_reward"].tooltip_text).contains("BOT MADEIRA"), "bloqueado: dica BLOQUEADO · Derrote o BOT MADEIRA")
     check(g.count_unlocked() == 4, "4 avatares gratuitos liberados no início")
     # ---------- bloqueado não seleciona ----------
     g.cards["madeira_reward"].pressed.emit()
@@ -107,7 +109,7 @@ func run():
     check(g.count_unlocked() == 7, "contagem: 7 conquistados após 3 vitórias")
     check(String(hub.gallery_count.text).contains("7 de %d" % ids.size()), "texto da contagem atualizado")
     # ---------- Pacote Fundador: avatar + Selo ----------
-    check(g.state_of("fundador") == "locked" and String(g.cards["fundador"].tooltip_text).contains("Pacote Fundador"), "sem Pacote Fundador: avatar Fundador bloqueado (Exclusivo do Pacote Fundador)")
+    check(g.state_of("fundador") == "locked" and (not pc or String(g.cards["fundador"].tooltip_text).contains("Pacote Fundador")), "sem Pacote Fundador: avatar Fundador bloqueado (Exclusivo do Pacote Fundador)")
     var before_f = hub.avatar_id
     hub.choose_avatar("fundador")
     check(hub.avatar_id == before_f, "sem o pacote: não seleciona o avatar Fundador")
@@ -121,7 +123,7 @@ func run():
     hub.show_page("main")
     await frames(3)
     hub.refresh_founder()
-    check(hub.ref_founder_badge.visible, "Selo Fundador ao lado do nome na Home")
+    check(not hub.ref_founder_badge.visible, "R138: o cartão da Home não mostra o ícone (segue no Perfil e na partida)")
     hub.show_page("profile")
     await frames(3)
     check(hub.founder_row.visible, "Selo Fundador no Perfil")

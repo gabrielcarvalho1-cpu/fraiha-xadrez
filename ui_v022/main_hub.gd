@@ -813,6 +813,7 @@ func _build_pages():
     profile.add_child(founder_row)
     var seal = TextureRect.new()
     seal.name = "FounderSeal"
+    seal.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR   # R138 · ícone nítido
     founder_seal = seal
     seal.texture = FOUNDER_BADGE
     seal.custom_minimum_size = Vector2(56, 56)
@@ -2748,7 +2749,7 @@ func refresh_founder():
         var f: Font = nl.get_theme_font("font")
         var w: float = minf(f.get_string_size(nl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, nl.get_theme_font_size("font_size")).x, nl.size.x)
         ref_founder_badge.position = nl.position + Vector2(w + 6.0, -2.0)
-        ref_founder_badge.visible = on and ref_mode
+        ref_founder_badge.visible = false   # R138 · o cartão da Home não mostra mais o ícone (ficava colado no brasão da liga e borrado); ele segue no Perfil e na partida
     if is_instance_valid(mobile_ui): mobile_ui.queue_redraw_cards()
 
 func refresh_club():

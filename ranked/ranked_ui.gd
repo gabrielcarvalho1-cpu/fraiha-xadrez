@@ -209,6 +209,7 @@ func _make_strip() -> Dictionary:
     # R31 · Destaque social: selo (Fundador / Club) do jogador, já filtrado pelo servidor.
     var seal = TextureRect.new()
     seal.name = "StripBadge"
+    seal.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR   # R138 · ícone nítido
     seal.custom_minimum_size = Vector2(26, 26)
     seal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     seal.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

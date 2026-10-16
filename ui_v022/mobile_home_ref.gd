@@ -397,7 +397,7 @@ func refresh():
     badge_glow.self_modulate = GLOW_COLORS.get(league_id, Color(1.0, 0.82, 0.45))
     var st: Texture2D = hub.current_badge_texture()
     seal.texture = st
-    seal.visible = st != null
+    seal.visible = false   # R138 · como no PC: o cartão da Home não mostra o ícone (segue no Perfil e na partida)
     if st != null:
         var nw: float = name_text.ink_width()
         seal.position = name_text.position + Vector2(nw + 10.0, -9.0)

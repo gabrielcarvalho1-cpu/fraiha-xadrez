@@ -472,6 +472,7 @@ func _seal(parent: Node, p: Dictionary, px: int) -> TextureRect:
     if id.is_empty(): return null
     var t = TextureRect.new()
     t.name = "SocialBadge"
+    t.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR   # R138 · ícone nítido
     t.texture = Cosmetics.badge_texture(id, px <= 48)
     t.custom_minimum_size = Vector2(px, px)
     t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
