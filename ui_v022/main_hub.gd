@@ -1975,7 +1975,7 @@ func _build_ranking():
         status.name = "LeagueStatus_" + id
         league_status_labels[id] = status
         league_buttons[id] = button
-    league_detail_badge = RefPage.image(panel, null, Rect2(52, 412, 338, 436))   # a arte do brasão tem margem própria
+    league_detail_badge = RefPage.image(panel, null, Rect2(52, 412, 300, 436))   # a arte do brasão tem margem própria; R137: até x=352 (as asas da Challenger cobriam o texto)
     league_detail_badge.name = "LeagueDetailBadge"
     league_detail_title = RefPage.text(panel, "", Rect2(352, 478, 540, 56), 40, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
     league_detail_title.add_theme_font_override("font", FONT_CINZEL)
@@ -2076,6 +2076,19 @@ func _zoom_preview(on: bool):
     _preview_tween = create_tween()
     _preview_tween.tween_property(league_scene_preview, "scale", Vector2.ONE * (PREVIEW_ZOOM if on else 1.0), 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
+## R137 · nome longo (Challenger, Grande Mestre) e descrição de 4 linhas: diminui a letra até caber, sem cortar
+## o "0–100 PL" nem passar da linha de baixo
+func _fit_league_texts():
+    var tf: Font = league_detail_title.get_theme_font("font")
+    var px := 40
+    while px > 26 and tf.get_string_size(league_detail_title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > league_detail_title.size.x - 4: px -= 1
+    league_detail_title.add_theme_font_size_override("font_size", px)
+    var dpx := 21
+    while true:
+        league_desc.add_theme_font_size_override("font_size", dpx)
+        if dpx <= 16 or league_desc.get_line_count() <= 3: break   # até a linha dourada cabem 3 linhas
+        dpx -= 1
+
 ## R137 · o conteúdo extra (Web) chegou: redesenha a prévia da liga aberta na página das Ligas
 func refresh_league_preview():
     if is_instance_valid(league_detail_title) and not selected_league.is_empty(): _select_league(selected_league, false)
@@ -2116,6 +2129,7 @@ func _select_league(id: String, apply_theme_now := true, done := Callable()):
         league_chip.text = "Disponível" if unlocked else "Bloqueada"
         league_chip.add_theme_color_override("font_color", Color("efe6cf") if unlocked else Color("b9b2a0"))
         league_desc.text = description
+        _fit_league_texts()
         _refresh_ranking_header()
         var i := LeagueCatalog.index_of(id)
         if i >= 0 and i < LIGA_TILES.size():
