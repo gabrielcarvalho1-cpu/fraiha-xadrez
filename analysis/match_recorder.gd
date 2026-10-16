@@ -104,7 +104,9 @@ func _process(_d):
         var human: String = record.human_color
         var status: String = String(game.status)
         var result := "draw"
-        if "VITÓRIA" in status: result = "win"
+        # R127 · EMPATE primeiro: "MATERIAL INSUFICIENTE" / "SEM MATERIAL" contêm "MATE" e viravam vitória/derrota
+        if status.begins_with("EMPATE"): result = "draw"
+        elif "VITÓRIA" in status: result = "win"
         elif "DERROTA" in status: result = "loss"
         elif "MATE" in status:
             result = "loss" if String(game.turn) == human else "win"

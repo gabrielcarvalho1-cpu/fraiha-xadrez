@@ -269,7 +269,8 @@ func _process(_delta):
     promoted_now = false
     if game.game_over and not previous_end and previous_count >= 0:
         var human: String = game.bot.human_color if game.bot != null else (game.online.color if game.online != null else "")
-        if "MATE" in game.status:
+        if String(game.status).begins_with("EMPATE"): pass   # R127 · "MATERIAL INSUFICIENTE" contém "MATE": empate não toca som de mate/vitória/derrota
+        elif "MATE" in game.status:
             play_cue("mate")
             if not human.is_empty(): play_cue("loss" if game.turn == human else "win")
         elif "VENC" in game.status:
