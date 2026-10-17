@@ -56,7 +56,7 @@ func run():
     check(ui != null and ui.visible and ui.mode == "tutorial", "XEQUE abre no tutorial")
     var audio = stage.get_node_or_null("GameAudio")
     check(audio != null and audio.music_path == "res://xeque/audio/musica_xeque.mp3" and audio.music.stream != null and bool(audio.music.stream.loop), "música do XEQUE tocando, em loop")
-    check(hit_center(ui, "tut_play") != Vector2(-1, -1) and hit_center(ui, "tut_back") != Vector2(-1, -1), "tutorial com JOGAR AGORA e VOLTAR")
+    check(hit_center(ui, "tut_bots") != Vector2(-1, -1) and hit_center(ui, "tut_online") != Vector2(-1, -1) and hit_center(ui, "tut_back") != Vector2(-1, -1), "tutorial com CONTRA BOTS, JOGAR ONLINE e VOLTAR (R145)")
     ui.seed_override = 77
     ui._on_hit("tut_play")
     stage.party_online._choose_bots()   # R144 · JOGAR pergunta CONTRA BOTS / ONLINE

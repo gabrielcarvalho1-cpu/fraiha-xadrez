@@ -1694,6 +1694,10 @@ func _party_bots(game: String):
 func party_choose(game: String):
     if party_online != null: party_online.open_choice(game)
 
+## R145 · botões CONTRA BOTS / JOGAR ONLINE na própria tela do modo
+func party_online_queue(game: String) -> String:
+    return party_online.queue_online(game) if party_online != null else "Indisponível."
+
 func party_in_match() -> bool:
     for game in ["marcha", "xeque"]:
         var ui = _party_ui(game)

@@ -896,6 +896,11 @@ func _on_hit(id: String):
             elif mode in ["tutorial", "over"] and not tutorial_from_game and stage != null and stage.has_method("party_choose"): stage.party_choose("xeque")   # R144 · CONTRA BOTS ou JOGAR ONLINE
             else: start_game()
         "tut_invite": invite_friend()
+        "tut_bots": if mode == "tutorial" and not tutorial_from_game: start_game()   # R145
+        "tut_online":
+            if mode == "tutorial" and not tutorial_from_game:
+                var err: String = stage.party_online_queue("xeque") if stage != null and stage.has_method("party_online_queue") else "Indisponível."
+                if not err.is_empty(): _flash(err)
         "over_tutorial":
             tutorial_from_game = false
             mode = "tutorial"

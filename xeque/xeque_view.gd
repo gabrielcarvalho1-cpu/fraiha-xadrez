@@ -1270,11 +1270,11 @@ func _draw_tutorial(d: Vector2):
     else:
         for i in 6: rects.append(Rect2(84 + (i % 2) * 464, 254 + (i / 2) * 470, 448, 450))
     for i in 6: _tutorial_panel(rects[i], i + 1, panels[i], portrait)
-    var foot_y := 975.0 if not portrait else 1712.0
+    var foot_y := 975.0 if not portrait else 1696.0
     var fx := 150.0 if not portrait else 90.0
     var parts := ["Como vencer: seja o ", "último jogador de pé", "."]
     var x := fx
-    var ffs := 38 if not portrait else 34
+    var ffs := (32 if not ui.tutorial_from_game else 38) if not portrait else 32
     for j in 3:
         text(parts[j], Vector2(x, foot_y), "ui_sp", ffs, maroon if j == 1 else ink, -1, HORIZONTAL_ALIGNMENT_LEFT, 4, Color("2a0508"))
         x += tw(parts[j], "ui_sp", ffs)
@@ -1282,14 +1282,17 @@ func _draw_tutorial(d: Vector2):
         if not portrait: button_dark(Rect2(1400, 912, 368, 94), "VOLTAR", "tut_back", 48)
         else: button_dark(Rect2(90, 1752, 900, 96), "VOLTAR À PARTIDA", "tut_back", 46)
     else:
+        # R145 · CONTRA BOTS e JOGAR ONLINE direto na tela (antes: JOGAR AGORA abria uma caixa)
         if not portrait:
-            button_dark(Rect2(880, 914, 220, 92), "VOLTAR", "tut_back", 50)
-            button_dark(Rect2(1120, 914, 256, 92), "CONVIDAR", "tut_invite", 46)
-            button_gold(Rect2(1396, 912, 372, 96), "JOGAR AGORA", "tut_play", true, 58)
+            button_dark(Rect2(850, 914, 190, 92), "VOLTAR", "tut_back", 40)
+            button_dark(Rect2(1052, 914, 220, 92), "CONVIDAR", "tut_invite", 38)
+            button_gold(Rect2(1284, 912, 236, 96), "CONTRA BOTS", "tut_bots", true, 36)
+            button_gold(Rect2(1532, 912, 236, 96), "JOGAR ONLINE", "tut_online", true, 36)
         else:
-            button_dark(Rect2(90, 1752, 250, 96), "VOLTAR", "tut_back", 44)
-            button_dark(Rect2(356, 1752, 290, 96), "CONVIDAR", "tut_invite", 44)
-            button_gold(Rect2(662, 1750, 328, 100), "JOGAR", "tut_play", true, 50)
+            button_gold(Rect2(90, 1722, 440, 96), "CONTRA BOTS", "tut_bots", true, 44)
+            button_gold(Rect2(550, 1722, 440, 96), "JOGAR ONLINE", "tut_online", true, 44)
+            button_dark(Rect2(90, 1830, 440, 76), "VOLTAR", "tut_back", 36)
+            button_dark(Rect2(550, 1830, 440, 76), "CONVIDAR", "tut_invite", 36)
 
 ## R85 · fundo do tutorial: vermelho do tabuleiro com casas vermelho/creme nas faixas de cima e de baixo.
 func _tutorial_bg(d: Vector2, portrait: bool):

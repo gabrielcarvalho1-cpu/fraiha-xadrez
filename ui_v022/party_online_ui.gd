@@ -258,6 +258,14 @@ func _choose_bots():
     close()
     bots_chosen.emit(game)
 
+## R145 · botão JOGAR ONLINE direto na tela do modo (sem a caixa de escolha). Devolve o erro ("" = entrou na fila).
+func queue_online(p_game: String) -> String:
+    game = p_game
+    if account == null or not account.has_method("has_profile") or not account.has_profile(): return "Entre na sua conta para jogar online."
+    if not account.send_server({"type": "party_queue", "game": game}): return "Sem conexão com o servidor. Tente de novo em instantes."
+    open_search(game, 1, 1)
+    return ""
+
 func _choose_online():
     if account == null or not account.has_method("has_profile") or not account.has_profile():
         _err("Entre na sua conta para jogar online.")

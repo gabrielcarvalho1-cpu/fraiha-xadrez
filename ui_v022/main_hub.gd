@@ -894,7 +894,7 @@ func _build_pages():
 ## sem rolar; no celular a mesma coluna é emprestada pelo mobile_hub (page_scrolls).
 ## R51 · CONFIGURAÇÕES no PC: a página é a imagem de referência do dono (ui_kit/pages/config_bg.png);
 ## o jogo põe por cima os valores vivos (volumes, pré-move, versão), os sliders e as áreas de clique.
-const CONFIG_REF := Vector2(1448, 1086)   # R52: referência nova (painel já recortado)
+const CONFIG_REF := Vector2(1448, 1234)   # R52: referência nova (painel já recortado) · R145: + linha TABULEIRO E PEÇAS (148 px)
 const PROFILE_REF := Vector2(1774, 887)   # R52b: referência nova do PERFIL (painel já recortado)
 const PF_BAR := Rect2(1014, 232, 20, 546)
 const PF_BAR_GRAB := Rect2(1014, 232, 20, 124)
@@ -963,36 +963,21 @@ func _build_settings_page():
     var ps := RefPage.text(panel, "", Rect2(346, 848, 820, 40), 28, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
     premove_button.set_meta("ref_labels", [pt, ps])
     _refresh_premove_button()
-    # R139 · TABULEIRO E PEÇAS: placa na linha do título PARTIDA (a arte não tem outra linha livre)
-    var bc_btn := Button.new()
-    bc_btn.name = "SettingsBoardColors"
-    bc_btn.text = "TABULEIRO E PEÇAS  ›"
-    bc_btn.focus_mode = Control.FOCUS_NONE
+    # R145 · TABULEIRO E PEÇAS: placa igual à do PRÉ-MOVE, logo abaixo dela (a arte ganhou a 2ª placa)
+    var bc_btn := RefPage.hotspot(panel, Rect2(126, 930, 1196, 130), open_board_colors, "SettingsBoardColors")
+    var bc_ic := RefPage.image(panel, RefPage.tex("about_ico_perso"), Rect2(186, 948, 98, 94))
+    bc_ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    bc_ic.size = Vector2(98, 94)
+    var bct := RefPage.text(panel, "Tabuleiro e Peças", Rect2(340, 948, 820, 52), 40, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
+    bct.add_theme_font_override("font", FONT_CINZEL)
+    RefPage.text(panel, "Cores das casas e das peças", Rect2(346, 996, 820, 40), 28, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
     bc_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    bc_btn.add_theme_font_override("font", FONT_CINZEL)
-    bc_btn.add_theme_font_size_override("font_size", 27)
-    # R142 · mais visível (era uma placa fina que passava despercebida): borda dourada grossa e sombra
-    for pair in [["normal", Color("13254a")], ["hover", Color("1d3768")], ["pressed", Color("0d1a36")]]:
-        var bst := StyleBoxFlat.new()
-        bst.bg_color = pair[1]
-        bst.border_color = Color("e8b242")
-        bst.set_border_width_all(3)
-        bst.set_corner_radius_all(6)
-        bst.shadow_color = Color(0, 0, 0, 0.45)
-        bst.shadow_size = 4
-        bc_btn.add_theme_stylebox_override(pair[0], bst)
-    bc_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-    for k in ["font_color", "font_hover_color", "font_pressed_color"]: bc_btn.add_theme_color_override(k, Color("f4ce7f"))
-    bc_btn.position = Vector2(860, 704)
-    bc_btn.size = Vector2(462, 62)
-    bc_btn.pressed.connect(open_board_colors)
-    panel.add_child(bc_btn)
     var note := Label.new()
     note.name = "SettingsNote"
     note.text = "Preferências salvas automaticamente. O botão de som da tela inicial silencia tudo."
     note.visible = false
     panel.add_child(note)
-    RefPage.hotspot(panel, Rect2(132, 932, 668, 98), back, "SettingsBack")
+    RefPage.hotspot(panel, Rect2(132, 1080, 668, 98), back, "SettingsBack")
     # R97 · TERMOS, PRIVACIDADE e EXCLUIR CONTA (placa pequena no canto da moldura, acima da versão)
     var legal_btn := Button.new()
     legal_btn.name = "SettingsLegal"
@@ -1010,11 +995,11 @@ func _build_settings_page():
         legal_btn.add_theme_stylebox_override(pair[0], st)
     legal_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
     for k in ["font_color", "font_hover_color", "font_pressed_color"]: legal_btn.add_theme_color_override(k, Color("f4ce7f"))
-    legal_btn.position = Vector2(880, 930)
+    legal_btn.position = Vector2(880, 1078)
     legal_btn.size = Vector2(442, 50)
     legal_btn.pressed.connect(func(): open_legal("termos"))
     panel.add_child(legal_btn)
-    var ver := RefPage.text(panel, "FRAIHA Xadrez · versão %s" % APP_VERSION, Rect2(900, 980, 422, 40), 21, Color("e3dccb"), false, HORIZONTAL_ALIGNMENT_RIGHT)
+    var ver := RefPage.text(panel, "FRAIHA Xadrez · versão %s" % APP_VERSION, Rect2(900, 1128, 422, 40), 21, Color("e3dccb"), false, HORIZONTAL_ALIGNMENT_RIGHT)
     ver.name = "SettingsVersion"
     pages["settings"] = panel
 

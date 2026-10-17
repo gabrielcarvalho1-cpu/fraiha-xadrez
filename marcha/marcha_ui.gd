@@ -1307,6 +1307,11 @@ func _on_hit(id: String):
             mode = "lobby"
             g = null
             access.refresh()
+        "lobby_bots": if mode == "lobby": start_game()   # R145 · botões direto na tela
+        "lobby_online":
+            if mode == "lobby":
+                var err: String = stage.party_online_queue("marcha") if stage != null and stage.has_method("party_online_queue") else "Indisponível."
+                if not err.is_empty(): _flash(err)
         "lobby_play":   # R144 · CONTRA BOTS ou JOGAR ONLINE (só no lobby: o 2º toque/clique emulado não reabre)
             if mode != "lobby": pass
             elif stage != null and stage.has_method("party_choose"): stage.party_choose("marcha")
@@ -2453,7 +2458,7 @@ class TableView extends Control:
             var selected: bool = i == ui.sel_card
             var rot := 0.0
             if ui.portrait: rot = 0.0   # R87 · cartas retas em pé
-            elif ui.desk: rot = lerpf(-0.07, 0.085, float(i) / maxf(1.0, n - 1.0)) if n > 1 else 0.0     # leque da referência
+            # R145 · PC também reto: inclinadas, as bordas e as letras das cartas serrilhavam (filtro NEAREST)
             if selected:
                 # R57 · no PC a carta sobe pouco: não pode cobrir as casas de baixo do tabuleiro
                 r = r.grow(4 if ui.desk else 6)
@@ -2864,7 +2869,12 @@ class TableView extends Control:
         var line := badge if ok or note.is_empty() else badge + " · " + note
         rtext(line, Vector2(232, 538), "semi_sp", 15.0, Color("9fe3b5") if ok else Color("f2b27a"), 586.0, HORIZONTAL_ALIGNMENT_CENTER, 580.0, 0, Color.BLACK, true)
         var jr := Rect2(485, 580, 525, 80)
-        if ok: art_button(plate, jr, ui.lr(jr), "lobby_play")
+        if ok:
+            # R145 · CONTRA BOTS e JOGAR ONLINE direto na tela (a arte tem duas placas no lugar do JOGAR AGORA)
+            for bt in [["lobby_bots", Rect2(480, 578, 258, 84), "CONTRA BOTS"], ["lobby_online", Rect2(737, 578, 258, 84), "JOGAR ONLINE"]]:
+                var br: Rect2 = bt[1]
+                art_button(plate, br, ui.lr(br), bt[0])
+                rtext(bt[2], Vector2(br.position.x + 30, br.position.y + 55), "title", 30.0, Color("f2c75a"), br.size.x - 60, HORIZONTAL_ALIGNMENT_CENTER, br.size.x - 64, 3, Color("2a1a04"), true)
         else:
             draw_texture_rect(ui.r57.botao_jogar_agora_vazio, ui.lr(jr), false)
             rtext("CONHECER CLUB FRAIHA", Vector2(jr.position.x + 70, 634), "title", 34.0, Color("f2c75a"), jr.size.x - 140, HORIZONTAL_ALIGNMENT_CENTER, jr.size.x - 150, 3, Color("2a1a04"), true)
@@ -2906,14 +2916,18 @@ class TableView extends Control:
         # botões
         if ui.portrait:
             var by := 1450.0
-            if ok: gold_button(Rect2(60, by, 960, 100), "JOGAR AGORA", 44, "lobby_play")
+            if ok:
+                gold_button(Rect2(60, by, 470, 100), "CONTRA BOTS", 40, "lobby_bots")
+                gold_button(Rect2(550, by, 470, 100), "JOGAR ONLINE", 40, "lobby_online")
             else: gold_button(Rect2(60, by, 960, 100), "CONHECER CLUB FRAIHA", 40, "lobby_club")
             dark_button(Rect2(60, by + 120, 470, 84), "COMO JOGAR", 32, "lobby_tutorial")
             gold_button(Rect2(550, by + 120, 470, 84), "CONVIDAR AMIGO", 32, "lobby_invite")
             dark_button(Rect2(60, by + 222, 960, 84), "VOLTAR", 34, "lobby_back")
         else:
             var by2 := 700.0
-            if ok: gold_button(Rect2(70, by2, 520, 96), "JOGAR AGORA", 42, "lobby_play")
+            if ok:
+                gold_button(Rect2(70, by2, 255, 96), "CONTRA BOTS", 30, "lobby_bots")
+                gold_button(Rect2(335, by2, 255, 96), "JOGAR ONLINE", 30, "lobby_online")
             else: gold_button(Rect2(70, by2, 520, 96), "CONHECER CLUB FRAIHA", 36, "lobby_club")
             dark_button(Rect2(620, by2 + 8, 300, 80), "COMO JOGAR", 30, "lobby_tutorial")
             dark_button(Rect2(950, by2 + 8, 200, 80), "VOLTAR", 30, "lobby_back")
