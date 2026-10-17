@@ -185,6 +185,7 @@ func _back():
         "dm": close_dm()
         "invite_pick": _show("invite_friends" if not picker_game.is_empty() else invite_return)
         "invite_friends": close()
+        "invite_table": _show("invite_friends")
         "ref": _show("list")
         "profile": _show("search" if not last_query.is_empty() and profile.get("from_search", false) else "list")
         _: _show("list")
@@ -722,6 +723,7 @@ func _build_body(which: String, narrow: bool):
         "invite_pick": _build_invite_pick()
         "ref": _build_ref(narrow)
         "invite_friends": _build_invite_friends()
+        "invite_table": _build_invite_table()
     if reconnecting and is_instance_valid(notice) and not notice.visible: notice_text("Reconectando…", GOLD)
     dim.show(); panel.show()
     chrome.visible = wide
@@ -1285,12 +1287,14 @@ func open_invite(uid: String, peer: Dictionary):
     invite_return = "list" if screen == "list" else "profile"
     _show("invite_pick")
 
-func send_invite(mode: String, game := "chess"):
+func send_invite(mode: String, game := "chess", table := "bots"):
     if invite_sending: return
     invite_sending = true
-    _show("invite_friends" if picker_game in ["marcha", "xeque"] else "invite_pick")
+    _show("invite_friends" if picker_game in ["marcha", "xeque"] and screen != "invite_pick" else "invite_pick")
     var msg := {"type": "invite_send", "user_id": String(invite_peer.get("user_id", "")), "mode": mode}
-    if game != "chess": msg["game"] = game     # R35: MARCHA REAL / XEQUE (mesa online com bots)
+    if game != "chess":
+        msg["game"] = game     # R35: MARCHA REAL / XEQUE (mesa online com bots)
+        msg["table"] = table   # R144 · "bots" (vocês + bots) ou "online" (vocês juntos na fila online)
     if not _send(msg):
         invite_sending = false
         _show("invite_friends" if picker_game in ["marcha", "xeque"] else "invite_pick")
@@ -1339,19 +1343,36 @@ func _build_invite_pick():
     if picker_game == "chess":
         if invite_sending: _label(box, "Enviando convite…", 14, GOLD, true)
         return
-    _label(box, "Ou um modo de cartas (vocês dois + 2 bots):", 15, GOLD)
+    _label(box, "Ou um modo de cartas:", 15, GOLD)
     var grid2 = GridContainer.new()
     grid2.columns = 1 if _narrow() else 2
     grid2.add_theme_constant_override("h_separation", 8)
     grid2.add_theme_constant_override("v_separation", 8)
     box.add_child(grid2)
-    for item in [["marcha", "MARCHA REAL · dupla contra 2 bots"], ["xeque", "XEQUE · cada um por si"]]:
+    for item in [["marcha", "bots", "MARCHA REAL · dupla contra 2 bots"], ["marcha", "online", "MARCHA REAL · dupla ONLINE"], ["xeque", "bots", "XEQUE · vocês + 2 bots"], ["xeque", "online", "XEQUE · ONLINE juntos"]]:
         var game: String = item[0]
-        var gb = _button(grid2, item[1], func(): send_invite(game, game), true)
-        gb.name = "Invite_" + game
+        var table: String = item[1]
+        var gb = _button(grid2, item[2], func(): send_invite(game, game, table), true)
+        gb.name = "Invite_" + game + ("_online" if table == "online" else "")
         gb.custom_minimum_size.y = 54
         gb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         gb.disabled = invite_sending
+    if invite_sending: _label(box, "Enviando convite…", 14, GOLD, true)
+
+# R144 · convite de MARCHA REAL / XEQUE: vocês + bots, ou vocês juntos na fila online
+func _build_invite_table():
+    _label(box, "CONVIDAR " + String(invite_peer.get("nickname", "")), 20, Color("f4edda"), true)
+    _label(box, String(GAME_NAMES.get(picker_game, "")), 15, GOLD, true)
+    _label(box, "Como vocês querem jogar?", 15, DIM_TEXT, true)
+    var duo := picker_game == "marcha"
+    for item in [["bots", "VOCÊS + BOTS", "Começa assim que o convite for aceito" if not duo else "Vocês em dupla contra 2 bots"],
+            ["online", "JOGAR ONLINE JUNTOS", "Vocês entram juntos na fila" + (" como dupla" if duo else "") + " e a mesa completa com outras pessoas"]]:
+        var table: String = item[0]
+        var b = _button(box, String(item[1]), func(): send_invite(picker_game, picker_game, table), table == "online")
+        b.name = "InviteTable_" + table
+        b.custom_minimum_size.y = 58
+        b.disabled = invite_sending
+        _label(box, String(item[2]), 13, DIM_TEXT, true)
     if invite_sending: _label(box, "Enviando convite…", 14, GOLD, true)
 
 # ---------- Presença ----------
@@ -1423,7 +1444,7 @@ func _on_presence(msg: Dictionary):
 
 
 # ---------- R35.1 · CONVIDAR AMIGO de dentro de cada modo (JOGAR ONLINE, MARCHA REAL, XEQUE) ----------
-const GAME_NAMES := {"chess": "JOGAR ONLINE · xadrez casual", "marcha": "MARCHA REAL · vocês em dupla contra 2 bots", "xeque": "XEQUE · vocês dois + 2 bots"}
+const GAME_NAMES := {"chess": "JOGAR ONLINE · xadrez casual", "marcha": "MARCHA REAL", "xeque": "XEQUE"}   # R144 · com bots ou online: escolhido depois
 func open_invite_picker(game: String):
     picker_game = game
     invite_sending = false
@@ -1465,4 +1486,5 @@ func _picker_invite(uid: String, peer: Dictionary):
         open_invite(uid, peer)        # escolher o ritmo (3/5/10/20 min)
         return
     invite_peer = _peer(uid, peer)
-    send_invite(picker_game, picker_game)
+    invite_return = "invite_friends"
+    _show("invite_table")   # R144 · com bots ou online?

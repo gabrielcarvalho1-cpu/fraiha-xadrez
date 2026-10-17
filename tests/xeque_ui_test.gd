@@ -59,6 +59,7 @@ func run():
     check(hit_center(ui, "tut_play") != Vector2(-1, -1) and hit_center(ui, "tut_back") != Vector2(-1, -1), "tutorial com JOGAR AGORA e VOLTAR")
     ui.seed_override = 77
     ui._on_hit("tut_play")
+    stage.party_online._choose_bots()   # R144 · JOGAR pergunta CONTRA BOTS / ONLINE
     await frames(3)
     var g: Rules = ui.g
     check(ui.mode == "game" and g != null and g.hands[0].size() == 5 and g.state == Rules.TURN_WAITING, "JOGAR AGORA: partida com 5 cartas na mão")
@@ -180,6 +181,7 @@ func run():
     check(hit_center(ui, "again") != Vector2(-1, -1) and hit_center(ui, "over_menu") != Vector2(-1, -1), "resultado: JOGAR NOVAMENTE e VOLTAR AO MENU")
     # ---------- jogar novamente e abandonar ----------
     ui._on_hit("again")
+    stage.party_online._choose_bots()   # R144
     await frames(2)
     check(ui.mode == "game" and ui.g != null and ui.g.round_no == 1, "JOGAR NOVAMENTE começa outra partida")
     ui._on_hit("menu")
@@ -204,6 +206,7 @@ func run():
     # ---------- MÚSICA / EFEITOS ----------
     hub.open_xeque()
     ui._on_hit("tut_play")
+    stage.party_online._choose_bots()   # R144 · JOGAR pergunta CONTRA BOTS / ONLINE
     await frames(2)
     var mbus := AudioServer.get_bus_index("Music")
     var fbus := AudioServer.get_bus_index("Effects")

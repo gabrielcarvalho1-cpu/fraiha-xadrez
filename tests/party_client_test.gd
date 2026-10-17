@@ -77,6 +77,11 @@ func run():
             if b.text == "CONVIDAR": inv_btn = b
     check(inv_btn != null, "amigo online com botão CONVIDAR")
     if inv_btn != null: inv_btn.pressed.emit()
+    # R144 · convite de modo de cartas pergunta: VOCÊS + BOTS ou JOGAR ONLINE JUNTOS
+    await wait_until(func(): return social.box.find_child("InviteTable_bots", true, false) != null, 3.0)
+    var tb = social.box.find_child("InviteTable_bots", true, false)
+    check(tb != null and social.box.find_child("InviteTable_online", true, false) != null, "convite: VOCÊS + BOTS ou JOGAR ONLINE JUNTOS")
+    if tb != null: tb.pressed.emit()
     check(await wait_until(func(): return stage.hub.marcha != null and stage.hub.marcha.online and stage.hub.marcha.mode == "game", 10.0), "amigo aceitou: MARCHA REAL abre online sozinha")
     var mu = stage.hub.marcha
     check(not social.is_open(), "a tela de Amigos fecha quando a mesa abre")

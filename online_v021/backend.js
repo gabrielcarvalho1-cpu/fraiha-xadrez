@@ -256,6 +256,7 @@ class Backend {
     if (this.invites && this.invites.reserved(uid)) return true; // convite sendo aceito: partida prestes a começar
     for (const g of this.games()) if (g !== service && (g.activeMatchOf(uid) || g.mm.has(uid))) return true;
     if (this.party && this.party.activeMatchOf(uid)) return true;      // mesa online de MARCHA REAL / XEQUE
+    if (this.party && this.party.queue && this.party.queue.has(uid)) return true;   // R144 · fila online de MARCHA REAL / XEQUE
     return false;
   }
   // Amizade desfeita/bloqueio (chamados pelo serviço de Amigos): cancela convite pendente entre os dois.

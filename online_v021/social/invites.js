@@ -33,12 +33,12 @@ class Invites {
   openOf(uid) { const inv = this.invites.get(this.byUser.get(uid)); return inv && OPEN.has(inv.status) ? inv : null; }
   // Reservado = convite sendo aceito (partida prestes a ser criada): não entra em fila nem em outra partida.
   reserved(uid) { const inv = this.openOf(uid); return !!inv && inv.status === 'starting'; }
-  inQueue(uid) { return this.backend.games().some(g => g.mm.has(uid)); }
+  inQueue(uid) { return this.backend.games().some(g => g.mm.has(uid)) || !!(this.backend.party && this.backend.party.queue && this.backend.party.queue.has(uid)); }
   view(inv, now = this.now()) {
     const game = inv.game || 'chess';
     return { id: inv.id, from: inv.from, to: inv.to, mode: inv.mode, game, mode_name: game === 'chess' ? CASUAL_MODES[inv.mode].name : GAMES[game].name, minutes: game === 'chess' ? CASUAL_MODES[inv.mode].minutes : 0,
       created_at: new Date(inv.created).toISOString(), expires_at: new Date(inv.expires).toISOString(),
-      expires_in_ms: Math.max(0, inv.expires - now), status: inv.status, reason: inv.reason || '', match_id: inv.match_id || '' };
+      expires_in_ms: Math.max(0, inv.expires - now), status: inv.status, reason: inv.reason || '', match_id: inv.match_id || '', table: inv.table || 'bots' };
   }
   // Cada lado recebe o convite com o seu papel (sender/recipient).
   emit(inv, type, extra = {}, now = this.now()) {
@@ -130,7 +130,8 @@ class Invites {
       if (this.openOf(other)) return this.fail(ws, 'Este amigo já tem um convite pendente.', 'target_busy');
       const p = op.profile;
       const inv = { id: crypto.randomUUID(), from: { user_id: me, nickname: p.nickname, avatar_id: (op.identity && op.identity.avatar) || p.avatar_id, ...publicLook(op.identity) }, to: { user_id: other, nickname: peer.nickname, avatar_id: peer.avatar_id, ...publicLook(peer) },
-        mode, game, created: now, expires: now + TTL_MS, status: 'pending' };
+        mode, game, created: now, expires: now + TTL_MS, status: 'pending',
+        table: game !== 'chess' && String(m.table || '') === 'online' ? 'online' : 'bots' };   // R144 · MARCHA/XEQUE: vocês + bots, ou vocês na fila online
       this.invites.set(inv.id, inv); this.byUser.set(me, inv.id); this.byUser.set(other, inv.id);
       this.toUser(me, { type: 'invite_sent', invite: { ...this.view(inv, now), role: 'sender' } });
       this.toUser(other, { type: 'invite_received', invite: { ...this.view(inv, now), role: 'recipient' } });
@@ -198,6 +199,17 @@ class Invites {
       const party = this.backend.party;
       if (!party) return release('server_error', 'Modo indisponível no servidor.');
       let room;
+      if (inv.table === 'online') {
+        // R144 · JOGAR ONLINE com o amigo: os dois entram juntos na fila (na MARCHA, como dupla)
+        for (const u of [from, to]) if (this.byUser.get(u) === inv.id) this.byUser.delete(u);
+        const prob = party.queue.join(inv.game, [inv.from, inv.to]);
+        if (prob) return release(prob[0], prob[1]);
+        inv.status = 'accepted'; inv.match_id = '';
+        for (const u of [from, to]) party.toUser(u, { type: 'party_queued', game: inv.game, waiting: party.queue.waiting(inv.game), group: 2 });
+        this.broadcast(inv);
+        setTimeout(() => this.invites.delete(inv.id), 120000).unref();
+        return;
+      }
       try { room = party.start(inv.game, [inv.from, inv.to]); }
       catch (e) { console.error('invite party start', e && e.message); return release('server_error', 'Não foi possível iniciar a partida.'); }
       inv.status = 'accepted'; inv.match_id = room.id;

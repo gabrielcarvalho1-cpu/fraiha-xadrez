@@ -201,8 +201,9 @@ func _build():
     col.add_child(who)
     var game := String(invite.get("game", "chess"))
     var mode_text := "%s · %d min · Casual (sem PL)" % [String(invite.get("mode_name", "")).to_upper(), int(invite.get("minutes", 0))]
-    if game == "marcha": mode_text = "MARCHA REAL · vocês em dupla contra 2 bots"
-    elif game == "xeque": mode_text = "XEQUE · vocês dois + 2 bots, cada um por si"
+    var online := String(invite.get("table", "bots")) == "online"   # R144 · vocês juntos na fila online
+    if game == "marcha": mode_text = "MARCHA REAL · ONLINE · vocês em dupla na fila" if online else "MARCHA REAL · vocês em dupla contra 2 bots"
+    elif game == "xeque": mode_text = "XEQUE · ONLINE · vocês dois na fila, cada um por si" if online else "XEQUE · vocês dois + 2 bots, cada um por si"
     _label(mode_text, 15, TEXT).name = "InviteMode"
     countdown = _label("", 14, DIM_TEXT)
     countdown.name = "InviteCountdown"

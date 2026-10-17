@@ -1307,7 +1307,10 @@ func _on_hit(id: String):
             mode = "lobby"
             g = null
             access.refresh()
-        "lobby_play": start_game()
+        "lobby_play":   # R144 · CONTRA BOTS ou JOGAR ONLINE (só no lobby: o 2º toque/clique emulado não reabre)
+            if mode != "lobby": pass
+            elif stage != null and stage.has_method("party_choose"): stage.party_choose("marcha")
+            else: start_game()
         "lobby_tutorial": tut_page = 0
         "lobby_invite": invite_friend()
         "lobby_back", "over_back": close()

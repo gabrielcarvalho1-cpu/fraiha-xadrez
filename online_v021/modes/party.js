@@ -34,8 +34,8 @@ const T = {
   keepEndedMs: 120000,
 };
 const GAMES = { marcha: { name: 'MARCHA REAL' }, xeque: { name: 'XEQUE' } };
-const MARCHA_BOTS = { 1: 'ReiDoBlitz', 3: 'Cavalo_Louco' };
-const XEQUE_BOTS = { 1: ['Dama de Ferro', 'cauteloso'], 3: ['Torre Velha', 'blefador'] };
+const MARCHA_BOTS = { 0: 'Torre_Antiga', 1: 'ReiDoBlitz', 2: 'Dama_Veloz', 3: 'Cavalo_Louco' };   // R144: fila online pode deixar qualquer lugar para bot
+const XEQUE_BOTS = { 0: ['Rei Sereno', 'equilibrado'], 1: ['Dama de Ferro', 'cauteloso'], 2: ['Bispo Astuto', 'equilibrado'], 3: ['Torre Velha', 'blefador'] };
 const rot = (s, v) => (s < 0 ? s : (s - v + 4) % 4);            // absoluto → visto pelo jogador v
 const unrot = (s, v) => (s + v) % 4;                             // visto pelo jogador v → absoluto
 const rotArr = (a, v) => [0, 1, 2, 3].map(rs => a[unrot(rs, v)]);
@@ -45,6 +45,7 @@ class Party {
     this.send = send; this.backend = backend; this.now = now;
     this.rooms = new Map(); this.byUser = new Map();
     this.sweep = setInterval(() => this.cleanup(), 30000); this.sweep.unref && this.sweep.unref();
+    this.queue = new (require('./party_queue').PartyQueue)(this, { now });   // R144 · fila online
   }
   sockets(uid) { return this.backend && this.backend.socketsOf ? this.backend.socketsOf(uid) : []; }
   toUser(uid, msg) { for (const ws of this.sockets(uid)) this.send(ws, msg); }
@@ -59,12 +60,12 @@ class Party {
     const rng = rngFrom(opts.seed || 0);
     const seats = [];
     for (let s = 0; s < 4; s++) seats.push(null);
-    const humanSeats = [0, 2];
+    const humanSeats = Array.isArray(opts.seats) && opts.seats.length === humans.length ? opts.seats : [0, 2];   // R144: fila online escolhe os lugares
     humans.forEach((h, i) => { seats[humanSeats[i]] = { kind: 'human', uid: h.user_id, nickname: h.nickname, avatar: h.avatar_id || '', ...publicLook(h), connected: true, away_since: 0, left: false }; });
     for (let s = 0; s < 4; s++) if (!seats[s]) {
       seats[s] = game === 'marcha' ? { kind: 'bot', nickname: MARCHA_BOTS[s] || `Bot ${s}` } : { kind: 'bot', nickname: (XEQUE_BOTS[s] || [`Bot ${s}`])[0], profile: (XEQUE_BOTS[s] || [0, 'equilibrado'])[1] };
     }
-    const room = { id, game, seats, rng, ver: 0, ended: false, busy: false, timer: null, deadline: 0, turn_seat: -1, started_at: this.now(), result: null, last: null };
+    const room = { id, game, seats, rng, online: !!opts.online, ver: 0, ended: false, busy: false, timer: null, deadline: 0, turn_seat: -1, started_at: this.now(), result: null, last: null };
     { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('started', game === 'xeque' ? 'xeque' : 'marcha', game); }
     if (game === 'marcha') {
       room.g = new M.Marcha(rng);
@@ -347,6 +348,7 @@ class Party {
   onClose(ws) {
     const uid = ws.identity && ws.identity.id;
     if (!uid) return;
+    if (this.queue.has(uid) && !this.sockets(uid).some(x => x !== ws)) this.queue.cancel(uid);   // R144: caiu → sai da fila
     const room = this.roomOf(uid);
     if (!room) return;
     if (this.sockets(uid).some(x => x !== ws)) return;           // outra aba/aparelho ainda conectado
@@ -370,8 +372,20 @@ class Party {
     this.send(ws, { ...this.startMsg(room, seat), resumed: true });
     if (!was) this.broadcast(room, { ev: 'presence' });
   }
+  // R144 · quem entra na fila: a conta com o visual atual (igual ao convite)
+  member(ws) {
+    const p = ws.profile || {}, id = ws.identity || {};
+    return { user_id: ws.user.id, nickname: p.nickname, avatar_id: id.avatar || p.avatar_id, ...publicLook(id) };
+  }
   handle(ws, m) {
     const a = String(m.type || ''), uid = ws.user.id;
+    if (a === 'party_queue') {
+      const game = String(m.game || '');
+      const p = this.queue.join(game, [this.member(ws)]);
+      if (p) return this.send(ws, { type: 'party_queue_error', game, code: p[0], message: p[1] });
+      return this.send(ws, { type: 'party_queued', game, waiting: this.queue.waiting(game) });
+    }
+    if (a === 'party_queue_cancel') { const was = this.queue.cancel(uid); if (!was) this.send(ws, { type: 'party_queue_cancelled', game: String(m.game || ''), was_queued: false }); return; }
     const room = this.rooms.get(String(m.room_id || '')) || this.roomOf(uid);
     if (a === 'party_sync') {
       if (!room || this.seatOf(room, uid) < 0) return this.send(ws, { type: 'party_none' });
@@ -439,6 +453,6 @@ class Party {
       else if (!r.ended && r.seats.every(s => s.kind !== 'human' || s.left || (!s.connected && now - s.away_since > 600000))) this.finish(r, 'abandoned');
     }
   }
-  stop() { clearInterval(this.sweep); for (const r of this.rooms.values()) clearTimeout(r.timer); }
+  stop() { clearInterval(this.sweep); this.queue.stop(); for (const r of this.rooms.values()) clearTimeout(r.timer); }
 }
 module.exports = { Party, GAMES, T };

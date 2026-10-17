@@ -407,7 +407,11 @@ func _connect():
         socket = null
         retry_in = 5.0
 
+var send_hook: Callable   # testes: captura o que seria enviado ao servidor (sem servidor de verdade)
 func _send(msg: Dictionary) -> bool:
+    if send_hook.is_valid():
+        send_hook.call(msg)
+        return true
     if socket == null or not socket_open: return false
     var err := socket.send_text(JSON.stringify(msg))
     if err != OK: _log("send falhou (%d) para %s" % [err, String(msg.get("type", ""))])

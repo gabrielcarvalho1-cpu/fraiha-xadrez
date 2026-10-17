@@ -893,6 +893,7 @@ func _on_hit(id: String):
             else: close()
         "tut_play", "again":
             if online and mode == "tutorial" and tutorial_from_game: _resume_from_tutorial()
+            elif mode in ["tutorial", "over"] and not tutorial_from_game and stage != null and stage.has_method("party_choose"): stage.party_choose("xeque")   # R144 · CONTRA BOTS ou JOGAR ONLINE
             else: start_game()
         "tut_invite": invite_friend()
         "over_tutorial":

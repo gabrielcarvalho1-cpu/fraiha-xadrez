@@ -69,6 +69,7 @@ var mobile_status: Label
 var mobile_promotion: PanelContainer
 var account
 var party_chat                   # R37.3 · social/party_chat.gd
+var party_online                 # R144 · ui_v022/party_online_ui.gd (CONTRA BOTS / JOGAR ONLINE e a fila)
 var profile_popup                # R37 · social/profile_popup.gd (cartão de perfil durante a partida)
 var account_ui
 var account_chip: Button
@@ -573,6 +574,11 @@ func _setup_account():
     invite_ui.setup(account, hub.avatar_texture, func(): return party_in_match() or (mode in ["online", "ranked", "casual"] and ((mode != "ranked" or ranked.in_match()) and (mode != "casual" or casual.in_match()))))
     # R35 · MARCHA REAL / XEQUE online com amigo: o servidor manda party_* e a tela do modo joga
     account.server_message.connect(_on_party_message)
+    # R144 · escolha CONTRA BOTS / JOGAR ONLINE e a fila online dos modos de cartas
+    party_online = preload("res://ui_v022/party_online_ui.gd").new()
+    add_child(party_online)
+    party_online.setup(self)
+    party_online.bots_chosen.connect(_party_bots)
     # R104 · conta suspensa pela moderação: aviso na moldura do jogo (motivo e prazo)
     account.server_message.connect(func(m):
         if String(m.get("type", "")) == "acct_suspended":
@@ -1674,6 +1680,19 @@ func _on_voice_changed():
 func _party_ui(game: String):
     if hub == null: return null
     return hub.get("marcha") if game == "marcha" else hub.get("xeque")
+
+## R144 · CONTRA BOTS (da escolha ou de quem cansou de esperar na fila): abre o modo se preciso e começa.
+func _party_bots(game: String):
+    var ui = _party_ui(game)
+    if ui == null or not ui.is_open():
+        if game == "marcha": await hub.open_marcha()
+        else: await hub.open_xeque()
+        ui = _party_ui(game)
+    if ui != null and ui.has_method("start_game"): ui.start_game()
+
+## R144 · JOGAR AGORA dos modos de cartas: pergunta CONTRA BOTS ou JOGAR ONLINE
+func party_choose(game: String):
+    if party_online != null: party_online.open_choice(game)
 
 func party_in_match() -> bool:
     for game in ["marcha", "xeque"]:
