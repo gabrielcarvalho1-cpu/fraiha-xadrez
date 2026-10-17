@@ -1838,8 +1838,9 @@ var about_nav_art: Array = []
 var about_icon: TextureRect
 var about_lead: Label
 var about_topic := 0
+var about_discord: Button   # R141 · COMUNIDADE E SUPORTE: link do Discord clicável
 ## R53 · tópicos do CONHEÇA O FRAIHA (fonte única: PC e celular)
-const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez combina o jogo clássico com um mundo medieval em pixel art. Planeje suas jogadas, pratique e compartilhe partidas.\n\nFeito por jogadores, para jogadores. Maringá · Paraná · Brasil."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o brasão, a moldura e a cor de tabuleiro daquela liga."],["MODOS DE JOGO","Contra o computador: Desafio das Ligas — 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e entre na fila; o adversário é encontrado automaticamente. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nEm TABULEIRO E PEÇAS (Configurações ou Ligas) escolha as cores das casas e das peças: várias são grátis, cada liga conquistada no Ranked libera a cor dela e as peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente.\n\nToque em COMUNIDADE (na tela inicial ou no MAIS, no celular) ou acesse discord.gg/27WRsrUGa6 para entrar no nosso servidor no Discord: desafios, Torneio da Semana, novidades e salas de voz.\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
+const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez é xadrez online e grátis, direto no navegador do PC ou do celular, num reino medieval em pixel art. Treine contra 11 bots, jogue com pessoas de verdade, suba de liga no Ranked e reveja suas partidas na análise.\n\nAlém do xadrez, tem dois jogos próprios para jogar com os amigos: XEQUE e MARCHA REAL. Feito por jogadores, para jogadores."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o brasão, a moldura e a cor de tabuleiro daquela liga."],["MODOS DE JOGO","Desafio das Ligas: 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e o adversário é encontrado na hora. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos.\nXEQUE: cartas e blefe para 4. A mesa pede uma peça e cada um baixa cartas viradas dizendo que são ela. Desconfiou? Aperte XEQUE! Quem erra aciona o Relógio, e se ele disparar é xeque-mate.\nMARCHA REAL: em dupla, levem os 8 peões até o Salão do Trono jogando cartas, capturando e trocando de lugar."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nEm TABULEIRO E PEÇAS (Configurações ou Ligas) escolha as cores das casas e das peças: várias são grátis, cada liga conquistada no Ranked libera a cor dela e as peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente! No nosso servidor no Discord tem desafios, Torneio da Semana, novidades e salas de voz:\ndiscord.gg/27WRsrUGa6\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
 
 func _build_about_page():
     var topics: Array = ABOUT_TOPICS
@@ -1889,23 +1890,66 @@ func _build_about_page():
         var idx := i
         RefPage.hotspot(panel, r, func(): _show_about_topic(topics, idx), "AboutTopic%d" % i)
     RefPage.hotspot(panel, Rect2(122, 685, 430, 82), back, "AboutBack")
+    # R141 · COMUNIDADE E SUPORTE: botão de verdade para o Discord (o link no texto não era clicável)
+    about_discord = discord_button(panel, Rect2(620, 684, 430, 60), 26)
+    about_discord.name = "AboutDiscord"
     _show_about_topic(topics, 0)
+
+## R141 · botão ENTRAR NO DISCORD (PC e celular): dourado sobre azul-marinho, abre a pergunta da COMUNIDADE
+func discord_button(parent: Control, r: Rect2, px: int) -> Button:
+    var b := Button.new()
+    b.text = "ENTRAR NO DISCORD  ›"
+    b.position = r.position
+    b.size = r.size
+    b.focus_mode = Control.FOCUS_NONE
+    b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    for st in [["normal", Color("13254a"), 1.0], ["hover", Color("1d3768"), 1.0], ["pressed", Color("0d1a36"), 1.0]]:
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = st[1]
+        sb.border_color = Color("e8b242")
+        sb.set_border_width_all(maxi(2, int(round(px / 9.0))))
+        sb.set_corner_radius_all(maxi(4, int(round(px / 4.0))))
+        sb.shadow_color = Color(0, 0, 0, 0.45)
+        sb.shadow_size = 4
+        b.add_theme_stylebox_override(st[0], sb)
+    b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+    b.add_theme_font_override("font", FONT_CINZEL)
+    b.add_theme_font_size_override("font_size", px)
+    for c in ["font_color", "font_focus_color"]: b.add_theme_color_override(c, Color("f5cf6a"))
+    for c in ["font_hover_color", "font_pressed_color"]: b.add_theme_color_override(c, Color("fff0b8"))
+    b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+    b.add_theme_constant_override("outline_size", 3)
+    b.pressed.connect(open_community)
+    parent.add_child(b)
+    return b
 
 func _show_about_topic(topics: Array, i: int):
     var topic: Array = topics[i]
     about_title.text = String(topic[0])
+    # R141 · título longo (COMUNIDADE E SUPORTE) encolhia para fora da moldura: diminui até caber
+    for px in [50, 46, 42, 38, 34]:
+        about_title.add_theme_font_size_override("font_size", px)
+        if FONT_CINZEL.get_string_size(about_title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x <= 560.0: break
     var parts: PackedStringArray = String(topic[1]).split("\n\n", false, 1)
     # frase de abertura (curta) em destaque, como na referência; texto longo fica todo no corpo
     var lead_ok := parts.size() > 1 and parts[0].length() <= 60
     about_lead.text = parts[0] if lead_ok else ""
     about_body.text = parts[1] if lead_ok else String(topic[1])
     about_body.position.y = 470.0 if lead_ok else 384.0
-    about_body.size.y = 746.0 - about_body.position.y
+    var discord: bool = String(topic[0]) == "COMUNIDADE E SUPORTE"
+    if is_instance_valid(about_discord): about_discord.visible = discord
+    var avail: float = (676.0 if discord else 746.0) - about_body.position.y
+    about_body.size.y = avail
     # texto longo: diminui a fonte até caber no quadro (nada passa da moldura)
+    # R141 · mede com a própria fonte (get_line_count() do Label ainda trazia o tamanho anterior e o texto passava da moldura)
+    var bf: Font = about_body.get_theme_font("font")
     for px in [27, 25, 23, 21, 19]:
         about_body.add_theme_font_size_override("font_size", px)
-        var lines := about_body.get_line_count()
-        if lines * (about_body.get_line_height() + 5) <= about_body.size.y: break
+        var lines := 0
+        for para in about_body.text.split("\n"):
+            var w := bf.get_string_size(para, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+            lines += maxi(1, ceili(w * 1.06 / 720.0))
+        if lines * (px * 1.4 + 5.0) <= avail - 6.0: break   # get_line_height() ainda vinha do tamanho anterior
     var big := RefPage.tex(ABOUT_ICONS[i])   # R93 · o "_big" era cópia idêntica
     about_icon.texture = big
     about_topic = i

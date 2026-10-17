@@ -115,6 +115,15 @@ func _about():
     _click_node(p, "AboutTopic2")
     await _shot("conheca_ligas.png")
     print("CHECK conheca topico=", hub.get("about_topic"))
+    _click_node(p, "AboutTopic3")
+    await _shot("conheca_modos.png")
+    _click_node(p, "AboutTopic5")
+    await _shot("conheca_comunidade.png")
+    var dsc: Button = p.find_child("AboutDiscord", true, false)
+    print("CHECK conheca discord visivel=", dsc != null and dsc.is_visible_in_tree())
+    _click_node(p, "AboutTopic0")
+    for i in range(3): await process_frame
+    print("CHECK conheca discord some fora=", dsc != null and not dsc.is_visible_in_tree())
     _click_node(p, "AboutBack")
     for i in range(6): await process_frame
     print("CHECK conheca voltar pagina=", hub.page)

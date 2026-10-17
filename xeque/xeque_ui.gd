@@ -127,6 +127,30 @@ var avatars := []
 var pieces := {}
 var clock_tex := {}
 var xeque_tex := {}
+# ---- R141 · dica "DESCONFIOU? DÊ XEQUE!" sobre o botão: nas 3 primeiras partidas do aparelho, até usar o XEQUE
+const HINT_FILE := "user://xeque_dica.cfg"
+const HINT_GAMES := 3
+var hint_on := false
+func _hint_cfg() -> ConfigFile:
+    var c := ConfigFile.new()
+    c.load(HINT_FILE)
+    return c
+## Chamado no começo de cada partida (offline e online): decide se a dica aparece nesta partida.
+func _xeque_hint_new_game():
+    var c := _hint_cfg()
+    var used := bool(c.get_value("dica", "usou", false))
+    var n := int(c.get_value("dica", "partidas", 0))
+    hint_on = not used and n < HINT_GAMES
+    if hint_on:
+        c.set_value("dica", "partidas", n + 1)
+        c.save(HINT_FILE)
+func xeque_hint_used():
+    if not hint_on and bool(_hint_cfg().get_value("dica", "usou", false)): return
+    hint_on = false
+    var c := _hint_cfg()
+    c.set_value("dica", "usou", true)
+    c.save(HINT_FILE)
+
 # ---- jogada humana
 var selected: Array = []          # índices na mão
 var input_locked := false         # depois de JOGAR / XEQUE, até o próximo turno
@@ -374,6 +398,7 @@ func start_game():
     mesa_round = -1
     particles = []
     slam = {}
+    _xeque_hint_new_game()
     _start_intro()
     _begin_turn()
 
@@ -593,6 +618,7 @@ func human_accept():
 
 func human_challenge():
     if not can_human_challenge(): return
+    xeque_hint_used()
     input_locked = true
     if online:
         _online_send({"kind": "challenge"})
@@ -996,6 +1022,7 @@ func start_online(msg: Dictionary):
         particles = []
         slam = {}
         if int(msg.get("snapshot", {}).get("round", 1)) <= 1: _start_intro()
+        _xeque_hint_new_game()
     mode = "game"
     _apply_snapshot(msg.get("snapshot", {}))
     if bool(msg.get("ended", false)) or g.state == Rules.MATCH_END: _finish()

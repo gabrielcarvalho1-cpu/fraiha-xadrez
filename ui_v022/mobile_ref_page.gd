@@ -397,6 +397,15 @@ func _build_about():
 		txt.add_theme_constant_override("line_separation", int(round(6 * s)))
 		txt.text = _about_bbcode(String(topic[1]))
 		content.add_child(txt)
+		if String(topic[0]) == "COMUNIDADE E SUPORTE":
+			# R141 · link do Discord clicável: botão logo abaixo do texto
+			var holder := Control.new()
+			holder.custom_minimum_size = Vector2(632, 150) * s
+			holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			content.add_child(holder)
+			var db: Button = hub.discord_button(holder, Rect2(Vector2(0, 30) * s, Vector2(560, 110) * s), maxi(10, int(round(40 * s))))
+			db.name = "AboutDiscordMobile"
+			db.mouse_filter = Control.MOUSE_FILTER_PASS   # o dedo ainda rola a lista
 		if i < topics.size() - 1:
 			var sp := Control.new()
 			sp.custom_minimum_size.y = 56 * s

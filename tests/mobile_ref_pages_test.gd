@@ -105,6 +105,12 @@ func run():
 	rp.scroll.scroll_vertical = int(bar.max_value)
 	await frames(3)
 	check(last != null and rp.panel.get_global_rect().end.y <= root.get_visible_rect().size.y + 2.0, "fim do painel (moldura de baixo) alcançável")
+	# R141 · botão ENTRAR NO DISCORD no fim de COMUNIDADE E SUPORTE (o link do texto não era clicável)
+	var dsc: Button = rp.find_child("AboutDiscordMobile", true, false)
+	check(dsc != null and dsc.is_visible_in_tree() and dsc.get_global_rect().end.y <= root.get_visible_rect().size.y, "botão ENTRAR NO DISCORD visível no fim")
+	if OS.get_environment("SHOT_DIR") != "":
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(OS.get_environment("SHOT_DIR").path_join("m_discord.png"))
 	var n0 := count_nodes(rp)
 	await frames(30)
 	check(count_nodes(rp) == n0, "sem nós novos por quadro (%d)" % n0)

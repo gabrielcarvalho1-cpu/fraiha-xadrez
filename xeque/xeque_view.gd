@@ -430,6 +430,8 @@ func _draw_game():
     if sm != null and sm.supported(): fullscreen_button(lay.full, sm.on_cached())   # R43
     _draw_voice(lay)
     if not mate: _draw_hand()
+    if _hint_rr.size.x > 0.0 and ui.phase == "": _xeque_hint_balloon(_hint_rr)
+    _hint_rr = Rect2()
     _draw_fly()
     if ui.phase in ["reveal", "clock", "safe"] and not bool(ui.result.get("accept", false)): _draw_reveal(false)   # R88: ACEITAR não revela
     # R85 · o relógio acionado aparece sozinho: tela escurece em fade e ele surge grande no centro, POR CIMA das cartas
@@ -942,6 +944,12 @@ func _xeque_art(rr: Rect2, state: String, enabled: bool):
     var call: bool = enabled and ui.phase == "" and state in ["normal", "hover"]
     var p := 0.5 + 0.5 * sin(ui.t * 4.2)
     var r := rr
+    # R141 · "tremidinha" a cada ~3 s na SUA VEZ: o botão balança de lado (sem mudar de tamanho, não pisca)
+    var shake := 0.0
+    if call:
+        var sp := fmod(ui.t, 3.0)
+        if sp < 0.42: shake = sin(sp / 0.42 * PI * 5.0) * (1.0 - sp / 0.42) * rr.size.y * 0.05
+    r.position.x += shake
     if call:
         # R139 · sem "respirar" no tamanho: cada tamanho novo trocava a textura reduzida (degraus de 4 px) e a arte
         # parecia piscar. Agora o tamanho é fixo e só o brilho pulsa (halo e a arte acesa), liso.
@@ -965,7 +973,47 @@ func _xeque_art(rr: Rect2, state: String, enabled: bool):
             var bot := r.position.y + r.size.y * 0.72
             var w := r.size.x * 0.07
             draw_colored_polygon(PackedVector2Array([Vector2(cx, top), Vector2(cx + w, top), Vector2(cx + w - r.size.x * 0.06, bot), Vector2(cx - r.size.x * 0.06, bot)]), Color(1, 0.97, 0.85, 0.28 * sin(ph / 0.45 * PI)))
+    if call and ui.hint_on: _hint_rr = rr   # desenhado no fim (por cima da mão no celular)
     if call or state == "ativado": queue_redraw()
+
+## R141 · balão dourado em cima do botão XEQUE ("DESCONFIOU? DÊ XEQUE!"), subindo e descendo devagar.
+## Só nas primeiras partidas (ui.hint_on), até o jogador usar o XEQUE pela primeira vez.
+var _hint_rr := Rect2()
+func _xeque_hint_balloon(rr: Rect2):
+    var portrait: bool = ui.layout == "portrait"
+    var fs := int(clampf(rr.size.y * 0.2, 18.0, 30.0)) if not portrait else 38
+    var fnt: Font = font("ui_sp")
+    var l1 := "DESCONFIOU?"
+    var l2 := "DÊ XEQUE!"
+    var tw := maxf(fnt.get_string_size(l1, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x, fnt.get_string_size(l2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+    var bob := sin(ui.t * 2.6) * rr.size.y * 0.04
+    var sz := Vector2(tw + fs * 1.6, fs * 2.7)
+    var tip := Vector2(rr.get_center().x, rr.position.y + rr.size.y * 0.1 + bob)
+    var box := Rect2(Vector2(tip.x - sz.x / 2.0, tip.y - fs * 0.7 - sz.y), sz)
+    box.position.x = clampf(box.position.x, 12.0, maxf(12.0, float(ui.design.x) - sz.x - 12.0))
+    # sombra, corpo marfim com borda dourada, biquinho apontando para o botão
+    var sh := Rect2(box.position + Vector2(3, 4), box.size)
+    draw_style_box(_balloon_box(Color(0, 0, 0, 0.45), Color(0, 0, 0, 0), fs), sh)
+    var tri := PackedVector2Array([Vector2(tip.x - fs * 0.6, box.end.y - 2), Vector2(tip.x + fs * 0.6, box.end.y - 2), tip])
+    draw_colored_polygon(PackedVector2Array([tri[0] + Vector2(-3, 0), tri[1] + Vector2(3, 0), tri[2] + Vector2(0, 4)]), Color("e8b242"))
+    draw_style_box(_balloon_box(Color("fff4d6"), Color("e8b242"), fs), box)
+    draw_colored_polygon(tri, Color("fff4d6"))
+    var y0 := box.position.y + sz.y / 2.0 - fs * 0.15
+    draw_string(fnt, Vector2(box.position.x, y0), l1, HORIZONTAL_ALIGNMENT_CENTER, sz.x, fs, Color("5a1a14"))
+    draw_string(fnt, Vector2(box.position.x, y0 + fs * 1.05), l2, HORIZONTAL_ALIGNMENT_CENTER, sz.x, fs, Color("b8321e"))
+
+var _balloon_cache := {}
+func _balloon_box(bg: Color, border: Color, fs: int) -> StyleBoxFlat:
+    var key := "%s|%s|%d" % [bg.to_html(), border.to_html(), fs]
+    if not _balloon_cache.has(key):
+        var sb := StyleBoxFlat.new()
+        sb.bg_color = bg
+        sb.border_color = border
+        sb.set_border_width_all(3 if border.a > 0.0 else 0)
+        sb.set_corner_radius_all(int(fs * 0.55))
+        sb.anti_aliasing = true
+        _balloon_cache[key] = sb
+    return _balloon_cache[key]
 
 func _draw_play_button():
     if desk(): return _desk_play_button()
