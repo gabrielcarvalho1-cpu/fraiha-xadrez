@@ -297,7 +297,7 @@ func _relayout():
     desk = true   # R71 deitado / R74 em pé: o visual novo do PC em todo lugar (em pé, por blocos: PORTRAIT_GAME/LOBBY)
     Layout = LayoutR57 if desk else LayoutStd
     if desk and r57.is_empty():
-        for key in ["mesa", "salao", "botao_jogar_vazio", "botao_jogar_agora_vazio", "mesa_wide", "salao_wide", "placa_perfil_1", "placa_perfil_2", "placa_perfil_3"]: r57[key] = load("res://marcha/art/r57/%s.png" % key)
+        for key in ["mesa", "salao", "botao_jogar_vazio", "botao_jogar_agora_vazio", "mesa_wide", "salao_wide", "placa_perfil_1", "placa_perfil_2", "placa_perfil_3", "salao_botoes_cel"]: r57[key] = load("res://marcha/art/r57/%s.png" % key)
         for pair in [["r57_name", "res://marcha/art/fonts/oswald-latin-400-normal.woff", 0], ["r57_head", FONT_SEMI, 1], ["r57_bold", FONT_BOLD, 0]]:
             var fv := FontVariation.new()
             fv.base_font = pair[1] if pair[1] is Font else load(pair[1])
@@ -2858,7 +2858,11 @@ class TableView extends Control:
     func _draw_lobby_r57():
         var plate: Texture2D = ui.r57.salao
         if ui.portrait:
-            for b in ui.PORTRAIT_LOBBY: draw_texture_rect_region(plate, b[1], b[0])
+            for i in ui.PORTRAIT_LOBBY.size():
+                var b: Array = ui.PORTRAIT_LOBBY[i]
+                # R149 · bloco dos botões: placas recortadas (sem o tapete verde em volta do CONVIDAR AMIGO)
+                if i == 4 and ui.r57.get("salao_botoes_cel") != null: draw_texture_rect(ui.r57.salao_botoes_cel, b[1], false)
+                else: draw_texture_rect_region(plate, b[1], b[0])
         else: draw_texture_rect(plate, ui.lr(Rect2(Vector2.ZERO, ui.R57_LOBBY)), false)
         _r57_icons(plate, [["fullscreen", Rect2(1165, 12, 50, 50)], ["mute_music", Rect2(1222, 12, 50, 50)], ["mute_fx", Rect2(1282, 12, 50, 50)], ["lobby_tutorial", Rect2(1342, 12, 50, 50)], ["lobby_back", Rect2(1409, 12, 51, 50)]], true)
         # acesso (Club / partida grátis do dia): uma linha discreta no rodapé do painel

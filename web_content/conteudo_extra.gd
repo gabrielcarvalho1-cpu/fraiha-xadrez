@@ -219,7 +219,10 @@ func _update_wait():
 	var vs := get_viewport().get_visible_rect().size
 	var sz := box.get_combined_minimum_size()
 	box.size = sz
-	box.position = ((vs - sz) * 0.5).floor()
+	# R149 · celular em pé: a caixa não cabia na largura (cortava nas laterais) → encolhe para caber com margem
+	var k: float = minf(1.0, minf((vs.x - 32.0) / maxf(1.0, sz.x), (vs.y - 32.0) / maxf(1.0, sz.y)))
+	box.scale = Vector2(k, k)
+	box.position = ((vs - sz * k) * 0.5).floor()
 
 var _log_t := 0.0
 func _process(d):
