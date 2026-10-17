@@ -2871,10 +2871,10 @@ class TableView extends Control:
         var jr := Rect2(485, 580, 525, 80)
         if ok:
             # R145 · CONTRA BOTS e JOGAR ONLINE direto na tela (a arte tem duas placas no lugar do JOGAR AGORA)
-            for bt in [["lobby_bots", Rect2(480, 578, 258, 84), "CONTRA BOTS"], ["lobby_online", Rect2(737, 578, 258, 84), "JOGAR ONLINE"]]:
+            for bt in [["lobby_bots", Rect2(441, 576, 319, 89), "CONTRA BOTS"], ["lobby_online", Rect2(770, 576, 279, 89), "JOGAR ONLINE"]]:   # R146 · alinhadas com COMO JOGAR / VOLTAR
                 var br: Rect2 = bt[1]
                 art_button(plate, br, ui.lr(br), bt[0])
-                rtext(bt[2], Vector2(br.position.x + 30, br.position.y + 55), "title", 30.0, Color("f2c75a"), br.size.x - 60, HORIZONTAL_ALIGNMENT_CENTER, br.size.x - 64, 3, Color("2a1a04"), true)
+                rtext(bt[2], Vector2(br.position.x + 30, br.position.y + 56), "title", 24.0, Color("f2c75a"), br.size.x - 60, HORIZONTAL_ALIGNMENT_CENTER, -1.0, 3, Color("2a0508"), true)   # mesmo tamanho nas duas
         else:
             draw_texture_rect(ui.r57.botao_jogar_agora_vazio, ui.lr(jr), false)
             rtext("CONHECER CLUB FRAIHA", Vector2(jr.position.x + 70, 634), "title", 34.0, Color("f2c75a"), jr.size.x - 140, HORIZONTAL_ALIGNMENT_CENTER, jr.size.x - 150, 3, Color("2a1a04"), true)
