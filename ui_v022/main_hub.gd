@@ -107,7 +107,7 @@ var avatar_id := "warrior"
 var profile_portrait: TextureRect
 var avatar_choices := {}
 var about_title: Label
-var about_body: Label
+var about_body: RichTextLabel   # R142 · rich: MODOS DE JOGO com tópicos (XADREZ · XEQUE · MARCHA REAL) em dourado
 var volume := 0.8
 var music_volume := 0.65
 var premove_enabled := true
@@ -970,18 +970,21 @@ func _build_settings_page():
     bc_btn.focus_mode = Control.FOCUS_NONE
     bc_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     bc_btn.add_theme_font_override("font", FONT_CINZEL)
-    bc_btn.add_theme_font_size_override("font_size", 24)
-    for pair in [["normal", Color("15213a")], ["hover", Color("1f3156")], ["pressed", Color("0e182b")]]:
+    bc_btn.add_theme_font_size_override("font_size", 27)
+    # R142 · mais visível (era uma placa fina que passava despercebida): borda dourada grossa e sombra
+    for pair in [["normal", Color("13254a")], ["hover", Color("1d3768")], ["pressed", Color("0d1a36")]]:
         var bst := StyleBoxFlat.new()
         bst.bg_color = pair[1]
-        bst.border_color = Color("c99a45")
-        bst.set_border_width_all(2)
-        bst.set_corner_radius_all(3)
+        bst.border_color = Color("e8b242")
+        bst.set_border_width_all(3)
+        bst.set_corner_radius_all(6)
+        bst.shadow_color = Color(0, 0, 0, 0.45)
+        bst.shadow_size = 4
         bc_btn.add_theme_stylebox_override(pair[0], bst)
     bc_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
     for k in ["font_color", "font_hover_color", "font_pressed_color"]: bc_btn.add_theme_color_override(k, Color("f4ce7f"))
-    bc_btn.position = Vector2(880, 712)
-    bc_btn.size = Vector2(442, 50)
+    bc_btn.position = Vector2(860, 704)
+    bc_btn.size = Vector2(462, 62)
     bc_btn.pressed.connect(open_board_colors)
     panel.add_child(bc_btn)
     var note := Label.new()
@@ -1840,7 +1843,7 @@ var about_lead: Label
 var about_topic := 0
 var about_discord: Button   # R141 · COMUNIDADE E SUPORTE: link do Discord clicável
 ## R53 · tópicos do CONHEÇA O FRAIHA (fonte única: PC e celular)
-const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez é xadrez online e grátis, direto no navegador do PC ou do celular, num reino medieval em pixel art. Treine contra 11 bots, jogue com pessoas de verdade, suba de liga no Ranked e reveja suas partidas na análise.\n\nAlém do xadrez, tem dois jogos próprios para jogar com os amigos: XEQUE e MARCHA REAL. Feito por jogadores, para jogadores."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o brasão, a moldura e a cor de tabuleiro daquela liga."],["MODOS DE JOGO","Desafio das Ligas: 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\nOnline: escolha o ritmo (3, 5, 10 ou 20 min) e o adversário é encontrado na hora. Não vale PL.\nRanqueado: entre na sua conta e dispute PL em quatro ritmos.\nXEQUE: cartas e blefe para 4. A mesa pede uma peça e cada um baixa cartas viradas dizendo que são ela. Desconfiou? Aperte XEQUE! Quem erra aciona o Relógio, e se ele disparar é xeque-mate.\nMARCHA REAL: em dupla, levem os 8 peões até o Salão do Trono jogando cartas, capturando e trocando de lugar."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nEm TABULEIRO E PEÇAS (Configurações ou Ligas) escolha as cores das casas e das peças: várias são grátis, cada liga conquistada no Ranked libera a cor dela e as peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente! No nosso servidor no Discord tem desafios, Torneio da Semana, novidades e salas de voz:\ndiscord.gg/27WRsrUGa6\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
+const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez é xadrez online e grátis, direto no navegador do PC ou do celular, num reino medieval em pixel art. Treine contra 11 bots, jogue com pessoas de verdade, suba de liga no Ranked e reveja suas partidas na análise.\n\nAlém do xadrez, tem dois jogos próprios para jogar com os amigos: XEQUE e MARCHA REAL. Feito por jogadores, para jogadores."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nO Ranked tem quatro ritmos (3, 5, 10 e 20 minutos), cada um com PL e liga próprios. A cada 100 PL você sobe de liga. A maior liga alcançada em qualquer ritmo libera o brasão, a moldura e a cor de tabuleiro daquela liga."],["MODOS DE JOGO","## XADREZ\n• Desafio das Ligas: 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\n• Online: escolha 3, 5, 10 ou 20 min e jogue na hora. Não vale PL.\n• Ranqueado: com a sua conta, dispute PL em quatro ritmos.\n## XEQUE\nCartas e blefe para 4. Baixe cartas viradas dizendo que são a peça que a mesa pede. Desconfiou? Aperte XEQUE!\n## MARCHA REAL\nEm dupla, levem os 8 peões até o Salão do Trono jogando cartas."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nEm TABULEIRO E PEÇAS (Configurações ou Ligas) escolha as cores das casas e das peças: várias são grátis, cada liga conquistada no Ranked libera a cor dela e as peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente! No nosso servidor no Discord tem desafios, Torneio da Semana, novidades e salas de voz:\ndiscord.gg/27WRsrUGa6\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
 
 func _build_about_page():
     var topics: Array = ABOUT_TOPICS
@@ -1855,11 +1858,21 @@ func _build_about_page():
     about_lead = RefPage.text(panel, "", Rect2(620, 384, 720, 56), 34, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
     about_lead.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     about_lead.clip_text = false
-    about_body = RefPage.text(panel, "", Rect2(620, 470, 720, 276), 27, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
+    about_body = RichTextLabel.new()
+    about_body.bbcode_enabled = true
+    about_body.scroll_active = false
+    about_body.fit_content = false
+    about_body.position = Vector2(620, 470)
+    about_body.size = Vector2(720, 276)
+    about_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
     about_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    about_body.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-    about_body.clip_text = false
-    about_body.add_theme_constant_override("line_spacing", 5)
+    about_body.add_theme_font_override("normal_font", Kit.SERIF)
+    about_body.add_theme_font_override("bold_font", Kit.SERIF_BOLD)
+    about_body.add_theme_color_override("default_color", Color("efe6cf"))
+    about_body.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
+    about_body.add_theme_constant_override("outline_size", 3)
+    about_body.add_theme_constant_override("line_separation", 5)
+    panel.add_child(about_body)
     about_nav_art.clear()
     about_nav_labels.clear()
     for i in range(topics.size()):
@@ -1923,6 +1936,16 @@ func discord_button(parent: Control, r: Rect2, px: int) -> Button:
     parent.add_child(b)
     return b
 
+## R142 · texto dos tópicos em BBCode: linha "## NOME" vira um subtítulo dourado (MODOS DE JOGO: XADREZ · XEQUE · MARCHA REAL)
+static func about_bbcode(t: String) -> String:
+    var out := PackedStringArray()
+    for line in t.replace("[", "[lb]").split("\n"):
+        if line.begins_with("## "):
+            if not out.is_empty(): out.append("[font_size=10] [/font_size]")   # respiro entre os tópicos
+            out.append("[color=#f3c55a][b]%s[/b][/color]" % line.substr(3))
+        else: out.append(line)
+    return "\n".join(out)
+
 func _show_about_topic(topics: Array, i: int):
     var topic: Array = topics[i]
     about_title.text = String(topic[0])
@@ -1934,7 +1957,8 @@ func _show_about_topic(topics: Array, i: int):
     # frase de abertura (curta) em destaque, como na referência; texto longo fica todo no corpo
     var lead_ok := parts.size() > 1 and parts[0].length() <= 60
     about_lead.text = parts[0] if lead_ok else ""
-    about_body.text = parts[1] if lead_ok else String(topic[1])
+    var plain: String = parts[1] if lead_ok else String(topic[1])
+    about_body.text = about_bbcode(plain)
     about_body.position.y = 470.0 if lead_ok else 384.0
     var discord: bool = String(topic[0]) == "COMUNIDADE E SUPORTE"
     if is_instance_valid(about_discord): about_discord.visible = discord
@@ -1942,14 +1966,11 @@ func _show_about_topic(topics: Array, i: int):
     about_body.size.y = avail
     # texto longo: diminui a fonte até caber no quadro (nada passa da moldura)
     # R141 · mede com a própria fonte (get_line_count() do Label ainda trazia o tamanho anterior e o texto passava da moldura)
-    var bf: Font = about_body.get_theme_font("font")
     for px in [27, 25, 23, 21, 19]:
-        about_body.add_theme_font_size_override("font_size", px)
-        var lines := 0
-        for para in about_body.text.split("\n"):
-            var w := bf.get_string_size(para, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
-            lines += maxi(1, ceili(w * 1.06 / 720.0))
-        if lines * (px * 1.4 + 5.0) <= avail - 6.0: break   # get_line_height() ainda vinha do tamanho anterior
+        about_body.add_theme_font_size_override("normal_font_size", px)
+        about_body.add_theme_font_size_override("bold_font_size", px + 2)
+        # R142 · altura real do texto (RichTextLabel mede na hora, com subtítulos e quebras)
+        if about_body.get_content_height() <= avail - 6.0: break
     var big := RefPage.tex(ABOUT_ICONS[i])   # R93 · o "_big" era cópia idêntica
     about_icon.texture = big
     about_topic = i

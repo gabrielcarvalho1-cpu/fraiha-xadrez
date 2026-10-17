@@ -356,8 +356,11 @@ func _spawn_capture(center:Vector2, victim:String):
         var speed=70.0+float((i*37)%90)
         particles.append({"pos":center,"vel":Vector2(cos(a),sin(a))*speed,"life":0.45+float(i%5)*0.05,"col":col})
 
+## R142 · casa de cada opção da promoção (Dama, Torre, Bispo, Cavalo) — PC e celular usam o mesmo painel
+func promotion_choice_rect(i: int) -> Rect2:
+    return Rect2(269+i*130,473,105,95)
+
 func _draw_promotion_overlay():
-    if mobile_presentation: return
     if not promotion_pending: return
     if online != null and promotion_color != online.color: return
     var font=ThemeDB.fallback_font
@@ -369,7 +372,7 @@ func _draw_promotion_overlay():
     draw_string(font,Vector2(286,446),"Escolha a nova peça",HORIZONTAL_ALIGNMENT_LEFT,-1,17,Color("#e8ddc3"))
     var opts=["Q","R","B","N"]
     for i in range(4):
-        var rr=Rect2(269+i*130,473,105,95)
+        var rr=promotion_choice_rect(i)
         draw_rect(rr,Color("#4d6c3d") if i%2==0 else Color("#b89a61"))
         draw_rect(rr,Color("#f0cf77"),false,3)
         _piece(rr.get_center()+Vector2(0,3),promotion_color+opts[i])
@@ -690,10 +693,11 @@ func _handle_game_input(event):
             return
     if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed:
         if promotion_pending:
-            if mobile_presentation: return
+            # R142 · no celular também: toque no mesmo painel do PC (antes havia um painel simples à parte)
+            if online != null and promotion_color != online.color: return
             var opts=["Q","R","B","N"]
             for i in range(4):
-                var rr=Rect2(269+i*130,473,105,95)
+                var rr=promotion_choice_rect(i)
                 if rr.has_point(event.position):
                     _finish_promotion(opts[i])
                     return

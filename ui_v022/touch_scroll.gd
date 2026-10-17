@@ -44,7 +44,7 @@ func _input(event):
         return
     if event is InputEventScreenTouch:
         if event.pressed:
-            if _index == -1 and _rect().has_point(event.position):
+            if _index == -1 and _rect().has_point(event.position) and not _covered():
                 _vel = Vector2.ZERO
                 _index = event.index
                 _last_t = Time.get_ticks_usec()
@@ -101,6 +101,12 @@ func _process(delta: float):
     # chegou no começo/fim (o Godot segurou o valor) ou ficou lento: para
     if _vel.length() < MIN_SPEED or (after == before and (absf(_pos.y - after.y) > 2.0 or absf(_pos.x - after.x) > 2.0)):
         _vel = Vector2.ZERO
+
+## R142 · um painel (TABULEIRO E PEÇAS etc.) aberto por cima: o dedo é dele, a lista de trás não rola
+func _covered() -> bool:
+    for m in get_tree().get_nodes_in_group("fraiha_modal"):
+        if m.has_method("is_open") and m.is_open() and not m.is_ancestor_of(scroll): return true
+    return false
 
 func _rect() -> Rect2:
     var xf := scroll.get_global_transform_with_canvas()

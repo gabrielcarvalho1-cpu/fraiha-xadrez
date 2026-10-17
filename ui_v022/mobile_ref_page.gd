@@ -419,7 +419,11 @@ func _build_about():
 static func _about_bbcode(t: String) -> String:
 	var parts := t.split("\n\n", false, 1)
 	var body := parts[1] if parts.size() > 1 and parts[0].length() <= 60 else t
-	body = body.replace("[", "[lb]")
+	# R142 · "[" escapado + subtítulos "## NOME" em dourado (MODOS DE JOGO: XADREZ · XEQUE · MARCHA REAL)
+	var lines := PackedStringArray()
+	for line in body.replace("[", "[lb]").split("\n"):
+		lines.append("[color=#f3c55a][b]%s[/b][/color]" % line.substr(3) if line.begins_with("## ") else line)
+	body = "\n".join(lines)
 	body = body.replace("FRAIHA Xadrez", "[color=#f3c55a][b]FRAIHA Xadrez[/b][/color]")
 	return body.replace(" · ", "  •  ")
 

@@ -55,6 +55,7 @@ func setup(p_hub):
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_main.add_child(scroll)
+	preload("res://ui_v022/touch_scroll.gd").attach(scroll)   # R142 · celular: arrastar em cima das amostras rola a lista
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation", 10)

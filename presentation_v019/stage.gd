@@ -869,7 +869,7 @@ func _process(delta):
     mobile_status.visible = mobile and mode in ["local", "bot"] and not (board_skin != null and board_skin.on) and not mobile_hud_on()   # R51: com a pele, o relógio aceso mostra a vez
     var short_status = _mobile_status_text()
     if mobile_status.text != short_status: mobile_status.text = short_status
-    mobile_promotion.visible = mobile and playing and game.promotion_pending and (game.online == null or game.promotion_color == game.online.color)
+    mobile_promotion.visible = false   # R142 · o celular usa o mesmo painel de promoção do PC (desenhado no tabuleiro)
 
 func _mobile_status_text() -> String:
     var text: String = game.status
