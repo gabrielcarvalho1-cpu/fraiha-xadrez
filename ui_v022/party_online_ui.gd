@@ -13,7 +13,7 @@ const ICON_BOTS := "res://profile/avatars/ferro_reward.png"
 const ICON_ONLINE := "res://ui_v022/assets/online_tab_icon_casual.png"
 const ALONE_HINT_S := 30
 ## cores de cada modo: [fundo do painel, borda/detalhe]
-const THEME := {"xeque": [Color("2a0b12"), Color("8e1c2c")], "marcha": [Color("0d241b"), Color("1f5a3e")]}
+const THEME := {"xeque": [Color("2a0b12"), Color("8e1c2c")], "marcha": [Color("2a0b12"), Color("8e1c2c")]}
 const NAMES := {"xeque": "XEQUE", "marcha": "MARCHA REAL"}
 
 signal bots_chosen(game: String)
