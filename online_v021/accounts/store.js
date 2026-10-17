@@ -51,6 +51,9 @@ const STAT_MODES = ['casual', 'marcha', 'xeque'];
 const emptyModeStats = () => { const o = {}; for (const m of STAT_MODES) o[m] = { wins: 0, losses: 0, draws: 0 }; return o; };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fullStats = rows => { const out = {}; for (const m of MODES) out[m] = { ...emptyStats(), ...(rows[m] || {}) }; return out; };
+// R143 · a Força (forca, forca_rd) é oculta: só o serviço de partidas lê (getRankedStatsFull)
+const hideForca = all => { for (const m of Object.keys(all)) { delete all[m].forca; delete all[m].forca_rd; delete all[m].updated_at; } return all; };
+const DAY = 86400000;
 
 class MemoryStore {
   constructor() { this.profiles = new Map(); this.stats = new Map(); this.matches = []; this.persistent = false; this.social = { requests: new Set(), friends: new Set(), blocks: new Set() }; this.dms = []; this.dmSeq = 0; }
@@ -124,7 +127,25 @@ class MemoryStore {
     p.avatar_url = null; p.avatar_updated_at = new Date().toISOString();
     return { profile: p };
   }
-  async getRankedStats(userId) { return fullStats(this.stats.get(userId) || {}); }
+  // R143 · { forca: true } só para o serviço de partidas: a Força é oculta
+  async getRankedStats(userId, opts = {}) { const all = JSON.parse(JSON.stringify(fullStats(this.stats.get(userId) || {}))); return opts.forca ? all : hideForca(all); }
+  // R143 · vagas do Challenger: Grão-Mestre (100 PL) e Challenger de um ritmo + quantos jogaram nos últimos 30 dias
+  async challengerRows(mode) {
+    const rows = [], since = Date.now() - 30 * DAY; let active = 0;
+    for (const [uid, all] of this.stats) {
+      const s = all && all[mode]; if (!s) continue;
+      const at = new Date(s.updated_at || 0).getTime();
+      if (s.matches > 0 && at >= since) active++;
+      if (s.league >= 9) rows.push({ user_id: uid, league: s.league, pl: s.pl, forca: s.forca ?? null, matches: s.matches, updated_at: s.updated_at || null });
+    }
+    return { rows, active };
+  }
+  async setRankedPlace(userId, mode, from, to) {
+    const s = (this.stats.get(userId) || {})[mode];
+    if (!s || s.league !== from.league || s.pl !== from.pl) return false;
+    s.league = to.league; s.pl = to.pl; s.highest_league = Math.max(s.highest_league, to.league);
+    return true;
+  }
   // ---------- Direitos (0005): em memória só para desenvolvimento ----------
   async getEntitlements(userId) {
     this.entitlements = this.entitlements || new Map();
@@ -291,6 +312,8 @@ class MemoryStore {
       const out = r.result === 'draw' ? 'draws' : (r.result === side ? 'wins' : 'losses');
       s.league = r[side + '_league_after']; s.pl = r[side + '_pl_after']; s.matches++; s[out]++;
       s.highest_league = Math.max(s.highest_league, s.league);
+      if (r[side + '_forca_after'] != null) { s.forca = r[side + '_forca_after']; s.forca_rd = r[side + '_forca_rd_after']; }
+      s.updated_at = r.finished_at || new Date().toISOString();
     };
     apply(w, 'white'); apply(b, 'black');
     this.matches.push({ ...r });
@@ -602,10 +625,37 @@ class SupabaseStore {
     } catch (e) { console.error('[acct-delete] liberar login falhou (migration 0011 aplicada?)', e && (e.code || ''), e && e.message); }
     return { ok: true };
   }
-  async getRankedStats(userId) {
-    const rows = await this.req('/ranked_stats?user_id=eq.' + encodeURIComponent(userId) + '&select=mode,league,pl,matches,wins,losses,draws,highest_league');
+  // R143 · { forca: true } (só o serviço de partidas): com a Força oculta. Banco sem a 0020: sem ela (estimada pela liga).
+  async getRankedStats(userId, opts = {}) {
+    if (!opts.forca) {
+      const rows = await this.req('/ranked_stats?user_id=eq.' + encodeURIComponent(userId) + '&select=mode,league,pl,matches,wins,losses,draws,highest_league');
+      const map = {}; for (const r of rows) map[r.mode] = r;
+      return fullStats(map);
+    }
+    const base = '/ranked_stats?user_id=eq.' + encodeURIComponent(userId) + '&select=mode,league,pl,matches,wins,losses,draws,highest_league,updated_at';
+    let rows;
+    try { rows = await this.req(base + ',forca,forca_rd'); }
+    catch (e) { if (!SCHEMA_MISSING(e)) throw e; rows = await this.req(base); }
     const map = {}; for (const r of rows) map[r.mode] = r;
     return fullStats(map);
+  }
+  // R143 · candidatos e membros do Challenger de um ritmo + quantas contas jogaram nos últimos 30 dias
+  async challengerRows(mode) {
+    const base = '/ranked_stats?mode=eq.' + encodeURIComponent(mode) + '&league=gte.9&select=user_id,league,pl,matches,updated_at';
+    let rows;
+    try { rows = await this.req(base + ',forca&limit=2000'); }
+    catch (e) { if (!SCHEMA_MISSING(e)) throw e; rows = await this.req(base + '&limit=2000'); }
+    const since = new Date(Date.now() - 30 * DAY).toISOString();
+    const act = await this.req('/ranked_stats?mode=eq.' + encodeURIComponent(mode) + '&matches=gte.1&updated_at=gte.' + encodeURIComponent(since) + '&select=user_id&limit=5000');
+    return { rows, active: Array.isArray(act) ? act.length : 0 };
+  }
+  // Troca liga/PL só se ainda estiver como lido (nunca atropela uma partida gravada no meio do caminho).
+  async setRankedPlace(userId, mode, from, to) {
+    const q = '/ranked_stats?user_id=eq.' + encodeURIComponent(userId) + '&mode=eq.' + encodeURIComponent(mode) + '&league=eq.' + (from.league | 0) + '&pl=eq.' + (from.pl | 0);
+    const body = { league: to.league, pl: to.pl };
+    if (to.league === 10) body.highest_league = 10;
+    const rows = await this.req(q, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
+    return Array.isArray(rows) && rows.length > 0;
   }
   async recordRankedMatch(r) {
     return this.req('/rpc/fraiha_record_ranked_match', { method: 'POST', body: JSON.stringify({ p: r }) });

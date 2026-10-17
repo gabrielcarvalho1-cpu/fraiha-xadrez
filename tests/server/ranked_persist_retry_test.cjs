@@ -106,9 +106,9 @@ async function server() {
     const pend = await b.next(m => m.type === 'ranked_error' || m.type === 'ranked_queued', 3000);
     check(pend.type === 'ranked_error' && pend.code === 'result_pending', 'servidor: durante as novas tentativas o vencedor NÃO entra em outra fila (result_pending)');
     const ra = await a.next('ranked_result', 5000), rb = await b.next('ranked_result', 5000);
-    check(ra.saved === true && rb.saved === true && rb.pl_change === 15, 'servidor: 2 falhas transitórias → resultado chega com saved=true');
+    check(ra.saved === true && rb.saved === true && rb.pl_change === 36, 'servidor: 2 falhas transitórias → resultado chega com saved=true');   // R143: conta nova vence +36
     const sb = await ranked3(b), sa = await ranked3(a);
-    check(sb.pl === 15 && sb.matches === 1 && sa.matches === 1, 'servidor: PL +15 aplicado UMA vez (1 partida para cada)');
+    check(sb.pl === 36 && sb.matches === 1 && sa.matches === 1, 'servidor: PL +36 aplicado UMA vez (1 partida para cada)');
     check((s.log().match(/FLAKY call/g) || []).length === 3, 'servidor: exatamente 3 chamadas de gravação');
     b.send({ type: 'ranked_queue', mode: 'ranked_3min' }); check((await b.next(m => m.type === 'ranked_queued' || m.type === 'ranked_error', 3000)).type === 'ranked_queued', 'servidor: depois de gravado, volta a entrar na fila normalmente');
     a.close(); b.close(); s.stop(); }
@@ -117,7 +117,7 @@ async function server() {
     const { a, b } = await playAndResign(s.port, 'lostA', 'lostB');
     const rb = await b.next('ranked_result', 5000);
     const sb = await ranked3(b);
-    check(rb.saved === true && sb.pl === 15 && sb.matches === 1, 'servidor: gravou e a resposta se perdeu → saved=true e PL NÃO duplicado (15, 1 partida)');
+    check(rb.saved === true && sb.pl === 36 && sb.matches === 1, 'servidor: gravou e a resposta se perdeu → saved=true e PL NÃO duplicado (36, 1 partida)');
     check((s.log().match(/FLAKY call/g) || []).length === 1, 'servidor: nenhuma segunda gravação depois do commit');
     a.close(); b.close(); s.stop(); }
   // banco fora do ar: desiste com saved=false e registra a partida para reconciliação

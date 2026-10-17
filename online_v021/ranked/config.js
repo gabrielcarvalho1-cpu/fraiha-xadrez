@@ -22,11 +22,14 @@ const CONFIG = {
   baseMs: mode => num(env.FRAIHA_TEST_BASE_MS, ALL_MODES[mode].minutes * 60000),
   startDelayMs: num(env.FRAIHA_RANKED_START_DELAY_MS, 3000),
   reconnectGraceMs: num(env.FRAIHA_RANKED_RECONNECT_MS, 60000),
+  // R143 · o adversário é escolhido pela FORÇA oculta (não mais pela liga/PL): começa em ±120 de Força,
+  // amplia +80 a cada 10 s, até ±600. Assim um jogador forte que está começando enfrenta gente forte (e não
+  // atropela iniciantes), e cada um pega alguém do seu nível de verdade.
   matchmaking: {
-    initialPlWindow: 20,                                   // mesma liga, ±20 PL
-    expandEveryMs: num(env.FRAIHA_MM_EXPAND_MS, 10000),    // a cada 10 s amplia
-    expandStep: 40,                                        // +40 na faixa (liga*100+PL)
-    maxWindow: 300,                                        // R51: nunca passa de 1 liga (Madeira: 2)
+    initialWindow: 120,
+    expandEveryMs: num(env.FRAIHA_MM_EXPAND_MS, 10000),
+    expandStep: 80,
+    maxWindow: 600,
   },
   tickMs: 200,
 };

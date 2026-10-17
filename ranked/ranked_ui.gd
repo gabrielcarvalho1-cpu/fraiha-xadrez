@@ -629,7 +629,7 @@ func _desk_art(which: String) -> bool:
                 var league_txt: String = LEAGUES[after_league].to_upper()
                 if bool(r.get("demoted", false)): league_txt = "REBAIXADO · " + league_txt
                 d.label(league_txt, Rect2(300, 702, 522, 58), 46, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskResultLeague"
-                d.label("%d / 100 PL" % after_pl, Rect2(380, 784 if win else 780, 362, 48), 38, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskResultCount"
+                d.label(progress_line(r, true), Rect2(170, 784 if win else 780, 782, 48), 34, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskResultCount"   # R143
                 var start_value := 100.0 if bool(r.get("demoted", false)) else float(r.get("pl_before", after_pl))
                 d.bar(Rect2(234, 840, 652, 37) if win else Rect2(234, 845, 654, 36), start_value, after_pl)
                 if account.ranked is Dictionary and r.has("stats"): account.ranked[String(r.mode)] = r.stats
@@ -775,6 +775,19 @@ func _casual_card(grid: Container, item: Array):
     b.name = "Queue_" + id
     b.disabled = not account.online_ready()
 
+## R143 · progresso depois da partida: quanto falta para a próxima liga (o Grão-Mestre trava em 100 PL e
+## espera vaga no Challenger, que é só para os melhores de cada ritmo)
+static func progress_line(r: Dictionary, short := false) -> String:
+    var lg := int(r.get("league_after", 0))
+    var pl := int(r.get("pl_after", 0))
+    var slots := int(r.get("challenger_slots", 0))
+    var top := ("Top %d" % slots) if slots > 0 else "os melhores"
+    if lg >= 10: return "%d / 100 PL · Challenger (%s)" % [pl, top]
+    if lg == 9:
+        if pl >= 100: return ("100 / 100 PL · esperando vaga no Challenger" if short else "100 / 100 PL · esperando vaga no Challenger (%s)" % top)
+        return "%d / 100 PL · faltam %d para disputar o Challenger" % [pl, 100 - pl]
+    return "%d / 100 PL · faltam %d para %s" % [pl, 100 - pl, LEAGUES[lg + 1]]
+
 func _result(r: Dictionary):
     if bool(r.get("unknown", false)):
         # R53 · a partida terminou no servidor sem o resultado chegar (expirou enquanto o jogador estava fora)
@@ -822,7 +835,7 @@ func _result(r: Dictionary):
         _label("REBAIXADO", 24, Color("ff9d86"), true)
         _label("de %s para %s" % [LEAGUES[int(r.get("league_before", 0))], LEAGUES[after_league]], 15, Color("c4cbbd"), true)
     _label(LEAGUES[after_league].to_upper(), 18, Color("f4edda"), true)
-    _label("%d / 100 PL" % after_pl, 16, Color("c4cbbd"), true)
+    _label(progress_line(r), 16, Color("c4cbbd"), true)   # R143
     # Barra anima do PL anterior ao atual (reinicia do zero ao promover; no rebaixamento desce do topo).
     var start_value = 0.0 if bool(r.get("promoted", false)) else (100.0 if bool(r.get("demoted", false)) else float(r.get("pl_before", after_pl)))
     result_bar = _bar(box, start_value)

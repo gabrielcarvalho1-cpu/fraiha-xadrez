@@ -126,8 +126,14 @@ func run():
 		"reason_text": "Desistência", "pl_change": 18, "pl_before": 72, "pl_after": 90, "league_before": 0, "league_after": 0})
 	await frames(4)
 	check(da.is_open() and da.kind == "result_win", "Ranked: VITÓRIA na arte")
-	check(txt(da, "DeskResultPl") == "+18 PL" and txt(da, "DeskResultLeague") == "MADEIRA" and txt(da, "DeskResultCount") == "90 / 100 PL", "vitória Ranked: +PL, liga e PL atual")
+	check(txt(da, "DeskResultPl") == "+18 PL" and txt(da, "DeskResultLeague") == "MADEIRA" and txt(da, "DeskResultCount") == "90 / 100 PL · faltam 10 para Ferro", "vitória Ranked: +PL, liga e PL atual (R143: quanto falta)")
 	check(txt(da, "DeskResultSub") == "RELÂMPAGO · Desistência" and txt(da, "DeskBackText") == "VOLTAR AO RANKED", "vitória Ranked: modo · motivo e VOLTAR AO RANKED")
+	if OS.get_environment("SHOT_DIR") != "":   # R143 · print da linha de progresso
+		for ov in root.find_children("*", "CanvasLayer", true, false):
+			if ov.get_script() != null and String(ov.get_script().resource_path).ends_with("game_result_overlay.gd"): ov.visible = false
+		await frames(40)
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(OS.get_environment("SHOT_DIR").path_join(OS.get_environment("SHOT_TAG") + "resultado_ranked.png"))
 	check(node(da, "DeskPlayAgain") != null and node(da, "DeskAnalyze") != null and node(da, "DeskBack") != null, "vitória Ranked: JOGAR NOVAMENTE / ANALISAR / VOLTAR")
 	await frames(70)
 	check(absf(da.bar_value() - 90.0) < 0.5, "barra de PL anima até o PL novo (%.1f)" % da.bar_value())

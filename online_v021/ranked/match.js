@@ -12,6 +12,8 @@ const REASONS = { checkmate: 'Xeque-mate', timeout: 'Tempo esgotado', timeout_dr
 // quem ofereceu só oferece de novo depois de fazer mais um lance. Lance do adversário = oferta recusada.
 const DRAW_MIN_PLY = { rated: 20, casual: 2 };
 
+// R143 · a Força é oculta: nunca sai para o cliente.
+const publicStats = s => { const { forca, forca_rd, updated_at, ...rest } = s || {}; return rest; };
 // Partida autoritativa (Ranked e Casual). rated=false: sem PL, sem liga, sem gravação.
 class RankedMatch {
   constructor({ mode, white, black, now, cfg = CONFIG, rated = true, prefix = 'ranked' }) {
@@ -92,7 +94,10 @@ class RankedMatch {
       white_pl_before: W.stats.pl, black_pl_before: B.stats.pl, white_pl_change: r.w.applied, black_pl_change: r.b.applied,
       white_pl_after: r.w.stats.pl, black_pl_after: r.b.stats.pl,
       white_league_before: W.stats.league, black_league_before: B.stats.league,
-      white_league_after: r.w.stats.league, black_league_after: r.b.stats.league, moves: this.pos.history.join(' ') };
+      white_league_after: r.w.stats.league, black_league_after: r.b.stats.league, moves: this.pos.history.join(' '),
+      // R143 · Força oculta depois da partida (a função do banco grava com a 0020; sem ela, o banco ignora)
+      white_forca_after: r.w.stats.forca, white_forca_rd_after: r.w.stats.forca_rd,
+      black_forca_after: r.b.stats.forca, black_forca_rd_after: r.b.stats.forca_rd };
   }
   publicPlayer(c) {
     const p = this.players[c], out = { user_id: /^[0-9a-f-]{36}$/i.test(String(p.userId || '')) ? p.userId : '', nickname: p.nickname, avatar_id: p.avatar, badge: p.badge || '', title: p.title || '', frame: p.frame || 'liga', founder: !!p.founder, club: !!p.club, connected: p.connected };
@@ -119,7 +124,8 @@ class RankedMatch {
     return { type: 'ranked_result', match_id: this.id, mode: this.mode, mode_name: ALL_MODES[this.mode].name, you: c,
       outcome: r.winner === 'draw' ? 'draw' : r.winner === c ? 'win' : 'loss', reason: r.reason, reason_text: REASONS[r.reason] || r.reason,
       pl_change: mine.applied, league_before: before.league, pl_before: before.pl, league_after: mine.stats.league, pl_after: mine.stats.pl,
-      promoted: mine.promoted, demoted: !!mine.demoted, stats: mine.stats, saved };
+      promoted: mine.promoted, demoted: !!mine.demoted, stats: publicStats(mine.stats), saved,
+      challenger_candidate: !!mine.challenger_candidate, challenger_slots: this.challengerSlots || 0 };
   }
 }
-module.exports = { RankedMatch, REASONS };
+module.exports = { RankedMatch, REASONS, publicStats };

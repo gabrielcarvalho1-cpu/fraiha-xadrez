@@ -1,8 +1,10 @@
 'use strict';
 // Uma fila por modalidade; nunca mistura ritmos.
 const { MODES, CONFIG } = require('./config');
-const { rating } = require('./progression');
+const { forcaOf } = require('./progression');
+// R143 · Ranked: pareia pela FORÇA oculta (ranked/progression.js). A faixa começa estreita e amplia com a espera.
 // open=true (Casual): qualquer par da mesma modalidade, por ordem de chegada.
+const forca = e => forcaOf(e.stats).f;
 class Matchmaker {
   constructor(cfg = CONFIG.matchmaking, modes = MODES, { open = false } = {}) {
     this.cfg = cfg; this.open = open; this.queues = new Map(Object.keys(modes).map(m => [m, []]));
@@ -15,21 +17,12 @@ class Matchmaker {
   cancel(userId) { let found = null; for (const q of this.queues.values()) { const i = q.findIndex(e => e.userId === userId); if (i >= 0) found = q.splice(i, 1)[0]; } return found; }
   window(waited) {
     const steps = Math.floor(waited / this.cfg.expandEveryMs);
-    return steps === 0 ? null : Math.min(this.cfg.maxWindow, this.cfg.initialPlWindow + steps * this.cfg.expandStep);
-  }
-  // R51 · Ranked: só uma liga de diferença (Prata ↔ Bronze/Prata/Ouro). A Madeira, sem liga abaixo,
-  // também alcança o Bronze (Madeira ↔ Madeira/Ferro/Bronze). A faixa de PL ampliada respeita esse teto.
-  static leaguesOk(la, lb) {
-    const lo = Math.min(la, lb), gap = Math.abs(la - lb);
-    return gap <= 1 || (lo === 0 && gap <= 2);
+    return Math.min(this.cfg.maxWindow, (this.cfg.initialWindow || 120) + steps * this.cfg.expandStep);
   }
   compatible(a, b, now) {
     if (this.open) return true;
-    if (!Matchmaker.leaguesOk(a.stats.league, b.stats.league)) return false;
     const waited = Math.max(now - a.since, now - b.since);
-    const w = this.window(waited);
-    if (w === null) return a.stats.league === b.stats.league && Math.abs(a.stats.pl - b.stats.pl) <= this.cfg.initialPlWindow;
-    return Math.abs(rating(a.stats) - rating(b.stats)) <= w;
+    return Math.abs(forca(a) - forca(b)) <= this.window(waited);
   }
   tick(now, eligible = () => true) {
     const pairs = [];
@@ -41,7 +34,7 @@ class Matchmaker {
         for (let j = i + 1; j < q.length; j++) {
           if (!eligible(q[j])) continue;
           if (q[j].userId === q[i].userId || !this.compatible(q[i], q[j], now)) continue;
-          const gap = this.open ? 0 : Math.abs(rating(q[i].stats) - rating(q[j].stats));
+          const gap = this.open ? 0 : Math.abs(forca(q[i]) - forca(q[j]));
           if (gap < bestGap) { best = j; bestGap = gap; }
           if (this.open) break;
         }

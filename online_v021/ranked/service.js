@@ -7,6 +7,7 @@ const { MODES, CASUAL_MODES, ALL_MODES, CONFIG } = require('./config');
 const { Matchmaker } = require('./matchmaker');
 const { RankedMatch } = require('./match');
 const { persistRanked } = require('./persist');
+const { ChallengerLadder } = require('./challenger');
 const RESULT_KEEP_MS = Number(process.env.FRAIHA_RESULT_KEEP_MS || 10 * 60 * 1000);
 
 class Ranked {
@@ -18,7 +19,10 @@ class Ranked {
     this.matches = new Map(); this.byUser = new Map(); this.sockets = new Map();
     this.pendingQueues = new Map(); // uid -> revisão vigente e leituras ainda em andamento
     this.timer = setInterval(() => this.tick(), cfg.tickMs); this.timer.unref && this.timer.unref();
+    this.challenger = this.rated ? new ChallengerLadder(this) : null;   // R143 · vagas do Challenger
   }
+  // R143 · PL/liga + Força oculta (lidos do servidor, nunca do cliente)
+  statsFull(uid) { return this.backend.store.getRankedStats(uid, { forca: true }); }
   fail(ws, message, code = '') { this.send(ws, { type: this.p + 'error', message, code }); }
   uidOf(ws) { return ws.identity ? ws.identity.id : ws.user ? ws.user.id : null; }
   // Partida ainda não encerrada deste usuário (para impedir duas partidas ao mesmo tempo).
@@ -104,7 +108,7 @@ class Ranked {
       }
       operation = {}; revision.latest = operation; revision.pending++;
       // PL/liga sempre lidos do servidor, nunca do cliente.
-      return this.backend.store.getRankedStats(uid).then(async all => {
+      return this.statsFull(uid).then(async all => {
         if (this.backend.ensureSession && this.backend.current(ws, revision.sessionRevision)) {
           if (!(await this.backend.ensureSession(ws))) return;
         }
@@ -182,7 +186,7 @@ class Ranked {
       const id = (pws && pws.identity) || p;
       return { userId: p.userId, nickname: id.nickname || p.nickname, avatar: id.avatar || p.avatar, ...publicLook(id), stats, since: this.now() };
     };
-    const stats = this.rated ? Promise.all(['w', 'b'].map(col => this.backend.store.getRankedStats(old.players[col].userId).then(all => all[old.mode])))
+    const stats = this.rated ? Promise.all(['w', 'b'].map(col => this.statsFull(old.players[col].userId).then(all => all[old.mode])))
       : Promise.resolve([null, null]);
     return stats.then(([sw, sb]) => {
       // cores trocadas: quem era Pretas agora joga de Brancas
@@ -223,6 +227,10 @@ class Ranked {
       if (r.attempts > 1 || r.already) console.log('ranked persist', match.id, JSON.stringify({ saved: r.saved, attempts: r.attempts, already: r.already }));
     }
     match.saved = saved;
+    if (this.challenger) {
+      match.challengerSlots = this.challenger.slots[match.mode] || 0;
+      if (saved) void this.challenger.sync(match.mode);   // alguém pode ter chegado a Grão-Mestre 100 / caído do Challenger
+    }
     if (!this.rated && match.result) this.recordCasual(match);
     // R105 · indicação: partida online terminada contra outra pessoa conta para a conta convidada
     const R = this.backend && this.backend.referrals;
@@ -336,6 +344,6 @@ class Ranked {
       this.pushState(match, this.now());
     }
   }
-  stop() { clearInterval(this.timer); this.pendingQueues.clear(); }
+  stop() { clearInterval(this.timer); this.pendingQueues.clear(); if (this.challenger) this.challenger.stop(); }
 }
 module.exports = { Ranked, MatchService: Ranked };
