@@ -130,8 +130,35 @@ static func _emulated_mouse() -> bool:
     return bool(ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch", true))
 
 # ---------------------------------------------------------------- primitivas
+var _wide_cache := {}
 func L() -> Dictionary:
-    return LAYOUTS[ui.layout]
+    if ui.layout != "landscape" or float(ui.get("wide_extra")) < 1.0: return LAYOUTS[ui.layout]
+    var e: float = ui.wide_extra
+    if not _wide_cache.has(e):
+        _wide_cache.clear()
+        _wide_cache[e] = _spread(LAYOUTS["landscape"], e)
+    return _wide_cache[e]
+
+## R155 · celular deitado largo: coluna da esquerda fica, o meio anda metade da sobra, a coluna da direita anda tudo.
+static func _wx(x: float, e: float) -> float:
+    if x < 420.0: return 0.0
+    if x >= 1500.0: return e
+    return e * 0.5
+static func _spread(v, e: float):
+    if v is Rect2: return Rect2((v as Rect2).position + Vector2(_wx((v as Rect2).get_center().x, e), 0.0), (v as Rect2).size)
+    if v is Vector2: return (v as Vector2) + Vector2(_wx((v as Vector2).x, e), 0.0)
+    if v is Dictionary:
+        var d := {}
+        for key in v: d[key] = _spread_key(key, v[key], e)
+        return d
+    if v is Array:
+        var a := []
+        for it in v: a.append(_spread(it, e))
+        return a
+    return v
+static func _spread_key(key, val, e: float):
+    if key is String and key == "scene": return [val[0], (val[1] as Vector2) + Vector2(e * 0.5, 0.0)]
+    return _spread(val, e)
 
 func font(key: String) -> Font:
     return ui.fonts[key]

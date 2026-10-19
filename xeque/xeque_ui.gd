@@ -359,6 +359,7 @@ func _input(event):
         elif mode == "tutorial" or mode == "over": close()
         _redraw()
 
+var wide_extra := 0.0
 func _relayout():
     if root == null: return
     var vs := root.get_viewport_rect().size
@@ -368,6 +369,12 @@ func _relayout():
     elif vs.x / maxf(1.0, vs.y) >= 1.95 and MobileLayout.active(get_viewport()): layout = "landscape"
     else: layout = "desktop"
     design = {"desktop": Vector2(1920, 1080), "portrait": Vector2(1080, 1920), "landscape": Vector2(1950, 900)}[layout]
+    # R155 · celular deitado mais largo que 1950x900: o desenho ganha largura (em vez de sobrar faixa dos lados) e
+    # as colunas da esquerda/direita vão para as pontas — a mesa no meio, tudo preenchendo a tela (como a MARCHA)
+    wide_extra = 0.0
+    if layout == "landscape":
+        wide_extra = maxf(0.0, 900.0 * vs.x / maxf(1.0, vs.y) - 1950.0)
+        design.x += wide_extra
     if layout == "desktop": _load_desk_art()
     else: _load_clean_cards(false)
     k = minf(vs.x / design.x, vs.y / design.y)
