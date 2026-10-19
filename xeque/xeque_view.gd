@@ -427,24 +427,64 @@ func _draw_scene_full(a: Rect2):
                 k += 1
     draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
 
+## R156 · zoom das colunas laterais no celular deitado largo (1 = normal). Até 35% maiores, conforme a sobra.
+func side_zoom() -> float:
+    if ui.layout != "landscape": return 1.0
+    return clampf(1.0 + float(ui.get("wide_extra")) / 1300.0, 1.0, 1.35)
+var _grp_a := Vector2.ZERO
+var _grp_f := 1.0
+var _grp_hits := 0
+## Desenha um grupo ampliado em volta do ponto `a` (coordenadas do desenho) — os toques acompanham.
+func _group_begin(a: Vector2, f: float):
+    _grp_a = a
+    _grp_f = f
+    _grp_hits = ui.hits.size()
+    if f != 1.0:
+        # o próprio origin/k da tela mudam enquanto o grupo desenha (as funções de desenho "voltam" para eles)
+        _grp_saved = [ui.origin, ui.k]
+        ui.origin = ui.origin + a * ui.k * (1.0 - f)
+        ui.k = ui.k * f
+        draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+var _grp_saved := []
+func _group_end():
+    if _grp_f != 1.0:
+        for i in range(_grp_hits, ui.hits.size()):
+            var r: Rect2 = ui.hits[i].rect
+            ui.hits[i].rect = Rect2(_grp_a + (r.position - _grp_a) * _grp_f, r.size * _grp_f)
+        ui.origin = _grp_saved[0]
+        ui.k = _grp_saved[1]
+        draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+    _grp_f = 1.0
+## Ponto do desenho → ponto da tela já considerando o zoom do grupo (ex.: CHAT ao lado do retrato).
+func group_point(p: Vector2, left: bool) -> Vector2:
+    var f := side_zoom()
+    var a := Vector2(20, 20) if left else Vector2(ui.design.x - 10.0, 0)
+    return a + (p - a) * f
+
 func _draw_game():
     var g = ui.g
     if g == null: return
     ui._sync_chat_dock()   # R88
     var lay := L()
     _draw_scene()
+    var mate: bool = ui.phase in ["mate", "elim"]
+    # R156 · celular deitado largo: as colunas da esquerda e da direita ficam MAIORES (sobrava muito cenário)
+    var f: float = side_zoom()
+    _group_begin(Vector2(20, 20), f)
     _draw_title()
     _draw_mesa_pede()
     if lay.como != null: _draw_como_jogar(lay.como)
-    var mate: bool = ui.phase in ["mate", "elim"]
+    if not (mate and 0 == int(ui.result.loser)): _draw_plate(0)
+    _draw_turn_banner()
+    _group_end()
     # relógio do centro (o de quem está em foco)
     # R35.1 · a torre-relógio só aparece quando alguém errou (o relógio é acionado); fora disso a mesa fica livre
     _draw_pile()
-    for s in 4:
+    for s in range(1, 4):
         if mate and s == int(ui.result.loser): continue
         _draw_plate(s)
     _draw_bubble()
-    _draw_turn_banner()
+    _group_begin(Vector2(ui.design.x - 10.0, 0), f)
     _draw_meter()
     _draw_xeque_button(false)
     _draw_play_button()
@@ -456,6 +496,7 @@ func _draw_game():
     var sm = ui.screen_mode()
     if sm != null and sm.supported(): fullscreen_button(lay.full, sm.on_cached())   # R43
     _draw_voice(lay)
+    _group_end()
     if not mate: _draw_hand()
     if _hint_rr.size.x > 0.0 and ui.phase == "": _xeque_hint_balloon(_hint_rr)
     _hint_rr = Rect2()

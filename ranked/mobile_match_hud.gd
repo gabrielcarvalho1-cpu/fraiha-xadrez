@@ -366,15 +366,20 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 	corner.back.show()
 	corner.gear.show()
 	corner.tab.show()
-	# cartões na coluna da esquerda: adversário em cima, jogador embaixo
-	var col_x := safe.position.x
-	var col_w := frame.position.x - 6.0 - col_x
-	var s := clampf(col_w / 220.0, 0.6, 1.25)
-	# R154 · tela deitada baixa (ex.: com a barra do navegador): os dois cartões cabem na altura (antes o de baixo cortava)
-	s = maxf(0.45, minf(s, (safe.size.y - bs - 18.0) / 320.0))
+	# R156 · um cartão de cada lado do tabuleiro: adversário na coluna da DIREITA (em cima, abaixo da engrenagem),
+	# jogador na coluna da ESQUERDA (embaixo). Cada um ganha a altura toda da coluna → cartões maiores e o cenário
+	# da direita deixa de sobrar vazio.
+	var lx := safe.position.x
+	var lw: float = frame.position.x - 6.0 - lx
+	var rx0 := frame.end.x + 6.0
+	var rw: float = corner.tab.position.x - 6.0 - rx0
+	var col_w := minf(lw, rw)
+	var s := clampf(col_w / 220.0, 0.6, 1.45)
+	s = maxf(0.45, minf(s, (safe.size.y - bs - 14.0) / 170.0))
 	var ch := 160.0 * s
+	var cw := minf(col_w, 260.0 * s)
 	var top_y := safe.position.y + bs + 6.0
-	var rects := {"top": Rect2(col_x, top_y, col_w, ch), "bottom": Rect2(col_x, maxf(top_y + ch + 6.0, safe.end.y - ch), col_w, ch)}
+	var rects := {"top": Rect2(rx0 + (rw - cw) / 2.0, top_y, cw, ch), "bottom": Rect2(lx + (lw - cw) / 2.0, safe.end.y - ch - 4.0, cw, ch)}
 	for key in ["top", "bottom"]:
 		var c: Rect2 = rects[key]
 		var p: Dictionary = plates[key]
