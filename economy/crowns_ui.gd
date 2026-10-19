@@ -281,8 +281,8 @@ func _soon(parent: Control):
 	cb.pressed.connect(func(): client.open_creator())
 	parent.add_child(cb)
 	# R118 · torneio grátis de XEQUE / MARCHA com prêmio em Coroas
-	var tb := button("TORNEIO DA SEMANA", 15)
+	var tb := button("TORNEIOS", 15)
 	tb.name = "CrownsOpenTournament"
 	tb.custom_minimum_size = Vector2(0, ts(44))
-	tb.pressed.connect(func(): client.open_tournament("xeque"))
+	tb.pressed.connect(func(): client.open_tournament("chess"))
 	parent.add_child(tb)

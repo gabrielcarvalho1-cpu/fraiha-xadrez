@@ -450,6 +450,22 @@ class MemoryStore {
     for (const r of (this.creatorSales || new Map()).values()) if (r.code === code && r.status === 'due') { r.status = 'paid'; r.paid_at = new Date().toISOString(); r.paid_note = note || ''; n++; cents += r.commission_cents; }
     return { paid: n, commission_cents: cents };
   }
+  // R157 · Torneios de evento (em memória)
+  async evList() { return [...(this.events || new Map()).values()].map(e => ({ ...e })).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))); }
+  async evGet(id) { const e = (this.events || new Map()).get(id); return e ? { ...e } : null; }
+  async evByCode(code) { return (await this.evList()).find(e => e.code === code) || null; }
+  async evSave(ev) {
+    this.events = this.events || new Map();
+    if ([...this.events.values()].some(e => e.code === ev.code && e.id !== ev.id)) { const err = new Error('duplicate'); err.code = '23505'; throw err; }
+    const now = new Date().toISOString();
+    const row = { ...(this.events.get(ev.id) || { id: ev.id || require('crypto').randomUUID(), created_at: now, bracket: null }), ...ev, updated_at: now };
+    if (!row.id) row.id = require('crypto').randomUUID();
+    this.events.set(row.id, row); return { ...row };
+  }
+  async evEntries(id) { return [...(this.eventEntries || new Map()).values()].filter(r => r.event_id === id).sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at))).map(r => ({ ...r })); }
+  async evJoin(id, uid) { this.eventEntries = this.eventEntries || new Map(); const k = id + '|' + uid; if (!this.eventEntries.has(k)) this.eventEntries.set(k, { event_id: id, user_id: uid, joined_at: new Date().toISOString() }); return true; }
+  async evLeave(id, uid) { (this.eventEntries || new Map()).delete(id + '|' + uid); return true; }
+  async evOfUser(uid) { return [...(this.eventEntries || new Map()).values()].filter(r => r.user_id === uid).map(r => r.event_id); }
   // R118 · Torneio da Semana (em memória)
   async tournAdd(week, game, userId, pts, win) {
     this.tourn = this.tourn || new Map();
@@ -994,6 +1010,25 @@ class SupabaseStore {
       body: JSON.stringify({ status: 'paid', paid_at: new Date().toISOString(), paid_note: note || '' }) });
     return { paid: rows.length, commission_cents: rows.reduce((s, r) => s + (r.commission_cents || 0), 0) };
   }
+  // R157 · Torneios de evento (0021)
+  async evList() { return this.req('/event_tournaments?select=*&order=created_at.desc&limit=200'); }
+  async evGet(id) { const r = await this.req('/event_tournaments?id=eq.' + encodeURIComponent(id) + '&select=*'); return r[0] || null; }
+  async evByCode(code) { const r = await this.req('/event_tournaments?code=eq.' + encodeURIComponent(code) + '&select=*'); return r[0] || null; }
+  async evSave(ev) {
+    const body = { ...ev, updated_at: new Date().toISOString() };
+    if (!body.id) delete body.id;
+    const rows = body.id
+      ? await this.req('/event_tournaments?id=eq.' + encodeURIComponent(body.id), { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) })
+      : await this.req('/event_tournaments', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
+    return rows[0];
+  }
+  async evEntries(id) { return this.req('/event_entries?event_id=eq.' + encodeURIComponent(id) + '&select=*&order=joined_at.asc&limit=1000'); }
+  async evJoin(id, uid) {
+    await this.req('/event_entries', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ event_id: id, user_id: uid }) });
+    return true;
+  }
+  async evLeave(id, uid) { await this.req('/event_entries?event_id=eq.' + encodeURIComponent(id) + '&user_id=eq.' + encodeURIComponent(uid), { method: 'DELETE' }); return true; }
+  async evOfUser(uid) { return (await this.req('/event_entries?user_id=eq.' + encodeURIComponent(uid) + '&select=event_id&limit=200')).map(r => r.event_id); }
   // R118 · Torneio da Semana (0018)
   async tournAdd(week, game, userId, pts, win) {
     return this.req('/rpc/fraiha_tourn_add', { method: 'POST', body: JSON.stringify({ p_week: week, p_game: game, p_user: userId, p_pts: pts, p_win: !!win }) });

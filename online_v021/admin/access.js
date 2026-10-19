@@ -5,9 +5,9 @@
 // Papéis → permissões (RBAC simples, pronto para crescer; tabela admin_roles = migration proposta).
 const ROLES = {
   // entitlements.write (Clube/Fundador): SÓ owner. operator/viewer não recebem (política mais segura).
-  owner: ['dashboard.read', 'live.read', 'queues.read', 'queues.write', 'matches.read', 'players.read', 'audit.read', 'system.read', 'entitlements.write', 'payments.read', 'payments.write', 'reports.read', 'moderation.write'],
-  operator: ['dashboard.read', 'live.read', 'queues.read', 'queues.write', 'matches.read', 'players.read', 'audit.read', 'system.read', 'payments.read', 'reports.read', 'moderation.write'],
-  viewer: ['dashboard.read', 'live.read', 'queues.read', 'matches.read', 'players.read', 'system.read'],
+  owner: ['dashboard.read', 'live.read', 'queues.read', 'queues.write', 'matches.read', 'players.read', 'audit.read', 'system.read', 'entitlements.write', 'payments.read', 'payments.write', 'reports.read', 'moderation.write', 'events.read', 'events.write'],
+  operator: ['dashboard.read', 'live.read', 'queues.read', 'queues.write', 'matches.read', 'players.read', 'audit.read', 'system.read', 'payments.read', 'reports.read', 'moderation.write', 'events.read', 'events.write'],
+  viewer: ['dashboard.read', 'live.read', 'queues.read', 'matches.read', 'players.read', 'system.read', 'events.read'],
 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

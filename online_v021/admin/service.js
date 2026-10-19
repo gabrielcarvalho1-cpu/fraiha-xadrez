@@ -81,6 +81,7 @@ class AdminService {
         if (path === '/admin/api/payments') return need('payments.read') && out(200, await this.payments(url.searchParams.get('status') || ''));
         if (path === '/admin/api/reports') return need('reports.read') && out(200, await this.reportsList(url.searchParams.get('status') || 'open'));
         if (path === '/admin/api/creators') return need('payments.read') && out(200, await this.creatorsList());   // R121
+        if (path === '/admin/api/events') return need('events.read') && out(200, this.backend.events ? await this.backend.events.adminList() : { available: false });   // R157
         return out(404, { error: 'not_found' });
       }
       if (req.method === 'POST') {
@@ -126,6 +127,23 @@ class AdminService {
           try { body = await readJson(req, 4096); }
           catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
           return cp[1] ? this.creatorPay(admin, cp[1], body || {}, out) : this.creatorSave(admin, body || {}, out);
+        }
+        // R157 · torneios de evento: criar/editar, montar chaves, marcar vencedor
+        const ev = /^\/admin\/api\/events(?:\/([0-9a-fA-F-]{36})(?:\/(bracket|result))?)?$/.exec(path);
+        if (ev) {
+          if (!need('events.write')) return;
+          if (this.limited('write:' + admin.id, 40)) return out(429, { error: 'rate_limited' });
+          if (!this.backend.events) return out(503, { error: 'unavailable' });
+          let body;
+          try { body = await readJson(req, 8192); }
+          catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
+          body = body || {};
+          const id = ev[1] ? ev[1].toLowerCase() : null;
+          const E = this.backend.events;
+          const r = ev[2] === 'bracket' ? await E.adminBracket(id) : ev[2] === 'result' ? await E.adminResult(id, body) : await E.adminSave(id, body);
+          this.audit.record({ actor: admin, action: 'event_' + (ev[2] || (id ? 'edit' : 'create')), target: id || (r.body.item && r.body.item.id) || null,
+            before: r.before || null, after: r.after || null, result: r.status === 200 ? 'ok' : String(r.body.error || 'error'), reason: String(body.reason || '').slice(0, 300) });
+          return out(r.status, r.body);
         }
         // R104 · moderação: arquivar/resolver denúncia, suspender e tirar suspensão
         const rp = /^\/admin\/api\/reports\/([0-9a-fA-F-]{36})$/.exec(path);

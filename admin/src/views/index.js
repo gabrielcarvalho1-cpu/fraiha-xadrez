@@ -569,3 +569,100 @@ export function system(ctx) {
     },
   };
 }
+
+// ---------------------------------------------------------------- R157 · TORNEIOS DE EVENTO (XADREZ, por código)
+const EV_ST = { open: ['Inscrições abertas', 'on'], closed: ['Inscrições encerradas', 'warn'], running: ['Em andamento', 'warn'], finished: ['Encerrado', 'on'], cancelled: ['Cancelado', 'off'] };
+const pad2 = n => String(n).padStart(2, '0');
+const localInput = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+function eventDialog(ev, modes, statuses) {
+  return new Promise(resolve => {
+    const f = (label, el) => h('label', {}, label, el);
+    const name = h('input', { type: 'text', value: ev ? ev.name : '', placeholder: 'Torneio da cidade · Outubro', maxlength: 60 });
+    const code = h('input', { type: 'text', value: ev ? ev.code : '', placeholder: 'MARINGA2026', maxlength: 20, style: 'text-transform:uppercase' });
+    const mode = h('select', {}, modes.map(m => h('option', { value: m.id, selected: ev ? ev.mode === m.id : m.id === 'casual_10min' }, m.name)));
+    const when = h('input', { type: 'datetime-local', value: ev ? localInput(ev.starts_at) : '' });
+    const max = h('input', { type: 'number', min: 2, max: 256, value: ev ? ev.max_players : 16 });
+    const status = h('select', {}, statuses.map(s => h('option', { value: s, selected: ev ? ev.status === s : s === 'open' }, (EV_ST[s] || [s])[0])));
+    const notes = h('textarea', { rows: 3, maxlength: 500, placeholder: 'Regras, local, premiação… (os inscritos veem)' }, ev ? ev.notes : '');
+    const reason = h('textarea', { rows: 2, placeholder: 'Motivo (vai para o Admin Log)', maxlength: 300 });
+    const close = v => { bg.remove(); resolve(v); };
+    const bg = h('div', { class: 'modal-bg', onclick: e => { if (e.target === bg) close(null); } },
+      h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
+        h('h3', {}, ev ? 'Editar torneio' : 'Novo torneio de xadrez'),
+        h('div', { class: 'fields' }, f('Nome', name), f('Código de inscrição (4 a 20 letras/números)', code), f('Ritmo das partidas', mode),
+          f('Data e hora (opcional)', when), f('Vagas', max), ev ? f('Situação', status) : '', f('Observações para os jogadores', notes), f('Motivo', reason)),
+        h('div', { class: 'actions' }, h('button', { class: 'btn ghost', onclick: () => close(null) }, 'Cancelar'),
+          h('button', { class: 'btn ok', onclick: () => close({ name: name.value.trim(), code: code.value.trim().toUpperCase(), mode: mode.value,
+            starts_at: when.value ? new Date(when.value).toISOString() : null, max_players: Number(max.value), status: ev ? status.value : 'open',
+            notes: notes.value.trim(), reason: reason.value.trim() }) }, 'Salvar'))));
+    document.body.append(bg); name.focus();
+  });
+}
+const EV_ERR = { invalid_code: 'Código inválido (4 a 20 letras/números, sem espaço).', invalid_name: 'Informe o nome (3 a 60 letras).', invalid_max: 'Vagas de 2 a 256.',
+  invalid_date: 'Data inválida.', code_taken: 'Esse código já é de outro torneio.', not_enough_players: 'Precisa de pelo menos 2 inscritos.',
+  match_not_ready: 'Essa partida ainda não tem os dois jogadores.', migration_0021_missing: 'Banco sem a migração 0021 (torneios de evento).' };
+export function events(ctx) {
+  const f = frame(ctx, 'Torneios', 'Torneios de XADREZ com código: crie o torneio, passe o código para as pessoas (só quem digita o código entra pela aba TORNEIO → XADREZ do jogo), feche as inscrições, monte as chaves e marque o vencedor de cada partida. As partidas são combinadas entre os jogadores (convite de amigo no ritmo do torneio).');
+  const can = () => ctx.session && ctx.session.admin && (ctx.session.admin.perms || []).includes('events.write');
+  let meta = { modes: [], statuses: [] };
+  const err = e => toast(EV_ERR[e && e.code] || 'Não foi possível concluir.');
+  const save = async ev => {
+    const v = await eventDialog(ev, meta.modes, meta.statuses);
+    if (!v) return;
+    try { await ctx.api.post('/admin/api/events' + (ev ? '/' + ev.id : ''), v); toast('Torneio salvo.'); } catch (e) { err(e); }
+    ctx.refresh();
+  };
+  const quick = async (ev, status, label) => {
+    try { await ctx.api.post('/admin/api/events/' + ev.id, { status }); toast(label); } catch (e) { err(e); }
+    ctx.refresh();
+  };
+  const bracket = async ev => {
+    const ok = await confirmAction({ title: 'Montar as chaves de ' + ev.name, body: `${ev.entrants.length} inscritos. As chaves são sorteadas (eliminação simples; quem sobra passa direto para a 2ª rodada). As inscrições fecham. ${ev.bracket ? 'ATENÇÃO: as chaves atuais e os resultados serão APAGADOS.' : ''}`, confirmWord: 'CHAVES', actionLabel: 'Montar chaves', danger: !!ev.bracket });
+    if (!ok) return;
+    try { await ctx.api.post('/admin/api/events/' + ev.id + '/bracket', { reason: ok.reason }); toast('Chaves montadas.'); } catch (e) { err(e); }
+    ctx.refresh();
+  };
+  const result = async (ev, r, m, uid) => {
+    try { await ctx.api.post('/admin/api/events/' + ev.id + '/result', { round: r, match: m, winner: uid }); toast(uid ? 'Vencedor marcado.' : 'Resultado desfeito.'); } catch (e) { err(e); }
+    ctx.refresh();
+  };
+  const roundName = (r, n) => n - r === 1 ? 'Final' : n - r === 2 ? 'Semifinal' : n - r === 3 ? 'Quartas de final' : `Rodada ${r + 1}`;
+  const bracketView = ev => {
+    const nm = id => id ? (ev.names[id] || 'Jogador') : '—';
+    const rounds = ev.bracket.rounds;
+    return h('div', { style: 'display:flex;gap:14px;overflow-x:auto;padding:6px 0' }, rounds.map((round, r) => h('div', { style: 'min-width:220px' },
+      h('div', { class: 'dim', style: 'margin-bottom:6px;font-weight:600' }, roundName(r, rounds.length)),
+      round.map((x, m) => h('div', { class: 'panel', style: 'padding:8px;margin-bottom:8px' },
+        [x.a, x.b].map(p => h('div', { style: 'display:flex;gap:6px;align-items:center;margin:2px 0' },
+          h('span', { style: (x.winner && x.winner === p ? 'font-weight:700;color:#7be08a' : '') + ';flex:1' }, p ? nm(p) : (r === 0 ? '(passa direto)' : '—')),
+          can() && p && x.a && x.b && ev.status !== 'cancelled' && x.winner !== p ? h('button', { class: 'btn', style: 'padding:2px 8px', onclick: () => result(ev, r, m, p) }, 'Venceu') : '')),
+        can() && x.winner && x.a && x.b ? h('button', { class: 'btn ghost', style: 'padding:2px 8px;margin-top:4px', onclick: () => result(ev, r, m, null) }, 'Desfazer') : '')))));
+  };
+  return {
+    error: f.error,
+    async load() {
+      const d = await ctx.api.get('/admin/api/events');
+      if (!ctx.alive()) return;
+      if (!d.available) return f.show(stateBox('error', d.error === 'migration_0021_missing' ? 'Banco sem a migração 0021 (torneios de evento). Aplique supabase/migrations/0021_fraiha_torneios_evento.sql no SQL Editor.' : 'Torneios indisponíveis neste servidor.'));
+      meta = { modes: d.modes || [], statuses: d.statuses || [] };
+      const item = ev => h('div', { class: 'panel' },
+        h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' },
+          h('strong', {}, ev.name), h('span', { class: 'badge' }, 'CÓDIGO ' + ev.code),
+          h('span', { class: 'badge ' + (EV_ST[ev.status] || ['', ''])[1] }, (EV_ST[ev.status] || [ev.status])[0]),
+          h('span', { class: 'dim' }, `${(meta.modes.find(m => m.id === ev.mode) || { name: ev.mode }).name} · ${ev.entrants.length}/${ev.max_players} inscritos · ${ev.starts_at ? fmtDate(ev.starts_at) : 'sem data'}`),
+          ev.champion ? h('span', { class: 'badge on' }, '🏆 ' + (ev.names[ev.champion] || 'Jogador')) : '',
+          can() ? h('span', { style: 'margin-left:auto;display:flex;gap:8px;flex-wrap:wrap' },
+            h('button', { class: 'btn', onclick: () => save(ev) }, 'Editar'),
+            ev.status === 'open' ? h('button', { class: 'btn', onclick: () => quick(ev, 'closed', 'Inscrições encerradas.') }, 'Encerrar inscrições') : '',
+            ev.status === 'closed' && !ev.bracket ? h('button', { class: 'btn', onclick: () => quick(ev, 'open', 'Inscrições reabertas.') }, 'Reabrir inscrições') : '',
+            ev.status !== 'cancelled' && ev.status !== 'finished' ? h('button', { class: 'btn ok', onclick: () => bracket(ev) }, ev.bracket ? 'Refazer chaves' : 'Montar chaves') : '') : ''),
+        ev.notes ? h('p', { class: 'dim', style: 'white-space:pre-wrap' }, ev.notes) : '',
+        h('details', { style: 'margin-top:8px' }, h('summary', {}, `Inscritos (${ev.entrants.length})`),
+          ev.entrants.length ? h('ol', {}, ev.entrants.map(e => h('li', {}, e.nickname, h('span', { class: 'dim' }, ' · ' + fmtDate(e.joined_at))))) : h('p', { class: 'dim' }, 'Ninguém inscrito ainda.')),
+        ev.bracket ? bracketView(ev) : '');
+      f.show(
+        can() ? h('div', { style: 'margin:10px 0' }, h('button', { class: 'btn primary', onclick: () => save(null) }, '+ Novo torneio')) : '',
+        d.items.length ? h('div', {}, d.items.map(item)) : stateBox('empty', 'Nenhum torneio criado ainda.'));
+    },
+  };
+}

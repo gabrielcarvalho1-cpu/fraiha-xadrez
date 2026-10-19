@@ -108,7 +108,7 @@ func open_pass():
 
 var tourn_panel = null
 ## R118 · TORNEIO DA SEMANA (XEQUE / MARCHA REAL)
-func open_tournament(g := "xeque"):
+func open_tournament(g := "chess"):
 	if not is_instance_valid(tourn_panel):
 		tourn_panel = load("res://economy/tournament_ui.gd").new()
 		hub.add_child(tourn_panel)
