@@ -71,11 +71,10 @@ const st = (k, c, pred) => c.next(m => m.type === k + '_state' && pred(m), 3000)
     check(/10 lances/.test((await g.white.next('ranked_error')).message), 'Ranked: empate só depois de 10 lances de cada lado');
     g.black.send({ type: 'ranked_resign', match_id: g.id });
     await g.white.next('ranked_result', 5000); await g.black.next('ranked_result', 5000);
-    g.white.send({ type: 'ranked_rematch', match_id: g.id }); await g.black.next(m => m.type === 'ranked_rematch_status' && m.theirs, 3000);
-    g.black.send({ type: 'ranked_rematch', match_id: g.id });
-    const rf = await g.black.next(m => m.type === 'ranked_found' && m.match_id !== g.id, 5000);
-    check(rf.you === 'w' && rf.opponent.pl !== undefined, 'Ranked: revanche começa com cores trocadas e PL atualizado');
-    check(/\[rematch\]/.test(s.log()), 'revanche registrada no log');
+    g.white.send({ type: 'ranked_rematch', match_id: g.id });
+    const rz = await g.white.next(m => m.type === 'ranked_rematch_status' && m.closed, 3000);
+    check(/casual/.test(rz.message), 'Ranked: revanche recusada (só existe no casual)');
+    check(/\[rematch\]/.test(s.log()), 'revanche casual registrada no log');
     for (const w of [ra, rb]) w.close();
   } finally { s.stop(); }
   summary('DRAW_REMATCH');

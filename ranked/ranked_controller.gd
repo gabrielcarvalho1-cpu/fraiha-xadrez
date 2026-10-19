@@ -97,7 +97,7 @@ func can_offer_draw() -> bool:
 
 func request_rematch():
     var mid := String(last_result.get("match_id", ""))
-    if mid.is_empty() or bool(rematch.closed): return
+    if mid.is_empty() or bool(rematch.closed) or kind == "ranked": return   # R158 · sem revanche no ranked
     rematch.mine = true
     rematch.match_id = mid
     account.send_server({"type": kind + "_rematch", "match_id": mid})
@@ -249,7 +249,7 @@ func _on_message(msg: Dictionary):
         "link_lost":
             pending = false
             resync_pending = in_match()
-            if in_match(): problem.emit("Conexão perdida. Reconectando — o relógio oficial continua no servidor.")
+            if in_match(): problem.emit("RECONECTANDO…\nA conexão caiu por um instante. O seu relógio continua contando no servidor.")
             # Buscando: continua na tela de busca e volta para a fila ao reconectar.
             requeue_pending = not queue_mode.is_empty() and not in_match()
             searching = requeue_pending

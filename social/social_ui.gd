@@ -711,7 +711,8 @@ func _show(which: String):
         _build_body(which, narrow)
         return
     # moldura: no celular em pé, um pouco menor (a bandeira não encosta na placa do título)
-    var frame := Kit.box("painel_amigos", ART_K if not narrow else 0.3, Vector2(24 if not narrow else 16, 20 if not narrow else 16))
+    # R158 · celular em pé: moldura "clean" (sem a bandeira que cobria a placa AMIGOS e o canto)
+    var frame := Kit.box("painel_amigos" if not narrow else "painel_amigos_clean", ART_K if not narrow else 0.3, Vector2(24 if not narrow else 14, 20 if not narrow else 14))
     frame.content_margin_bottom = 30 if not narrow else 22
     panel.add_theme_stylebox_override("panel", frame)
     var head = HBoxContainer.new()
@@ -756,7 +757,7 @@ func _build_body(which: String, narrow: bool):
             search_input = LineEdit.new()
             preload("res://ui_v022/web_text_field.gd").attach(search_input)
             search_input.name = "FriendSearch"
-            search_input.placeholder_text = "Buscar jogador pelo nickname"
+            search_input.placeholder_text = "Buscar jogador" if narrow else "Buscar jogador pelo nickname"   # R158 · celular: sem cortar
             search_input.max_length = 16
             search_input.text = last_query if which == "search" else ""
             search_input.custom_minimum_size.y = 50 if wide else 46
@@ -1038,11 +1039,16 @@ func _layout():
     box.custom_minimum_size.x = width - 48.0
     if screen == "dm" and is_instance_valid(dm_scroll):
         # A conversa ocupa o espaço que sobra na tela (sem passar do painel).
-        var avail = (area.size.y - 16.0) / ui_scale - 28.0
-        _set_dm_height(avail - _dm_rest() - 4.0)
+        # R158 · desconta a moldura de verdade (antes 28 px fixos, mas o painel usa ~50): a caixa de mensagem
+        # passava da borda de baixo e cortava no celular
+        var sb = panel.get_theme_stylebox("panel")
+        var pad: float = maxf(50.0, (sb.get_minimum_size().y if sb != null else 0.0) + 6.0)
+        var avail = (area.size.y - 16.0) / ui_scale - pad
+        _set_dm_height(avail - _dm_rest() - 6.0)
     var wanted = box.get_combined_minimum_size().y + 28.0
     var pad_x := 48.0
-    var pad_y := 50.0
+    var sb0 = panel.get_theme_stylebox("panel")
+    var pad_y: float = maxf(50.0, (sb0.get_minimum_size().y if sb0 != null else 0.0) + 6.0)
     wanted = box.get_combined_minimum_size().y + pad_y
     var height = minf(maxf(wanted, 0.0), (area.size.y - 16.0) / ui_scale)
     scroll.custom_minimum_size = Vector2(width - pad_x, height - pad_y)

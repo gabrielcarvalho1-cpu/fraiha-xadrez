@@ -193,7 +193,7 @@ func _web_music_init():
         };
         m.tryPlay = () => {
             m.graph();
-            if (m.ctx && m.ctx.state === 'suspended') m.ctx.resume().catch(() => {});
+            if (m.ctx && m.ctx.state !== 'running' && m.ctx.state !== 'closed') m.ctx.resume().catch(() => {});   // R158 · iOS volta como 'interrupted'
             if (m.url && m.vol > 0 && !m.hidden) m.el.play().catch(() => {});
         };
         // R84 · recebe o MP3 em pedaços e guarda até 3 músicas (Blob URL por nome); a mais antiga sai
@@ -220,10 +220,19 @@ func _web_music_init():
         };
         // Navegadores só liberam áudio depois de um toque/tecla.
         for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, () => { if (m.el.paused || (m.ctx && m.ctx.state !== 'running')) m.tryPlay(); }, true);
-        document.addEventListener('visibilitychange', () => { m.hidden = document.hidden; if (m.hidden) m.el.pause(); else m.tryPlay(); });
+        document.addEventListener('visibilitychange', () => { m.hidden = document.hidden; if (m.hidden) m.el.pause(); else { m.tryPlay(); setTimeout(m.tryPlay, 400); } });
+        window.addEventListener('pageshow', () => { m.hidden = document.hidden; if (!m.hidden) m.tryPlay(); });
+        window.addEventListener('focus', () => { m.hidden = document.hidden; if (!m.hidden) m.tryPlay(); });
         window.fraihaMusic = m;
     })()
     """)
+
+## R158 · voltou do segundo plano (minimizou/trocou de app): acorda os contextos de áudio do navegador
+## (efeitos do Godot + música). Sem isso o iPhone/Android deixava tudo mudo até recarregar.
+func _notification(what):
+    if not OS.has_feature("web") or OS.has_feature("editor"): return
+    if what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED:
+        JavaScriptBridge.eval("try{window.__fxAudioWake&&window.__fxAudioWake(false);window.fraihaMusic&&!document.hidden&&window.fraihaMusic.tryPlay()}catch(e){}")
 
 func _web_music_volume():
     var bus = AudioServer.get_bus_index("Music")

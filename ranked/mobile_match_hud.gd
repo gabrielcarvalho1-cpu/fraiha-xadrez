@@ -266,6 +266,7 @@ func apply() -> void:
 	if stage.mobile_promotion != null:
 		stage.mobile_promotion.position = board.get_center() - stage.mobile_promotion.size / 2.0
 	_layout_chat(board, safe)
+	_style_link(link, board)
 	refresh_actions()
 	_key = ""
 	_process(0.0)
@@ -280,7 +281,7 @@ func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 	# a sobra fica embaixo do cartão do jogador: é onde o painel AÇÕES abre (como na referência) sem cobrir nada
 	# R155 · tabuleiro + cartões CENTRALIZADOS entre o topo e a barra de baixo (antes a sobra ia quase toda para baixo,
 	# um vão grande de desenho entre o cartão do jogador e os botões INÍCIO/AÇÕES/CHAT)
-	var block_top := safe.position.y + slack * 0.5
+	var block_top := safe.position.y + slack * 0.62   # R158 · um pouco mais para baixo (pedido do dono)
 	off = Vector2(ox, block_top - P_BLOCK.x * k)
 	bg.mode = "p"
 	bg.wood = wood
@@ -387,7 +388,7 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 		var p: Dictionary = plates[key]
 		# R155 · tudo DENTRO da moldura do cartão (a arte tem ~22 px de madeira à esquerda e ~16 em cima/embaixo,
 		# em pixels de tela: o NinePatch não escala a borda). Antes nome, relógio e "Material" encostavam/passavam da borda.
-		var inner := Rect2(c.position + Vector2(24.0, 17.0), c.size - Vector2(24.0 + 16.0, 17.0 + 17.0))
+		var inner := Rect2(c.position + Vector2(18.0, 17.0), c.size - Vector2(18.0 + 18.0, 17.0 + 17.0))
 		var gap := 6.0 * s
 		var a := minf(52.0 * s, inner.size.y * 0.42)
 		var av := Rect2(inner.position + Vector2(2.0, 2.0), Vector2(a, a))
@@ -430,6 +431,34 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 		moves.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_style_moves(clampf(vs.y * 0.036, 11.0, 16.0))
 	return Rect2(frame.position + F_BOARD.position * kf, F_BOARD.size * kf)
+
+## R158 · aviso de conexão (Ranked/Casual) numa faixa escura legível, com a letra do tamanho que caber
+## (em pé ele passava da largura e quebrava por cima do tabuleiro).
+## R158 · aviso de conexão (Ranked/Casual): um cartão no MEIO do tabuleiro, azul com borda dourada, letra creme
+## (antes era texto vermelho solto no topo, passando da largura e cortado).
+func _style_link(l: Label, board: Rect2) -> void:
+	if l == null: return
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.055, 0.12, 0.94)
+	sb.border_color = Color("e2b24f")
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(10)
+	sb.shadow_color = Color(0, 0, 0, 0.55)
+	sb.shadow_size = 10
+	for side in ["left", "right"]: sb.set("content_margin_" + side, 18)
+	for side in ["top", "bottom"]: sb.set("content_margin_" + side, 14)
+	_ov(l, "style", "normal", sb)
+	_ov(l, "color", "font_color", Color("f4ead2"))
+	_ov(l, "size", "font_size", clampi(int(board.size.x / 22.0), 14, 22))
+	_rec(l, "horizontal_alignment", HORIZONTAL_ALIGNMENT_CENTER)
+	_rec(l, "vertical_alignment", VERTICAL_ALIGNMENT_CENTER)
+	_rec(l, "autowrap_mode", TextServer.AUTOWRAP_WORD_SMART)
+	_rec(l, "z_index", 20)
+	var w := board.size.x * 0.82
+	l.size = Vector2(w, 0.0)
+	l.reset_size()
+	l.size.x = w
+	l.position = board.get_center() - l.size / 2.0
 
 func _set_rect(c: Control, r: Rect2) -> void:
 	c.position = r.position
@@ -566,8 +595,8 @@ func _build_plates() -> void:
 		plate_layer.add_child(box)
 		var card := NinePatchRect.new()               # deitado: cartão que cresce (cantos da arte)
 		card.name = "HudCard_" + key
-		card.texture = tex("card")
-		card.patch_margin_left = 24; card.patch_margin_right = 24; card.patch_margin_top = 20; card.patch_margin_bottom = 20
+		card.texture = tex("card_clean")   # R158 · moldura limpa (a antiga era recorte de print, com folhas nas bordas)
+		card.patch_margin_left = 16; card.patch_margin_right = 16; card.patch_margin_top = 16; card.patch_margin_bottom = 16
 		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		plate_layer.add_child(card)
@@ -662,11 +691,16 @@ func _build_nav() -> void:
 func _fit_nav_button(b: Button) -> void:
 	var ic: TextureRect = b.get_node("Icon")
 	var l: Label = b.get_node("Caption")
-	var h := b.size.y
-	ic.position = Vector2(0, h * 0.14)
+	# R158 · o AÇÕES é mais alto (150 contra 125 na arte): ícone e texto usam a altura dos outros, CENTRALIZADOS
+	# nele (antes o texto descia e encostava na borda de baixo)
+	var full := b.size.y
+	var h: float = minf(full, b.size.x * 125.0 / 164.0)
+	var oy: float = (full - h) / 2.0
+	ic.position = Vector2(0, oy + h * 0.14)
 	ic.size = Vector2(b.size.x, h * 0.42)
-	l.position = Vector2(0, h * 0.58)
+	l.position = Vector2(0, oy + h * 0.58)
 	l.size = Vector2(b.size.x, h * 0.3)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.add_theme_font_size_override("font_size", maxi(10, int(round(h * 0.2))))
 	var badge: Label = b.get_node("Badge")
 	badge.add_theme_font_size_override("font_size", maxi(9, int(round(h * 0.15))))
@@ -1035,6 +1069,12 @@ func _process(_d) -> void:
 		_moves_n = st.bot_controller.san_log.size()
 		moves.text = _moves_line(st.bot_controller.san_log)
 		if sheet.visible: _fill_sheet()
+	if link != null:
+		_rec(link, "self_modulate", Color(1, 1, 1, 0) if link.text.is_empty() else Color.WHITE)   # R158 · cartão vazio não aparece
+		if not link.text.is_empty() and link.get_meta("hud_txt", "") != link.text:
+			link.set_meta("hud_txt", link.text)   # texto novo: recentraliza (a altura muda com as linhas)
+			var b := Rect2(stage.game.position + stage.game.ORIGIN * stage.game.scale, Vector2(stage.game.BOARD, stage.game.BOARD) * stage.game.scale)
+			_style_link(link, b)
 	_keep_strips()
 
 ## Textos vivos maiores que a caixa da arte encolhem até caber; o selo vem logo depois do nome; o texto da 2ª
@@ -1121,6 +1161,13 @@ class BgArt extends Node2D:
 				var s := maxf(full.size.x / ts.x, full.size.y / ts.y)
 				draw_texture_rect(_fill, Rect2((full.size - ts * s) / 2.0, ts * s), false, Color(0.8, 0.84, 0.8))
 				draw_texture_rect(_top, top_rect, false)
+				# R158 · embaixo do cartão do jogador a arte acabava num corte reto ("recorte"): emenda suave no chão
+				var yb := top_rect.end.y
+				if yb < full.size.y - 2.0:
+					var cb0 := Color(0.02, 0.04, 0.03, 0.0)
+					var cb1 := Color(0.02, 0.04, 0.03, 0.6)
+					draw_polygon(PackedVector2Array([Vector2(0, yb - 5.0), Vector2(full.size.x, yb - 5.0), Vector2(full.size.x, yb), Vector2(0, yb)]), PackedColorArray([cb0, cb0, cb1, cb1]))
+					draw_polygon(PackedVector2Array([Vector2(0, yb), Vector2(full.size.x, yb), Vector2(full.size.x, yb + 30.0), Vector2(0, yb + 30.0)]), PackedColorArray([cb1, cb1, cb0, cb0]))
 				# R155 · com o tabuleiro centralizado sobra fundo em cima: emenda suave (sem a linha reta cortando a arte)
 				if top_rect.position.y > 2.0:
 					var y := top_rect.position.y

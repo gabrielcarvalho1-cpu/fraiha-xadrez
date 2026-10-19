@@ -86,5 +86,14 @@ func run():
 	await frames(6)
 	check(cui.rematch_label.text.contains("Aguardando"), "empate: pedi revanche, aguardando")
 	await shot("6_empate_aguardando")
+	# R158 · Ranked: NUNCA oferece revanche (nem no PC, nem no celular)
+	var rui = stage.ranked_ui
+	rui.controller.last_result = {"match_id": "r1", "mode": "ranked_3min", "mode_name": "Relâmpago", "outcome": "win", "reason": "checkmate", "reason_text": "Xeque-mate", "pl_change": 20, "pl_after": 40, "pl_before": 20, "league_after": 0, "league_before": 0}
+	rui._show("result")
+	await frames(6)
+	check(not is_instance_valid(rui.rematch_btn), "ranked: resultado SEM botão de revanche")
+	rui.controller.request_rematch()
+	check(not bool(rui.controller.rematch.mine), "ranked: pedir revanche não faz nada")
+	await shot("7_ranked_sem_revanche")
 	print("RESULT %s" % ("OK" if fails == 0 else "%d FALHAS" % fails))
 	quit(1 if fails else 0)

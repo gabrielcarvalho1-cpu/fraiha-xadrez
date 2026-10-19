@@ -164,6 +164,7 @@ class Ranked {
   rematch(ws, uid, m, cancel, now) {
     const old = this.matches.get(String(m.match_id || '')), c = old ? old.colorOf(uid) : null;
     const gone = msg => this.send(ws, { type: this.p + 'rematch_status', match_id: String(m.match_id || ''), mine: false, theirs: false, closed: true, message: msg });
+    if (this.rated) return gone('Revanche só existe na partida casual.');   // R158 · nunca no ranked
     if (!old || !c || old.status !== 'finished' || old.rematchId) return gone('A revanche não está mais disponível.');
     const o = c === 'w' ? 'b' : 'w', oppUid = old.players[o].userId;
     if (cancel) {

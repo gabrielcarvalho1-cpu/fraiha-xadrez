@@ -655,14 +655,16 @@ func _desk_art(which: String) -> bool:
                 play_requested.emit()
                 _show("modes"), "DeskBack", 22)
             # R98 · REVANCHE: placa verde embaixo da arte (mesmo adversário, cores trocadas)
-            d.below = 250.0
-            rematch_label = d.label("", Rect2(160, 1404, 802, 50), 40, DeskArt.GOLD, DeskArt.FONT_BODY)
-            rematch_label.name = "DeskRematchInfo"
-            rematch_btn = DrawRematch.art_button("green", "PEDIR REVANCHE", 22)
-            rematch_btn.name = "DeskRematch"
-            rematch_btn.pressed.connect(_press_rematch)
-            d.add_item(rematch_btn, Rect2(276, 1458, 570, 167))
-            _sync_rematch()
+            # R158 · revanche só na partida CASUAL online (nunca no ranked)
+            if not rated():
+                d.below = 250.0
+                rematch_label = d.label("", Rect2(160, 1404, 802, 50), 40, DeskArt.GOLD, DeskArt.FONT_BODY)
+                rematch_label.name = "DeskRematchInfo"
+                rematch_btn = DrawRematch.art_button("green", "PEDIR REVANCHE", 22)
+                rematch_btn.name = "DeskRematch"
+                rematch_btn.pressed.connect(_press_rematch)
+                d.add_item(rematch_btn, Rect2(276, 1458, 570, 167))
+                _sync_rematch()
         _:
             return false
     d.show_modal()
@@ -847,7 +849,6 @@ func _result(r: Dictionary):
         close_panel()
         play_requested.emit()
         controller.queue(String(r.mode)), true)
-    _rematch_row()
     _button(box, "VOLTAR AO RANKED", func():
         play_requested.emit()
         _show("modes"))

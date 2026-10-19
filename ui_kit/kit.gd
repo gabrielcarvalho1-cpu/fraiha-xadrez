@@ -20,6 +20,7 @@ const FRAMES := {
     "caixa_vazia": ["caixa_vazia", 56, 56, 30, 30],
     "campo": ["campo", 26, 26, 30, 30],
     "painel_amigos": ["painel_amigos", 90, 230, 178, 75],
+    "painel_amigos_clean": ["painel_amigos_clean", 62, 62, 55, 55],   # R158 · celular: sem a bandeira (tools/painel_amigos_clean_r158.py)
     # R52b · peças da referência nova de AMIGOS (painel/modal do PC)
     "fr_btn_verde": ["fr_btn_verde", 34, 34, 28, 28],
     "fr_btn_azul": ["fr_btn_azul", 34, 34, 28, 28],

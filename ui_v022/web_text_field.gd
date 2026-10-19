@@ -99,16 +99,23 @@ func _ready():
             const vv = window.visualViewport;
             // R151 · barra EMBAIXO da área visível (logo acima do teclado), não no topo da tela: antes ficavam
             // duas faixas (a do topo com o campo e a do teclado embaixo) e parecia ter duas caixas de mensagem.
+            // R158 · iPhone: se o campo focado ficar onde o teclado vai cobrir, o Safari ROLA a página inteira para
+            // mostrá-lo — o jogo sobe e aparece o fundo verde vazio. Por isso, ao tocar, o campo vai para o TOPO
+            // (o Safari não precisa rolar) e só desce para cima do teclado quando o teclado já abriu.
+            const kbOpen = () => (vv && vv.height < window.innerHeight - 80) || Date.now() - (el._t || 0) > 650;
             const place = () => {
                 const vtop = (vv && vv.offsetTop) || 0, vh = (vv && vv.height) || window.innerHeight;
                 const h = bar.offsetHeight || 62;
-                const top = Math.max(vtop, vtop + vh - h);
+                if (el.dataset.docked === '1' && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
+                const top = (el.dataset.docked === '1' && !kbOpen()) ? vtop : Math.max(vtop, vtop + vh - h);
                 bar.style.top = top + 'px';
                 if (el.dataset.docked === '1') el.style.top = (top + 8) + 'px';
             };
             const dock = () => {
                 if (el.dataset.docked === '1') return;
                 el.dataset.docked = '1';
+                el._t = Date.now();
+                setTimeout(place, 700);
                 el._geo = {left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height, fontSize: el.style.fontSize};
                 bar.style.display = 'flex';
                 setTimeout(place, 50); setTimeout(place, 300);   // o teclado ainda está subindo
