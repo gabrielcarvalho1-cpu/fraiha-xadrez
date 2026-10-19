@@ -128,6 +128,7 @@ func _scroll_end():
 	await get_tree().process_frame
 	scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value)
 
+var _last_toggle_ms := -100000
 func _message_row(m: Dictionary, mine: bool) -> Control:
 	var id := int(m.get("id", 0))
 	var box := VBoxContainer.new()
@@ -157,6 +158,11 @@ func _message_row(m: Dictionary, mine: bool) -> Control:
 		line.gui_input.connect(func(e: InputEvent):
 			var up: bool = (e is InputEventMouseButton and not e.pressed and e.button_index == MOUSE_BUTTON_LEFT) or (e is InputEventScreenTouch and not e.pressed)
 			if up:
+				# R153 · o celular manda o MESMO toque duas vezes (toque + clique emulado): antes a mensagem abria e
+				# fechava no mesmo toque (Android: "apertar várias vezes"; iPhone: nunca ficava aberta). Um toque = uma troca.
+				var now := Time.get_ticks_msec()
+				if now - _last_toggle_ms < 450: return
+				_last_toggle_ms = now
 				selected = -1 if selected == id else id
 				_rebuild())
 	if selected == id and not mine:
