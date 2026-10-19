@@ -68,14 +68,19 @@ func set_info(data: Dictionary):
     var av := String(info.get("avatar_id", info.get("avatar", "")))
     var fr := public_frame()
     var bd := Cosmetics.public_badge(info)
-    var key := "%s|%s|%s|%s|%s" % [av, fr, bd, mine, hub != null]
+    var url := String(info.get("avatar_url", "")) if info.get("avatar_url") is String else ""
+    var key := "%s|%s|%s|%s|%s|%s" % [av, fr, bd, mine, hub != null, url]
     if key == _key: return
     _key = key
-    # avatar
+    # avatar (R150: a FOTO do outro jogador quando ele tiver; senão o avatar do catálogo)
     var tex: Texture2D = null
     if hub != null and hub.has_method("avatar_texture"):
-        tex = hub.avatar_texture() if mine else (hub.avatar_texture(av) if not av.is_empty() else null)
+        if mine: tex = hub.avatar_texture()
+        elif hub.has_method("avatar_texture_for"): tex = hub.avatar_texture_for(info)
+        else: tex = hub.avatar_texture(av) if not av.is_empty() else null
         if tex == null: tex = hub.avatar_texture("warrior")
+        if not mine and hub.has_signal("peer_avatar_ready") and not hub.peer_avatar_ready.is_connected(_on_peer_avatar):
+            hub.peer_avatar_ready.connect(_on_peer_avatar)
     avatar_rect.texture = tex
     # moldura premium (a "liga" fica com a borda simples do fundo)
     if fr != "liga":   # R116 · Club, Fundador e as molduras da Loja
@@ -93,6 +98,12 @@ func set_info(data: Dictionary):
     seal_rect.texture = Cosmetics.badge_texture(bd)
     seal_rect.visible = show_seal and seal_rect.texture != null
     _place_seal()
+
+## R150 · a foto deste jogador terminou de baixar: mostra.
+func _on_peer_avatar(uid: String):
+    if mine or uid != String(info.get("user_id", info.get("uid", info.get("userId", "")))): return
+    _key = ""
+    set_info(info)
 
 func public_frame() -> String:
     return Cosmetics.public_frame(info)

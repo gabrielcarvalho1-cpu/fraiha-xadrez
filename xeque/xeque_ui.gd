@@ -333,9 +333,14 @@ func _load_avatars():
         for s in range(1, mini(4, players.size())):
             if bool(players[s].get("bot", false)): continue
             var av := String(players[s].get("avatar", ""))
-            var t: Texture2D = hub.avatar_texture(av) if not av.is_empty() else hub.avatar_texture("warrior")
+            var t: Texture2D = hub.avatar_texture_for(players[s]) if hub.has_method("avatar_texture_for") else (hub.avatar_texture(av) if not av.is_empty() else hub.avatar_texture("warrior"))
+            # R150 · a foto do amigo pode chegar depois (download): recarrega os retratos quando chegar
+            if hub.has_signal("peer_avatar_ready") and not hub.peer_avatar_ready.is_connected(_on_peer_avatar): hub.peer_avatar_ready.connect(_on_peer_avatar)
             if t != null: avatars[s] = t
     if view != null and view.get("grey_avatars") != null: view.grey_avatars.clear()
+
+func _on_peer_avatar(_uid: String):
+    if online and is_inside_tree(): _load_avatars()
 
 ## R41 · Identidade pública (selo/título/moldura) de quem está no lugar `seat`. Bots: {}.
 func seat_look(seat: int) -> Dictionary:

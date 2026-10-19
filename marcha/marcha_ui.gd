@@ -1109,6 +1109,7 @@ func seat_look(seat: int) -> Dictionary:
 func seat_avatar(seat: int) -> Texture2D:
     if not online or seat >= players.size() or bool(players[seat].get("bot", false)): return null
     if hub == null or not hub.has_method("avatar_texture"): return null
+    if hub.has_method("avatar_texture_for"): return hub.avatar_texture_for(players[seat])   # R150 · foto do amigo
     var av := String(players[seat].get("avatar", ""))
     return hub.avatar_texture(av) if not av.is_empty() else hub.avatar_texture("warrior")
 
@@ -1121,7 +1122,7 @@ func seat_info(seat: int) -> Dictionary:
         var pl: Dictionary = players[seat]
         info.user_id = String(pl.get("user_id", ""))
         info.bot = bool(pl.get("bot", false))
-        if hub != null and hub.has_method("avatar_texture") and not info.bot: info.avatar = hub.avatar_texture(String(pl.get("avatar", ""))) if seat != 0 else (my_portrait if my_portrait != null else portraits.voce)
+        if hub != null and hub.has_method("avatar_texture") and not info.bot: info.avatar = (hub.avatar_texture_for(pl) if hub.has_method("avatar_texture_for") else hub.avatar_texture(String(pl.get("avatar", "")))) if seat != 0 else (my_portrait if my_portrait != null else portraits.voce)
         if not info.bot: info.merge(seat_look(seat))
         else: info.avatar = portraits[BOTS[seat].portrait] if BOTS.has(seat) else null
     elif seat == 0:

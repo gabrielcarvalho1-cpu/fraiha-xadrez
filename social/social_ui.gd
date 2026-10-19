@@ -76,6 +76,8 @@ var reconnecting := false
 func setup(service, avatar_callable: Callable = Callable()):
     account = service
     avatar_for = avatar_callable
+    var hub = avatar_for.get_object() if avatar_for.is_valid() else null
+    if hub != null and hub.has_signal("peer_avatar_ready"): hub.peer_avatar_ready.connect(_on_peer_avatar)
     preload("res://ui_v022/esc_stack.gd").register(self)   # R129 · ESC em tudo (fecha só a janela de cima)
     layer = 66   # R35.1: por cima das telas dos modos (MARCHA REAL / XEQUE), que convidam daqui
     dim = ColorRect.new()
@@ -238,6 +240,9 @@ func _on_message(msg: Dictionary):
     if type == "presence_snapshot" or type == "presence_update" or type == "link_lost":
         _on_presence(msg)
         return
+    if type == "friend_profile":   # R150 · amigo trocou a foto/avatar/nome
+        if msg.get("profile") is Dictionary: _on_friend_profile(msg.profile)
+        return
     if type == "ref_info":   # R105 · convite por link
         ref_info = msg
         if screen == "ref": _show("ref")
@@ -339,7 +344,7 @@ func show_request_card(who: Dictionary):
     var head = HBoxContainer.new()
     head.add_theme_constant_override("separation", 10)
     v.add_child(head)
-    var av = _avatar(head, String(who.get("avatar_id", "warrior")), 46)
+    var av = _avatar(head, who, 46)
     av.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     var col = VBoxContainer.new()
     col.add_theme_constant_override("separation", 2)
@@ -445,16 +450,81 @@ func _button(parent: Node, text: String, action: Callable, primary := false, sma
     parent.add_child(b)
     return b
 
-func _avatar(parent: Node, id: String, px: int) -> TextureRect:
+## R150 · `who` = perfil público (Dictionary: foto avatar_url + avatar_id) ou só o id do avatar (String).
+func _avatar(parent: Node, who, px: int) -> TextureRect:
     var t = TextureRect.new()
     t.custom_minimum_size = Vector2(px, px)
     t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    var known: bool = id in ["warrior", "archer", "mage", "paladin"] or (id in AvatarCatalog.ids() and AvatarCatalog.has_art(id))
-    if avatar_for.is_valid(): t.texture = avatar_for.call(id if known else "warrior")
+    _set_avatar(t, who)
     parent.add_child(t)
     return t
+
+func _set_avatar(t: TextureRect, who):
+    var info: Dictionary = who if who is Dictionary else {"avatar_id": String(who)}
+    var id := String(info.get("avatar_id", "warrior"))
+    var known: bool = id in ["warrior", "archer", "mage", "paladin"] or (id in AvatarCatalog.ids() and AvatarCatalog.has_art(id))
+    if not known: info = info.duplicate(); info["avatar_id"] = "warrior"
+    var hub = avatar_for.get_object() if avatar_for.is_valid() else null
+    if hub != null and hub.has_method("avatar_texture_for"):
+        t.texture = hub.avatar_texture_for(info)
+        var url := String(info.get("avatar_url", "")) if info.get("avatar_url") is String else ""
+        if not url.is_empty() and t.texture is ImageTexture: t.texture = _round_photo(t.texture, url)
+        var uid := String(info.get("user_id", ""))
+        if not uid.is_empty():
+            t.set_meta("peer_uid", uid)
+            t.set_meta("peer_info", info)
+    elif avatar_for.is_valid(): t.texture = avatar_for.call(String(info.avatar_id))
+
+## R150 · foto (quadrada) recortada em círculo, para caber no anel dourado como os avatares do catálogo.
+var _round_cache := {}
+func _round_photo(tex: Texture2D, url: String) -> Texture2D:
+    var k := url + "|" + str(tex.get_instance_id())
+    if _round_cache.has(k): return _round_cache[k]
+    var img: Image = tex.get_image()
+    if img == null: return tex
+    img = img.duplicate()
+    if img.get_format() != Image.FORMAT_RGBA8: img.convert(Image.FORMAT_RGBA8)
+    var w := img.get_width()
+    var c := (w - 1) / 2.0
+    var r := w * 0.47
+    for y in w:
+        for x in w:
+            var d := Vector2(x - c, y - c).length()
+            if d > r:
+                var px := img.get_pixel(x, y)
+                px.a *= clampf(1.0 - (d - r), 0.0, 1.0)
+                img.set_pixel(x, y, px)
+    if _round_cache.size() > 64: _round_cache.clear()
+    _round_cache[k] = ImageTexture.create_from_image(img)
+    return _round_cache[k]
+
+## R150 · a foto de alguém chegou (download terminou): troca nos retratos dessa pessoa que estão na tela.
+func _on_peer_avatar(uid: String):
+    for n in find_children("*", "TextureRect", true, false):
+        if n.has_meta("peer_uid") and String(n.get_meta("peer_uid")) == uid: _set_avatar(n, n.get_meta("peer_info"))
+
+## R150 · um amigo trocou a foto / avatar / selo / nome (aviso do servidor): atualiza tudo que guardamos dele.
+func _on_friend_profile(p: Dictionary):
+    var uid := String(p.get("user_id", ""))
+    if uid.is_empty(): return
+    var upd := func(d: Dictionary):
+        if String(d.get("user_id", "")) != uid: return
+        for k in ["nickname", "avatar_id", "avatar_url", "badge", "title", "frame", "founder", "club"]:
+            if p.has(k): d[k] = p[k]
+    for key in data:
+        for d in data[key]:
+            if d is Dictionary: upd.call(d)
+    for d in results:
+        if d is Dictionary: upd.call(d)
+    for d in [profile, dm_peer, invite_peer]: upd.call(d)
+    for n in find_children("*", "TextureRect", true, false):
+        if n.has_meta("peer_uid") and String(n.get_meta("peer_uid")) == uid:
+            var info: Dictionary = (n.get_meta("peer_info") as Dictionary).duplicate()
+            for k in ["avatar_id", "avatar_url"]: info[k] = p.get(k, info.get(k))
+            _set_avatar(n, info)
+    if is_open() and screen in ["list", "profile", "search", "invite_friends"]: _show(screen)
 
 ## R41 · Moldura Club / Fundador sobre o avatar de outro jogador (dados do servidor).
 func _frame(av: Control, p: Dictionary) -> void:
@@ -485,7 +555,7 @@ func _seal(parent: Node, p: Dictionary, px: int) -> TextureRect:
     return t
 
 static func _peer(uid: String, peer: Dictionary) -> Dictionary:
-    return {"user_id": uid, "nickname": String(peer.get("nickname", "")), "avatar_id": String(peer.get("avatar_id", "warrior")), "badge": String(peer.get("badge", "")), "title": String(peer.get("title", ""))}
+    return {"user_id": uid, "nickname": String(peer.get("nickname", "")), "avatar_id": String(peer.get("avatar_id", "warrior")), "avatar_url": peer.get("avatar_url"), "badge": String(peer.get("badge", "")), "title": String(peer.get("title", ""))}
 
 const SECTION_ICON := {"ONLINE": "ico_sec_online", "EM PARTIDA": "ico_sec_partida", "OFFLINE": "ico_sec_offline"}
 const SECTION_ICON_WIDE := {"ONLINE": "fr_ico_online", "EM PARTIDA": "fr_ico_partida", "OFFLINE": "fr_ico_offline"}
@@ -552,7 +622,7 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
         btn_row = HBoxContainer.new()
         btn_row.add_theme_constant_override("separation", 6)
         outer.add_child(btn_row)
-    var av := _avatar(row, String(p.get("avatar_id", "warrior")), 50 if wide else 46)
+    var av := _avatar(row, p, 50 if wide else 46)
     if wide:
         # anel dourado da referência em volta do retrato
         var ring := TextureRect.new()
@@ -857,7 +927,7 @@ func _build_profile(narrow: bool):
     var top = HBoxContainer.new() if not narrow else VBoxContainer.new()
     top.add_theme_constant_override("separation", 12)
     box.add_child(top)
-    var av = _avatar(top, String(profile.get("avatar_id", "warrior")), 88)
+    var av = _avatar(top, profile, 88)
     _frame(av, profile)
     if narrow: av.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     var info = VBoxContainer.new()
@@ -1175,7 +1245,7 @@ func _build_dm():
     var head = HBoxContainer.new()
     head.add_theme_constant_override("separation", 10)
     box.add_child(head)
-    _frame(_avatar(head, String(dm_peer.get("avatar_id", "warrior")), 44), dm_peer)
+    _frame(_avatar(head, dm_peer, 44), dm_peer)
     _seal(head, dm_peer, 30)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1319,7 +1389,7 @@ func _build_invite_pick():
     var head = HBoxContainer.new()
     head.add_theme_constant_override("separation", 10)
     box.add_child(head)
-    _frame(_avatar(head, String(invite_peer.get("avatar_id", "warrior")), 44), invite_peer)
+    _frame(_avatar(head, invite_peer, 44), invite_peer)
     _seal(head, invite_peer, 30)
     var col = VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL

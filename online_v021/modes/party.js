@@ -84,7 +84,7 @@ class Party {
   }
   startMsg(room, v) {
     return { type: 'party_start', room_id: room.id, game: room.game, game_name: GAMES[room.game].name, seat: 0,
-      players: rotArr(room.seats, v).map(s => ({ user_id: s.kind === 'human' ? s.uid : '', name: s.nickname, avatar: s.avatar || '', badge: s.badge || '', title: s.title || '', frame: s.frame || 'liga', founder: !!s.founder, club: !!s.club, bot: s.kind !== 'human', connected: s.kind !== 'human' || s.connected, left: !!s.left })),
+      players: rotArr(room.seats, v).map(s => ({ user_id: s.kind === 'human' ? s.uid : '', name: s.nickname, avatar: s.avatar || '', avatar_url: s.kind === 'human' ? s.avatar_url || null : null, badge: s.badge || '', title: s.title || '', frame: s.frame || 'liga', founder: !!s.founder, club: !!s.club, bot: s.kind !== 'human', connected: s.kind !== 'human' || s.connected, left: !!s.left })),
       ruleset: room.game === 'marcha' ? M.RULESET_VERSION : X.RULESET_VERSION, turn_ms: room.game === 'marcha' ? T.marchaTurnMs : T.turnMs, snapshot: this.snapshot(room, v) };
   }
   later(room, ms, fn) { clearTimeout(room.timer); room.timer = setTimeout(() => { room.timer = null; if (!room.ended) fn(); }, Math.max(0, ms)); room.timer.unref && room.timer.unref(); }

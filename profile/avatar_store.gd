@@ -83,7 +83,7 @@ static func encode_webp(img: Image) -> PackedByteArray:
     return bytes
 
 ## Baixa a foto pública (profiles.avatar_url) para o cache local, se faltar ou estiver velha.
-func fetch(key: String, url: String):
+func fetch(key: String, url: String, size: int = SIZE):
     if pending.has(url) or not needs_fetch(key, url): return
     var req := HTTPRequest.new()
     req.timeout = 20.0
@@ -95,9 +95,9 @@ func fetch(key: String, url: String):
         if result != HTTPRequest.RESULT_SUCCESS or code != 200 or body.is_empty(): return
         var img := decode(body)
         if img == null: return
-        if img.get_width() != SIZE or img.get_height() != SIZE: img.resize(SIZE, SIZE, Image.INTERPOLATE_LANCZOS)
-        save_local(key, img)
-        set_cached_url(key, url))
+        if img.get_width() != size or img.get_height() != size: img.resize(size, size, Image.INTERPOLATE_LANCZOS)
+        set_cached_url(key, url)   # antes do save_local: quem reage ao texture_ready já vê a URL nova (sem baixar de novo)
+        save_local(key, img))
     if req.request(url) != OK:
         pending.erase(url)
         req.queue_free()

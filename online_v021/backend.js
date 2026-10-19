@@ -303,6 +303,17 @@ class Backend {
   inMatch(uid) { return this.games().some(g => !!g.activeMatchOf(uid)) || !!(this.party && this.party.activeMatchOf(uid)); }
   // Sessões/partidas mudaram: o serviço de presença recalcula (com tolerância) e avisa amigos se mudou.
   presenceChanged(uid) { if (this.presence) this.presence.changed(uid); }
+  // R150 · perfil público mudou (foto, avatar, selo, nome): avisa na hora os amigos conectados, para a foto nova
+  // aparecer sem precisar sair e entrar (antes só quem trocou via a mudança). Mesmo público da presença.
+  async profileChanged(uid) {
+    if (!this.presence) return;
+    try {
+      const [p] = await this.store.getProfilesByIds([uid]);
+      if (!p) return;
+      const msg = { type: 'friend_profile', profile: p };
+      for (const f of await this.presence.audience(uid)) for (const ws of this.socketsOf(f)) this.send(ws, msg);
+    } catch (e) { console.error('profile notify', e && e.message); }
+  }
   socketsOf(uid) { return [...(this.online.get(uid) || [])].filter(ws => ws.readyState === undefined || ws.readyState === 1); }
   // Presença pública publicada (com tolerância): só o estado, nunca dados de conexão.
   presenceOf(uid) { return this.presence ? this.presence.stateOf(uid) : 'offline'; }
@@ -350,7 +361,7 @@ class Backend {
     if (s.stateRevision !== stateRevision || !this.ready(ws, revision)) return false;
     ws.profile = profile;
     const look = profile ? Cosmetics.effective(profile, entitlements) : null;
-    if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame, founder: look.founder, club: look.club, guest: false }); }
+    if (profile) { ws.guest = null; this.setIdentity(ws, { id: u.id, nickname: profile.nickname, avatar: look.avatar_id, avatar_url: Cosmetics.photoUrl(profile.avatar_url), badge: look.badge, title: look.title, frame: look.frame, founder: look.founder, club: look.club, guest: false }); }
     else this.setIdentity(ws, null);
     // nickname_next_change_at: calculado pelo SERVIDOR (cooldown de 30 dias); o cliente só exibe.
     const pubProfile = profile ? { ...profile, nickname_next_change_at: nextNickChange(profile), status: Status.of(profile) } : null;
@@ -618,6 +629,7 @@ class Backend {
         if (r.error) return this.send(ws, { type: 'acct_cosmetics_error', code: r.code || 'profile_error', message: r.error });
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
         this.presenceChanged(accountId);
+        this.profileChanged(accountId);
         const look = Cosmetics.effective(r.profile, ent);
         return this.send(ws, { type: 'acct_cosmetics_saved', avatar_id: look.avatar_id, badge: look.badge, title: look.title, frame: look.frame, partial: !!r.partial });
       }
@@ -649,6 +661,7 @@ class Backend {
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'profile_error', next_change_at: r.next_change_at || null });
         if (!(await this.checked(ws, revision, this.state(ws)))) return;                       // atualiza ws.profile e a identidade pública (chat, amigos…)
         this.presenceChanged(accountId);
+        this.profileChanged(accountId);
         return this.send(ws, { type: 'acct_nickname_changed', nickname: v.nickname, next_change_at: nextNickChange(r.profile) });
       }
       // ---------- Foto de perfil (0004): o cliente manda a imagem já recortada (512x512); o servidor revalida ----------
@@ -659,6 +672,7 @@ class Backend {
         const r = await op.wait(() => this.store.saveAvatar(accountId, v.bytes, v.mime));
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'avatar_error' });
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
+        this.profileChanged(accountId);
         return this.send(ws, { type: 'acct_avatar_saved', avatar_url: r.profile.avatar_url || null });
       }
       if (a === 'acct_avatar_clear') {
@@ -666,6 +680,7 @@ class Backend {
         const r = await op.wait(() => this.store.clearAvatar(accountId));
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'avatar_error' });
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
+        this.profileChanged(accountId);
         return this.send(ws, { type: 'acct_avatar_saved', avatar_url: null });
       }
       // ---------- R97 · EXCLUIR CONTA (confirmação = digitar o próprio nome) ----------

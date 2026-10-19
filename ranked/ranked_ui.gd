@@ -280,7 +280,7 @@ func strip_info(color: String) -> Dictionary:
         "name": "Você" if me else String(info.get("nickname", "Adversário")), "bot": false,
         "mode": mode if rated() else "casual", "mode_label": ("RANQUEADO · " if rated() else "CASUAL · ") + String(controller.mode_name).to_upper(),
         "subtitle": ("BRANCAS" if color == "w" else "PRETAS")}
-    if hub != null and hub.has_method("avatar_texture"): d.avatar = hub.avatar_texture() if me else hub.avatar_texture(String(info.get("avatar_id", "")))
+    if hub != null and hub.has_method("avatar_texture"): d.avatar = hub.avatar_texture() if me else (hub.avatar_texture_for(info) if hub.has_method("avatar_texture_for") else hub.avatar_texture(String(info.get("avatar_id", ""))))
     d.merge(PlayerPortrait.self_info(hub) if me else {"badge": info.get("badge", ""), "title": info.get("title", ""), "frame": info.get("frame", "liga")})   # R41
     return d
 
@@ -603,7 +603,7 @@ func _desk_art(which: String) -> bool:
             var av := String(opp.get("avatar_id", opp.get("avatar", "")))
             var tex: Texture2D = null
             if hub != null and hub.has_method("avatar_texture"):
-                tex = hub.avatar_texture(av) if not av.is_empty() else null
+                tex = hub.avatar_texture_for(opp) if hub.has_method("avatar_texture_for") else (hub.avatar_texture(av) if not av.is_empty() else null)
                 if tex == null: tex = hub.avatar_texture("warrior")
             if tex != null: d.image(tex, Rect2(456, 723, 213, 213), true, 0.64).name = "DeskFoundAvatar"
             d.label(String(opp.get("nickname", "")), Rect2(250, 962, 622, 86), 76, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskFoundName"

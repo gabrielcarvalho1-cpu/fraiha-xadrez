@@ -78,10 +78,16 @@ function effective(p, ent) {
 
 // R41 · Parte pública da identidade que viaja para os outros jogadores (mesa, convite, festa, DM).
 // Recebe ws.identity ({badge,title,frame,founder,club}) ou um perfil público (pub) e normaliza.
+// R150 · foto de perfil (profiles.avatar_url, bucket público "avatars"): viaja junto para os outros jogadores
+// verem a foto (antes só o avatar do catálogo ia). Só URL http(s) curta; qualquer outra coisa = sem foto.
+function photoUrl(u) {
+  u = typeof u === 'string' ? u : '';
+  return /^(https?|memory):\/\/[^\s"'<>]{1,400}$/.test(u) ? u : null;
+}
 function look(o) {
   o = o || {};
   return { badge: BADGES.includes(o.badge) ? o.badge : '', title: TITLES.includes(o.title) ? o.title : '',
-    frame: FRAMES.includes(o.frame) ? o.frame : 'liga', founder: !!o.founder, club: !!o.club };
+    frame: FRAMES.includes(o.frame) ? o.frame : 'liga', founder: !!o.founder, club: !!o.club, avatar_url: photoUrl(o.avatar_url) };
 }
 
-module.exports = { look, validate, effective, SHOP_TITLES, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, CLUB_AVATARS, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };
+module.exports = { look, photoUrl, validate, effective, SHOP_TITLES, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, CLUB_AVATARS, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };

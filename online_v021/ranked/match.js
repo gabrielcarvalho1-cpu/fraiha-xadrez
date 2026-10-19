@@ -100,7 +100,7 @@ class RankedMatch {
       black_forca_after: r.b.stats.forca, black_forca_rd_after: r.b.stats.forca_rd };
   }
   publicPlayer(c) {
-    const p = this.players[c], out = { user_id: /^[0-9a-f-]{36}$/i.test(String(p.userId || '')) ? p.userId : '', nickname: p.nickname, avatar_id: p.avatar, badge: p.badge || '', title: p.title || '', frame: p.frame || 'liga', founder: !!p.founder, club: !!p.club, connected: p.connected };
+    const p = this.players[c], out = { user_id: /^[0-9a-f-]{36}$/i.test(String(p.userId || '')) ? p.userId : '', nickname: p.nickname, avatar_id: p.avatar, avatar_url: p.avatar_url || null, badge: p.badge || '', title: p.title || '', frame: p.frame || 'liga', founder: !!p.founder, club: !!p.club, connected: p.connected };
     if (this.rated) { out.league = p.stats.league; out.pl = p.stats.pl; }
     return out;
   }

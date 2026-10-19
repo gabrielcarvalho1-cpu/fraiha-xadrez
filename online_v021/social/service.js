@@ -107,7 +107,7 @@ class Social {
       this.send(ws, { type: 'social_ok', action, user_id: other, relation: newRel });
       await op.wait(() => this.pushList(me));
       op.assert();
-      if (notifyEvent) this.notify(other, notifyEvent, { user_id: me, nickname: meProfile.nickname, avatar_id: meProfile.avatar_id });
+      if (notifyEvent) this.notify(other, notifyEvent, { user_id: me, nickname: meProfile.nickname, avatar_id: meProfile.avatar_id, avatar_url: meProfile.avatar_url || null });
       await op.wait(() => this.pushList(other));
     };
     if (a === 'social_request') {

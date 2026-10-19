@@ -10,6 +10,7 @@ signal ranked_requested
 signal account_requested
 signal friends_requested
 signal premove_changed(enabled: bool)
+signal peer_avatar_ready(uid: String)   # R150 · chegou a foto de outro jogador (amigo, mesa, adversário)
 signal cosmetics_changed   # R31: ícone/título/moldura/avatar mudaram (a conta sincroniza com o servidor)
 
 const BoardColors = preload("res://cosmetics/board_colors.gd")   # R139
@@ -181,7 +182,10 @@ func _ready():
     avatar_store = load("res://profile/avatar_store.gd").new()
     avatar_store.name = "AvatarStore"
     add_child(avatar_store)
-    avatar_store.texture_ready.connect(func(_k):
+    avatar_store.texture_ready.connect(func(k):
+        if String(k).begins_with(PEER_PREFIX):   # R150 · foto de OUTRO jogador: só avisa quem está mostrando
+            peer_avatar_ready.emit(String(k).substr(PEER_PREFIX.length()))
+            return
         _focus_current_look()   # R54 · foto chegou da conta: o detalhe do Perfil mostra a foto
         _refresh_avatars())
     monetization_state = load("res://monetization/monetization_state.gd").new()
@@ -1212,6 +1216,30 @@ func avatar_key() -> String:
 ## Foto personalizada do jogador (cache local), se houver.
 func custom_avatar() -> Texture2D:
     return avatar_store.texture_for(avatar_key()) if avatar_store != null else null
+
+## R150 · FOTO DOS OUTROS JOGADORES. O servidor manda avatar_url (foto pública do Storage) junto com o perfil
+## público (amigos, busca, convites, mensagens, mesa, adversário). Antes ninguém via a foto dos outros: só o
+## avatar do catálogo. Cache próprio (user://avatars/p_<user_id>.webp, 160 px) separado da foto da conta
+## deste aparelho; URL nova (foto trocada) = baixa de novo. Enquanto baixa, mostra o avatar do catálogo.
+const PEER_PREFIX := "p_"
+const PEER_PHOTO_SIZE := 160
+func peer_photo(uid: String, url: String) -> Texture2D:
+    if avatar_store == null or uid.is_empty() or not url.begins_with("http"): return null
+    if account != null and account.has_profile() and uid == String(account.user_id): return custom_avatar()
+    var key := PEER_PREFIX + uid
+    if avatar_store.needs_fetch(key, url): avatar_store.fetch(key, url, PEER_PHOTO_SIZE)
+    return avatar_store.texture_for(key)   # cópia antiga (se houver) até a nova chegar
+
+## Avatar de outro jogador a partir do perfil público: foto (se tiver) → avatar do catálogo → Guerreiro.
+func avatar_texture_for(info: Dictionary) -> Texture2D:
+    var uid := String(info.get("user_id", info.get("uid", info.get("userId", ""))))
+    var url = info.get("avatar_url")
+    if url is String and not url.is_empty():
+        var photo := peer_photo(uid, url)
+        if photo != null: return photo
+    var av := String(info.get("avatar_id", info.get("avatar", "")))
+    var t: Texture2D = avatar_texture(av) if not av.is_empty() else null
+    return t if t != null else avatar_texture("warrior")
 
 ## R65 · os avatares do catálogo (profile/avatars) já trazem uma moldura própria desenhada na borda; dentro da
 ## moldura do cartão da Home isso virava "moldura dentro da moldura" e a foto parecia não preencher o vão.
