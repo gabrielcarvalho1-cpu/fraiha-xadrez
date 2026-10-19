@@ -278,7 +278,9 @@ func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 	var nav_top := safe.end.y - P_NAV_BUTTONS * k
 	var slack := maxf(0.0, nav_top - safe.position.y - (P_BLOCK.y - P_BLOCK.x) * k)
 	# a sobra fica embaixo do cartão do jogador: é onde o painel AÇÕES abre (como na referência) sem cobrir nada
-	var block_top := safe.position.y + maxf(0.0, slack - P_PANEL.size.y * k) * 0.4
+	# R155 · tabuleiro + cartões CENTRALIZADOS entre o topo e a barra de baixo (antes a sobra ia quase toda para baixo,
+	# um vão grande de desenho entre o cartão do jogador e os botões INÍCIO/AÇÕES/CHAT)
+	var block_top := safe.position.y + slack * 0.5
 	off = Vector2(ox, block_top - P_BLOCK.x * k)
 	bg.mode = "p"
 	bg.wood = wood
@@ -1105,6 +1107,14 @@ class BgArt extends Node2D:
 				var s := maxf(full.size.x / ts.x, full.size.y / ts.y)
 				draw_texture_rect(_fill, Rect2((full.size - ts * s) / 2.0, ts * s), false, Color(0.8, 0.84, 0.8))
 				draw_texture_rect(_top, top_rect, false)
+				# R155 · com o tabuleiro centralizado sobra fundo em cima: emenda suave (sem a linha reta cortando a arte)
+				if top_rect.position.y > 2.0:
+					var y := top_rect.position.y
+					var h := minf(36.0, y)
+					var c0 := Color(0.02, 0.04, 0.03, 0.0)
+					var c1 := Color(0.02, 0.04, 0.03, 0.55)
+					draw_polygon(PackedVector2Array([Vector2(0, y - h), Vector2(full.size.x, y - h), Vector2(full.size.x, y), Vector2(0, y)]), PackedColorArray([c0, c0, c1, c1]))
+					draw_polygon(PackedVector2Array([Vector2(0, y), Vector2(full.size.x, y), Vector2(full.size.x, y + 28.0), Vector2(0, y + 28.0)]), PackedColorArray([c1, c1, c0, c0]))
 			return
 		if wood:
 			draw_texture_rect(_land, top_rect, false)

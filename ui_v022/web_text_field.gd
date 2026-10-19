@@ -150,12 +150,28 @@ func _exit_tree():
         bar.remove()
         bar = null
 
+## R155 · o campo HTML fica por cima de tudo e não é cortado pela rolagem do Godot: se o LineEdit está fora da
+## parte visível de uma lista que rola (ex.: EXCLUIR CONTA, embaixo do texto), o campo aparecia solto em cima da
+## barra de baixo — e tocar nele no iPhone fazia a página inteira pular (tela verde gigante). Só mostra quando o
+## campo está (quase) todo dentro da área visível de todos os pais que cortam o conteúdo.
+func _inside_clip() -> bool:
+    var r := field.get_global_rect()
+    var p := field.get_parent()
+    while p != null:
+        if p is Control and (p as Control).clip_contents:
+            var c := (p as Control).get_global_rect()
+            var i := c.intersection(r)
+            if i.size.y < r.size.y * 0.8 or i.size.x < r.size.x * 0.5: return false
+        if p is CanvasLayer: break
+        p = p.get_parent()
+    return true
+
 func docked() -> bool:
     return el != null and str(el.dataset.docked) == "1"
 
 func _process(_delta):
     if el == null: return
-    var show := field.is_visible_in_tree() and field.editable and not _covered_for(field)
+    var show := field.is_visible_in_tree() and field.editable and not _covered_for(field) and (docked() or _inside_clip())
     if show != _shown:
         _shown = show
         if not show:

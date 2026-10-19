@@ -167,7 +167,9 @@ class Card extends Button:
         var focused: bool = gallery.focus_id == avatar
         ref_frame.modulate = Color(0.72, 1.3, 0.86) if st == "selected" else (Color(1.25, 1.18, 1.0) if (focused or is_hovered()) else Color.WHITE)
         var title := String(e2.get("name", avatar)).to_upper()
-        var fs := _fit(ref_name.get_theme_font("font"), title, int(round(30 * k)), size.x - 14.0)
+        # R155 · nome comprido (CAVALEIRO ESMERALDA) no celular: diminui até caber na faixa do nome (antes cortava as pontas)
+        var room: float = (ref_name.size.x if ref_name.size.x > 4.0 else size.x - 14.0) - 8.0
+        var fs := _fit(ref_name.get_theme_font("font"), title, int(round(30 * k)), room, 6)
         if ref_name.text != title: ref_name.text = title
         ref_name.add_theme_font_size_override("font_size", maxi(7, fs))
         ref_name.add_theme_color_override("font_color", Color("efe6cf") if not locked else Color("c9c9c4"))
@@ -302,7 +304,7 @@ class Card extends Button:
         if st == "locked": return "BLOQUEADO · " + gallery.hint(avatar)
         if st == "no_art_unlocked": return "Conquistado · a arte deste avatar ainda será adicionada"
         return String(e.get("name", avatar))
-    static func _fit(font: Font, text: String, fs: int, room: float) -> int:
+    static func _fit(font: Font, text: String, fs: int, room: float, low := 9) -> int:
         var s := fs
-        while s > 9 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x > room: s -= 1
+        while s > low and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, s).x > room: s -= 1
         return s

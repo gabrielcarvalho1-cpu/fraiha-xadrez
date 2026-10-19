@@ -396,7 +396,7 @@ func _show(target: String):
             _label(account.email, 14, Color("b8b19c"))
             if not account.persistent_backend:
                 _label("Servidor em modo de teste: progresso Ranked NÃO é permanente.", 14, Color("ff9d86"))
-            _button("CONTINUAR", close, true)
+            _button("VOLTAR", close, true)   # R155 · antes CONTINUAR (confundia: o botão só volta para a Home)
             _button("DEFINIR SENHA" if account.provider != "email" else "ALTERAR SENHA", func(): _show("set_password"))
             _button("SAIR DA CONTA", account.sign_out)
             _link("Termos, privacidade e excluir conta", func(): if open_legal.is_valid(): open_legal.call("termos"))

@@ -191,19 +191,19 @@ static func _board_colors(hub, parent: VBoxContainer, mh):
     v.get_parent().name = "PersonalizeBoardColors"
     Art.label(v, "O tabuleiro é o da Madeira para todos; você escolhe as cores das casas e das peças. Fundador e Club têm cores exclusivas.", hub.fs(16), Art.MUTED)
     var row := HBoxContainer.new()
-    row.add_theme_constant_override("separation", 16)
+    row.add_theme_constant_override("separation", 10 if hub.narrow else 16)   # R155 · celular: cabe na largura (antes a moldura da direita saía da tela)
     v.add_child(row)
     var pv = preload("res://cosmetics/board_colors_preview.gd").new(mh.effective_board_color(), mh.effective_piece_color())
     pv.name = "PersonalizeBoardPreview"
     var st = mh.get_parent()
     if st != null and st.get("theme_manager") != null: pv.classic_pieces = st.theme_manager.classic_pieces
-    pv.custom_minimum_size = Vector2(1, 1) * (150.0 if hub.narrow else 190.0)
+    pv.custom_minimum_size = Vector2(1, 1) * (118.0 if hub.narrow else 190.0)
     row.add_child(pv)
     var go := Art.Cta.new("ESCOLHER CORES", "gold", 52, 15 if hub.narrow else 17)
     go.name = "PersonalizeBoardColorsOpen"
     go.icon_kind = ""
     go.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    go.custom_minimum_size.x = 170 if hub.narrow else 230
+    go.custom_minimum_size.x = 150 if hub.narrow else 230
     go.pressed.connect(func(): mh.open_board_colors())
     row.add_child(go)
     if mh.has_signal("board_colors_changed"):

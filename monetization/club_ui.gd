@@ -142,12 +142,12 @@ static func _weekly_report(hub, parent: VBoxContainer):
     v.add_child(layout)
     var stats := GridContainer.new()
     stats.columns = 3
-    stats.add_theme_constant_override("h_separation", 14 if hub.narrow else 26)
+    stats.add_theme_constant_override("h_separation", 8 if hub.narrow else 26)
     stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     layout.add_child(stats)
     for pair in [["12", "partidas"], ["7", "vitórias"], ["3", "erros recorrentes"]]:
         var cell := VBoxContainer.new()
-        cell.custom_minimum_size.x = 92 if hub.narrow else 130
+        cell.custom_minimum_size.x = 78 if hub.narrow else 130
         stats.add_child(cell)
         var n := Art.label(cell, pair[0], hub.fs(44), Art.INK, Art.FONT_BOLD)
         n.autowrap_mode = TextServer.AUTOWRAP_OFF
