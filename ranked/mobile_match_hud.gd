@@ -376,10 +376,15 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 	for key in ["top", "bottom"]:
 		var c: Rect2 = rects[key]
 		var p: Dictionary = plates[key]
-		var pad := 10.0 * s
-		var a := 54.0 * s
-		var av := Rect2(c.position + Vector2(pad + 2.0 * s, pad + 2.0 * s), Vector2(a, a))
-		var cb := Rect2(c.position.x + pad, av.end.y + 6.0 * s, c.size.x - 2.0 * pad, 44.0 * s)
+		# R155 · tudo DENTRO da moldura do cartão (a arte tem ~22 px de madeira à esquerda e ~16 em cima/embaixo,
+		# em pixels de tela: o NinePatch não escala a borda). Antes nome, relógio e "Material" encostavam/passavam da borda.
+		var inner := Rect2(c.position + Vector2(24.0, 17.0), c.size - Vector2(24.0 + 16.0, 17.0 + 17.0))
+		var gap := 6.0 * s
+		var a := minf(52.0 * s, inner.size.y * 0.42)
+		var av := Rect2(inner.position + Vector2(2.0, 2.0), Vector2(a, a))
+		var mat_h := 16.0 * s
+		var cb_h := minf(38.0 * s, inner.size.y - a - mat_h - gap * 2.0)
+		var cb := Rect2(inner.position.x + 2.0, av.end.y + gap, inner.size.x - 4.0, cb_h)
 		for n in p.values(): n.hide()
 		p.card.show()
 		p.clock.show()
@@ -387,22 +392,26 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 		_set_rect(p.card, c)
 		_set_rect(p.clock, cb)
 		var hg: TextureRect = p.clock.get_node("Hourglass")
-		hg.position = Vector2(6.0 * s, 5.0 * s)
-		hg.size = Vector2(28.0 * s, cb.size.y - 10.0 * s)
-		_set_rect(p.ring, Rect2(av.get_center() - av.size * 0.66, av.size * 1.32))
+		hg.position = Vector2(6.0 * s, 4.0 * s)
+		hg.size = Vector2(24.0 * s, cb.size.y - 8.0 * s)
+		_set_rect(p.ring, Rect2(av.get_center() - av.size * 0.62, av.size * 1.24))
 		var nx := av.end.x + 8.0 * s
-		var tw := c.end.x - pad - nx
-		_skin_strip(key, c, av, true, Rect2(nx, av.position.y + 2.0 * s, tw, 26.0 * s), 19.0 * s,
-			Rect2(nx, av.position.y + 30.0 * s, tw, 20.0 * s), 13.0 * s,
-			Rect2(cb.position.x + 44.0 * s, cb.position.y + 2.0 * s, cb.size.x - 52.0 * s, cb.size.y - 4.0 * s), 30.0 * s,
-			Rect2(c.position.x + pad + 4.0 * s, cb.end.y + 4.0 * s, c.size.x - 2.0 * pad - 8.0 * s, 18.0 * s))
+		var tw := inner.end.x - nx - 2.0
+		# nome e 2ª linha centralizados na altura do retrato
+		var name_h := 22.0 * s
+		var sub_h := 18.0 * s
+		var ty := av.position.y + (a - name_h - sub_h - 2.0 * s) / 2.0
+		_skin_strip(key, c, av, true, Rect2(nx, ty, tw, name_h), 17.0 * s,
+			Rect2(nx, ty + name_h + 2.0 * s, tw, sub_h), 12.0 * s,
+			Rect2(cb.position.x + 36.0 * s, cb.position.y + 1.0, cb.size.x - 44.0 * s, cb.size.y - 2.0), 25.0 * s,
+			Rect2(inner.position.x + 8.0, cb.end.y + 2.0 * s, inner.size.x - 16.0, mat_h))
 	# painel AÇÕES: sai da aba da direita (por cima do tabuleiro enquanto aberto)
 	_layout_panel_landscape(vs, safe, corner.tab.position.x)
 	link = ui().link_label
 	var rx := frame.end.x + 6.0
 	link.position = Vector2(rx, safe.position.y + bs + 8.0)
 	link.size = Vector2(maxf(60.0, corner.tab.position.x - rx - 6.0), 60.0)
-	moves.visible = stage.mode == "bot"
+	moves.visible = false   # R155 · deitado sem a caixa LANCES (o dono achou feia); a lista fica no painel AÇÕES
 	if moves.visible:
 		moves.position = Vector2(rx + 4.0, safe.position.y + bs + 10.0)
 		# R154 · a caixa cresce com o texto (a aba AÇÕES fica à direita, não embaixo): em tela baixa a caixa tinha
