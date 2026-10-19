@@ -366,20 +366,22 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 	corner.back.show()
 	corner.gear.show()
 	corner.tab.show()
-	# R156 · um cartão de cada lado do tabuleiro: adversário na coluna da DIREITA (em cima, abaixo da engrenagem),
-	# jogador na coluna da ESQUERDA (embaixo). Cada um ganha a altura toda da coluna → cartões maiores e o cenário
-	# da direita deixa de sobrar vazio.
-	var lx := safe.position.x
-	var lw: float = frame.position.x - 6.0 - lx
-	var rx0 := frame.end.x + 6.0
-	var rw: float = corner.tab.position.x - 6.0 - rx0
-	var col_w := minf(lw, rw)
-	var s := clampf(col_w / 220.0, 0.6, 1.45)
-	s = maxf(0.45, minf(s, (safe.size.y - bs - 14.0) / 170.0))
+	# cartões na coluna da esquerda: adversário em cima, jogador embaixo (R157.1: voltou a ser assim, pedido do dono)
+	var col_x := safe.position.x
+	var col_w := frame.position.x - 6.0 - col_x
+	var s := clampf(col_w / 220.0, 0.6, 1.25)
+	# R154 · tela deitada baixa (ex.: com a barra do navegador): os dois cartões cabem na altura (antes o de baixo cortava)
+	s = maxf(0.45, minf(s, (safe.size.y - bs - 18.0) / 320.0))
 	var ch := 160.0 * s
-	var cw := minf(col_w, 260.0 * s)
 	var top_y := safe.position.y + bs + 6.0
-	var rects := {"top": Rect2(rx0 + (rw - cw) / 2.0, top_y, cw, ch), "bottom": Rect2(lx + (lw - cw) / 2.0, safe.end.y - ch - 4.0, cw, ch)}
+	var rects := {"top": Rect2(col_x, top_y, col_w, ch), "bottom": Rect2(col_x, maxf(top_y + ch + 6.0, safe.end.y - ch), col_w, ch)}
+	# R157.1 · coluna da direita (entre o tabuleiro e a aba AÇÕES): botão CHAT no meio; o chat abre ocupando ela
+	var rx0: float = frame.end.x + 6.0
+	right_col = Rect2(rx0, top_y, maxf(60.0, corner.tab.position.x - 6.0 - rx0), safe.end.y - 4.0 - top_y)
+	# botão no alto da coluna (fica visível com o chat aberto: tocar de novo fecha); o chat ocupa o resto da coluna
+	var chs := clampf(minf(right_col.size.x * 0.36, vs.y * 0.17), 44.0, 72.0)
+	_set_rect(corner.chat, Rect2(Vector2(right_col.get_center().x - chs / 2.0, right_col.position.y), Vector2(chs, chs)))
+	right_col = Rect2(right_col.position.x, right_col.position.y + chs + 6.0, right_col.size.x, right_col.size.y - chs - 6.0)
 	for key in ["top", "bottom"]:
 		var c: Rect2 = rects[key]
 		var p: Dictionary = plates[key]
@@ -493,6 +495,7 @@ func _skin_strip(key: String, card: Rect2, avatar: Rect2, round: bool, name_r: R
 		mh.queue_redraw()
 
 # ------------------------------------------------------------------ chat
+var right_col := Rect2()
 func _layout_chat(board: Rect2, safe: Rect2) -> void:
 	var c = stage.match_chat
 	if c == null or not c.active() or not c.open_mobile: return
@@ -501,10 +504,16 @@ func _layout_chat(board: Rect2, safe: Rect2) -> void:
 		var bottom := nav.position.y - 4.0
 		c.panel.position = Vector2(safe.position.x, top)
 		c.panel.size = Vector2(safe.size.x, maxf(160.0, bottom - top))
+	elif right_col.size.x >= 150.0:
+		# R157.1 · deitado: o chat preenche a coluna da direita (o cenário que sobrava), sem cobrir o tabuleiro
+		c.panel.position = right_col.position
+		c.panel.size = right_col.size
 	else:
+		# coluna estreita (celular 16:9): painel mais largo por cima do tabuleiro, mas abaixo do botão CHAT
 		var w := minf(420.0, safe.size.x * 0.5)
-		c.panel.position = Vector2(corner.tab.position.x - w - 6.0, safe.position.y + 4.0)
-		c.panel.size = Vector2(w, safe.size.y - 8.0)
+		var y0: float = right_col.position.y if right_col.size.y > 0.0 else safe.position.y + 4.0
+		c.panel.position = Vector2(corner.tab.position.x - w - 6.0, y0)
+		c.panel.size = Vector2(w, safe.end.y - 4.0 - y0)
 
 ## Botão da direita da barra: CHAT nas partidas online; contra o computador (sem chat) é LANCES.
 func _third_pressed() -> void:

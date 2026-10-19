@@ -56,8 +56,10 @@ func setup(service):
     var col = VBoxContainer.new()
     col.add_theme_constant_override("separation", 6)
     panel.add_child(col)
-    var head = HBoxContainer.new()
-    head.add_theme_constant_override("separation", 6)
+    # R157.1 · os botões do topo quebram linha quando o painel é estreito (celular deitado: chat na coluna da direita)
+    var head = HFlowContainer.new()
+    head.add_theme_constant_override("h_separation", 6)
+    head.add_theme_constant_override("v_separation", 6)
     col.add_child(head)
     title = Label.new()
     title.text = "CHAT"
