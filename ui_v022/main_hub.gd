@@ -2399,9 +2399,17 @@ func _layout():
         canvas.visible = desk_home
         presentation_frame.visible = desk_home
         if not desk_home:
+            _wide_home(false)
             mobile_ui.layout()
             return
     var dimensions = get_viewport().get_visible_rect().size
+    # R153 · HOME DEITADA no celular largo: o menu ocupa a altura da tela e o resto vai para as laterais
+    var wide: bool = is_instance_valid(mobile_ui) and dimensions.x / maxf(1.0, dimensions.y) > WIDE_MIN_RATIO
+    _wide_home(wide)
+    if wide:
+        _layout_wide(dimensions)
+        presentation_frame.queue_redraw()
+        return
     # Fit the intact composition and its frame together, using all available space.
     var framed_size = DESIGN + Vector2.ONE * FRAME_MARGIN * 2.0
     var contain = minf(dimensions.x / framed_size.x, dimensions.y / framed_size.y)
@@ -2412,6 +2420,98 @@ func _layout():
     canvas.scale = Vector2.ONE * factor
     canvas.position = (dimensions - DESIGN*factor) / 2.0
     presentation_frame.queue_redraw()
+
+## R153 · HOME DEITADA (celular deitado, tela mais larga que 1,85:1). Antes a composição inteira (16:9) cabia
+## na altura e sobravam as laterais (borda espelhada / folhagem). Agora a faixa do MENU (dos pilares até o SAIR)
+## ocupa a altura toda — botões ~50% maiores — e o fundo cobre a tela inteira. O que fica fora dessa faixa
+## (SEJA MEMBRO, ícones, logo, cartão de perfil, conta, COMUNIDADE) vai para as laterais: os botões de verdade
+## são movidos e a moldura da arte vai junto (recortes com borda suave, tools/home_wide_r153.py).
+const WIDE_MIN_RATIO := 1.85
+const WIDE_BAND := Vector2(312, 905)   # y de cima/baixo da faixa do menu na arte (1672x941)
+const WIDE_PATCHES := {   # recorte (mesmos números de tools/home_wide_r153.py) e nós que andam junto
+    "club": [Rect2(10, 4, 354, 84), ["ClubHomeEntry"]],
+    "icons": [Rect2(356, 6, 146, 82), ["SoundButton", "FullscreenButton", "TrophyTopButton", "ChatTopButton", "CrownsTopButton"]],
+    "logo": [Rect2(470, 0, 732, 312), []],
+    "profile": [Rect2(1210, 18, 446, 232), ["RefProfileButton", "ProfilePanel", "ProfileStack"]],
+    "account": [Rect2(20, 832, 354, 100), ["AccountCard", "AccountPanel", "RefAccountAvatar", "RefAccountAvatarFrameHost"]],
+    "community": [Rect2(1388, 856, 262, 64), ["CommunityButton"]],
+}
+var _wide_on := false
+var _wide_orig := {}          # nó -> posição original (para voltar ao normal)
+var _wide_layer: Control      # recortes da arte, entre a arte e os botões
+var _wide_patch := {}
+
+func _wide_home(on: bool):
+    if on == _wide_on: return
+    _wide_on = on
+    if not on:
+        for n in _wide_orig.keys():
+            if is_instance_valid(n):
+                n.position = _wide_orig[n][0]
+                n.scale = _wide_orig[n][1]
+        _wide_orig.clear()
+        if is_instance_valid(_wide_layer): _wide_layer.queue_free()
+        _wide_layer = null
+        _wide_patch.clear()
+        return
+    _wide_layer = Control.new()
+    _wide_layer.name = "WideHomePatches"
+    _wide_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    canvas.add_child(_wide_layer)
+    var art = canvas.get_node_or_null("ForestArtwork")
+    canvas.move_child(_wide_layer, (art.get_index() + 1) if art != null else 0)
+    for key in WIDE_PATCHES:
+        if key == "community": continue
+        var t := TextureRect.new()
+        t.name = "Wide_" + key
+        t.texture = load("res://ui_v022/assets/home_wide_%s.png" % key)
+        t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        t.stretch_mode = TextureRect.STRETCH_SCALE
+        t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        _wide_layer.add_child(t)
+        _wide_patch[key] = t
+
+const WIDE_MENU_X := Vector2(540, 1120)   # pilares do menu na arte: nada das laterais passa daqui
+func _layout_wide(dims: Vector2):
+    var band_h: float = WIDE_BAND.y - WIDE_BAND.x
+    var s: float = maxf(dims.y / band_h, dims.x / DESIGN.x)
+    canvas.scale = Vector2.ONE * s
+    canvas.position = Vector2((dims.x - DESIGN.x * s) / 2.0, (dims.y - band_h * s) / 2.0 - WIDE_BAND.x * s)
+    var v := Rect2(-canvas.position / s, dims / s)          # parte da arte que aparece (coordenadas da arte)
+    var m := 12.0
+    var left_w: float = WIDE_MENU_X.x - v.position.x - m * 2.0
+    var right_w: float = v.end.x - WIDE_MENU_X.y - m * 2.0
+    var kl: float = clampf(left_w / 356.0, 0.5, 1.0)         # tela menos larga: as laterais encolhem um pouco
+    var kr: float = clampf(right_w / 446.0, 0.5, 1.0)
+    var place := {
+        "club": [v.position + Vector2(m, m), kl],
+        "icons": [v.position + Vector2(m, m + 90.0 * kl), kl],
+        "account": [Vector2(v.position.x + m, v.end.y - (100.0 + m) * kl), kl],
+        "profile": [Vector2(v.end.x - 446.0 * kr - m, v.position.y + m), kr],
+        "community": [Vector2(v.end.x - (262.0 + m) * kr - m * 0.5, v.end.y - (64.0 + m) * kr - m * 0.5), kr],
+    }
+    for key in place:
+        var src: Rect2 = WIDE_PATCHES[key][0]
+        var at: Vector2 = place[key][0]
+        var k: float = place[key][1]
+        for nm in WIDE_PATCHES[key][1]:
+            var n = canvas.get_node_or_null(nm)
+            if n == null: continue
+            if not _wide_orig.has(n): _wide_orig[n] = [n.position, n.scale]
+            n.scale = (_wide_orig[n][1] as Vector2) * k
+            n.position = at + ((_wide_orig[n][0] as Vector2) - src.position) * k
+        if _wide_patch.has(key):
+            _wide_patch[key].position = at
+            _wide_patch[key].size = src.size * k
+    # logo: no meio do espaço livre da coluna da esquerda (entre os ícones e a conta), do tamanho que couber
+    var lsrc: Rect2 = WIDE_PATCHES["logo"][0]
+    var top: float = v.position.y + m + 90.0 * kl + 84.0 * kl
+    var bottom: float = v.end.y - (100.0 + m * 2.0) * kl
+    var k2: float = minf(left_w / lsrc.size.x, (bottom - top) / lsrc.size.y)
+    var lsz: Vector2 = lsrc.size * maxf(0.2, k2)
+    _wide_patch["logo"].size = lsz
+    _wide_patch["logo"].position = Vector2(v.position.x + m + (left_w - lsz.x) / 2.0, top + (bottom - top - lsz.y) / 2.0)
+    _wide_patch["logo"].visible = k2 > 0.22
 
 func _draw_presentation_frame():
     if not desk_art_awake: return   # R89
