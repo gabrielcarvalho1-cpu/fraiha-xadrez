@@ -70,6 +70,8 @@ var tiles_box: Control
 var tiles := []               # [Button, id]
 var moves: RichTextLabel      # contra o computador: últimos lances
 var link: Label
+var card_grow := 0.0      # R160 · px que cada cartão cresce em pé
+var header: Label
 var _orig := {}
 var _key := ""
 var _moves_n := -1
@@ -113,6 +115,26 @@ func setup(owner_stage) -> void:
 	moves.add_theme_font_override("bold_font", FONT_TITLE)
 	moves.add_theme_color_override("default_color", Color("efe6d2"))
 	root.add_child(moves)
+	header = Label.new()          # R160 · faixa em pé com o modo da partida
+	header.name = "HudHeader"
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header.clip_text = true
+	header.add_theme_font_override("font", FONT_TITLE)
+	header.add_theme_color_override("font_color", Color("f3d68a"))
+	header.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+	header.add_theme_constant_override("outline_size", 3)
+	var hs := StyleBoxFlat.new()
+	hs.bg_color = Color(0.03, 0.055, 0.12, 0.9)
+	hs.border_color = Color("c99a45")
+	hs.set_border_width_all(2)
+	hs.set_corner_radius_all(8)
+	hs.shadow_color = Color(0, 0, 0, 0.45)
+	hs.shadow_size = 6
+	header.add_theme_stylebox_override("normal", hs)
+	header.hide()
+	root.add_child(header)
 	sheet = PanelContainer.new()
 	sheet.name = "HudMovesSheet"
 	var ss := StyleBoxFlat.new()
@@ -271,6 +293,31 @@ func apply() -> void:
 	_key = ""
 	_process(0.0)
 
+## R160 · texto da faixa de cima (em pé): o modo e o ritmo da partida
+func _header_text() -> String:
+	match String(stage.mode):
+		"ranked", "casual":
+			var u = ui()
+			var nm := ""
+			if u != null and u.get("controller") != null: nm = String(u.controller.mode_name)
+			var base := "RANKED" if stage.mode == "ranked" else "CASUAL"
+			return base + ("  ·  " + nm.to_upper() if nm != "" else "")
+		"bot": return "TREINO CONTRA O COMPUTADOR"
+		"local": return "PARTIDA LOCAL"
+	return ""
+
+func _layout_header(r: Rect2) -> void:
+	if header == null: return
+	var t := _header_text()
+	header.visible = r.size.y >= 20.0 and t != ""
+	if not header.visible: return
+	header.text = t
+	var fs := int(clampf(r.size.y * 0.5, 11.0, 17.0))
+	while fs > 9 and FONT_TITLE.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > r.size.x - 24.0: fs -= 1
+	header.add_theme_font_size_override("font_size", fs)
+	header.position = r.position
+	header.size = r.size
+
 # ---------- EM PÉ
 func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 	var core_w := P_CORE.y - P_CORE.x
@@ -281,8 +328,22 @@ func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 	# a sobra fica embaixo do cartão do jogador: é onde o painel AÇÕES abre (como na referência) sem cobrir nada
 	# R155 · tabuleiro + cartões CENTRALIZADOS entre o topo e a barra de baixo (antes a sobra ia quase toda para baixo,
 	# um vão grande de desenho entre o cartão do jogador e os botões INÍCIO/AÇÕES/CHAT)
-	var block_top := safe.position.y + slack * 0.62   # R158 · um pouco mais para baixo (pedido do dono)
+	# R160 · a sobra vira cartões MAIORES (+~30%) e uma faixa em cima com o modo da partida; o resto se divide
+	# igual em cima e embaixo (contra o bot, embaixo fica também a linha dos LANCES)
+	var lances_need := 52.0 if stage.mode == "bot" else 0.0
+	var free := slack - lances_need
+	card_grow = clampf((free - 40.0) / 4.0, 0.0, 118.0 * k * 0.32)
+	var rest := free - 2.0 * card_grow
+	var hh := 0.0
+	var hgap := 0.0
+	if rest >= 46.0 and _header_text() != "":
+		hh = clampf(vs.y * 0.036, 24.0, 32.0)
+		hgap = 8.0
+	rest -= hh + hgap
+	var top_pad := maxf(0.0, rest * 0.5)
+	var block_top := safe.position.y + top_pad + hh + hgap + card_grow
 	off = Vector2(ox, block_top - P_BLOCK.x * k)
+	_layout_header(Rect2(safe.position.x + safe.size.x * 0.12, safe.position.y + top_pad, safe.size.x * 0.76, hh))
 	bg.mode = "p"
 	bg.wood = wood
 	bg.full = Rect2(Vector2.ZERO, vs)
@@ -317,14 +378,18 @@ func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 		if wood:
 			# R159 · Madeira em pé: cartão LIMPO por cima (a arte de fundo não tem mais os cartões desenhados,
 			# então não sobra recorte atrás da moldura)
-			var cr0: Rect2 = R(spec.card)
+			var crb: Rect2 = R(spec.card)
+			var g := card_grow
+			# R160 · cartão cresce para FORA do tabuleiro (o de cima sobe, o de baixo desce)
+			var cr0 := Rect2(crb.position.x, crb.position.y - (g if key == "top" else 0.0), crb.size.x, crb.size.y + g)
 			# a arte é mais larga que a tela: o cartão não pode encostar/passar da borda (a moldura dourada some).
 			# Encolhe o cartão inteiro na horizontal (tudo dentro dele acompanha na mesma proporção).
 			var x0 := maxf(cr0.position.x, safe.position.x + 4.0)
 			var x1 := minf(cr0.end.x, safe.end.x - 4.0)
 			var fx := (x1 - x0) / cr0.size.x
-			var hm := func(r: Rect2) -> Rect2: return Rect2(x0 + (r.position.x - cr0.position.x) * fx, r.position.y, r.size.x * fx, r.size.y)
-			var cr: Rect2 = hm.call(cr0)
+			var fy := cr0.size.y / crb.size.y
+			var hm := func(r: Rect2) -> Rect2: return Rect2(x0 + (r.position.x - cr0.position.x) * fx, cr0.position.y + (r.position.y - crb.position.y) * fy, r.size.x * fx, r.size.y * fy)
+			var cr := Rect2(x0, cr0.position.y, x1 - x0, cr0.size.y)
 			p.flat.show()
 			p.clock.show()
 			p.ring.show()
@@ -335,10 +400,22 @@ func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 			hg.position = Vector2(clr.size.y * 0.16, clr.size.y * 0.16)
 			hg.size = Vector2(clr.size.y * 0.36, clr.size.y * 0.68)
 			var a0: Rect2 = hm.call(R(spec.avatar))
-			var asz := minf(a0.size.x, a0.size.y)
-			var av := Rect2(a0.get_center() - Vector2(asz, asz) / 2.0, Vector2(asz, asz))
+			var asz := minf(a0.size.x, minf(a0.size.y, cr.size.y * 0.66)) if card_grow < 4.0 else cr.size.y * 0.68
+			var av := Rect2(Vector2(a0.position.x + (a0.size.x - minf(asz, a0.size.x)) / 2.0, cr.get_center().y - asz / 2.0), Vector2(asz, asz))
 			_set_rect(p.ring, Rect2(av.get_center() - av.size * 0.62, av.size * 1.24))
-			_skin_strip(key, cr, av, true, hm.call(R(spec.name)), spec.name_fs * k * minf(1.0, fx + 0.04), hm.call(R(spec.sub)), spec.sub_fs * k * minf(1.0, fx + 0.04), hm.call(R(spec.clock)), spec.clock_fs * k, hm.call(R(spec.material)))
+			var fs_k := k * minf(1.0, fx + 0.04)
+			if g < 4.0:
+				_skin_strip(key, cr, av, true, hm.call(R(spec.name)), spec.name_fs * fs_k, hm.call(R(spec.sub)), spec.sub_fs * fs_k, hm.call(R(spec.clock)), spec.clock_fs * k, hm.call(R(spec.material)))
+			else:
+				# cartão alto: nome / liga / material + peças capturadas numa linha inteira cada
+				var tx := av.end.x + asz * 0.22
+				var tw := clr.position.x - 8.0 - tx
+				var h := cr.size.y
+				var nr := Rect2(tx, cr.position.y + h * 0.12, tw, h * 0.30)
+				var sbr := Rect2(tx, cr.position.y + h * 0.41, tw, h * 0.21)
+				var mr := Rect2(tx, cr.position.y + h * 0.63, tw, h * 0.26)
+				var fys := minf(fy, 1.25)
+				_skin_strip(key, cr, av, true, nr, spec.name_fs * fs_k * fys, sbr, spec.sub_fs * fs_k * fys, hm.call(R(spec.clock)), spec.clock_fs * k * minf(fy, 1.2), mr)
 			continue
 		if not wood:
 			p.flat.show()
@@ -356,7 +433,7 @@ func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 	link.position = R(Rect2(40, 186, 860, 40)).position
 	link.size = R(Rect2(40, 186, 860, 40)).size
 	# lances (contra o computador): na sobra entre o cartão do jogador e a barra
-	var mv_top := off.y + 1086.0 * k
+	var mv_top := off.y + 1086.0 * k + card_grow
 	moves.visible = stage.mode == "bot" and nav_top - mv_top >= 26.0
 	if moves.visible:
 		var h := minf(nav_top - mv_top - 6.0, 44.0)
@@ -448,6 +525,7 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 	var rx := frame.end.x + 6.0
 	link.position = Vector2(rx, safe.position.y + bs + 8.0)
 	link.size = Vector2(maxf(60.0, corner.tab.position.x - rx - 6.0), 60.0)
+	header.hide()
 	moves.visible = false   # R155 · deitado sem a caixa LANCES (o dono achou feia); a lista fica no painel AÇÕES
 	if moves.visible:
 		moves.position = Vector2(rx + 4.0, safe.position.y + bs + 10.0)
@@ -714,6 +792,7 @@ func _build_nav() -> void:
 	nav_buttons.actions.pressed.connect(toggle_actions)
 	nav_buttons.chat.pressed.connect(_third_pressed)
 	nav.hide()
+	if header != null: header.hide()
 
 func _fit_nav_button(b: Button) -> void:
 	var ic: TextureRect = b.get_node("Icon")
@@ -1065,6 +1144,7 @@ func _process(_d) -> void:
 	if wanted() != on or (on and (th_now == "wood") != wood):
 		stage._layout()
 		return
+	if on and header != null and header.visible and header.text != _header_text(): stage._layout()   # R160 · o ritmo chegou do servidor
 	if not on: return
 	var st = stage
 	# resultado/fim/promoção têm prioridade: o painel AÇÕES fecha sozinho
