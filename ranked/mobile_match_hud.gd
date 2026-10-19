@@ -32,10 +32,10 @@ const P_NAV := {"home": Rect2(208, 1503, 164, 125), "actions": Rect2(392, 1490, 
 const P_CARD := {
 	"top": {"card": Rect2(128, 64, 714, 118), "avatar": Rect2(167, 88, 76, 76), "round": true,
 		"name": Rect2(262, 84, 206, 44), "name_fs": 34.0, "sub": Rect2(264, 128, 206, 30), "sub_fs": 23.0,
-		"material": Rect2(470, 106, 136, 38), "clock": Rect2(684, 92, 134, 64), "clock_fs": 50.0},
+		"material": Rect2(470, 106, 136, 38), "clock": Rect2(684, 92, 134, 64), "clock_fs": 50.0, "clockbox": Rect2(612, 74, 222, 98)},
 	"bottom": {"card": Rect2(86, 962, 772, 120), "avatar": Rect2(118, 982, 96, 82), "round": false,
 		"name": Rect2(238, 984, 236, 44), "name_fs": 34.0, "sub": Rect2(240, 1028, 236, 30), "sub_fs": 23.0,
-		"material": Rect2(480, 1006, 142, 38), "clock": Rect2(698, 990, 126, 64), "clock_fs": 50.0},
+		"material": Rect2(480, 1006, 142, 38), "clock": Rect2(698, 990, 126, 64), "clock_fs": 50.0, "clockbox": Rect2(626, 972, 222, 100)},
 }
 const P_PANEL := Rect2(20, 1100, 901, 390)    # painel AÇÕES aberto (base colada na barra de baixo)
 const P_TILE := Vector2(180, 126)
@@ -313,6 +313,33 @@ func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 		var spec: Dictionary = P_CARD[key]
 		var p: Dictionary = plates[key]
 		for n in p.values(): n.hide()
+		p.flat.texture = tex("card_clean" if wood else "card")
+		if wood:
+			# R159 · Madeira em pé: cartão LIMPO por cima (a arte de fundo não tem mais os cartões desenhados,
+			# então não sobra recorte atrás da moldura)
+			var cr0: Rect2 = R(spec.card)
+			# a arte é mais larga que a tela: o cartão não pode encostar/passar da borda (a moldura dourada some).
+			# Encolhe o cartão inteiro na horizontal (tudo dentro dele acompanha na mesma proporção).
+			var x0 := maxf(cr0.position.x, safe.position.x + 4.0)
+			var x1 := minf(cr0.end.x, safe.end.x - 4.0)
+			var fx := (x1 - x0) / cr0.size.x
+			var hm := func(r: Rect2) -> Rect2: return Rect2(x0 + (r.position.x - cr0.position.x) * fx, r.position.y, r.size.x * fx, r.size.y)
+			var cr: Rect2 = hm.call(cr0)
+			p.flat.show()
+			p.clock.show()
+			p.ring.show()
+			_set_rect(p.flat, cr)
+			var clr: Rect2 = hm.call(R(spec.clockbox))
+			_set_rect(p.clock, clr)
+			var hg: TextureRect = p.clock.get_node("Hourglass")
+			hg.position = Vector2(clr.size.y * 0.16, clr.size.y * 0.16)
+			hg.size = Vector2(clr.size.y * 0.36, clr.size.y * 0.68)
+			var a0: Rect2 = hm.call(R(spec.avatar))
+			var asz := minf(a0.size.x, a0.size.y)
+			var av := Rect2(a0.get_center() - Vector2(asz, asz) / 2.0, Vector2(asz, asz))
+			_set_rect(p.ring, Rect2(av.get_center() - av.size * 0.62, av.size * 1.24))
+			_skin_strip(key, cr, av, true, hm.call(R(spec.name)), spec.name_fs * k * minf(1.0, fx + 0.04), hm.call(R(spec.sub)), spec.sub_fs * k * minf(1.0, fx + 0.04), hm.call(R(spec.clock)), spec.clock_fs * k, hm.call(R(spec.material)))
+			continue
 		if not wood:
 			p.flat.show()
 			p.box.show()
@@ -1151,7 +1178,7 @@ class BgArt extends Node2D:
 	func _draw():
 		if mode == "p" and _fill == null:
 			_fill = load("res://ranked/art/mob_hud_fill.png")
-			_top = load("res://ranked/art/mob_hud_p_top.png")
+			_top = load("res://ranked/art/mob_hud_p_soft.png")   # R159 · moldura some suave em cima/embaixo, sem cartões na arte
 		elif mode != "p" and _land == null:
 			_land = load("res://ranked/art/mob_hud_l_art.png")
 			_frame = load("res://ranked/art/mob_hud_frame.png")
@@ -1161,21 +1188,6 @@ class BgArt extends Node2D:
 				var s := maxf(full.size.x / ts.x, full.size.y / ts.y)
 				draw_texture_rect(_fill, Rect2((full.size - ts * s) / 2.0, ts * s), false, Color(0.8, 0.84, 0.8))
 				draw_texture_rect(_top, top_rect, false)
-				# R158 · embaixo do cartão do jogador a arte acabava num corte reto ("recorte"): emenda suave no chão
-				var yb := top_rect.end.y
-				if yb < full.size.y - 2.0:
-					var cb0 := Color(0.02, 0.04, 0.03, 0.0)
-					var cb1 := Color(0.02, 0.04, 0.03, 0.6)
-					draw_polygon(PackedVector2Array([Vector2(0, yb - 5.0), Vector2(full.size.x, yb - 5.0), Vector2(full.size.x, yb), Vector2(0, yb)]), PackedColorArray([cb0, cb0, cb1, cb1]))
-					draw_polygon(PackedVector2Array([Vector2(0, yb), Vector2(full.size.x, yb), Vector2(full.size.x, yb + 30.0), Vector2(0, yb + 30.0)]), PackedColorArray([cb1, cb1, cb0, cb0]))
-				# R155 · com o tabuleiro centralizado sobra fundo em cima: emenda suave (sem a linha reta cortando a arte)
-				if top_rect.position.y > 2.0:
-					var y := top_rect.position.y
-					var h := minf(36.0, y)
-					var c0 := Color(0.02, 0.04, 0.03, 0.0)
-					var c1 := Color(0.02, 0.04, 0.03, 0.55)
-					draw_polygon(PackedVector2Array([Vector2(0, y - h), Vector2(full.size.x, y - h), Vector2(full.size.x, y), Vector2(0, y)]), PackedColorArray([c0, c0, c1, c1]))
-					draw_polygon(PackedVector2Array([Vector2(0, y), Vector2(full.size.x, y), Vector2(full.size.x, y + 28.0), Vector2(0, y + 28.0)]), PackedColorArray([c1, c1, c0, c0]))
 			return
 		if wood:
 			draw_texture_rect(_land, top_rect, false)
