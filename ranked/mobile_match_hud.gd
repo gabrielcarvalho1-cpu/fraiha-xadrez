@@ -331,6 +331,7 @@ func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 	if moves.visible:
 		var h := minf(nav_top - mv_top - 6.0, 44.0)
 		moves.position = Vector2(safe.position.x + 6.0, mv_top + (nav_top - mv_top - h) / 2.0)
+		moves.fit_content = false
 		moves.size = Vector2(safe.size.x - 12.0, h)
 		moves.autowrap_mode = TextServer.AUTOWRAP_OFF          # uma linha só (os lances mais novos)
 		_style_moves(clampf(h * 0.42, 12.0, 17.0))
@@ -367,6 +368,8 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 	var col_x := safe.position.x
 	var col_w := frame.position.x - 6.0 - col_x
 	var s := clampf(col_w / 220.0, 0.6, 1.25)
+	# R154 · tela deitada baixa (ex.: com a barra do navegador): os dois cartões cabem na altura (antes o de baixo cortava)
+	s = maxf(0.45, minf(s, (safe.size.y - bs - 18.0) / 320.0))
 	var ch := 160.0 * s
 	var top_y := safe.position.y + bs + 6.0
 	var rects := {"top": Rect2(col_x, top_y, col_w, ch), "bottom": Rect2(col_x, maxf(top_y + ch + 6.0, safe.end.y - ch), col_w, ch)}
@@ -402,7 +405,10 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 	moves.visible = stage.mode == "bot"
 	if moves.visible:
 		moves.position = Vector2(rx + 4.0, safe.position.y + bs + 10.0)
-		moves.size = Vector2(maxf(60.0, corner.tab.position.x - rx - 10.0), corner.tab.position.y - moves.position.y - 6.0)
+		# R154 · a caixa cresce com o texto (a aba AÇÕES fica à direita, não embaixo): em tela baixa a caixa tinha
+		# uma linha só e o resto do texto saía cortado
+		moves.fit_content = true
+		moves.size = Vector2(maxf(60.0, corner.tab.position.x - rx - 10.0), 0.0)
 		moves.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_style_moves(clampf(vs.y * 0.036, 11.0, 16.0))
 	return Rect2(frame.position + F_BOARD.position * kf, F_BOARD.size * kf)
@@ -1050,7 +1056,10 @@ func _style_moves(fs: float) -> void:
 
 func _moves_line(log: Array) -> String:
 	var t := "[b][color=#f3d27e]LANCES[/color][/b]   "
-	if log.is_empty(): return t + "[color=#a8a294]a partida começa com as BRANCAS[/color]"
+	if log.is_empty():
+		# R154 · deitado: em duas linhas curtas (antes a 2ª linha saía da caixa e ficava cortada)
+		if orient == "l": return "[b][color=#f3d27e]LANCES[/color][/b]\n[color=#a8a294]começa com as BRANCAS[/color]"
+		return t + "[color=#a8a294]a partida começa com as BRANCAS[/color]"
 	var many := 10 if orient == "l" else 6
 	var first := maxi(0, log.size() - many)
 	if first % 2 == 1: first -= 1

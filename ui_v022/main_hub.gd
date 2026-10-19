@@ -214,6 +214,18 @@ func _track_desk(t: AtlasTexture, texture: Texture2D):
 
 ## R89 · celular: solta as artes da Home do PC quando ela não está na tela (em pé, páginas, partidas) e
 ## carrega de novo quando a Home deitada aparece. No PC fica sempre acordada.
+## R154 · celular deitado: a moldura nova do cartão de perfil (a do PC) também — sem ela aparecia o cartão
+## antigo da arte, com a barrinha num lugar e "Madeira · 0/100 PL" escrito em cima dela. Só com a Home deitada na tela.
+func _mobile_profile_frame():
+    if not is_instance_valid(canvas) or not preload("res://ui_v022/mobile_layout.gd").active(get_viewport()): return
+    var pb = canvas.get_node_or_null("RefProfileButton")
+    if pb == null: return
+    var fr = pb.get_node_or_null("RefProfileFrame")
+    var un = pb.get_node_or_null("RefProfileUnder")
+    var on: bool = desk_art_awake
+    if fr != null and (fr.texture != null) != on: fr.texture = load(PROFILE_FRAME_PATH) if on else null
+    if un != null and (un.texture != null) != on: un.texture = load(PROFILE_UNDER_PATH) if on else null
+
 func set_desk_art(on: bool):
     if on == desk_art_awake: return
     desk_art_awake = on
@@ -225,6 +237,7 @@ func set_desk_art(on: bool):
     else:
         for t in _desk_atlases: (t as AtlasTexture).atlas = _desk(String(_desk_atlases[t]))
         if art != null: art.texture = _desk_theme_tex if _desk_theme_tex != null else FOREST
+    _mobile_profile_frame()
     if is_instance_valid(presentation_frame): presentation_frame.queue_redraw()
     var fx = canvas.get_node_or_null("HomeFx") if is_instance_valid(canvas) else null
     if fx != null and fx.has_method("set_awake"): fx.set_awake(on)
@@ -2395,6 +2408,7 @@ func _layout():
         # outras páginas continua a tela do celular.
         var desk_home: bool = mobile_ui.desk_home_on()
         set_desk_art(desk_home)   # R89 · artes do PC só quando a Home deitada está na tela
+        _mobile_profile_frame()
         mobile_ui.visible = not desk_home
         canvas.visible = desk_home
         presentation_frame.visible = desk_home
@@ -2450,6 +2464,9 @@ func _wide_home(on: bool):
                 n.position = _wide_orig[n][0]
                 n.scale = _wide_orig[n][1]
         _wide_orig.clear()
+        var pb0 = canvas.get_node_or_null("RefProfileButton")
+        var un0 = pb0.get_node_or_null("RefProfileUnder") if pb0 != null else null
+        if un0 != null: un0.visible = true
         if is_instance_valid(_wide_layer): _wide_layer.queue_free()
         _wide_layer = null
         _wide_patch.clear()
@@ -2460,8 +2477,12 @@ func _wide_home(on: bool):
     canvas.add_child(_wide_layer)
     var art = canvas.get_node_or_null("ForestArtwork")
     canvas.move_child(_wide_layer, (art.get_index() + 1) if art != null else 0)
+    # o cartão de perfil usa a moldura nova (a mesma do PC) por cima; o "remendo" do fundo não vai junto
+    var pb = canvas.get_node_or_null("RefProfileButton")
+    var un = pb.get_node_or_null("RefProfileUnder") if pb != null else null
+    if un != null: un.visible = false
     for key in WIDE_PATCHES:
-        if key == "community": continue
+        if key == "community" or key == "profile": continue
         var t := TextureRect.new()
         t.name = "Wide_" + key
         t.texture = load("res://ui_v022/assets/home_wide_%s.png" % key)
