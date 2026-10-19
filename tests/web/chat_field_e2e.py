@@ -1,6 +1,6 @@
 """R90 · Campo de chat da Web no celular (ui_v022/web_text_field.gd, modo CHAT) num Chromium real com toque.
 Usa o MESMO JavaScript do .gd (extraído do arquivo) e confere, emulando iPhone e Android:
-tocar no campo foca e encaixa a barra no topo; digitar e APAGAR texto; tocar ENVIAR envia SEM tirar o foco
+tocar no campo foca e encaixa a barra EMBAIXO, logo acima do teclado (R151; antes no topo); digitar e APAGAR texto; tocar ENVIAR envia SEM tirar o foco
 (teclado continua aberto, nada pula); várias mensagens seguidas; um toque = um envio só; Enter envia;
 tocar fora solta a barra; mouse (PC) também envia.
 Rodar: python3 tests/web/chat_field_e2e.py   · sai com 1 se algum FAIL."""
@@ -43,12 +43,13 @@ async def run(p, name, opts):
     st = lambda: pg.evaluate("""() => { const el=document.getElementById('fraiha-text-1'), bar=document.getElementById('fraiha-text-1-bar');
         const r=el.getBoundingClientRect(), s=bar.querySelector('button').getBoundingClientRect();
         return {focus: document.activeElement===el, docked: el.dataset.docked==='1', bar: getComputedStyle(bar).display, top: r.top,
-                value: el.value, sends: window.sends, last: window.lastText||'', blurs: window.blurs, send: [s.x+s.width/2, s.y+s.height/2]}; }""")
+                value: el.value, sends: window.sends, last: window.lastText||'', blurs: window.blurs, send: [s.x+s.width/2, s.y+s.height/2], vh: (window.visualViewport||window).height, bar_bottom: bar.getBoundingClientRect().bottom}; }""")
     touch = opts.get("has_touch")
     tap = (lambda x, y: pg.touchscreen.tap(x, y)) if touch else (lambda x, y: pg.mouse.click(x, y))
     await tap(140, 582); await asyncio.sleep(0.2)
     s = await st()
-    ck(s["focus"] and s["docked"] and s["bar"] == "flex" and s["top"] < 20, f"{name}: tocar no campo foca e encaixa a barra no topo (top={s['top']:.0f})")
+    ck(s["focus"] and s["docked"] and s["bar"] == "flex" and s["top"] > s["vh"] - 80 and abs(s["bar_bottom"] - s["vh"]) < 3, f"{name}: tocar no campo foca e encaixa a barra EMBAIXO, colada no teclado (top={s['top']:.0f}, tela={s['vh']:.0f})")
+    if os.environ.get("SHOT_DIR"): await pg.screenshot(path=os.path.join(os.environ["SHOT_DIR"], "chat_barra_" + name.split()[0] + ".png"))
     await pg.keyboard.type("olá mundo!!"); await asyncio.sleep(0.05)
     for _ in range(2): await pg.keyboard.press("Backspace")
     s = await st(); ck(s["value"] == "olá mundo", f"{name}: digitar e apagar ('{s['value']}')")

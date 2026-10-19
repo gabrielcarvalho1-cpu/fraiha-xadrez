@@ -838,6 +838,9 @@ func _build_pages():
     nickname_editor = preload("res://account/nickname_editor.gd").new()
     profile.add_child(nickname_editor)
     if account != null: nickname_editor.setup(account, 18)
+    nickname_editor.confirm = ask   # R151 · "tem certeza?" com as regras do nome (30 dias)
+    nickname_editor.always_enabled = true   # R151 · TROCAR NOME sempre aceso; o toque explica o que falta
+    if nickname_editor.save_button != null: nickname_editor.save_button.disabled = false
     _style_name_editor(nickname_editor)
     # Sem conta: nome local só para a partida contra o computador / tela inicial.
     local_name_box = VBoxContainer.new()

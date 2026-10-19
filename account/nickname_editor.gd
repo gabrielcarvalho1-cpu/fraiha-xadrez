@@ -20,6 +20,11 @@ var checked_name := ""
 var checked_ok := false
 var check_timer: Timer
 var font_size := 18
+## R151 · pergunta antes de trocar (hub.ask: título, texto, sim, não, ação). Sem ela, troca direto.
+var confirm: Callable
+## R151 · botão TROCAR NOME de fora (celular: botão do jogo embaixo do campo). Sempre ativo: o toque explica o
+## que falta (nome igual, inválido, em uso) em vez de ficar apagado sem dizer nada.
+var always_enabled := false
 
 func setup(account_service, fs := 18):
     account = account_service
@@ -41,9 +46,11 @@ func setup(account_service, fs := 18):
     input.text_changed.connect(_on_text)
     input.text_submitted.connect(func(_t): _save())
     row.add_child(input)
+    # R151 · Web no celular: campo HTML real por cima (senão o teclado não abre — o nome não dava para digitar)
+    preload("res://ui_v022/web_text_field.gd").attach(input)
     save_button = Button.new()
     save_button.name = "NicknameSave"
-    save_button.text = "SALVAR NOME"
+    save_button.text = "TROCAR NOME"
     save_button.custom_minimum_size = Vector2(0, 44)
     save_button.add_theme_font_size_override("font_size", fs - 2)
     save_button.disabled = true
@@ -80,7 +87,9 @@ func _label(text: String, fs: int, color: Color) -> Label:
 ## Estado atual da conta → campos.
 func refresh():
     var logged: bool = account != null and account.has_profile()
-    for n in [input.get_parent(), status, hint, cooldown]: n.visible = logged
+    for n in [input.get_parent(), status, cooldown]: n.visible = logged
+    hint.visible = false   # R151 · as regras aparecem na confirmação (a frase embaixo do campo saiu)
+    if save_button.get_parent() != input.get_parent(): save_button.visible = logged
     guest_note.visible = not logged
     if not logged: return
     if not input.has_focus(): input.text = account.nickname()
@@ -96,11 +105,11 @@ func refresh():
     elif input.text == account.nickname():
         status.text = "Este é o seu nome atual."
         status.add_theme_color_override("font_color", MUTED)
-        save_button.disabled = true
+        save_button.disabled = not always_enabled
 
 func _on_text(value: String):
     checked_ok = false
-    save_button.disabled = true
+    save_button.disabled = not always_enabled
     var clean: String = account.clean_nickname(value)
     if clean == account.nickname():
         status.text = "Este é o seu nome atual."
@@ -128,13 +137,43 @@ func _on_checked(nick: String, available: bool, error: String):
     status.text = ("OK  NOME DISPONÍVEL" if available else "X  ESSE NOME JÁ ESTÁ SENDO USADO") if error.is_empty() or available else "X  " + error
     if not available and error.begins_with("Esse nome"): status.text = "X  ESSE NOME JÁ ESTÁ SENDO USADO"
     status.add_theme_color_override("font_color", OK if available else BAD)
-    save_button.disabled = not available
+    save_button.disabled = not available and not always_enabled
 
 func _save():
-    if not checked_ok or save_button.disabled: return
-    save_button.disabled = true
+    if not checked_ok:
+        if always_enabled: _explain()
+        return
+    if save_button.disabled and not always_enabled: return
+    var nick: String = account.clean_nickname(input.text)
+    var text := "Trocar seu nome público para %s?\n\nÚnico no FRAIHA · 3 a 20 caracteres · letras, números e _\nDepois disso, só pode ser trocado de novo daqui a 30 dias." % nick
+    if confirm.is_valid(): confirm.call("TROCAR NOME", text, "CONFIRMAR", "CANCELAR", _do_save)
+    else: _do_save()
+
+func _do_save():
+    if not checked_ok: return
+    save_button.disabled = not always_enabled
     status.text = "Salvando…"
+    status.add_theme_color_override("font_color", MUTED)
     account.change_nickname(input.text)
+
+## R151 · botão sempre ativo: diz por que ainda não dá para trocar.
+func _explain():
+    var clean: String = account.clean_nickname(input.text)
+    var err: String = account.nickname_error(input.text)
+    if clean == account.nickname(): status.text = "Digite o nome novo no campo acima."
+    elif not err.is_empty(): status.text = "X  " + err
+    elif status.text.begins_with("X"): return
+    else: status.text = "Verificando…"
+    status.add_theme_color_override("font_color", BAD if not status.text.begins_with("Verificando") else MUTED)
+
+## R151 · celular: usa um botão do jogo (fora da linha do campo) como TROCAR NOME.
+func use_button(b: Button):
+    if save_button != null and save_button != b: save_button.queue_free()
+    save_button = b
+    always_enabled = true
+    b.disabled = false
+    b.pressed.connect(_save)
+    refresh()
 
 func _on_changed(nick: String, next_at: String):
     input.text = nick
@@ -148,7 +187,7 @@ func _on_failed(code: String, message: String, next_at: String):
     if code == "nickname_cooldown" and not next_at.is_empty():
         cooldown.text = "PRÓXIMA ALTERAÇÃO DISPONÍVEL EM: " + format_date(next_at)
         cooldown.visible = true
-    save_button.disabled = true
+    save_button.disabled = not always_enabled
 
 ## ISO 8601 (UTC) → dd/mm/aaaa (local). Só exibição; a regra é do servidor.
 static func format_date(iso: String) -> String:

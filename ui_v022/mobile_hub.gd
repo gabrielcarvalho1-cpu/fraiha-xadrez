@@ -581,6 +581,13 @@ func _profile(content: VBoxContainer, width := 0.0):
         var editor = load("res://account/nickname_editor.gd").new()
         content.add_child(editor)
         editor.setup(hub.account, 16)
+        editor.confirm = hub.ask   # R151 · "tem certeza?" com as regras do nome
+        if logged:
+            # R151 · TROCAR NOME embaixo do campo, no botão do jogo (antes não aparecia botão nenhum no celular)
+            var nick_btn = _button(content, "TROCAR NOME", func(): pass)
+            nick_btn.name = "NicknameSaveMobile"
+            content.move_child(nick_btn, editor.get_index() + 1)
+            editor.use_button(nick_btn)
     if not logged:
         _text(content,"NOME LOCAL (SEM CONTA)",16)
         var input = LineEdit.new()

@@ -6,8 +6,8 @@ extends Node
 ## teclado (também no iOS). O texto é espelhado no LineEdit (que continua sendo a fonte usada
 ## pelo jogo) e Enter vira text_submitted. Fora da Web mobile não faz nada.
 ##
-## R90 · modo CHAT (attach(line, true)): ao tocar no campo, ele vira uma barra fixa no topo da área
-## visível (acima do teclado no iPhone e no Android) com um botão ENVIAR próprio, em HTML. Tocar no
+## R90 · modo CHAT (attach(line, true)): ao tocar no campo, ele vira uma barra fixa EMBAIXO da área
+## visível (logo acima do teclado no iPhone e no Android; R151 — antes ficava no topo da tela) com um botão ENVIAR próprio, em HTML. Tocar no
 ## ENVIAR não tira o foco do campo (o teclado fica aberto e nada na tela pula), então o toque nunca se
 ## perde e dá para mandar várias mensagens seguidas. Tocar fora fecha o teclado e a barra volta ao lugar.
 const Mobile = preload("res://ui_v022/mobile_layout.gd")
@@ -55,8 +55,8 @@ func _ready():
                 const st = document.createElement('style'); st.id = 'fraiha-text-style';
                 st.textContent = 'input[id^=fraiha-text-]::placeholder{color:#b9ad8e;opacity:1}' +
                     '.fraiha-chat-bar{position:fixed;left:0;right:0;z-index:30;display:none;gap:8px;align-items:center;' +
-                    'padding:8px 10px;box-sizing:border-box;background:rgba(14,10,8,.97);border-bottom:2px solid #c99a45;' +
-                    'box-shadow:0 4px 14px rgba(0,0,0,.55)}' +
+                    'padding:8px 10px;box-sizing:border-box;background:rgba(14,10,8,.97);border-top:2px solid #c99a45;' +
+                    'box-shadow:0 -4px 14px rgba(0,0,0,.55)}' +
                     '.fraiha-chat-bar button{flex:0 0 auto;height:46px;padding:0 16px;border-radius:8px;border:2px solid #7a5512;' +
                     'background:#e9b23a;color:#2a1a04;font:bold 16px Georgia,serif;letter-spacing:1px;touch-action:manipulation}' +
                     '.fraiha-chat-bar button:active{background:#ffd56a}';
@@ -79,8 +79,12 @@ func _ready():
             bar.appendChild(send);
             document.body.appendChild(bar);
             const vv = window.visualViewport;
+            // R151 · barra EMBAIXO da área visível (logo acima do teclado), não no topo da tela: antes ficavam
+            // duas faixas (a do topo com o campo e a do teclado embaixo) e parecia ter duas caixas de mensagem.
             const place = () => {
-                const top = (vv && vv.offsetTop) || 0;
+                const vtop = (vv && vv.offsetTop) || 0, vh = (vv && vv.height) || window.innerHeight;
+                const h = bar.offsetHeight || 62;
+                const top = Math.max(vtop, vtop + vh - h);
                 bar.style.top = top + 'px';
                 if (el.dataset.docked === '1') el.style.top = (top + 8) + 'px';
             };
@@ -89,6 +93,7 @@ func _ready():
                 el.dataset.docked = '1';
                 el._geo = {left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height, fontSize: el.style.fontSize};
                 bar.style.display = 'flex';
+                setTimeout(place, 50); setTimeout(place, 300);   // o teclado ainda está subindo
                 Object.assign(el.style, {left: '10px', width: 'calc(100%% - 132px)', height: '46px', fontSize: '16px', zIndex: '31',
                     background: '#1d1510', border: '1px solid #84754b'});
                 place();
@@ -140,7 +145,7 @@ func _process(_delta):
             if bar != null: bar.style.display = "none"
         el.style.display = "block" if show else "none"
     if not show: return
-    # R104.1 · com o teclado aberto o campo sobe para a barra do topo (com o próprio ENVIAR): a linha do jogo
+    # R104.1 · com o teclado aberto o campo vai para a barra de cima do teclado (com o próprio ENVIAR): a linha do jogo
     # (caixa vazia + ENVIAR) some enquanto isso — antes apareciam DOIS lugares para digitar. O espaço fica
     # reservado (só fica transparente), então nada na tela pula quando o teclado abre ou fecha.
     if chat:
