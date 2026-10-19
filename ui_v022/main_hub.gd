@@ -56,6 +56,9 @@ var FOREST_V2: Texture2D:
 var FOREST_WIDE: Texture2D:
     get: return _desk(FOREST_WIDE_PATH)   # R64   # R43: laterais completadas (tools/home_wide_r43.py)
 const WIDE_PAD := 84.0
+const FOREST_SIDE_L := "res://ui_v022/assets/home_forest_v9_side_l.png"   # R152 · 360 px de folhagem + 90 px de emenda
+const FOREST_SIDE_R := "res://ui_v022/assets/home_forest_v9_side_r.png"
+const SIDE_OVERLAP := 90.0
 # Arte anterior: continua sendo a fonte das molduras das páginas internas (_frame) e dos temas que a usam.
 var FOREST_LEGACY: Texture2D:
     get: return _desk(FOREST_LEGACY_PATH)
@@ -2434,20 +2437,24 @@ func _draw_presentation_frame():
         var wr := Rect2(artwork.position - Vector2(WIDE_PAD * u, 0), FOREST_WIDE.get_size() * u)
         presentation_frame.draw_rect(full, Color("0f1625"))
         presentation_frame.draw_texture_rect(FOREST_WIDE, wr, false)
-        var th: float = FOREST_WIDE.get_height()
         for side in 2:
             var gap: float = wr.position.x if side == 0 else full.size.x - wr.end.x
             if gap < 0.5: continue
-            var sw: float = minf(gap / u, FOREST_WIDE.get_width() * 0.45)
-            var src := Rect2(0, 0, sw, th) if side == 0 else Rect2(FOREST_WIDE.get_width() - sw, 0, sw, th)
-            var dst := Rect2(wr.position.x, wr.position.y, -sw * u, wr.size.y) if side == 0 else Rect2(wr.end.x + sw * u, wr.position.y, -sw * u, wr.size.y)
-            presentation_frame.draw_texture_rect_region(FOREST_WIDE, dst, src, Color(0.78, 0.8, 0.76))
-            # escurece aos poucos para fora (a cena some no escuro, sem emenda)
-            var n := 16
+            # R152 · celular deitado bem largo: a cena CONTINUA com folhagem pixel art emendada na borda
+            # (tools/home_side_ext_r152.py) em vez da borda espelhada (parecia a tela duplicada) e das faixas pretas.
+            var ext: Texture2D = _desk(FOREST_SIDE_L if side == 0 else FOREST_SIDE_R)
+            var ew: float = (ext.get_width() - SIDE_OVERLAP) * u
+            var er := Rect2(wr.position.x - ew, wr.position.y, ext.get_width() * u, wr.size.y) if side == 0 else Rect2(wr.end.x - SIDE_OVERLAP * u, wr.position.y, ext.get_width() * u, wr.size.y)
+            presentation_frame.draw_texture_rect(ext, er, false)
+            var rest: float = gap - ew
+            if rest < 0.5: continue
+            # mais larga ainda (raro): o que sobra escurece aos poucos para fora, sem emenda
+            var x0: float = er.position.x if side == 0 else er.end.x
+            var n := 12
             for i in n:
-                var a := pow(float(i + 1) / n, 1.4) * 0.85
-                var w := gap / n
-                var x := wr.position.x - (i + 1) * w if side == 0 else wr.end.x + i * w
+                var a := pow(float(i + 1) / n, 1.2) * 0.9
+                var w := rest / n
+                var x := x0 - (i + 1) * w if side == 0 else x0 + i * w
                 presentation_frame.draw_rect(Rect2(x, 0, w + 0.5, full.size.y), Color(0.043, 0.057, 0.085, a))
         return
     # Sobras da tela (fora da tela cheia): panorama de folhagem em pixel art, levemente escurecido.

@@ -20,6 +20,7 @@ var status_label: Label
 var accept_button: Button
 var decline_button: Button
 var cancel_button: Button
+var dim: ColorRect
 var flash_left := 0.0          # mensagem final (recusado/expirado/cancelado) visível por alguns segundos
 
 func setup(service, avatar_callable: Callable = Callable(), hide_fn: Callable = Callable()):
@@ -39,6 +40,14 @@ func setup(service, avatar_callable: Callable = Callable(), hide_fn: Callable = 
     for side in ["left", "right", "top", "bottom"]: style.set("content_margin_" + side, 12)
     panel.add_theme_stylebox_override("panel", style)
     panel.mouse_filter = Control.MOUSE_FILTER_STOP
+    # R152 · fundo escurecido atrás do cartão: o convite fica sozinho no meio da tela, sem misturar com o que está atrás
+    dim = ColorRect.new()
+    dim.name = "InviteDim"
+    dim.color = Color(0.02, 0.03, 0.05, 0.72)
+    dim.mouse_filter = Control.MOUSE_FILTER_STOP
+    dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    dim.hide()
+    add_child(dim)
     add_child(panel)
     box = VBoxContainer.new()
     box.add_theme_constant_override("separation", 8)
@@ -124,7 +133,7 @@ func _clear():
     invite = {}
     starting = false
     flash_left = 0.0
-    panel.hide()
+    _set_shown(false)
 
 func _finish(text: String):
     invite = {}
@@ -245,18 +254,25 @@ func _process(delta):
         _tick_label()
     elif flash_left > 0.0:
         flash_left -= delta
-        if flash_left <= 0.0: panel.hide()
+        if flash_left <= 0.0: _set_shown(false)
     _update_visibility()
 
 func _update_visibility():
     var blocked = hidden_when.is_valid() and bool(hidden_when.call())
     var want = (has_invite() or flash_left > 0.0) and not blocked
-    if panel.visible != want:
-        panel.visible = want
-        if want: _layout()
+    if panel.visible != want or dim.visible != want: _set_shown(want)
+
+func _set_shown(want: bool):
+    panel.visible = want
+    dim.visible = want
+    preload("res://ui_v022/web_text_field.gd").set_covered(self, want)
+    if want: _layout()
 
 func _layout():
     if not panel.visible: return
+    var vr := get_viewport().get_visible_rect()
+    dim.position = vr.position
+    dim.size = vr.size
     var mobile = Mobile.active(get_viewport())
     var area = Mobile.safe_rect(get_viewport()) if mobile else get_viewport().get_visible_rect()
     var s = 1.0 if mobile else 1.4
@@ -271,8 +287,9 @@ func _layout():
     panel.size = Vector2(w, 0)
     panel.reset_size()
     panel.size.x = w
-    # Abaixo da faixa dos avisos (toast), centralizado no topo.
-    panel.position = Vector2(area.position.x + (area.size.x - w * s) / 2.0, area.position.y + (64.0 if mobile else 90.0))
+    # R152 · no MEIO da tela (antes no topo, por cima dos botões e do campo de busca)
+    var h: float = panel.get_combined_minimum_size().y * s
+    panel.position = Vector2(area.position.x + (area.size.x - w * s) / 2.0, area.position.y + maxf(8.0, (area.size.y - h) / 2.0))
 
 func _status(text: String, color := GOLD):
     if not is_instance_valid(status_label): return

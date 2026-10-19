@@ -124,6 +124,7 @@ func is_open() -> bool:
 
 func open():
 	visible = true
+	preload("res://ui_v022/web_text_field.gd").set_covered(self, true)   # R152 · campos HTML de baixo somem
 	for n in [frame, body, title_label, close_button]: n.visible = true   # (o campo HTML do celular segue a visibilidade)
 	opened_ms = Time.get_ticks_msec()
 	_layout()
@@ -132,6 +133,7 @@ func open():
 		create_tween().tween_property(n, "modulate:a", 1.0, 0.14)
 
 func close():
+	preload("res://ui_v022/web_text_field.gd").set_covered(self, false)
 	if not visible: return
 	visible = false
 	for n in [frame, body, title_label, close_button]: n.visible = false

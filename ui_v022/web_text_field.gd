@@ -30,6 +30,24 @@ static func attach(line: LineEdit, chat_mode := false) -> Node:
     line.add_child(helper, false, Node.INTERNAL_MODE_BACK)
     return helper
 
+## R152 · janelas por cima (convite, confirmação…): o campo HTML fica SEMPRE acima do canvas do jogo, então
+## enquanto alguma janela cobre a tela os campos de baixo somem (antes o "Buscar jogador" aparecia por cima
+## do cartão de convite). Cada janela marca/desmarca a si mesma; o campo dela mesma continua aparecendo.
+static var _covers := {}
+static func set_covered(owner: Object, on: bool) -> void:
+    var id := owner.get_instance_id()
+    if on: _covers[id] = owner
+    else: _covers.erase(id)
+static func _covered_for(f: Control) -> bool:
+    for id in _covers.keys():
+        var o = _covers[id]
+        if not is_instance_valid(o):
+            _covers.erase(id)
+            continue
+        if o is Node and (o as Node).is_ancestor_of(f): continue   # campo da própria janela
+        return true
+    return false
+
 static func wanted(viewport: Viewport) -> bool:
     return OS.has_feature("web") and Mobile.active(viewport)
 
@@ -137,7 +155,7 @@ func docked() -> bool:
 
 func _process(_delta):
     if el == null: return
-    var show := field.is_visible_in_tree() and field.editable
+    var show := field.is_visible_in_tree() and field.editable and not _covered_for(field)
     if show != _shown:
         _shown = show
         if not show:
