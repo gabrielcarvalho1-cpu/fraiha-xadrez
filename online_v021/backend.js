@@ -35,6 +35,8 @@ const GUEST_TTL_MS = 24 * 3600e3;
 // R170 · SEC-002/003/004: limites de entrada (ajustáveis por variável de ambiente; padrões folgados para jogador real)
 const LIM = (env, k, d) => { const v = Number(env[k]); return Number.isFinite(v) && v > 0 ? v : d; };
 const ANALYSIS_MODES = ['bot', 'casual', 'ranked', 'local', 'online'];
+const SERVER_ANALYSIS_MODES = { ranked: 'ranked', casual: 'casual', online: null };   // R171: partidas que o servidor conhece
+const FINISHED_KEEP_MS = 24 * 3600e3;
 const SESSION_REVALIDATE_MS = 60e3;
 const SESSION_MAX_MS = 3600e3; // limite também para tokens opacos/dev sem exp
 const AUTH_TIMEOUT_MS = 10e3;
@@ -141,8 +143,11 @@ class Backend {
     this.guestPerIp = new Window({ windowMs: 60e3, max: LIM(env, 'FRAIHA_GUEST_PER_IP_MIN', 30), now: this.now });
     this.guestGlobal = new Window({ windowMs: 60e3, max: LIM(env, 'FRAIHA_GUEST_GLOBAL_MIN', 600), now: this.now });
     // R170 · SEC-004: só grava histórico de análise que o servidor liberou (analysis_granted), 1 vez por partida
-    this.analysisGrants = new Map();   // uid -> [{until}]
-    this.analysisSaved = new Window({ windowMs: 24 * 3600e3, max: 1, maxKeys: 50000, now: this.now });
+    this.analysisGrants = new Map();   // uid -> [{until, match_id, mode}]
+    // R171 · SEC-004 (reteste Orca): partida online (Ranked/Casual) só entra no histórico se o SERVIDOR viu essa conta
+    // terminar essa partida; 1 gravação por partida (a chave é o id da partida, não o horário que o jogo manda)
+    this.finishedMatches = new Map();  // uid -> Map(match_id -> { kind, started_at, at })
+    this.analysisSaved = new Window({ windowMs: 7 * 24 * 3600e3, max: 1, maxKeys: 100000, now: this.now });
     this.analysisDaily = new Window({ windowMs: 24 * 3600e3, max: LIM(env, 'FRAIHA_ANALYSIS_RECORDS_DAY', 60), maxKeys: 50000, now: this.now });
   }
   // R170 · SEC-002: pode tentar entrar agora? (antes de qualquer consulta ao Supabase Auth)
@@ -156,21 +161,42 @@ class Backend {
     if (!this.authGlobal.hit('all')) return false;
     return !this.authGate.busy();
   }
-  // R170 · SEC-004
-  grantAnalysis(uid) {
+  // R170 · SEC-004 · R171: a liberação fica ligada à partida pedida (match_id + modo) quando o jogo informa
+  grantAnalysis(uid, ctx = {}) {
     const t = this.now();
     const list = (this.analysisGrants.get(uid) || []).filter(g => g.until > t);
-    if (list.length < 5) list.push({ until: t + 3 * 3600e3 });   // até 5 análises liberadas guardadas, valem 3 h
+    const match_id = typeof ctx.match_id === 'string' ? ctx.match_id.slice(0, 64) : '';
+    const mode = ANALYSIS_MODES.includes(String(ctx.mode || '')) ? String(ctx.mode) : '';
+    if (list.length < 5) list.push({ until: t + 3 * 3600e3, match_id, mode, bound: !!(match_id || mode) });   // até 5 guardadas, valem 3 h
     this.analysisGrants.set(uid, list);
     if (this.analysisGrants.size > 20000) for (const [k, v] of this.analysisGrants) if (!v.some(g => g.until > t)) this.analysisGrants.delete(k);
   }
-  takeAnalysisGrant(uid) {
+  // Usa SOMENTE a liberação desta partida (mesmo match_id e modo). Liberação de outra partida, ou pedida sem dizer a
+  // partida (jogo antigo), não serve para gravar histórico — a análise em si continua funcionando no aparelho.
+  takeAnalysisGrant(uid, sum) {
     const t = this.now();
     const list = (this.analysisGrants.get(uid) || []).filter(g => g.until > t);
     if (!list.length) { this.analysisGrants.delete(uid); return false; }
-    list.shift();
+    const mid = (sum && sum.match_id) || '';
+    const i = sum ? list.findIndex(g => g.bound && g.match_id === mid && g.mode === sum.mode) : -1;
+    if (i < 0) { this.analysisGrants.set(uid, list); return false; }
+    list.splice(i, 1);
     if (list.length) this.analysisGrants.set(uid, list); else this.analysisGrants.delete(uid);
     return true;
+  }
+  // R171 · SEC-004: o serviço Ranked/Casual avisa quando uma conta termina uma partida
+  noteFinishedMatch(uid, matchId, kind, startedAt) {
+    if (!uid || !matchId || String(uid).startsWith('guest')) return;
+    const t = this.now();
+    let m = this.finishedMatches.get(uid);
+    if (!m) { m = new Map(); this.finishedMatches.set(uid, m); }
+    m.set(String(matchId), { kind: String(kind), started_at: Number(startedAt) || t, at: t });
+    while (m.size > 50) m.delete(m.keys().next().value);
+    if (this.finishedMatches.size > 50000) for (const [k, v] of this.finishedMatches) { for (const [id, x] of v) if (t - x.at > FINISHED_KEEP_MS) v.delete(id); if (!v.size) this.finishedMatches.delete(k); }
+  }
+  finishedMatch(uid, matchId) {
+    const m = this.finishedMatches.get(uid), x = m && m.get(String(matchId || ''));
+    return x && this.now() - x.at <= FINISHED_KEEP_MS ? x : null;
   }
   // R170 · SEC-004: resumo da análise com formato e tamanhos conferidos (nada além do que a tabela guarda)
   static cleanAnalysis(sum) {
@@ -259,6 +285,7 @@ class Backend {
     // Serviços recebem a identidade antiga para desligar filas/mesas antes da limpeza.
     if (this.voice) this.voice.dropSocket(ws);   // voz: presença sai junto com a sessão (R45-V05)
     this.operations.run(null, () => this.setIdentity(ws, null));
+    if (ws.guest) ws.guest.seen = Date.now();   // R171 · SEC-003: inatividade do convidado conta a partir de agora
     ws.user = null; ws.profile = null; ws.guest = null;
     ws.cosmeticsAt = null; ws.guestAuthAt = null;
     s.closed = closed;
@@ -485,19 +512,29 @@ class Backend {
     if (this.casual) this.casual.onAuthenticated(ws);
   }
   // R170 · SEC-003: libera 10% do teto tirando os convidados há mais tempo sem uso (nunca quem está em partida/conectado)
+  // R171 · SEC-003: convidados com conexão aberta agora (nunca são descartados, nem pelo teto nem pela varredura)
+  liveGuests() {
+    const live = new Set();
+    for (const [, set] of this.online || []) for (const w of set) if (w.guest && !w.dead && (w.readyState === undefined || w.readyState === 1)) live.add(w.guest);
+    return live;
+  }
   evictGuests() {
     let drop = Math.max(1, Math.floor(this.maxGuests * 0.1));
-    const online = new Set();
-    for (const [, set] of this.online || []) for (const w of set) if (w.guest) online.add(w.guest);
+    const online = this.liveGuests();
     for (const [t, g] of this.guests) {
       if (drop <= 0) break;
       if (online.has(g) || this.inMatch(g.id)) continue;
       this.guests.delete(t); drop--;
     }
   }
+  // R171 · SEC-003 (reteste Orca): a varredura só descarta convidado realmente INATIVO — sem conexão aberta, fora de
+  // partida e há mais de 24 h sem uso (o relógio de inatividade conta a partir de quando a conexão fechou).
   sweepGuests() {
-    const now = Date.now();
-    for (const [t, g] of this.guests) if (now - (g.seen || 0) > GUEST_TTL_MS && !this.inMatch(g.id)) this.guests.delete(t);
+    const now = Date.now(), live = this.liveGuests();
+    for (const [t, g] of this.guests) {
+      if (live.has(g)) { g.seen = now; continue; }
+      if (now - (g.seen || 0) > GUEST_TTL_MS && !this.inMatch(g.id)) this.guests.delete(t);
+    }
   }
   async handle(ws, m) {
     const s = this.session(ws), a = String(m.type || '');
@@ -682,13 +719,14 @@ class Backend {
         const ent = await this.checked(ws, revision, this.store.getEntitlements(accountId));
         if (!this.ready(ws, revision)) return;
         if (this.inMatch(accountId)) return denyInMatch();
-        if (ent.club_active) { this.grantAnalysis(accountId); return this.send(ws, { type: 'analysis_granted', unlimited: true, used: 0, limit: 0, resets_at: null }); }
+        const actx = { match_id: m.match_id, mode: m.mode };   // R171 · SEC-004: liberação ligada à partida
+        if (ent.club_active) { this.grantAnalysis(accountId, actx); return this.send(ws, { type: 'analysis_granted', unlimited: true, used: 0, limit: 0, resets_at: null }); }
         const r = await op.wait(() => this.inMatch(accountId) ? { in_match: true } : this.store.analysisConsume(accountId, utcDay(), ANALYSIS_FREE_PER_DAY));
         if (!this.ready(ws, revision)) return;
         if (r.in_match || this.inMatch(accountId)) return denyInMatch();
         if (r.not_configured) return this.send(ws, { type: 'analysis_denied', code: 'not_configured', message: 'Análise ainda não configurada no servidor (migração 0005 pendente).' });
         if (!r.ok) return this.send(ws, { type: 'analysis_denied', code: 'quota', used: r.used, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight(), message: 'Você usou suas análises gratuitas de hoje.' });
-        this.grantAnalysis(accountId);
+        this.grantAnalysis(accountId, actx);
         return this.send(ws, { type: 'analysis_granted', unlimited: false, used: r.used, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight() });
       }
       // R169 · TREINE SEUS ERROS: 3 treinos por dia (UTC) sem Club; Club e Fundador = ilimitado.
@@ -717,9 +755,22 @@ class Backend {
         if (this.inMatch(accountId)) return;
         const sum = Backend.cleanAnalysis(m.summary);
         if (!sum) return;
-        const dedupe = accountId + '|' + sum.mode + '|' + sum.played_at;
-        if (this.analysisSaved.map.has(dedupe) && this.now() - this.analysisSaved.map.get(dedupe).start < 24 * 3600e3) return;
-        if (!this.takeAnalysisGrant(accountId)) return;
+        // R171 · SEC-004: Ranked/Casual só se o servidor viu ESTA conta terminar ESTA partida (o horário passa a ser o do
+        // servidor). 1 gravação por partida: a chave é o id da partida; contra bot/local (o servidor não vê a partida)
+        // a chave é o conteúdo (lances), então mudar o horário não duplica.
+        let dedupe;
+        if (Object.prototype.hasOwnProperty.call(SERVER_ANALYSIS_MODES, sum.mode)) {
+          const fm = this.finishedMatch(accountId, sum.match_id);
+          if (!fm || fm.kind !== SERVER_ANALYSIS_MODES[sum.mode]) return;
+          sum.played_at = Math.floor(fm.started_at / 1000);
+          dedupe = accountId + '|match|' + sum.match_id;
+        } else {
+          if (sum.match_id) return;   // contra bot/local o jogo nunca manda id de partida: id inventado é recusado
+          const fp = crypto.createHash('sha256').update(JSON.stringify([sum.mode, sum.color, sum.moves.map(x => x && x.u)])).digest('hex').slice(0, 32);
+          dedupe = accountId + '|' + sum.mode + '|' + fp;
+        }
+        if (this.analysisSaved.map.has(dedupe) && this.now() - this.analysisSaved.map.get(dedupe).start < 7 * 24 * 3600e3) return;
+        if (!this.takeAnalysisGrant(accountId, sum)) return;
         if (!this.analysisDaily.hit(accountId)) return;
         this.analysisSaved.hit(dedupe);
         try { await op.wait(() => this.store.saveAnalysis(accountId, sum)); } catch (e) { /* histórico é opcional (0005) */ }

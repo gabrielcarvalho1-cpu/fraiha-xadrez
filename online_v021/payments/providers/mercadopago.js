@@ -72,6 +72,7 @@ class MercadoPago {
     this.unsignedWin = { start: 0, n: 0 };
     this.unsignedActive = 0;
     this.recentLookups = new Map();   // data.id -> quando foi consultado (sem assinatura)
+    this.inflight = new Set();        // R171 · SEC-006: avisos sem assinatura sendo consultados/aplicados agora
     this.publicKey = String(env.FRAIHA_MP_PUBLIC_KEY || '').trim();
     this.api = String(env.FRAIHA_MP_API || 'https://api.mercadopago.com').replace(/\/+$/, '');
     this.publicUrl = String(env.FRAIHA_PUBLIC_URL || '').replace(/\/+$/, '');
@@ -173,18 +174,35 @@ class MercadoPago {
       if (this.requireSignature) return null;
       console.warn('[pagamentos] aviso do Mercado Pago sem assinatura (x-signature) — tipo ' + (type || '?'));
       // R170 · SEC-006: limites só para o caminho SEM assinatura (o assinado segue normal)
+      // R171 · SEC-006 (reteste Orca): "já processado" só é marcado DEPOIS que a consulta E a aplicação deram certo
+      // (webhookSettled). Consulta que falhou não vira "ignorado": a próxima tentativa consulta de novo.
+      // Repetição enquanto a 1ª ainda está em andamento recebe 503 (o provedor tenta de novo), nunca 200 calado.
       const t = Date.now();
       const last = this.recentLookups.get(dataId);
-      if (last && t - last < 60e3) return { ignore: true };   // repetido: já consultado há pouco
+      if (last && t - last < 60e3) return { ignore: true };   // repetido: já consultado E aplicado há pouco
+      if (this.inflight.has(dataId)) return { busy: true };
       if (t - this.unsignedWin.start >= 60e3) this.unsignedWin = { start: t, n: 0 };
       if (++this.unsignedWin.n > this.unsignedPerMin || this.unsignedActive >= 2) return { busy: true };   // 503: o provedor tenta de novo depois
-      if (this.recentLookups.size > 5000) this.recentLookups.clear();
-      this.recentLookups.set(dataId, t);
+      this.inflight.add(dataId);
       this.unsignedActive++;
-      try { return await this.lookup(dataId); } finally { this.unsignedActive--; }
+      let ev;
+      try { ev = await this.lookup(dataId); }
+      catch (e) { this.inflight.delete(dataId); throw e; }   // falha transitória: nada marcado, retry consulta de novo
+      finally { this.unsignedActive--; }
+      if (!ev || ev.ignore) { this.webhookSettled(dataId, true); return ev; }   // consulta OK, nada a aplicar
+      return { ...ev, unsignedId: dataId };
     }
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(dataId)) return null;
     return this.lookup(dataId);
+  }
+
+  // R171 · SEC-006: chamado pelo serviço depois de aplicar (ok=true) ou falhar (ok=false) um aviso sem assinatura
+  webhookSettled(id, ok) {
+    if (!id) return;
+    this.inflight.delete(id);
+    if (!ok) return;
+    if (this.recentLookups.size > 5000) this.recentLookups.clear();
+    this.recentLookups.set(id, Date.now());
   }
 
   // R171 · SEC-009: estorno integral (pagamento de Fundador aprovado sem vaga). Idempotente pela chave.

@@ -336,7 +336,10 @@ class Payments {
     if (!ev) return { status: 401, body: 'invalid' };
     if (ev.busy) return { status: 503, body: 'busy' };   // R170 · SEC-006: limite de avisos sem assinatura
     if (ev.ignore) return { status: 200, body: 'ignored' };
-    await this.apply(ev);
+    // R171 · SEC-006: o aviso só conta como processado se a aplicação deu certo; erro → 500 e o provedor tenta de novo
+    let ok = false;
+    try { await this.apply(ev); ok = true; }
+    finally { if (ev.unsignedId && this.provider.webhookSettled) this.provider.webhookSettled(ev.unsignedId, ok); }
     return { status: 200, body: 'ok' };
   }
 }

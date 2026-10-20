@@ -280,3 +280,76 @@ Regressão incluída na suíte:
 4. **CSP (opcional, depois):** regra report-only no Cloudflare, conforme `CSP_R171.md`.
 
 Para desfazer, a 0023 traz no cabeçalho como reverter.
+
+---
+
+## 11. Checkpoint após o reteste do Orca da R170 (commit seguinte ao 0883d51)
+
+O Orca reproduziu na R170 três falhas que **continuavam no 0883d51**: aquele commit não tinha mexido nesses pontos. Rodei o harness dele, sem mudanças, contra a R170 e contra a R171 nova:
+
+| Item do harness do Orca | R170 / 0883d51 | R171 nova |
+|---|---|---|
+| SEC-003 `connected_survives_sweep` | false | **true** |
+| SEC-003 convidado em partida sobrevive | true | true |
+| SEC-003 teto (6º convidado com teto 5) | `full` | `full` |
+| SEC-004 partida inventada gravada | 1 | **0** |
+| SEC-004 mesma partida com horário trocado | 2 | **0** |
+| SEC-004 Ranked inventado gravado | 1 | **0** |
+| SEC-006 retry depois de falha transitória | ignorado (1 consulta) | **consulta de novo** (2 consultas) |
+| SEC-006 limites (3/min, 2 simultâneas, assinatura obrigatória) | iguais | iguais |
+
+Sobre o SEC-006: a última linha do harness do Orca foi escrita assumindo o comportamento antigo ("ignorado"). Na R171 nova a segunda tentativa consulta de novo; como o mock dele falha sempre, ela lança o erro (vira 500, e o Mercado Pago tenta de novo). Rodei com essa linha protegida por try/catch.
+
+### SEC-003 · Convidados
+
+- `sweepGuests()` nunca descarta convidado com conexão aberta: usa `liveGuests()`, a mesma lista do `evictGuests()`.
+- Convidado em partida, mesmo desconectado, também nunca é descartado.
+- O relógio de inatividade conta a partir de quando a conexão fecha (`seen` atualizado no fechamento). Só sai quem está sem conexão, fora de partida e há mais de 24 h sem uso.
+- O teto de 20.000 continua.
+
+### SEC-004 · Histórico de análise
+
+- O `analysis_request` passa a dizer a partida (`match_id` + modo). O jogo novo já manda isso.
+- A liberação fica ligada a essa partida. Liberação de outra partida, ou sem partida (jogo antigo), **não grava** histórico. A análise no aparelho continua funcionando.
+- **Ranked e Casual:** só grava se o servidor viu **essa conta terminar essa partida**, avisado pelo serviço Ranked/Casual no fim. O modo também tem que bater. O horário gravado é o do servidor, e há **1 gravação por conta e partida**: mudar o horário não duplica.
+- **Contra bot / local:** o servidor não vê essas partidas. Nelas o jogo nunca manda id de partida, e um id inventado é recusado. A chave contra duplicata é o conteúdo (modo + cor + lances), então mudar o horário não duplica.
+- O limite de 60 gravações por dia continua. Gravar sempre na conta de quem pediu também.
+- **Limite honesto:** uma partida contra bot totalmente inventada ainda pode entrar no histórico da **própria** conta, como antes, porque o servidor não tem como saber que ela não existiu. Não afeta outra conta nem o Ranked.
+
+### SEC-006 · Webhook sem assinatura
+
+- "Já processado" só é marcado **depois** que a consulta **e** a aplicação deram certo (`webhookSettled`).
+- Falha na consulta ou na aplicação → 500, e a próxima tentativa consulta de novo.
+- Aviso repetido enquanto o primeiro ainda está em andamento → 503 ("tente depois"), nunca 200 calado.
+- Depois de aplicado com sucesso, repetições em menos de 1 min continuam sendo ignoradas.
+
+### Sessão / Coroas: o que os 13 testes provavam e o que não provavam
+
+Medi com uma sonda (fora do produto) quem recebe cada aviso de Coroas nos 35 testes históricos:
+
+| | R170 | R171 |
+|---|---|---|
+| avisos de Coroas entregues | 74 | 74 |
+| para o dono certo | 70 | **74** |
+| para socket que já não era a conta dona | **4** (teste de expiração e "auth inválido após válido") | **0** |
+
+O que isso mostra:
+
+- **Em 12 dos 13 testes que falhavam**, as mensagens a mais eram as Coroas da **própria** conta chegando **depois** de o login terminar, porque a entrada do dia rodava solta. Esses 12 ficaram verdes por **ordem**: as Coroas agora fazem parte da operação de login, chegam antes de ela terminar e são descartadas se a sessão mudar. A mudança está no código, que hoje é o comportamento correto. **Não houve vazamento entre contas nesses 12.**
+- **No teste de expiração**, a R170 entregou as Coroas de A a um socket cuja sessão já tinha expirado. Isso é vazamento real; na R171 não acontece.
+- **O vazamento A → B no mesmo aparelho** acontece numa janela que **nenhum dos 13 testes cobria**: o aviso escolhe os aparelhos e depois espera o banco; nesse meio-tempo A sai e B entra. Ele é provado por testes novos:
+  - `session_crowns_r171_test`: na R170 falha, B recebe saldo 5010 de A; na R171 passa.
+  - `sessao_coroas_invariantes_r171_test`, caso "lento em crownWallet": na R170 falha, B recebe `crowns_reward` e `crowns_state` com saldo 7010 de A; na R171 passa.
+- **Os dois arquivos históricos** (`session_hardening_test.cjs` e `session_send_defer_test.cjs`) estão **idênticos** à R170: `git diff 296942d` dá 0 linhas. Nenhuma assertion foi enfraquecida, e os 35 passam.
+
+`sessao_coroas_invariantes_r171_test` (6 testes) checa por **dono**, não por contagem. A conta A tem marcas: apelido, saldo ≥ 7000 e Fundador nº 77. Cenários:
+
+- A → logout → B com banco lento antes e depois de escolher os aparelhos;
+- login lento de A seguido de B;
+- revalidação antiga de A que volta **válida** depois de B entrar;
+- resposta adiada de A durante a revalidação: entregue a A se confirmada; descartada se trocar para B;
+- A e B em aparelhos diferentes.
+
+### Teste ajustado
+
+`hardening_r170_test` (SEC-004): o `analysis_request` agora informa a partida (`match_id: ''`, `mode: 'bot'`), porque a liberação ficou mais restrita. As assertions são as mesmas.

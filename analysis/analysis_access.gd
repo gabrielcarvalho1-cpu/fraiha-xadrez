@@ -106,11 +106,15 @@ func reset_text() -> String:
     return "renova às %02d:%02d" % [int(local.hour), int(local.minute)]
 
 ## Pede UMA análise. Responde por `granted`/`denied`.
-func request():
+## R171 · SEC-004: `ctx` diz QUAL partida (match_id + modo): o servidor liga a liberação a ela.
+func request(ctx := {}):
     if _waiting: return
     if account != null and account.has_profile() and account.server_ready and not dev_local:
         _waiting = true
-        if not account.send_server({"type": kind + "_request"}):
+        var msg := {"type": kind + "_request"}
+        for k in ["match_id", "mode"]:
+            if ctx.has(k): msg[k] = String(ctx[k])
+        if not account.send_server(msg):
             _waiting = false
             denied.emit("offline", "Sem conexão com o servidor. Tente novamente.")
         return

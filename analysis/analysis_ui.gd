@@ -72,7 +72,7 @@ func open_for(p_record):
     _show_page("asking")
     access.granted.connect(_on_granted, CONNECT_ONE_SHOT)
     access.denied.connect(_on_denied, CONNECT_ONE_SHOT)
-    access.request()
+    access.request({"match_id": String(record.match_id), "mode": String(record.mode)})
 
 ## Abre um relatório já pronto (histórico).
 func open_report(p_record, p_report: Dictionary):

@@ -142,7 +142,8 @@ test('SEC-004: analysis_record só grava depois de análise liberada, 1 vez por 
   const saved = () => (b.store.analyses || []).length;
   for (let i = 0; i < 20; i++) await b.handle(ws, { type: 'analysis_record', summary: { ...sum, played_at: sum.played_at + i } });
   assert.equal(saved(), 0, 'sem analysis_request liberado nada é gravado');
-  await b.handle(ws, { type: 'analysis_request' });
+  // R171: a liberação é ligada à partida pedida (match_id + modo); contra bot o jogo não tem id de partida
+  await b.handle(ws, { type: 'analysis_request', match_id: '', mode: 'bot' });
   await b.handle(ws, { type: 'analysis_record', summary: { ...sum, accuracy: 900 } });
   await b.handle(ws, { type: 'analysis_record', summary: { ...sum, moves: [{ u: 'x'.repeat(500) }] } });
   await b.handle(ws, { type: 'analysis_record', summary: { ...sum, mode: 'hack' } });
@@ -150,7 +151,7 @@ test('SEC-004: analysis_record só grava depois de análise liberada, 1 vez por 
   await b.handle(ws, { type: 'analysis_record', summary: sum });
   assert.equal(saved(), 1, 'análise válida e liberada é gravada');
   assert.equal(b.store.analyses[0].phases, undefined, 'campos extras não vão para o banco');
-  await b.handle(ws, { type: 'analysis_request' });
+  await b.handle(ws, { type: 'analysis_request', match_id: '', mode: 'bot' });
   await b.handle(ws, { type: 'analysis_record', summary: sum });
   assert.equal(saved(), 1, 'a mesma partida não é gravada duas vezes');
 });

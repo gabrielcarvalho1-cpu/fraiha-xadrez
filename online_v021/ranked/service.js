@@ -248,6 +248,8 @@ class Ranked {
     }
     for (const c of ['w', 'b']) {
       const uid = match.players[c].userId, ws = this.sockets.get(uid);
+      // R171 · SEC-004: o histórico de análise só aceita partida online que o servidor viu esta conta terminar
+      if (match.result && this.backend && this.backend.noteFinishedMatch) this.backend.noteFinishedMatch(uid, match.id, this.kind, match.startsAt);
       if (ws && match.players[c].connected) this.send(ws, match.resultFor(c, saved));
       if (this.byUser.get(uid) === match.id) this.byUser.delete(uid);
       this.presence(uid);
