@@ -40,7 +40,7 @@ Existem duas opções equivalentes. A recomendada é a A.
 **A · Runtime Node (igual ao staging)**
 - Branch: a branch moderna aprovada.
 - Runtime: Node.
-- Build Command: `npm install --omit=dev`.
+- Build Command: `npm ci --omit=dev` (R170: usa o package-lock.json; ws travado em 8.22.0).
 - Start Command: `npm start`.
 
 **B · Manter Docker**

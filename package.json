@@ -6,5 +6,5 @@
   "main": "online_v021/server.js",
   "engines": { "node": ">=20" },
   "scripts": { "start": "node online_v021/server.js" },
-  "dependencies": { "ws": "^8.18.0" }
+  "dependencies": { "ws": "8.22.0" }
 }

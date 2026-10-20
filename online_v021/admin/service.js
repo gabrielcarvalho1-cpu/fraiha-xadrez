@@ -499,7 +499,9 @@ class AdminService {
       commit: this.env.RENDER_GIT_COMMIT ? String(this.env.RENDER_GIT_COMMIT).slice(0, 12) : null,
       uptime_ms: this.now() - this.startedAt, tracking_since: new Date(this.metrics.startedAt).toISOString(),
       voice_configured: !!(this.backend.voice && this.backend.voice.configured && this.backend.voice.configured()),
-      audit_persistent: this.audit.persistent, controls_persistent: false, admins: this.access.admins.size };
+      audit_persistent: this.audit.persistent, controls_persistent: false, admins: this.access.admins.size,
+      ws_version: this.backend.wsVersion || null,   // R170 · SEC-005: versão da biblioteca ws realmente instalada
+      mp_signature_required: !!(this.backend.payments && this.backend.payments.provider && this.backend.payments.provider.requireSignature) };
   }
   // ---------------------------------------------------------------- ação real
   // Ritmo do Ranked/Casual (3/5/10/20 min): o jogo deixa de MOSTRAR o ritmo fechado; quem esperava nele sai da fila.

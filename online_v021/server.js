@@ -1,8 +1,17 @@
 const http=require('http'),crypto=require('crypto'),{WebSocketServer}=require('ws');
+// R170 · HARDENING (auditoria Orca R168): IP confiável, limites de conexão/webhook e tratamento de erro de socket.
+const {clientIp,Window}=require('./net_guard');
+const WS_VERSION=(()=>{try{return require('ws/package.json').version}catch{return '?'}})();
+console.log('FRAIHA ws '+WS_VERSION);
+const MAX_CONN=Number(process.env.FRAIHA_MAX_CONN||4000),MAX_CONN_PER_IP=Number(process.env.FRAIHA_MAX_CONN_PER_IP||40);
+const connPerIp=new Map();
+let sockErrLogged=0,sockErrWindow=0;
+function logSockErr(where,e){const t=Math.floor(Date.now()/60000);if(t!==sockErrWindow){sockErrWindow=t;sockErrLogged=0}if(++sockErrLogged<=20)console.warn('[ws] '+where+' error: '+String(e&&(e.code||e.message)||e).slice(0,120))}
 const PORT=Number(process.env.PORT||10000),MAX_ROOMS=128,TTL=1800e3,LETTERS='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const rooms=new Map();
 const {Backend}=require('./backend');const backend=new Backend({send:(ws,o)=>send(ws,o)});try{const {Ranked}=require('./ranked/service');backend.attachRanked(new Ranked({send:(ws,o)=>send(ws,o)}));backend.attachCasual(new Ranked({send:(ws,o)=>send(ws,o),kind:'casual'}))}catch(e){if(e.code!=='MODULE_NOT_FOUND')throw e}
 console.log('FRAIHA accounts backend: '+backend.kind);
+backend.wsVersion=WS_VERSION;   // R170 · SEC-005: aparece no Admin → Sistema
 // FRAIHA Admin · API /admin/api/* (desligada sem FRAIHA_ADMIN_USERS; autoridade só no servidor). Ver docs/admin/.
 const {AdminService}=require('./admin/service');const admin=new AdminService({backend});
 // Frontend do Admin em /admin/ (estático, só com o Admin ligado). A API /admin/api/* vem antes. Ver online_v021/admin/static.js.
@@ -34,7 +43,10 @@ function fail(ws,m){send(ws,{type:'error',message:m})}
 const MAX_PACKET=8192, MAX_BIG_PACKET=600*1024, BIG_TYPES={'acct_avatar_upload':MAX_BIG_PACKET,'analysis_record':64*1024};
 function bigAllowed(m,len){const lim=m&&typeof m.type==='string'&&Object.prototype.hasOwnProperty.call(BIG_TYPES,m.type)?BIG_TYPES[m.type]:0;return len<=lim}
 // R103 · webhook de pagamento: no máximo 120 avisos por minuto por IP (o Mercado Pago manda poucos; protege a cota da API)
-const hookHits=new Map();function webhookLimited(req){const ip=String(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').split(',')[0].trim();const now=Date.now();let h=hookHits.get(ip);if(!h||now-h.t>60000){h={t:now,n:0};hookHits.set(ip,h)}h.n++;if(hookHits.size>5000)hookHits.clear();return h.n>120}
+// R170 · SEC-006: o IP vem do ÚLTIMO X-Forwarded-For (o que o proxy do Render acrescenta; o primeiro o remetente escreve)
+// e há um teto GLOBAL por minuto, que não se contorna trocando o IP informado.
+const hookPerIp=new Window({windowMs:60000,max:120,maxKeys:5000}),hookGlobal=new Window({windowMs:60000,max:Number(process.env.FRAIHA_WEBHOOK_MAX_PER_MIN||300)});
+function webhookLimited(req){const okIp=hookPerIp.hit(clientIp(req));const okAll=hookGlobal.hit('all');return !(okIp&&okAll)}
 const server=http.createServer((req,res)=>{
   if(admin.owns(req))return void admin.handle(req,res);
   if(adminStatic.owns(req))return void adminStatic.handle(req,res);
@@ -44,7 +56,13 @@ const server=http.createServer((req,res)=>{
   if(req.method==='POST'&&(req.url==='/webhooks/payments'||String(req.url).startsWith('/webhooks/payments?'))){if(webhookLimited(req)){res.writeHead(429);return void res.end('slow down')}let raw='';req.on('data',d=>{raw+=d;if(raw.length>1e6)req.destroy()});req.on('end',async()=>{try{const r=await backend.payments.webhook(req,raw);res.writeHead(r.status,{'content-type':'text/plain'});res.end(r.body)}catch(e){console.error('webhook',e&&e.message);res.writeHead(500);res.end('error')}});return}
   res.writeHead(200,{'content-type':'text/plain'});res.end('FRAIHA multiplayer server\n')});
 const wss=new WebSocketServer({server,maxPayload:MAX_BIG_PACKET+1024});   // R104 · a biblioteca recusa (1009) pacote gigante ANTES de juntar na memória
-wss.on('connection',ws=>{ws.count=0;ws.rateAt=0;ws.on('message',raw=>{if(raw.length>MAX_BIG_PACKET)return ws.close(1009,'Packet too large');const sec=Math.floor(Date.now()/1000);if(ws.rateAt!==sec){ws.rateAt=sec;ws.count=0}if(++ws.count>20)return ws.close(1008,'Rate limit');let m;try{m=JSON.parse(raw)}catch{return raw.length>MAX_PACKET?ws.close(1009,'Packet too large'):undefined}if(raw.length>MAX_PACKET&&!bigAllowed(m,raw.length))return ws.close(1009,'Packet too large');if(m===null||typeof m!=='object'||Array.isArray(m)||typeof m.type!=='string')return fail(ws,'Mensagem inválida.');backend.presence.touch(ws);handle(ws,m)});ws.on('pong',()=>backend.presence.touch(ws));ws.on('close',()=>{backend.onClose(ws);const r=ws.room;if(r&&r[ws.color]===ws){r[ws.color]=null;r.votes.clear();r.touched=Date.now();broadcast(r)}})});
+// R170 · SEC-001: erro de socket/servidor NUNCA derruba o processo (quadro inválido, conexão cortada no handshake…)
+wss.on('error',e=>logSockErr('server',e));
+server.on('clientError',(e,socket)=>{logSockErr('http',e);try{socket.destroy()}catch{}});
+wss.on('connection',(ws,req)=>{ws.on('error',e=>{logSockErr('socket',e);try{ws.terminate()}catch{}});
+ws.ip=clientIp(req);const ipN=(connPerIp.get(ws.ip)||0)+1;connPerIp.set(ws.ip,ipN);ws.once('close',()=>{const n=(connPerIp.get(ws.ip)||1)-1;if(n<=0)connPerIp.delete(ws.ip);else connPerIp.set(ws.ip,n)});
+if(wss.clients.size>MAX_CONN||ipN>MAX_CONN_PER_IP){try{ws.close(1013,'Try again later')}catch{}return}
+ws.count=0;ws.rateAt=0;ws.on('message',raw=>{if(raw.length>MAX_BIG_PACKET)return ws.close(1009,'Packet too large');const sec=Math.floor(Date.now()/1000);if(ws.rateAt!==sec){ws.rateAt=sec;ws.count=0}if(++ws.count>20)return ws.close(1008,'Rate limit');let m;try{m=JSON.parse(raw)}catch{return raw.length>MAX_PACKET?ws.close(1009,'Packet too large'):undefined}if(raw.length>MAX_PACKET&&!bigAllowed(m,raw.length))return ws.close(1009,'Packet too large');if(m===null||typeof m!=='object'||Array.isArray(m)||typeof m.type!=='string')return fail(ws,'Mensagem inválida.');backend.presence.touch(ws);handle(ws,m)});ws.on('pong',()=>backend.presence.touch(ws));ws.on('close',()=>{backend.onClose(ws);const r=ws.room;if(r&&r[ws.color]===ws){r[ws.color]=null;r.votes.clear();r.touched=Date.now();broadcast(r)}})});
 function handle(ws,m){const a=String(m.type||'');if(a==='ping')return send(ws,{type:'pong'});if(a.startsWith('acct_')||a.startsWith('ranked_')||a.startsWith('casual_')||a.startsWith('chat_')||a.startsWith('social_')||a.startsWith('dm_')||a.startsWith('invite_')||a.startsWith('analysis_')||a.startsWith('train_')||a.startsWith('dev_')||a.startsWith('payment_')||a.startsWith('bot_')||a.startsWith('marcha_')||a.startsWith('party_')||a.startsWith('voice_')||a.startsWith('gchat_')||a.startsWith('ref_')||a.startsWith('crowns_')||a.startsWith('store_')||a.startsWith('pass_')||a.startsWith('tourn_')||a.startsWith('tev_')||a.startsWith('creator_')||a==='leaderboard_get'||a==='guest_auth')return void backend.handle(ws,m);if(!ws.room){if(a==='create'){if(rooms.size>=MAX_ROOMS)return fail(ws,'Servidor cheio. Tente novamente em alguns minutos.');const c=code(),r={code:c,g:fresh(),w:null,b:null,started:false,revision:0,votes:new Set(),touched:Date.now(),tokens:{w:token(),b:token()}};rooms.set(c,r);return attach(ws,r,'w')}if(a==='join'){const r=rooms.get(String(m.room||'').trim().toUpperCase());if(!r)return fail(ws,'Sala não encontrada ou expirada.');if(r.started)return fail(ws,'Esta sala já tem dois jogadores. Use Reconectar para voltar.');r.started=true;return attach(ws,r,'b')}if(a==='resume'){const r=rooms.get(String(m.room||''));if(!r)return fail(ws,'A sala expirou ou o servidor reiniciou.');const c=['w','b'].find(c=>r.tokens[c]===String(m.token||''));if(!c)return fail(ws,'Não foi possível recuperar esta sessão.');if(r[c])return fail(ws,'Esta sessão ainda está conectada em outra janela.');return attach(ws,r,c)}return fail(ws,'Crie ou entre em uma sala primeiro.')}
 const r=ws.room,g=r.g,c=ws.color;if(a==='leave'||a==='resign'){if(r.started&&!g.game_over){g.game_over=true;g.status='DESISTÊNCIA — '+(c==='w'?'PRETAS VENCEM':'BRANCAS VENCEM');g.promotion_pending=false;r.revision++}if(a==='leave'){r[c]=null;ws.room=null}broadcast(r);return}
 if(!r.started||!r.w||!r.b)return fail(ws,'Aguardando a conexão do outro jogador.');if(a==='restart'){r.votes.add(c);if(r.votes.size===2){r.g=fresh();r.votes.clear();r.revision++}broadcast(r);return}if(Number(m.revision)!==r.revision){fail(ws,'O tabuleiro foi atualizado. Tente a jogada novamente.');return broadcast(r)}if(g.game_over)return fail(ws,'Partida encerrada.');

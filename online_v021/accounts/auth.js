@@ -7,11 +7,27 @@ class SupabaseAuth {
   constructor({ url, apiKey, fetchImpl = fetch, cacheMs = 60e3, now = () => Date.now() }) {
     this.url = url.replace(/\/+$/, ''); this.apiKey = apiKey; this.fetch = fetchImpl; this.cacheMs = cacheMs;
     this.cache = new Map();
+    this.bad = new Map();   // R170 · SEC-002: tokens recusados pelo Auth (hash → até quando), sem nova consulta
+    this.calls = 0;         // consultas feitas ao Supabase Auth (testes/diagnóstico)
     this.now = now;
+  }
+  // R170 · SEC-002: o token de acesso do Supabase é SEMPRE um JWT (3 partes base64url, payload JSON).
+  // Qualquer outra coisa é recusada aqui, sem consultar o Auth.
+  static shapeOk(token) {
+    const parts = token.split('.');
+    if (parts.length !== 3 || !parts.every(p => /^[A-Za-z0-9_-]+$/.test(p))) return false;
+    try {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+      return !!payload && typeof payload === 'object' && !Array.isArray(payload);
+    } catch { return false; }
   }
   async verify(accessToken, { force = false } = {}) {
     const token = String(accessToken || '');
     if (token.length < 20 || token.length > 4096) return null;
+    if (!SupabaseAuth.shapeOk(token)) return null;
+    const badKey = crypto.createHash('sha256').update(token).digest('base64url');
+    const badUntil = this.bad.get(badKey);
+    if (badUntil && badUntil > this.now()) return null;
     const hit = this.cache.get(token);
     if (!force && hit && hit.until > this.now()) return hit.user;
     this.cache.delete(token);
@@ -23,10 +39,17 @@ class SupabaseAuth {
     } catch { /* tokens opacos: backend aplica duração máxima e revalidação */ }
     if (expiresAt !== null && expiresAt <= this.now()) return null;
     let res;
+    this.calls++;
     try {
       res = await this.fetch(this.url + '/auth/v1/user', { headers: { apikey: this.apiKey, Authorization: 'Bearer ' + token } });
     } catch { return null; }
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {   // recusado de verdade (não falha de rede): lembra por 5 min
+        if (this.bad.size > 5000) this.bad.clear();
+        this.bad.set(badKey, this.now() + 300e3);
+      }
+      return null;
+    }
     const u = await res.json().catch(() => null);
     if (!u || typeof u.id !== 'string') return null;
     if (expiresAt !== null && expiresAt <= this.now()) return null;

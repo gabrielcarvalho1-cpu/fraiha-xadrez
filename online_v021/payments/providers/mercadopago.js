@@ -66,6 +66,12 @@ class MercadoPago {
     this.token = String(env.FRAIHA_MP_ACCESS_TOKEN || '').trim();
     this.secret = String(env.FRAIHA_MP_WEBHOOK_SECRET || '').trim();
     this.requireSignature = /^(1|true|sim)$/i.test(String(env.FRAIHA_MP_REQUIRE_SIGNATURE || '').trim()) && !!this.secret;   // R110
+    // R170 · SEC-006: aviso SEM assinatura não pode virar consulta paga em massa: no máximo N por minuto (total),
+    // 2 consultas simultâneas e o mesmo pagamento é consultado no máximo 1 vez a cada 60 s.
+    this.unsignedPerMin = Math.max(1, Number(env.FRAIHA_MP_UNSIGNED_PER_MIN) || 30);
+    this.unsignedWin = { start: 0, n: 0 };
+    this.unsignedActive = 0;
+    this.recentLookups = new Map();   // data.id -> quando foi consultado (sem assinatura)
     this.publicKey = String(env.FRAIHA_MP_PUBLIC_KEY || '').trim();
     this.api = String(env.FRAIHA_MP_API || 'https://api.mercadopago.com').replace(/\/+$/, '');
     this.publicUrl = String(env.FRAIHA_PUBLIC_URL || '').replace(/\/+$/, '');
@@ -158,6 +164,7 @@ class MercadoPago {
     const type = String(url.searchParams.get('type') || url.searchParams.get('topic') || body.type || body.topic || '');
     const dataId = String(url.searchParams.get('data.id') || (body.data && body.data.id) || url.searchParams.get('id') || '');
     if (!dataId || (type && type !== 'payment')) return { ignore: true };
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(dataId)) return null;   // R170 · formato conferido ANTES de qualquer trabalho
     if (this.secret && req.headers['x-signature'] && !this.signatureOk(req, dataId)) return null;
     // R110 · aviso SEM assinatura: com FRAIHA_MP_REQUIRE_SIGNATURE=1 é recusado. Sem a variável continua aceito
     // (a consulta abaixo na API do Mercado Pago é a fonte da verdade, então não há fraude possível), mas fica
@@ -165,6 +172,16 @@ class MercadoPago {
     if (!req.headers['x-signature']) {
       if (this.requireSignature) return null;
       console.warn('[pagamentos] aviso do Mercado Pago sem assinatura (x-signature) — tipo ' + (type || '?'));
+      // R170 · SEC-006: limites só para o caminho SEM assinatura (o assinado segue normal)
+      const t = Date.now();
+      const last = this.recentLookups.get(dataId);
+      if (last && t - last < 60e3) return { ignore: true };   // repetido: já consultado há pouco
+      if (t - this.unsignedWin.start >= 60e3) this.unsignedWin = { start: t, n: 0 };
+      if (++this.unsignedWin.n > this.unsignedPerMin || this.unsignedActive >= 2) return { busy: true };   // 503: o provedor tenta de novo depois
+      if (this.recentLookups.size > 5000) this.recentLookups.clear();
+      this.recentLookups.set(dataId, t);
+      this.unsignedActive++;
+      try { return await this.lookup(dataId); } finally { this.unsignedActive--; }
     }
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(dataId)) return null;
     return this.lookup(dataId);

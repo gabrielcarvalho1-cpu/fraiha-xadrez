@@ -282,6 +282,7 @@ class Payments {
   async webhook(req, rawBody) {
     const ev = await this.provider.verifyWebhook(req, rawBody);
     if (!ev) return { status: 401, body: 'invalid' };
+    if (ev.busy) return { status: 503, body: 'busy' };   // R170 · SEC-006: limite de avisos sem assinatura
     if (ev.ignore) return { status: 200, body: 'ignored' };
     await this.apply(ev);
     return { status: 200, body: 'ok' };

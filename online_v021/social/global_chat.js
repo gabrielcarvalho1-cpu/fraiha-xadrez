@@ -49,6 +49,7 @@ class GlobalChat {
       const hub = this.backend && this.backend.chat;
       const ok = hub ? hub.allow('global:' + uid, c.text, now) : { ok: true };
       if (ok.error) return fail(ok.error, ok.code);
+      if (this.lastAt.size > 5000) for (const [k, v] of this.lastAt) if (now - v > MIN_GAP_MS) this.lastAt.delete(k);   // R170 · SEC-003: mapa auxiliar com teto
       this.lastAt.set(uid, now);
       this.members.add(ws);
       const p = ws.profile;

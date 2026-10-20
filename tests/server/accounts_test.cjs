@@ -54,10 +54,13 @@ const { SupabaseStore } = require('../../online_v021/accounts/store');
   const calls = [];
   const fake = async (url, opts = {}) => { calls.push({ url, opts }); return { ok: true, status: 200, json: async () => ({ id: 'u1', email: 'a@b', app_metadata: { provider: 'google' } }), text: async () => '[]' }; };
   const auth = new SupabaseAuth({ url: 'https://p.supabase.co/', apiKey: 'sb_publishable_x', fetchImpl: fake });
-  const u = await auth.verify('x'.repeat(40));
+  // R170 · SEC-002: o Supabase só emite JWT; token fora desse formato nem chega ao Auth
+  const tok = 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ sub: 'u1' })).toString('base64url') + '.' + 'x'.repeat(40);
+  check(await auth.verify('x'.repeat(40)) === null && calls.length === 0, 'token sem formato JWT recusado sem consultar o Auth');
+  const u = await auth.verify(tok);
   check(u.id === 'u1' && u.provider === 'google', 'SupabaseAuth lê usuário de /auth/v1/user');
-  check(calls[0].url === 'https://p.supabase.co/auth/v1/user' && calls[0].opts.headers.Authorization === 'Bearer ' + 'x'.repeat(40), 'token enviado como Bearer ao Supabase Auth');
-  await auth.verify('x'.repeat(40)); check(calls.length === 1, 'validação em cache (sem chamada repetida)');
+  check(calls[0].url === 'https://p.supabase.co/auth/v1/user' && calls[0].opts.headers.Authorization === 'Bearer ' + tok, 'token enviado como Bearer ao Supabase Auth');
+  await auth.verify(tok); check(calls.length === 1, 'validação em cache (sem chamada repetida)');
   const store = new SupabaseStore({ url: 'https://p.supabase.co', serviceKey: 'sb_secret_y', fetchImpl: fake });
   await store.getRankedStats('u1');
   check(calls[1].url.startsWith('https://p.supabase.co/rest/v1/ranked_stats?user_id=eq.u1') && calls[1].opts.headers.apikey === 'sb_secret_y' && !calls[1].opts.headers.Authorization, 'PostgREST com secret key só no servidor');

@@ -29,8 +29,12 @@ const { Events } = require('./economy/events');   // R157 · Torneios de evento 
 const { News } = require('./economy/news');   // R161 · Novidades (outdoor da Home + abas)
 const { SeasonPass } = require('./economy/season_pass');   // R120 · Passe da Temporada
 const { Creators } = require('./social/creators');   // R121 · Apoie um Criador
+const { Window, Gate } = require('./net_guard');   // R170 · hardening (auditoria Orca R168)
 
 const GUEST_TTL_MS = 24 * 3600e3;
+// R170 · SEC-002/003/004: limites de entrada (ajustáveis por variável de ambiente; padrões folgados para jogador real)
+const LIM = (env, k, d) => { const v = Number(env[k]); return Number.isFinite(v) && v > 0 ? v : d; };
+const ANALYSIS_MODES = ['bot', 'casual', 'ranked', 'local', 'online'];
 const SESSION_REVALIDATE_MS = 60e3;
 const SESSION_MAX_MS = 3600e3; // limite também para tokens opacos/dev sem exp
 const AUTH_TIMEOUT_MS = 10e3;
@@ -126,6 +130,81 @@ class Backend {
     this.modeControls.onLeaguesChange(() => this.broadcastLeaguesPreview());   // R128 · ligas liberadas: o jogo aplica na hora
     this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o), backend: this }) : null;
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
+    // R170 · SEC-002: login (acct_auth) limitado por conexão, por IP e no total; no máximo N consultas simultâneas ao Auth
+    const env = opts.env || process.env;
+    this.authPerConn = new WeakMap();
+    this.authPerIp = new Window({ windowMs: 60e3, max: LIM(env, 'FRAIHA_AUTH_PER_IP_MIN', 40), now: this.now });
+    this.authGlobal = new Window({ windowMs: 60e3, max: LIM(env, 'FRAIHA_AUTH_GLOBAL_MIN', 1200), now: this.now });
+    this.authGate = new Gate(LIM(env, 'FRAIHA_AUTH_CONCURRENCY', 32));
+    // R170 · SEC-003: convidados com teto e criação limitada por IP e no total
+    this.maxGuests = LIM(env, 'FRAIHA_MAX_GUESTS', 20000);
+    this.guestPerIp = new Window({ windowMs: 60e3, max: LIM(env, 'FRAIHA_GUEST_PER_IP_MIN', 30), now: this.now });
+    this.guestGlobal = new Window({ windowMs: 60e3, max: LIM(env, 'FRAIHA_GUEST_GLOBAL_MIN', 600), now: this.now });
+    // R170 · SEC-004: só grava histórico de análise que o servidor liberou (analysis_granted), 1 vez por partida
+    this.analysisGrants = new Map();   // uid -> [{until}]
+    this.analysisSaved = new Window({ windowMs: 24 * 3600e3, max: 1, maxKeys: 50000, now: this.now });
+    this.analysisDaily = new Window({ windowMs: 24 * 3600e3, max: LIM(env, 'FRAIHA_ANALYSIS_RECORDS_DAY', 60), maxKeys: 50000, now: this.now });
+  }
+  // R170 · SEC-002: pode tentar entrar agora? (antes de qualquer consulta ao Supabase Auth)
+  authAllowed(ws) {
+    if (!ws.ip) return true;   // só conexões de rede (server.js marca ws.ip); chamadas internas/testes sem IP não contam
+    const t = this.now();
+    let c = this.authPerConn.get(ws);
+    if (!c || t - c.start >= 60e3) { c = { start: t, n: 0 }; this.authPerConn.set(ws, c); }
+    if (++c.n > 12) return false;
+    if (!this.authPerIp.hit(ws.ip || 'local')) return false;
+    if (!this.authGlobal.hit('all')) return false;
+    return !this.authGate.busy();
+  }
+  // R170 · SEC-004
+  grantAnalysis(uid) {
+    const t = this.now();
+    const list = (this.analysisGrants.get(uid) || []).filter(g => g.until > t);
+    if (list.length < 5) list.push({ until: t + 3 * 3600e3 });   // até 5 análises liberadas guardadas, valem 3 h
+    this.analysisGrants.set(uid, list);
+    if (this.analysisGrants.size > 20000) for (const [k, v] of this.analysisGrants) if (!v.some(g => g.until > t)) this.analysisGrants.delete(k);
+  }
+  takeAnalysisGrant(uid) {
+    const t = this.now();
+    const list = (this.analysisGrants.get(uid) || []).filter(g => g.until > t);
+    if (!list.length) { this.analysisGrants.delete(uid); return false; }
+    list.shift();
+    if (list.length) this.analysisGrants.set(uid, list); else this.analysisGrants.delete(uid);
+    return true;
+  }
+  // R170 · SEC-004: resumo da análise com formato e tamanhos conferidos (nada além do que a tabela guarda)
+  static cleanAnalysis(sum) {
+    if (!sum || typeof sum !== 'object' || Array.isArray(sum)) return null;
+    if (Object.keys(sum).length > 24) return null;   // campos extras do jogo (fases, adversário…) são ignorados, não gravados
+    const mode = String(sum.mode || '');
+    if (!ANALYSIS_MODES.includes(mode)) return null;
+    const played = Number(sum.played_at);
+    if (!Number.isFinite(played) || played < 1.6e9 || played > Date.now() / 1000 + 86400) return null;
+    const acc = Number(sum.accuracy);
+    if (!Number.isFinite(acc) || acc < 0 || acc > 100) return null;
+    const color = sum.color == null || sum.color === '' ? null : String(sum.color);
+    if (color !== null && color !== 'w' && color !== 'b') return null;
+    const result = sum.result == null ? null : String(sum.result);
+    if (result !== null && !/^[a-z_]{0,16}$/.test(result)) return null;
+    const counts = sum.counts && typeof sum.counts === 'object' && !Array.isArray(sum.counts) ? sum.counts : {};
+    const ck = Object.keys(counts);
+    if (ck.length > 16 || ck.some(k => !/^[a-z_]{1,20}$/.test(k) || !Number.isInteger(counts[k]) || counts[k] < 0 || counts[k] > 1000)) return null;
+    const moves = Array.isArray(sum.moves) ? sum.moves : [];
+    if (moves.length > 400) return null;
+    for (const mv of moves) {
+      if (!mv || typeof mv !== 'object' || Array.isArray(mv)) return null;
+      const keys = Object.keys(mv);
+      if (keys.length > 8) return null;
+      for (const k of keys) {
+        const v = mv[k];
+        if (!/^[a-z_]{1,16}$/.test(k)) return null;
+        if (typeof v === 'string' ? v.length > 16 : !(typeof v === 'number' || typeof v === 'boolean' || v === null)) return null;
+      }
+    }
+    const int = v => (Number.isInteger(Number(v)) && Number(v) >= -1 && Number(v) <= 1000 ? Number(v) : -1);
+    return { match_id: sum.match_id == null ? null : String(sum.match_id).slice(0, 64), mode, played_at: played, color, result,
+      accuracy: acc, counts, critical_ply: int(sum.critical_ply), best_ply: int(sum.best_ply), moves,
+      engine: String(sum.engine || '').slice(0, 60), depth: Math.max(0, Math.min(60, Number(sum.depth) || 0)) };
   }
   session(ws) {
     if (!this.sessions.has(ws)) this.sessions.set(ws, { revision: 0, stateRevision: 0, closed: false });
@@ -390,15 +469,31 @@ class Backend {
     let token = String(m.token || '');
     let g = /^[a-f0-9]{48}$/.test(token) ? this.guests.get(token) : null;
     if (!g) {
+      // R170 · SEC-003: criar convidado NOVO é limitado por IP e no total, e o mapa tem teto
+      if (ws.ip && (!this.guestPerIp.hit(ws.ip) || !this.guestGlobal.hit('all'))) return this.send(ws, { type: 'guest_error', code: 'busy', message: 'Muitas entradas agora. Tente de novo em instantes.' });
+      if (this.guests.size >= this.maxGuests) this.evictGuests();
+      if (this.guests.size >= this.maxGuests) return this.send(ws, { type: 'guest_error', code: 'full', message: 'Servidor cheio para convidados. Entre com sua conta ou tente mais tarde.' });
       token = crypto.randomBytes(24).toString('hex');
       g = { id: 'guest:' + crypto.randomUUID(), nickname: 'Convidado ' + String(crypto.randomInt(1000, 10000)) };
       this.guests.set(token, g);
     }
     g.seen = now;
+    this.guests.delete(token); this.guests.set(token, g);   // R170 · ordem = uso mais recente (o mais antigo sai primeiro)
     ws.guest = g;
     this.setIdentity(ws, { id: g.id, nickname: g.nickname, avatar: 'warrior', guest: true });
     this.send(ws, { type: 'guest_state', token, nickname: g.nickname, casual_modes: this.casualModesOpen(), leagues_preview: this.leaguesPreview() });
     if (this.casual) this.casual.onAuthenticated(ws);
+  }
+  // R170 · SEC-003: libera 10% do teto tirando os convidados há mais tempo sem uso (nunca quem está em partida/conectado)
+  evictGuests() {
+    let drop = Math.max(1, Math.floor(this.maxGuests * 0.1));
+    const online = new Set();
+    for (const [, set] of this.online || []) for (const w of set) if (w.guest) online.add(w.guest);
+    for (const [t, g] of this.guests) {
+      if (drop <= 0) break;
+      if (online.has(g) || this.inMatch(g.id)) continue;
+      this.guests.delete(t); drop--;
+    }
   }
   sweepGuests() {
     const now = Date.now();
@@ -426,7 +521,11 @@ class Backend {
         return this.operations.run(null, () => this.send(ws, { type: game.p + 'cancelled', was_queued: !!entry }));
       }
     }
-    if (a === 'acct_auth') this.beginAuth(ws);
+    if (a === 'acct_auth') {
+      // R170 · SEC-002: limite ANTES de mexer na sessão ou consultar o Auth (a sessão atual continua valendo)
+      if (!this.authAllowed(ws)) return this.operations.run(null, () => this.fail(ws, 'Muitas tentativas de entrada. Aguarde um minuto e tente de novo.', { code: 'auth_busy' }));
+      this.beginAuth(ws);
+    }
     const revision = s.revision;
     if (a !== 'acct_auth' && !this.ready(ws, revision) && !(await this.ensureSession(ws))) return;
     if (!this.current(ws, revision)) return;
@@ -517,7 +616,10 @@ class Backend {
         catch (e) { if (e === CANCELLED) return; console.error('bots', a, e && e.message); return this.send(ws, { type: 'bot_error', code: 'server_error', message: 'Erro temporário no servidor. Tente novamente.' }); }
       }
       if (a === 'acct_auth') {
-        const user = await this.verifyToken(m.access_token, true);
+        const pending = this.verifyToken(m.access_token, true);
+        this.authGate.active++;   // R170 · SEC-002: conta consultas ao Auth em andamento (sem mudar a ordem do await)
+        pending.then(() => { this.authGate.active--; }, () => { this.authGate.active--; });
+        const user = await pending;
         if (!this.current(ws, revision)) return;
         if (!user) return this.expireSession(ws);
         const s = this.session(ws);
@@ -578,12 +680,13 @@ class Backend {
         const ent = await this.checked(ws, revision, this.store.getEntitlements(accountId));
         if (!this.ready(ws, revision)) return;
         if (this.inMatch(accountId)) return denyInMatch();
-        if (ent.club_active) return this.send(ws, { type: 'analysis_granted', unlimited: true, used: 0, limit: 0, resets_at: null });
+        if (ent.club_active) { this.grantAnalysis(accountId); return this.send(ws, { type: 'analysis_granted', unlimited: true, used: 0, limit: 0, resets_at: null }); }
         const r = await op.wait(() => this.inMatch(accountId) ? { in_match: true } : this.store.analysisConsume(accountId, utcDay(), ANALYSIS_FREE_PER_DAY));
         if (!this.ready(ws, revision)) return;
         if (r.in_match || this.inMatch(accountId)) return denyInMatch();
         if (r.not_configured) return this.send(ws, { type: 'analysis_denied', code: 'not_configured', message: 'Análise ainda não configurada no servidor (migração 0005 pendente).' });
         if (!r.ok) return this.send(ws, { type: 'analysis_denied', code: 'quota', used: r.used, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight(), message: 'Você usou suas análises gratuitas de hoje.' });
+        this.grantAnalysis(accountId);
         return this.send(ws, { type: 'analysis_granted', unlimited: false, used: r.used, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight() });
       }
       // R169 · TREINE SEUS ERROS: 3 treinos por dia (UTC) sem Club; Club e Fundador = ilimitado.
@@ -607,8 +710,16 @@ class Backend {
       }
       if (a === 'analysis_record') {
         if (!ws.profile) return;
-        const sum = m.summary && typeof m.summary === 'object' ? m.summary : null;
+        // R170 · SEC-004: só depois de uma análise liberada pelo servidor, fora de partida humana, formato conferido,
+        // 1 registro por partida e teto diário por conta. Recusa é silenciosa (o histórico local do jogo continua).
+        if (this.inMatch(accountId)) return;
+        const sum = Backend.cleanAnalysis(m.summary);
         if (!sum) return;
+        const dedupe = accountId + '|' + sum.mode + '|' + sum.played_at;
+        if (this.analysisSaved.map.has(dedupe) && this.now() - this.analysisSaved.map.get(dedupe).start < 24 * 3600e3) return;
+        if (!this.takeAnalysisGrant(accountId)) return;
+        if (!this.analysisDaily.hit(accountId)) return;
+        this.analysisSaved.hit(dedupe);
         try { await op.wait(() => this.store.saveAnalysis(accountId, sum)); } catch (e) { /* histórico é opcional (0005) */ }
         return;
       }
