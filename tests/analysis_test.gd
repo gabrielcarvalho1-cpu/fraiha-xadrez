@@ -209,8 +209,8 @@ func run():
     check(tr != null and tr.visible and node("ExerciseTitle") != null and node("ExerciseTitle").text.begins_with("EXERCÍCIO 1 DE"), "EXERCÍCIO 1 DE N")
     var epos = Notation.from_fen(String(rep.moves[tr.exercises[0]].fen_before))
     tr.board.move_tried.emit(epos.legal_moves()[0])
-    check(await wait_until(func(): return node("Verdict") != null, 30.0), "exercício avaliado")
-    check(node("NextBtn") != null or node("RetryBtn") != null, "feedback com próximo/tentar novamente")
+    check(await wait_until(func(): return node("TrainingStars") != null or node("TrainingWhy") != null, 30.0), "exercício avaliado (R169: estrelas ou o porquê do erro)")
+    check(node("TrainingHint") != null and node("TrainingShow") != null and node("TrainingSkip") != null, "ajuda em 3 degraus: DICA, MOSTRAR LANCE, PRÓXIMO")
     press("TrainingBack")
     check(not tr.visible, "treino fecha")
     # histórico

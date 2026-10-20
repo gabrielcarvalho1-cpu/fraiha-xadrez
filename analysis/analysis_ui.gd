@@ -410,6 +410,25 @@ func _class_effect(cls: String):
             tw.tween_property(target, "position:x", p.x, 0.04)
             tw.tween_property(target, "modulate", Color.WHITE, 0.4)
 
+## R169 · contador e aviso do limite de treinos
+func _train_counter_text() -> String:
+    var st = get_parent()
+    var acc = st.get("training_access") if st != null else null
+    if acc == null: return ""
+    if acc.club_unlimited(): return "TREINOS: ILIMITADO (Club / Fundador)"
+    return "TREINOS GRÁTIS HOJE: %d / %d" % [int(acc.used), int(acc.limit)]
+
+func refresh_train_counter():
+    var n = find_child("TrainCounter", true, false)
+    if n != null: n.text = _train_counter_text()
+
+func train_denied(msg: String):
+    refresh_train_counter()
+    var n = find_child("TrainDenied", true, false)
+    if n == null: return
+    n.text = msg + " Assine o Club FRAIHA para treinar sem limite." if msg.find("treino") >= 0 else msg
+    n.visible = true
+
 # ---------------------------------------------------------------- relatório
 func _page_report():
     trying = false
@@ -703,6 +722,13 @@ func _page_report():
     tb.disabled = trainable.is_empty()
     tb.pressed.connect(func(): train_requested.emit(report))
     tv.add_child(tb)
+    # R169 · limite como o da análise: 3 treinos grátis por dia (Club/Fundador ilimitado)
+    var tc := Art.label(tv, _train_counter_text(), fs(14), Art.MUTED)
+    tc.name = "TrainCounter"
+    var td := Art.label(tv, "", fs(15), Color("f2a070"))
+    td.name = "TrainDenied"
+    td.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    td.visible = false
     var tail := Control.new()
     tail.custom_minimum_size.y = 30
     column.add_child(tail)

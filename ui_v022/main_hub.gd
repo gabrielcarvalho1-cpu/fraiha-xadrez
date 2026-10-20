@@ -3323,6 +3323,9 @@ func refresh_founder():
         if not badge.is_empty(): parts.append(String(Cosmetics.BADGE_NAMES.get(badge, "")))
         parts.append("Pacote Fundador" if is_founder() else "Club FRAIHA")
         founder_sub_label.text = " · ".join(parts)
+    if is_instance_valid(ref_title_label):
+        ref_title_label.text = Cosmetics.title_text(title) if not title.is_empty() else ""
+        ref_title_label.visible = not title.is_empty() and ref_mode
     if is_instance_valid(ref_founder_badge):
         ref_founder_badge.texture = Cosmetics.badge_texture(badge)
         ref_founder_badge.tooltip_text = String(Cosmetics.BADGE_NAMES.get(badge, "")) + ("  ·  " + Cosmetics.title_text(title) if not title.is_empty() else "")
@@ -3608,6 +3611,7 @@ var ref_hovers := {}
 var ranked_extras: Array = []
 
 var ref_league_label: Label
+var ref_title_label: Label   # R169 · título (Loja de Coroas / Fundador / Club) embaixo da barra de PL no cartão da Home
 var ref_league_fill: ColorRect
 var desk_league_label: Label
 var desk_league_bar: Control
@@ -4048,6 +4052,21 @@ func _build_reference_chrome():
     _single_line(league)
     league.position = PROFILE_LEAGUE.position - pbtn.position
     league.size = PROFILE_LEAGUE.size
+    ref_title_label = Label.new()
+    ref_title_label.name = "RefTitle"
+    ref_title_label.add_theme_font_override("font", PROFILE_LEAGUE_FONT)
+    ref_title_label.add_theme_font_size_override("font_size", 15)
+    ref_title_label.add_theme_color_override("font_color", Color("f6d27a"))
+    ref_title_label.add_theme_color_override("font_outline_color", Color(0.04, 0.03, 0.01, 0.85))
+    ref_title_label.add_theme_constant_override("outline_size", 3)
+    ref_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    ref_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    ref_title_label.clip_text = true
+    ref_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ref_title_label.position = Vector2(PROFILE_BAR.position.x - 6, PROFILE_BAR.end.y + 1) - pbtn.position
+    ref_title_label.size = Vector2(PROFILE_BAR.size.x + 12, 20)
+    ref_title_label.visible = false
+    pbtn.add_child(ref_title_label)
     var fill = ColorRect.new()
     fill.color = Color("f2bd3c")
     fill.position = PROFILE_BAR.position - pbtn.position   # R55: dentro do trilho da barra da arte nova

@@ -20,6 +20,16 @@ var resets_at := ""
 var known := false            # já recebeu estado do servidor?
 var dev_local := false        # cota local de desenvolvimento (sem servidor)
 var _waiting := false
+## R169 · a mesma cota serve para o TREINE SEUS ERROS (kind = "train": train_status/request → train_*).
+var kind := "analysis"
+var noun := ["ANÁLISE", "ANÁLISES"]
+
+func _init(p_kind := "analysis"):
+    kind = p_kind
+    if kind == "train": noun = ["TREINO", "TREINOS"]
+
+func _dev_file() -> String:
+    return DEV_FILE if kind == "analysis" else "user://dev_%s_quota.cfg" % kind
 
 func setup(acc, ent):
     account = acc
@@ -32,24 +42,24 @@ func setup(acc, ent):
 
 func _on_account_changed():
     if account != null and account.has_profile() and account.server_ready:
-        account.send_server({"type": "analysis_status"})
+        account.send_server({"type": kind + "_status"})
     else:
         _load_dev()
 
 func _on_server(msg: Dictionary):
     var t := String(msg.get("type", ""))
-    if t == "analysis_state":
+    if t == kind + "_state":
         _apply(msg)
         dev_local = false
         known = true
         state_changed.emit()
-    elif t == "analysis_granted":
+    elif t == kind + "_granted":
         _apply(msg)
         known = true
         _waiting = false
         state_changed.emit()
         granted.emit(bool(msg.get("unlimited", false)))
-    elif t == "analysis_denied":
+    elif t == kind + "_denied":
         if msg.has("used"): _apply(msg)
         _waiting = false
         state_changed.emit()
@@ -77,6 +87,9 @@ func remaining() -> int:
 func status_line() -> String:
     if club_unlimited(): return "CLUB · ILIMITADO"
     var n := remaining()
+    if kind == "train":
+        if n == 0: return "VOCÊ USOU SEUS %d TREINOS GRÁTIS DE HOJE" % limit
+        return "%d %s GRÁTIS RESTANTE%s HOJE" % [n, noun[0] if n == 1 else noun[1], "" if n == 1 else "S"]
     if n == 0: return "VOCÊ USOU SUAS %d ANÁLISES GRATUITAS DE HOJE" % limit
     return "%d %s GRATUITA%s RESTANTE%s HOJE" % [n, "ANÁLISE" if n == 1 else "ANÁLISES", "" if n == 1 else "S", "" if n == 1 else "S"]
 
@@ -97,7 +110,7 @@ func request():
     if _waiting: return
     if account != null and account.has_profile() and account.server_ready and not dev_local:
         _waiting = true
-        if not account.send_server({"type": "analysis_request"}):
+        if not account.send_server({"type": kind + "_request"}):
             _waiting = false
             denied.emit("offline", "Sem conexão com o servidor. Tente novamente.")
         return
@@ -107,7 +120,7 @@ func request():
         granted.emit(true)
         return
     if used >= limit:
-        denied.emit("quota", "Você usou suas %d análises gratuitas de hoje." % limit)
+        denied.emit("quota", ("Você usou seus %d treinos grátis de hoje." if kind == "train" else "Você usou suas %d análises gratuitas de hoje.") % limit)
         return
     used += 1
     _save_dev()
@@ -123,7 +136,7 @@ func _load_dev():
     limit = FREE_PER_DAY
     unlimited = false
     resets_at = ""
-    if cfg.load(DEV_FILE) == OK and String(cfg.get_value("dev", "day", "")) == today:
+    if cfg.load(_dev_file()) == OK and String(cfg.get_value("dev", "day", "")) == today:
         used = int(cfg.get_value("dev", "used", 0))
     known = true
     state_changed.emit()
@@ -132,7 +145,7 @@ func _save_dev():
     var cfg := ConfigFile.new()
     cfg.set_value("dev", "day", Time.get_date_string_from_system(true))
     cfg.set_value("dev", "used", used)
-    cfg.save(DEV_FILE)
+    cfg.save(_dev_file())
 
 ## RESET DEV (ferramentas de desenvolvimento).
 func dev_reset():

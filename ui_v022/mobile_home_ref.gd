@@ -64,6 +64,7 @@ var portrait: TextureRect
 var club_host: Control
 var name_text
 var league_text
+var title_text   # R169 · título escolhido em PERSONALIZAR, embaixo da barra de PL
 var bar_fill: ColorRect
 var badge: TextureRect
 var badge_plate: TextureRect
@@ -282,6 +283,11 @@ func _build_top():
     bar_fill.size = Vector2(0, BAR.size.y)
     bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
     top.add_child(bar_fill)
+    title_text = RefText.make("", Rect2(298, 630, 296, 14), "default", Color("f6d27a"), true)
+    title_text.name = "RefTitle"
+    title_text.outline_size = 2
+    title_text.visible = false
+    top.add_child(title_text)
     # R86 · sem placa lisa: o pedaço do cartão com o escudo de madeira apagado cobre a arte, e o elo recortado
     # (sem o quadrado escuro) fica por cima com um brilho suave pulsando atrás
     badge_plate = TextureRect.new()
@@ -396,6 +402,10 @@ func refresh():
     var ltxt := "%s · %d / 100 PL" % [league.display_name, int(data.lp)]
     if league_text.text != ltxt: league_text.set_text(ltxt)
     bar_fill.size.x = BAR.size.x * clampf(float(data.lp) / 100.0, 0.0, 1.0)
+    if title_text != null and hub.has_method("current_title"):
+        var tt := preload("res://profile/premium_cosmetics.gd").title_text(hub.current_title())
+        if title_text.text != tt: title_text.set_text(tt)
+        title_text.visible = not tt.is_empty()
     portrait.texture = hub.avatar_texture()
     portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if hub.avatar_id == "warrior" else TextureRect.STRETCH_KEEP_ASPECT_COVERED
     hub.attach_club_frame(club_host)
@@ -419,7 +429,7 @@ func refresh():
 func _process(_delta):
     # nome/liga podem mudar fora da Home (conta, Ranked): confere barato enquanto aparece
     if is_visible_in_tree() and hub != null:
-        var key := "%s|%s|%s|%s" % [hub.player_name, hub.league_profile.data.current_league, hub.league_profile.data.lp, hub.avatar_id]
+        var key := "%s|%s|%s|%s|%s|%s" % [hub.player_name, hub.league_profile.data.current_league, hub.league_profile.data.lp, hub.avatar_id, hub.title_pref, hub.frame_pref]
         if key != _shown:
             _shown = key
             refresh()

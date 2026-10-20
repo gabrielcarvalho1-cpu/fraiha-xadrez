@@ -226,6 +226,14 @@ func _message_row(m: Dictionary, mine: bool) -> Control:
 	line.add_text(String(m.get("nickname", "Jogador")))
 	line.pop()
 	line.pop()
+	# R169 · título escolhido (Loja / Fundador / Club) do lado do nome
+	var ttl := preload("res://profile/premium_cosmetics.gd").title_text(String(m.get("title", "")))
+	if not ttl.is_empty():
+		line.push_color(Color("f6d27a"))
+		line.push_font_size(ts(13))
+		line.add_text("  · " + ttl)
+		line.pop()
+		line.pop()
 	line.push_color(DIM)
 	line.add_text("  " + _hour(String(m.get("ts", ""))) + "\n")
 	line.pop()

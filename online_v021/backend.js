@@ -37,6 +37,7 @@ const AUTH_TIMEOUT_MS = 10e3;
 const CANCELLED = Symbol('session_cancelled');
 // Análise pós-partida: contas sem Club têm N análises por dia (dia UTC, relógio do servidor).
 const ANALYSIS_FREE_PER_DAY = Number(process.env.FRAIHA_ANALYSIS_FREE_PER_DAY || 3);
+const TRAIN_FREE_PER_DAY = Number(process.env.FRAIHA_TRAIN_FREE_PER_DAY || 3);   // R169 · TREINE SEUS ERROS
 // R44 · fase de testes: SEM LIMITE (0 = livre para todos). Para voltar a limitar: FRAIHA_MARCHA_FREE_PER_DAY=N no Render.
 const MARCHA_FREE_PER_DAY = Number(process.env.FRAIHA_MARCHA_FREE_PER_DAY || 0);   // R32: Marcha Real sem Club
 const utcDay = () => new Date().toISOString().slice(0, 10);
@@ -584,6 +585,25 @@ class Backend {
         if (r.not_configured) return this.send(ws, { type: 'analysis_denied', code: 'not_configured', message: 'Análise ainda não configurada no servidor (migração 0005 pendente).' });
         if (!r.ok) return this.send(ws, { type: 'analysis_denied', code: 'quota', used: r.used, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight(), message: 'Você usou suas análises gratuitas de hoje.' });
         return this.send(ws, { type: 'analysis_granted', unlimited: false, used: r.used, limit: ANALYSIS_FREE_PER_DAY, resets_at: nextUtcMidnight() });
+      }
+      // R169 · TREINE SEUS ERROS: 3 treinos por dia (UTC) sem Club; Club e Fundador = ilimitado.
+      // O contador mora no mesmo lugar dos contadores diários das Coroas (crown_daily, chave "train"): sem migração nova.
+      if (a === 'train_status' || a === 'train_request') {
+        const kindOut = a === 'train_request' ? 'train_granted' : 'train_state';
+        if (!ws.profile) return this.send(ws, a === 'train_request'
+          ? { type: 'train_denied', code: 'auth_required', message: 'Entre na sua conta para treinar seus erros.' }
+          : { type: 'train_state', unlimited: false, used: 0, limit: TRAIN_FREE_PER_DAY, resets_at: nextUtcMidnight(), guest: true });
+        const ent = await this.checked(ws, revision, this.store.getEntitlements(accountId));
+        if (!this.ready(ws, revision)) return;
+        if (ent.club_active || ent.is_founder) return this.send(ws, { type: kindOut, unlimited: true, used: 0, limit: 0, resets_at: null });
+        const day = utcDay();
+        let used = 0;
+        try { used = Number(((await op.wait(() => this.store.crownDaily(accountId, day))) || {}).train || 0); }
+        catch (e) { return this.send(ws, { type: kindOut, unlimited: false, used: 0, limit: TRAIN_FREE_PER_DAY, resets_at: nextUtcMidnight(), soft: true }); }   // sem a 0016: não trava o treino
+        if (a === 'train_status') return this.send(ws, { type: 'train_state', unlimited: false, used, limit: TRAIN_FREE_PER_DAY, resets_at: nextUtcMidnight() });
+        if (used >= TRAIN_FREE_PER_DAY) return this.send(ws, { type: 'train_denied', code: 'quota', used, limit: TRAIN_FREE_PER_DAY, resets_at: nextUtcMidnight(), message: `Você usou seus ${TRAIN_FREE_PER_DAY} treinos grátis de hoje.` });
+        try { const c = await op.wait(() => this.store.crownBump(accountId, day, { train: 1 })); used = Number((c && c.train) || used + 1); } catch (e) { used += 1; }
+        return this.send(ws, { type: 'train_granted', unlimited: false, used, limit: TRAIN_FREE_PER_DAY, resets_at: nextUtcMidnight() });
       }
       if (a === 'analysis_record') {
         if (!ws.profile) return;

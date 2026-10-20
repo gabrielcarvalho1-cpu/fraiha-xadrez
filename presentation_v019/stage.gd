@@ -60,6 +60,9 @@ var result_overlay             # presentation_v019/game_result_overlay.gd (VITÓ
 var analysis_engine            # analysis/engine.gd
 var reward_modal               # bot/reward_modal.gd
 var analysis_access            # analysis/analysis_access.gd
+var training_access            # R169 · mesma cota, para o TREINE SEUS ERROS
+var _training_pending := {}
+var _training_paid := {}       # treinos já liberados nesta sessão (abrir de novo a mesma partida não gasta outro)
 var analysis_ui = null
 var training_ui = null
 var analysis_history           # analysis/analysis_history.gd
@@ -1515,6 +1518,12 @@ func _setup_analysis():
     analysis_access.name = "AnalysisAccess"
     add_child(analysis_access)
     analysis_access.setup(account, hub.entitlements)
+    training_access = preload("res://analysis/analysis_access.gd").new("train")   # R169 · 3 treinos grátis por dia
+    training_access.name = "TrainingAccess"
+    add_child(training_access)
+    training_access.setup(account, hub.entitlements)
+    training_access.granted.connect(func(_u): _training_granted())
+    training_access.denied.connect(func(_c, msg): if analysis_ui != null and analysis_ui.has_method("train_denied"): analysis_ui.train_denied(msg))
     analysis_history = preload("res://analysis/analysis_history.gd").new()
     analysis_history.name = "AnalysisHistory"
     add_child(analysis_history)
@@ -1656,6 +1665,22 @@ func open_training_moves(moves: Array) -> bool:
     return true
 
 func open_training(report: Dictionary):
+    var key := str(report.get("played_at", report.get("started_at", ""))) + "|" + str(report.get("moves", []).size())
+    if _training_paid.has(key) or training_access == null:
+        _open_training_now(report)
+        return
+    _training_pending = {"report": report, "key": key}
+    training_access.request()
+
+func _training_granted():
+    if _training_pending.is_empty(): return
+    var rep: Dictionary = _training_pending.report
+    _training_paid[_training_pending.key] = true
+    _training_pending = {}
+    _open_training_now(rep)
+    if analysis_ui != null and analysis_ui.has_method("refresh_train_counter"): analysis_ui.refresh_train_counter()
+
+func _open_training_now(report: Dictionary):
     if training_ui == null:
         training_ui = preload("res://analysis/training_ui.gd").new(analysis_engine)
         add_child(training_ui)

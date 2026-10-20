@@ -266,6 +266,9 @@ func _fill_emotes():
         var eid := String(e.id)
         var b := _small(emote_row, String(e.text), func(): send_emote(eid))
         b.name = "Emote_" + eid
+        var fxi = preload("res://social/emote_fx.gd").make(eid, 30.0)   # R169 · prévia animada do emote no botão
+        fxi.position = Vector2(6, 6)
+        b.add_child(fxi)
         b.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
         b.add_theme_font_size_override("font_size", 15 if Mobile.active(get_viewport()) else 18)
         b.custom_minimum_size.y = 42
@@ -275,7 +278,7 @@ func _fill_emotes():
             st.border_color = Color("c99a45") if pair[0] == "normal" else GOLD
             st.set_border_width_all(2)
             st.set_corner_radius_all(6)
-            st.content_margin_left = 12
+            st.content_margin_left = 42
             st.content_margin_right = 12
             b.add_theme_stylebox_override(pair[0], st)
         b.add_theme_color_override("font_color", GOLD)
@@ -297,7 +300,7 @@ func send_emote(id: String):
         _show_status("Sem conexão. Tente de novo em instantes.")
 
 ## balão grande por cima do jogo (2,5 s) — o emote "fala" sem precisar olhar o chat
-func show_bubble(text: String, mine: bool, who: String):
+func show_bubble(text: String, mine: bool, who: String, emote_id := ""):
     if bubble_layer == null:
         bubble_layer = Control.new()
         bubble_layer.name = "EmoteBubbles"
@@ -324,15 +327,23 @@ func show_bubble(text: String, mine: bool, who: String):
     n.add_theme_font_size_override("font_size", 14)
     n.add_theme_color_override("font_color", Color("bcd4ff"))
     v.add_child(n)
+    # R169 · ícone animado do emote ao lado da frase (cavalo pulando, coroa girando…)
+    var line := HBoxContainer.new()
+    line.alignment = BoxContainer.ALIGNMENT_CENTER
+    line.add_theme_constant_override("separation", 14)
+    v.add_child(line)
+    if not emote_id.is_empty():
+        line.add_child(preload("res://social/emote_fx.gd").make(emote_id, 44.0 if Mobile.active(get_viewport()) else 64.0))
     var l := Label.new()
     l.text = text
+    l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     l.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
     l.add_theme_font_size_override("font_size", 24 if Mobile.active(get_viewport()) else 36)
     l.add_theme_color_override("font_color", GOLD)
     l.add_theme_color_override("font_outline_color", Color(0.1, 0.05, 0.0))
     l.add_theme_constant_override("outline_size", 5)
-    v.add_child(l)
+    line.add_child(l)
     bubble_layer.add_child(p)
     var vs := get_viewport().get_visible_rect().size
     var sz := p.get_combined_minimum_size()
@@ -365,7 +376,7 @@ func _on_message(msg: Dictionary):
             if not (muted and String(msg.get("from_color", "")) != my_color):
                 _add_line(msg)
                 if msg.has("emote"):   # R119
-                    show_bubble(String(msg.get("text", "")), String(msg.get("from_color", "")) == my_color, String(msg.get("nickname", "")))
+                    show_bubble(String(msg.get("text", "")), String(msg.get("from_color", "")) == my_color, String(msg.get("nickname", "")), String(msg.get("emote", "")))
                 if String(msg.get("from_color", "")) != my_color and not _visible_now():
                     unread += 1
                     _refresh_toggle()

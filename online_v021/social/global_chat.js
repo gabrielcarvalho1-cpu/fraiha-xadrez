@@ -5,6 +5,7 @@
 // Mesmas regras do chat da partida (texto limpo, 200 caracteres, sem spam/rajada) + intervalo mínimo próprio.
 // DENUNCIAR: registra no log do servidor (quem, qual mensagem) para moderação; SILENCIAR é só no aparelho.
 const { clean } = require('../chat');
+const { look } = require('../accounts/cosmetics');
 const HISTORY = 80;          // por canal
 // R168 · CANAIS (abas): GERAL, PROCURANDO PARCEIROS (achar gente para jogar) e DÚVIDAS E AJUDA.
 const CHANNELS = ['geral', 'parceiros', 'ajuda'];
@@ -52,7 +53,8 @@ class GlobalChat {
       this.members.add(ws);
       const p = ws.profile;
       const channel = CHANNELS.includes(String(m.channel || '')) ? String(m.channel) : 'geral';
-      const entry = { id: ++this.seq, channel, user_id: uid, nickname: String(p.nickname || 'Jogador'), avatar_id: String(p.avatar_id || ''),
+      const lk = look(p);   // R169 · título (e selo) aparecem ao lado do nome no chat global
+      const entry = { id: ++this.seq, channel, user_id: uid, nickname: String(p.nickname || 'Jogador'), avatar_id: String(p.avatar_id || ''), title: lk.title, badge: lk.badge,
         text: c.text, ts: new Date(now).toISOString() };
       this.messages.push(entry);
       // guarda as últimas HISTORY de CADA canal (um canal movimentado não apaga os outros)
