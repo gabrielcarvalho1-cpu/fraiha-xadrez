@@ -656,6 +656,7 @@ func _sync_theme_unlocks():
 func _open_ranked():
     if account.has_profile():
         bot_controller.stop()
+        if match_chat != null and match_chat.local_mode: match_chat.unbind()   # R169
         online.cancel_connection()
         hub.hide_hub()
         mode = "ranked_lobby"
@@ -688,6 +689,7 @@ func _open_friends():
 
 func _open_casual():
     bot_controller.stop()
+    if match_chat != null and match_chat.local_mode: match_chat.unbind()   # R169
     online.cancel_connection()
     hub.hide_hub()
     mode = "casual_lobby"
@@ -879,7 +881,7 @@ func _process(delta):
     mobile_restart.text = "Desistir" if mode in ["ranked", "casual"] else "Reiniciar"
     _refresh_analysis_buttons()
     if match_chat != null:
-        var want_chat = mobile and mode in ["ranked", "casual"] and match_chat.active()
+        var want_chat = mobile and mode in ["ranked", "casual", "bot"] and match_chat.active()
         if match_chat.toggle_button.visible != want_chat:
             match_chat.toggle_button.visible = want_chat
             _layout.call_deferred()
@@ -985,6 +987,7 @@ func refresh_player_card():
 
 func _start_local():
     bot_controller.stop()
+    if match_chat != null and match_chat.local_mode: match_chat.unbind()   # R169
     hub.hide_hub()
     online.cancel_connection()
     online.start_local()
@@ -997,6 +1000,7 @@ func _start_local():
 
 func _open_online():
     bot_controller.stop()
+    if match_chat != null and match_chat.local_mode: match_chat.unbind()   # R169
     hub.hide_hub()
     mode = "online_menu"
     game.hide()
@@ -1019,8 +1023,10 @@ func _start_bot(difficulty: String, side: String):
     bot_side_name = "BRANCAS" if bot_controller.human_color == "w" else "PRETAS"
     if recorder != null: recorder.begin("bot", bot_controller.human_color, hub.player_name, bot_level_name if not ladder_bot.is_empty() else "Computador · " + bot_level_name)
     _refresh_bot_caption()
+    if match_chat != null: match_chat.bind_local(bot_level_name if not ladder_bot.is_empty() else "Computador", bot_controller.human_color)   # R169 · chat/emotes de teste contra o bot
     _clear_selection()
     _refresh_input()
+    _layout()
 
 func _room_joined():
     mode = "online"
@@ -1156,6 +1162,7 @@ func _confirm_navigation():
         return
     online.cancel_connection()
     bot_controller.stop()
+    if match_chat != null and match_chat.local_mode: match_chat.unbind()   # R169
     if mode == "ranked" and ranked.in_match(): ranked.resign()
     if mode == "casual" and casual.in_match(): casual.resign()
     if pending_navigation == "quit":

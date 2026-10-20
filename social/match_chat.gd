@@ -35,6 +35,12 @@ const Cosmetics := preload("res://profile/premium_cosmetics.gd")
 var emote_button: Button
 var emote_row: HFlowContainer
 var bubble_layer: Control
+## R169 · CHAT CONTRA O COMPUTADOR (fase de testes): o mesmo chat e os mesmos EMOTES funcionam na partida contra
+## o bot, só no aparelho (nada vai ao servidor). O bot responde com um emote de vez em quando.
+var local_mode := false
+var local_name := "Computador"
+class LocalMarker extends RefCounted:
+    pass
 
 func setup(service):
     account = service
@@ -160,7 +166,46 @@ func _small(parent: Node, text: String, action: Callable) -> Button:
     return b
 
 # ---------- Ciclo de vida ----------
+func bind_local(bot_name: String, human_color: String):
+    local_mode = true
+    local_name = bot_name if not bot_name.is_empty() else "Computador"
+    controller = LocalMarker.new()
+    match_id = "local_%d" % Time.get_ticks_msec()
+    my_color = human_color
+    muted = false
+    unread = 0
+    messages.clear()
+    _rebuild()
+    status.hide()
+    report_button.hide()
+    mute_button.text = "SILENCIAR"
+    open_mobile = false
+    panel.show()
+    _local_receive({"from_color": "b" if my_color == "w" else "w", "nickname": local_name, "text": "Boa partida! (chat de teste: só no seu aparelho)"})
+    layout_needed.emit()
+
+func _local_receive(m: Dictionary):
+    var msg := m.duplicate()
+    msg["type"] = "chat_msg"
+    msg["match_id"] = match_id
+    _on_message(msg)
+
+## o que eu mando contra o bot: aparece na hora; o bot responde com um emote às vezes
+func _local_post(text: String, emote_id := ""):
+    var m := {"from_color": my_color, "nickname": "Você", "text": text}
+    if not emote_id.is_empty(): m["emote"] = emote_id
+    _local_receive(m)
+    if randf() < (0.8 if not emote_id.is_empty() else 0.4):
+        var mid := match_id
+        var replies: Array = ShopCatalog.FREE_EMOTES
+        var r: Dictionary = replies[randi() % replies.size()]
+        get_tree().create_timer(1.4).timeout.connect(func():
+            if local_mode and match_id == mid:
+                _local_receive({"from_color": "b" if my_color == "w" else "w", "nickname": local_name, "text": String(r.text), "emote": String(r.id)}))
+
 func bind(ranked_controller):
+    local_mode = false
+    report_button.show()
     controller = ranked_controller
     var new_id = String(controller.match_id)
     if new_id != match_id:
@@ -182,6 +227,7 @@ func bind(ranked_controller):
 
 func unbind():
     controller = null
+    local_mode = false
     open_mobile = false
     panel.hide()
     if restore_button != null: restore_button.hide()
@@ -196,6 +242,10 @@ func send_current():
     if text.is_empty() or match_id.is_empty(): return
     if text.length() > MAX_LEN:
         _show_status("Mensagem longa demais (máx. %d caracteres)." % MAX_LEN)
+        return
+    if local_mode:
+        _local_post(text)
+        input.clear()
         return
     if account.send_server({"type": "chat_send", "match_id": match_id, "text": text}):
         input.clear()
@@ -233,6 +283,13 @@ func _fill_emotes():
 
 func send_emote(id: String):
     if match_id.is_empty(): return
+    if local_mode:
+        var t := ""
+        for e in ShopCatalog.my_emotes(Cosmetics.shop_owned):
+            if String(e.id) == id: t = String(e.text)
+        if not t.is_empty(): _local_post(t, id)
+        emote_row.hide()
+        return
     if account.send_server({"type": "chat_emote", "match_id": match_id, "id": id}):
         emote_row.hide()
         status.hide()

@@ -76,6 +76,7 @@ static func modal(canvas: Control, bg_name: String, ref_size: Vector2, design: V
 static func text(parent: Control, t: String, rect: Rect2, px: int, color: Color, serif := false, align := HORIZONTAL_ALIGNMENT_CENTER, bold := true) -> Label:
     var l := Label.new()
     l.text = t
+    l.set_meta("box", rect.size)   # R169 · tamanho pedido (o Label cresce com o texto antes do clip_text valer)
     l.position = rect.position
     l.size = rect.size
     l.horizontal_alignment = align

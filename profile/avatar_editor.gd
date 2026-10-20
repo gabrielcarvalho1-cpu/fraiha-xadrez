@@ -1,6 +1,6 @@
 extends CanvasLayer
 ## Editor de foto de perfil: mover (arrastar), zoom (barra, roda do mouse ou pinça),
-## centralizar, prévia redonda, CANCELAR / SALVAR FOTO. Ao salvar: recorta o quadrado
+## centralizar, prévia QUADRADA com a moldura em uso (R169), CANCELAR / SALVAR FOTO. Ao salvar: recorta o quadrado
 ## enquadrado, redimensiona para 512x512, comprime em WebP (≤ 400 KB), grava no cache local
 ## e envia ao servidor quando há conta (acct_avatar_upload). Funciona com mouse e toque.
 signal saved(image: Image, bytes: PackedByteArray)
@@ -28,6 +28,11 @@ var touches := {}
 var pinch_start := 0.0
 var pinch_zoom := 1.0
 var preview_size := 320.0
+## R169 · a foto é enquadrada em QUADRADO dentro da moldura que o jogador usa (o círculo saiu)
+var frame_id := ""            # moldura em uso (main_hub.current_frame()); "" = só o filete dourado
+var league_id := "madeira"    # para a moldura "liga"
+var stage_box: CenterContainer
+var overlay: Control
 
 func _init():
     layer = 70
@@ -96,7 +101,15 @@ func _build():
     view.clip_contents = true
     view.draw.connect(_draw_view)
     view.gui_input.connect(_view_input)
-    v.add_child(view)
+    stage_box = CenterContainer.new()
+    stage_box.name = "AvatarStage"
+    stage_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    v.add_child(stage_box)
+    stage_box.add_child(view)
+    overlay = Control.new()   # a moldura por cima da prévia (sai para fora do quadrado; não recebe toque)
+    overlay.name = "AvatarFrameOverlay"
+    overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    stage_box.add_child(overlay)
     status = Art.label(v, "", 14, Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
     status.name = "AvatarStatus"
     var zrow := HBoxContainer.new()
@@ -139,11 +152,37 @@ func _build():
 
 func _layout():
     var vs := root.get_viewport_rect().size
-    preview_size = clampf(minf(vs.x - 80.0, vs.y - 300.0), 180.0, 360.0)
+    var k := 1.5 if _has_frame() else 1.0   # espaço para a moldura em volta
+    preview_size = clampf(minf((vs.x - 80.0) / k, (vs.y - 300.0) / k), 160.0, 330.0)
     view.custom_minimum_size = Vector2(preview_size, preview_size)
     view.size = view.custom_minimum_size
+    overlay.custom_minimum_size = view.custom_minimum_size
+    stage_box.custom_minimum_size = view.custom_minimum_size * k
     frame.custom_minimum_size.x = minf(vs.x - 24.0, 520.0)
     view.queue_redraw()
+
+func _has_frame() -> bool:
+    return not frame_id.is_empty() and frame_id != "none"
+
+## R169 · troca a moldura da prévia (chamado antes de abrir)
+func set_frame(fid: String, league := "madeira"):
+    frame_id = fid
+    league_id = league
+    if overlay == null: return
+    for c in overlay.get_children():
+        overlay.remove_child(c)
+        c.queue_free()
+    if _has_frame():
+        var f
+        if fid == "liga":
+            f = preload("res://profile/league_frame.gd").new()
+            f.league_id = league
+        else:
+            f = preload("res://monetization/club_frame.gd").new()
+            f.style = fid
+        f.name = "Frame"
+        overlay.add_child(f)
+    if visible: _layout()
 
 ## CENTRALIZAR: recoloca o centro da foto no centro do círculo (mantém o zoom).
 func center_photo():
@@ -188,26 +227,9 @@ func _draw_view():
     var r := _photo_rect()
     view.draw_rect(Rect2(Vector2.ZERO, view.size), Color(0.029, 0.043, 0.071))
     view.draw_texture_rect(source_tex, r, false)
-    # escurece fora do círculo (prévia de como fica no medalhão) e desenha a borda
-    var c := Vector2(preview_size, preview_size) / 2.0
-    var rad := preview_size / 2.0
-    var pts := PackedVector2Array()
-    for i in 64:
-        var a := TAU * i / 64.0
-        pts.append(c + Vector2(cos(a), sin(a)) * rad)
-    var outer := PackedVector2Array([Vector2(0, 0), Vector2(preview_size, 0), Vector2(preview_size, preview_size), Vector2(0, preview_size)])
-    # quatro cantos escurecidos (aproximação: polígono do quadrado menos círculo)
-    for i in 64:
-        var a0 := TAU * i / 64.0
-        var a1 := TAU * (i + 1) / 64.0
-        var p0 := c + Vector2(cos(a0), sin(a0)) * rad
-        var p1 := c + Vector2(cos(a1), sin(a1)) * rad
-        var far0 := c + Vector2(cos(a0), sin(a0)) * rad * 1.6
-        var far1 := c + Vector2(cos(a1), sin(a1)) * rad * 1.6
-        view.draw_colored_polygon(PackedVector2Array([p0, far0, far1, p1]), Color(0, 0, 0, 0.68))
-    view.draw_arc(c, rad - 1.0, 0, TAU, 96, Color("f1d58a"), 2.5)
-    view.draw_arc(c, rad - 6.0, 0, TAU, 96, Color(0.95, 0.84, 0.54, 0.35), 1.0)
-    view.draw_rect(Rect2(Vector2.ZERO, view.size), Color("c99a45"), false, 2.0)
+    # R169 · enquadramento QUADRADO: o que aparece aqui é exatamente o que fica no retrato (a moldura vem por cima)
+    if not _has_frame():
+        view.draw_rect(Rect2(Vector2.ZERO, view.size), Color("f1d58a"), false, 2.5)
 
 # ---------------------------------------------------------------- entrada
 func _view_input(event: InputEvent):

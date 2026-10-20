@@ -823,6 +823,7 @@ func _build_pages():
     ring.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
     dbox.add_child(ring)
+    avatar_detail["ring"] = ring
     var words: Control = avatar_detail.title.get_parent().get_parent()
     words.position = Vector2(200, 18)
     words.size = Vector2(410, 100)
@@ -1563,6 +1564,7 @@ func _refresh_avatar_detail_inner():
     if photo != null:
         avatar_detail.pic.texture = photo
         _detail_material(false)
+        _show_detail_frame(current_frame(), photo)
         avatar_detail.title.text = "SUA FOTO"
         avatar_detail.origin.text = "Foto enviada por você"
         avatar_detail.status.text = "EM USO no seu perfil"
@@ -1577,6 +1579,8 @@ func _refresh_avatar_detail_inner():
     var st: String = avatar_gallery.state_of(id)
     avatar_detail.pic.texture = avatar_texture(id) if AvatarCatalog.has_art(id) else null
     _detail_material(st == "locked")
+    # R169 · o avatar aparece QUADRADO dentro da moldura que o jogador usa (o círculo dourado saiu)
+    _show_detail_frame(current_frame(), avatar_detail.pic.texture, st == "locked")
     avatar_detail.title.text = String(e.get("name", id)).to_upper()
     var src := String(e.get("source", ""))
     avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else (avatar_lock_hint(id) if src in ["founder", "club", "shop", "pass"] else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot")))
@@ -1638,9 +1642,7 @@ func _refresh_frame_detail():
     var FG = preload("res://profile/frame_gallery.gd")
     var id: String = inspected_frame if not inspected_frame.is_empty() else cosmetic_pref("frame")
     var st: String = frame_gallery.state_of(id)
-    _show_detail_frame(frame_gallery.shown(id))
-    var holder: Control = avatar_detail.frame_slot
-    holder.modulate = Color(0.5, 0.5, 0.5) if st == "locked" else Color.WHITE
+    _show_detail_frame(frame_gallery.shown(id), null, st == "locked")
     avatar_detail.title.text = FG.display_name(id).to_upper()
     var req := Cosmetics.requirement("frame", id) if id != "auto" else ""
     avatar_detail.origin.text = ("Moldura em volta do seu retrato" if req.is_empty() else Cosmetics.lock_hint("frame", id))
@@ -1660,24 +1662,29 @@ func _refresh_frame_detail():
     b.text = "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR MOLDURA")
     b.disabled = st != "unlocked"
 
-## mostra o retrato com moldura (aba MOLDURAS) ou o círculo de sempre (fid vazio)
-func _show_detail_frame(fid: String):
+## R169 · retrato QUADRADO com a moldura `fid` (Avatares e Molduras) ou o círculo com o anel (Ícones, fid vazio).
+## tex: o que vai dentro (null = avatar/foto em uso); locked: cinza.
+func _show_detail_frame(fid: String, tex: Texture2D = null, locked := false):
     if not avatar_detail.has("frame_slot"): return
     var slot: Control = avatar_detail.frame_slot
-    slot.visible = not fid.is_empty()
-    avatar_detail.pic.visible = fid.is_empty()
-    if fid.is_empty() or String(slot.get_meta("fid", "")) == fid:
-        if not fid.is_empty():
-            var old = slot.get_node_or_null("Preview/FramePic")
-            if old != null: old.texture = avatar_texture()
-        return
-    for c in slot.get_children():
-        slot.remove_child(c)
-        c.queue_free()
-    var pv: Control = preload("res://profile/frame_gallery.gd").preview(self, fid, slot.size.x)
-    pv.name = "Preview"
-    slot.add_child(pv)
-    slot.set_meta("fid", fid)
+    var on := not fid.is_empty()
+    slot.visible = on
+    avatar_detail.pic.visible = not on
+    if avatar_detail.has("ring"): avatar_detail.ring.visible = not on
+    if not on: return
+    if String(slot.get_meta("fid", "")) != fid:
+        for c in slot.get_children():
+            slot.remove_child(c)
+            c.queue_free()
+        var pv: Control = preload("res://profile/frame_gallery.gd").preview(self, fid, slot.size.x)
+        pv.name = "Preview"
+        slot.add_child(pv)
+        slot.set_meta("fid", fid)
+    var pic = slot.get_node_or_null("Preview/FramePic")
+    if pic != null:
+        pic.texture = tex if tex != null else avatar_texture()
+        pic.material = avatar_gallery.gray_material() if locked and avatar_gallery != null else null
+    slot.modulate = Color(0.75, 0.75, 0.75) if locked else Color.WHITE
 
 func _refresh_avatars():
     if is_instance_valid(profile_portrait): profile_portrait.texture = slot_avatar_texture() if ref_mode else avatar_texture()
@@ -1952,16 +1959,27 @@ func _history_row_ref(e: Dictionary, st, mh) -> Control:
     var col: Color = Color("6fe07a") if res == "win" else (Color("ff5b5b") if lost else Color("f3d27e"))
     RefPage.text(row, res_txt, Rect2(120, 16, 300, 42), 29, col, false, HORIZONTAL_ALIGNMENT_LEFT)
     if mode == "bot":
-        RefPage.image(row, RefPage.tex("ico_computador"), Rect2(122, 58, 30, 26))
-        RefPage.text(row, "CONTRA COMPUTADOR", Rect2(158, 52, 236, 36), 16, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
+        var pc_ic := TextureRect.new()   # (com RefPage.image a imagem nascia no tamanho da textura e cobria o texto)
+        pc_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        pc_ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        pc_ic.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+        pc_ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        pc_ic.texture = RefPage.tex("ico_computador")
+        pc_ic.position = Vector2(120, 59)
+        pc_ic.size = Vector2(28, 24)
+        row.add_child(pc_ic)
+        _hist_fit(RefPage.text(row, "CONTRA COMPUTADOR", Rect2(156, 52, 214, 36), 16, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT))
     else:
-        RefPage.text(row, MH.mode_name(mode).to_upper(), Rect2(120, 52, 300, 36), 22, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
+        _hist_fit(RefPage.text(row, MH.mode_name(mode).to_upper(), Rect2(120, 52, 250, 36), 22, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT))
     RefPage.image(row, RefPage.tex(String(HIST_ICONS.get(mode, "ico_todas"))), Rect2(384, 16, 50, 46))
     var opp := String(e.get("opponent", ""))
     var d := Time.get_datetime_dict_from_unix_time(int(e.get("finished_at", e.get("started_at", 0))))
-    RefPage.text(row, ("vs  " + opp) if not opp.is_empty() and mode != "local" else MH.mode_name(mode), Rect2(460, 14, 330, 42), 26, Color("f1e6c8"), false, HORIZONTAL_ALIGNMENT_LEFT)
-    RefPage.text(row, "%02d/%02d/%d %02d:%02d" % [d.day, d.month, d.year, d.hour, d.minute], Rect2(460, 52, 330, 34), 21, Color("e7ddc4"), false, HORIZONTAL_ALIGNMENT_LEFT)
     var chess: bool = String(e.get("mode_id", MH.CHESS_MODE_ID)) == MH.CHESS_MODE_ID
+    # R169 · nomes longos (mesas de 4 da Marcha/Xeque) diminuem e terminam em "…" antes da próxima coluna
+    var name_l := RefPage.text(row, ("vs  " + opp) if not opp.is_empty() and mode != "local" else MH.mode_name(mode), Rect2(460, 14, 270, 42), 26, Color("f1e6c8"), false, HORIZONTAL_ALIGNMENT_LEFT)
+    _hist_fit(name_l, 20)
+    name_l.tooltip_text = opp
+    RefPage.text(row, "%02d/%02d/%d %02d:%02d" % [d.day, d.month, d.year, d.hour, d.minute], Rect2(460, 52, 270, 34), 21, Color("e7ddc4"), false, HORIZONTAL_ALIGNMENT_LEFT)
     var info := ""
     if chess:
         var white := String(e.get("color", "w")) != "b"
@@ -1976,15 +1994,21 @@ func _history_row_ref(e: Dictionary, st, mh) -> Control:
             info = "%d jogadas   ·   coroados %d x %d" % [int(e.get("plies", 0)), int(cr[0]) if cr.size() > 0 else 0, int(cr[1]) if cr.size() > 1 else 0]
     var rec = mh.record_of(e) if mh != null and chess else null
     var an: Dictionary = st.analysis_entry_for(rec) if chess and st != null and st.has_method("analysis_entry_for") else {}
-    if not an.is_empty(): info += "   ·   precisão %d%%" % int(round(float(an.get("accuracy", 0.0))))
-    RefPage.text(row, info, Rect2(806 if chess else 744, 28, 440, 42), 21, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
+    var can_review: bool = chess and not an.is_empty() and st.analysis_history != null and st.analysis_history.has_report(an)
+    # R169 · a informação termina ANTES do botão ANALISAR DE NOVO (antes passava por baixo dele)
+    var info_x := 806.0 if chess else 744.0
+    var info_end := 1028.0 if can_review else 1262.0
+    if not an.is_empty():
+        RefPage.text(row, info, Rect2(info_x, 12, info_end - info_x, 38), 21, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT)
+        _hist_fit(RefPage.text(row, "precisão %d%%" % int(round(float(an.get("accuracy", 0.0)))), Rect2(info_x, 50, info_end - info_x, 34), 19, Color("bfe8a8"), false, HORIZONTAL_ALIGNMENT_LEFT))
+    else:
+        _hist_fit(RefPage.text(row, info, Rect2(info_x, 28, info_end - info_x, 42), 21, Color("efe6cf"), false, HORIZONTAL_ALIGNMENT_LEFT))
     # botão da arte (moldura + lupa): o texto e o clique são do jogo
     var btn_r := Rect2(1273, 15, 215, 67)
     var txt_r := Rect2(1334, 15, 150, 67)
     if not chess:
         RefPage.text(row, "SEM ANÁLISE", txt_r, 17, Color("8c8a7e"), true)
         return row
-    var can_review: bool = not an.is_empty() and st.analysis_history != null and st.analysis_history.has_report(an)
     var main := RefPage.hotspot(row, btn_r, func():
         if can_review: st.open_history_report(an)
         elif rec != null: st.open_analysis_for(rec), "HistoryReview" if can_review else "HistoryAnalyze")
@@ -1996,6 +2020,31 @@ func _history_row_ref(e: Dictionary, st, mh) -> Control:
         az.name = "HistoryAnalyze"
         az.disabled = rec == null or rec.moves.size() < 2
     return row
+
+## R169 · texto da linha do histórico diminui até caber na própria coluna (nunca invade a vizinha)
+func _hist_fit(l: Label, min_px := 12):
+    l.clip_text = true
+    var box: Vector2 = l.get_meta("box", l.size)
+    var f: Font = l.get_theme_font("font")
+    var px := l.get_theme_font_size("font_size")
+    while px > min_px and f.get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > box.x - 4.0: px -= 1
+    l.add_theme_font_size_override("font_size", px)
+    if f.get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > box.x - 4.0:
+        var t := l.text
+        while t.length() > 1 and f.get_string_size(t + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > box.x - 4.0: t = t.substr(0, t.length() - 1)
+        l.text = t.strip_edges().trim_suffix(",") + "…"
+    # a caixa não cresce com o texto: o rótulo vai para dentro de um recorte do tamanho da coluna
+    var par := l.get_parent()
+    var clip := Control.new()
+    clip.clip_contents = true
+    clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    clip.position = l.position
+    clip.size = box
+    par.add_child(clip)
+    l.reparent(clip, false)
+    l.position = Vector2.ZERO
+    l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    l.size = box
 
 func _hist_btn_font(b: Button, px: int):
     b.add_theme_font_override("font", Kit.SERIF_BOLD)
@@ -4407,6 +4456,7 @@ func pick_photo():
     image_picker.open()
 
 func _on_photo_picked(bytes: PackedByteArray, _filename: String):
+    avatar_editor.set_frame(current_frame(), String(league_profile.data.current_league) if league_profile != null else "madeira")   # R169
     var err: String = avatar_editor.open_with(bytes)
     if not err.is_empty(): _avatar_message(err, true)
 

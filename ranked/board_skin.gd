@@ -476,7 +476,23 @@ func _apply_bot(M: Dictionary) -> void:
         if n != null: _rec(n, "visible", false)
     # sem chat contra o computador: o quadro do chat vira a lista de lances (escondo os controles do chat)
     var c = stage.match_chat
-    if c != null:
+    # R169 · fase de testes: chat/emotes também contra o bot (só no aparelho). PC: o quadro mostra o CHAT;
+    # minimizar (–) volta para a lista de LANCES e o botão CHAT reabre. Celular: a barra do chat funciona igual à online.
+    var local_chat: bool = c != null and c.get("local_mode") == true
+    if local_chat:
+        if kind != "pc":
+            var mv0 = stage.mobile_voice
+            if mv0 != null:
+                for n in [mv0.mic, mv0.ear]: _rec(n, "visible", false)
+            for i in range(hits.size() - 1, -1, -1):
+                if String(hits[i][2]) in ["mic", "ear"]: hits.remove_at(i)
+            if is_instance_valid(bot_moves): bot_moves.hide()
+            return
+        if not c.minimized:
+            if is_instance_valid(bot_moves): bot_moves.hide()
+            return
+        _rec(c.panel, "visible", false)
+    elif c != null:
         for n in [c.panel, c.restore_button]: _rec(n, "visible", false)
     if kind != "pc":
         # celular: sem voz e sem chat; a barra do chat vira a linha dos últimos lances
@@ -607,7 +623,7 @@ func _keep() -> void:
             ui.resign_button.position = R(PC.resign).position
     if kind == "mob":
         var cb: Button = mob_buttons.chatbar
-        cb.visible = stage.mode != "bot" and stage.match_chat != null and stage.match_chat.active()
+        cb.visible = stage.match_chat != null and (stage.mode != "bot" or stage.match_chat.local_mode) and stage.match_chat.active()
 
 ## Texto vivo maior que a caixa da arte: a fonte encolhe até caber (base = tamanho medido na referência).
 func _fit(l: Label, font: Font, base_fs: float) -> void:
