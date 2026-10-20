@@ -124,7 +124,7 @@ func _on_message(msg: Dictionary):
 			_rebuild()
 
 func unmute(uid: String):
-	var nick := String(muted.get(uid, ""))
+	var nick := str(muted.get(uid, "")) if muted.get(uid) is String else ""
 	muted.erase(uid)
 	status.text = "Você voltou a ver as mensagens de %s." % nick if nick != "" else ""
 	_rebuild()
@@ -137,7 +137,8 @@ func _rebuild_muted():
 	muted_bar.add_child(t)
 	for uid in muted:
 		var u := String(uid)
-		var b := button("%s  ·  REATIVAR" % String(muted[uid]), 13)
+		var nm = muted[uid]
+		var b := button("%s  ·  REATIVAR" % (nm if nm is String and nm != "" else "Jogador"), 13)
 		b.name = "GchatUnmute_" + u
 		b.pressed.connect(func(): unmute(u))
 		muted_bar.add_child(b)

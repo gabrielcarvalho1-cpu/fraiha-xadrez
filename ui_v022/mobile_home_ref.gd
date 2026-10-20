@@ -214,24 +214,29 @@ func _build_top():
     sound_button.set_frame(hub.TOP_FRAME_CEL, 16.0)   # R122 · moldura azul (antes: só o ícone sobre a arte)
     sound_button.pressed.connect(func(): hub.open_home_volume(sound_button))   # R96 · painel MÚSICA / EFEITOS
     top.add_child(sound_button)
-    # R96 · RANKING (troféu) e CHAT GLOBAL (balão) à esquerda do som, no mesmo tamanho
+    # R96 · RANKING (troféu) e CHAT GLOBAL (balão) à esquerda do som · R112 COROAS · R162 MENSAGENS (envelope)
+    # R162 · cinco botões na fileira de cima: um pouco mais estreitos (74) para caber ao lado do SEJA MEMBRO
+    var bw := 74.0
+    var gap := 6.0
+    var right := SOUND_RECT.end.x
+    var slot := func(i: int) -> Vector2: return Vector2(right - bw - (bw + gap) * i, SOUND_RECT.position.y)
+    sound_button.position = slot.call(0)
+    sound_button.size = Vector2(bw, SOUND_RECT.size.y)
     for spec in [["trophy", "Ranking", hub.open_leaderboard, 2], ["chat", "Chat global", hub.open_global_chat, 1]]:
         var tb: Button = hub.make_top_button(spec[0], spec[1], spec[2], SOUND_RECT.size.y)
-        tb.size = SOUND_RECT.size
-        tb.position = SOUND_RECT.position - Vector2((SOUND_RECT.size.x + 8.0) * int(spec[3]), 0)
+        tb.size = Vector2(bw, SOUND_RECT.size.y)
+        tb.position = slot.call(int(spec[3]))
         top.add_child(tb)
-    # R112 · COROAS: saldo à esquerda do troféu · R122: quadrado, do mesmo tamanho dos outros
-    var chip: Button = hub.crowns_client().make_chip(SOUND_RECT.size.y, SOUND_RECT.size.x)
+    var chip: Button = hub.crowns_client().make_chip(SOUND_RECT.size.y, bw)
     chip.set_frame(hub.TOP_FRAME_CEL, 16.0)   # R113 · mesma moldura do som
     chip.name = "CrownsTopButtonMobile"
-    chip.position = SOUND_RECT.position - Vector2((SOUND_RECT.size.x + 8.0) * 3.0, 0)
+    chip.position = slot.call(3)
     top.add_child(chip)
-    # R161 · OUTDOOR embaixo da logo: frase do Admin + símbolo de toque; abre NOVIDADES
-    var ticker: Button = hub.make_news_ticker(25, Color("011410"), Color("02241a"))
-    ticker.name = "NewsTickerMobile"
-    ticker.position = Vector2(224, 410)
-    ticker.size = Vector2(406, 39)
-    top.add_child(ticker)
+    var mail: Button = hub.make_mail_button(SOUND_RECT.size.y)
+    mail.name = "MailTopButtonMobile"
+    mail.size = Vector2(bw, SOUND_RECT.size.y)
+    mail.position = slot.call(4)
+    top.add_child(mail)
     # cartão do jogador (toque abre o Perfil)
     var card := _hit(top, CARD_RECT, "PERFIL", func(): hub.show_page("profile"))
     card.name = "RefProfileCard"

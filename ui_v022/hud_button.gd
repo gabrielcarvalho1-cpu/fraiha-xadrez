@@ -13,6 +13,11 @@ var icon_box := 54.0   # largura reservada ao ícone à esquerda (botões com te
 var sub_text := ""
 var sub_font: Font = null
 var sub_size := 14
+var badge := 0:   # R162 · bolinha vermelha com o número (mensagens não lidas)
+    set(v):
+        if badge != v:
+            badge = v
+            queue_redraw()
 
 ## R36 · Home v7: o quadrado (moldura dourada e fundo) já está na arte; o botão só desenha o ícone
 ## e uma luz suave no hover/clique.
@@ -202,6 +207,13 @@ func _draw():
                 var sh := PackedVector2Array()
                 for i in 13: sh.append(p + Vector2(0, r * 0.75 * k) + Vector2(cos(PI + PI * i / 12.0), sin(PI + PI * i / 12.0)) * r * 0.78 * k)
                 draw_colored_polygon(sh, col)
+        "mail":
+            # R162 · MENSAGENS: envelope fechado (aba em V)
+            var e := Rect2(center + Vector2(-r * 1.05, -r * 0.72), Vector2(r * 2.1, r * 1.44))
+            draw_rect(e, col)
+            draw_polyline(PackedVector2Array([e.position + Vector2(r * 0.08, r * 0.1), e.get_center() + Vector2(0, r * 0.12), Vector2(e.end.x - r * 0.08, e.position.y + r * 0.1)]), INK, w * 1.1)
+            draw_line(e.position + Vector2(r * 0.1, e.size.y - r * 0.12), e.get_center() + Vector2(-r * 0.25, r * 0.02), INK, w * 0.8)
+            draw_line(Vector2(e.end.x - r * 0.1, e.end.y - r * 0.12), e.get_center() + Vector2(r * 0.25, r * 0.02), INK, w * 0.8)
         "restart":
             draw_arc(center, r * 0.85, deg_to_rad(-70), deg_to_rad(220), 20, col, w)
             var end := center + Vector2(cos(deg_to_rad(-70)), sin(deg_to_rad(-70))) * r * 0.85
@@ -212,6 +224,20 @@ func _draw():
         var pos := Vector2((size.x - tw) / 2.0, size.y * 0.80)
         draw_string_outline(f, pos, sub_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_size, 4, INK)
         draw_string(f, pos, sub_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_size, GOLD)
+    if badge > 0:
+        var bt := str(badge) if badge < 100 else "99+"
+        var bf := get_theme_default_font()
+        var bs := maxi(10, int(size.y * 0.24))
+        var bw := maxf(size.y * 0.36, bf.get_string_size(bt, HORIZONTAL_ALIGNMENT_LEFT, -1, bs).x + size.y * 0.16)
+        var bh := size.y * 0.36
+        var br := Rect2(Vector2(size.x - bw * 0.8, -bh * 0.22), Vector2(bw, bh))
+        var sbx := StyleBoxFlat.new()
+        sbx.bg_color = Color("d83a2e")
+        sbx.border_color = Color("ffe7a8")
+        sbx.set_border_width_all(2)
+        sbx.set_corner_radius_all(int(bh / 2.0))
+        draw_style_box(sbx, br)
+        draw_string(bf, Vector2(br.position.x, br.get_center().y + bs * 0.36), bt, HORIZONTAL_ALIGNMENT_CENTER, br.size.x, bs, Color.WHITE)
     if not hint.is_empty():
         # Tecla como uma pequena "plaquinha".
         var font := get_theme_default_font()

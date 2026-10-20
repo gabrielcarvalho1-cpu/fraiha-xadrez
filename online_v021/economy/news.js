@@ -51,8 +51,9 @@ class News {
 
   // ---------- Admin ----------
   async adminList() {
-    if (!this.ok()) return { available: false, error: 'migration_0022_missing' };
-    try { return { available: true, items: await this.store.newsList(), kinds: KINDS, actions: ACTIONS }; }
+    // o Admin sempre tenta de novo (sem a pausa de 10 min): logo depois de aplicar a migração já funciona
+    if (!(this.store && this.store.newsList)) return { available: false, error: 'migration_0022_missing' };
+    try { const items = await this.store.newsList(); this.offUntil = 0; this.cache = null; return { available: true, items, kinds: KINDS, actions: ACTIONS }; }
     catch (e) { if (this.off(e, 'admin list')) return { available: false, error: 'migration_0022_missing' }; throw e; }
   }
   static validate(b, cur) {

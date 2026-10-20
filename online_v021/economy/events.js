@@ -136,9 +136,10 @@ class Events {
 
   // ---------- Admin ----------
   async adminList() {
-    if (!this.ok()) return { available: false, error: 'migration_0021_missing' };
+    if (!(this.store && this.store.evList)) return { available: false, error: 'migration_0021_missing' };   // R162 · Admin sempre tenta de novo
     try {
       const evs = await this.store.evList();
+      this.offUntil = 0;
       const items = [];
       for (const ev of evs) {
         const entries = await this.store.evEntries(ev.id);

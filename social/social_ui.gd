@@ -1,4 +1,5 @@
 extends CanvasLayer
+signal unread_changed(total: int)   # R162 · botão de MENSAGENS da Home (bolinha com o número)
 ## AMIGOS: lista (online / em partida / offline / pedidos / bloqueados), busca por nickname,
 ## perfil público e ações por relação. O servidor decide tudo; aqui só pedimos e mostramos.
 ## Nunca mostra e-mail. Texto de jogador sempre em Label comum (sem BBCode).
@@ -141,6 +142,7 @@ func setup(service, avatar_callable: Callable = Callable()):
     # Conta ainda conectando: mostra aqui o motivo se o servidor recusar a sessão.
     account.notice.connect(func(text, is_error): if is_open() and is_error and not account.has_profile(): notice_text(text))
     account.changed.connect(func(): if is_open() and screen == "list" and not has_list: _request_list())
+    account.changed.connect(_bg_list)   # R162 · ao entrar na conta: busca a lista (mensagens não lidas) mesmo com Amigos fechado
     get_viewport().size_changed.connect(_layout)
     hide_ui()
 
@@ -183,6 +185,7 @@ func esc_close():
 func _back():
     match screen:
         "list": close()
+        "inbox": close()
         "confirm": _show(String(confirm.get("return", "profile")))
         "dm": close_dm()
         "invite_pick": _show("invite_friends" if not picker_game.is_empty() else invite_return)
@@ -191,6 +194,54 @@ func _back():
         "ref": _show("list")
         "profile": _show("search" if not last_query.is_empty() and profile.get("from_search", false) else "list")
         _: _show("list")
+
+## R162 · MENSAGENS (botão ao lado da coroa): total de mensagens não lidas e a caixa de entrada
+var _bg_asked := false
+var _last_unread := -1
+func _bg_list():
+    if account == null: return
+    if not account.has_profile():
+        _bg_asked = false
+        if not account.signed_in() and _last_unread > 0:   # saiu da conta: a bolinha some (reconexão não pisca)
+            _last_unread = 0
+            unread_changed.emit(0)
+        return
+    if account.server_ready and not _bg_asked:
+        _bg_asked = true
+        _send({"type": "social_list"})
+
+func total_unread() -> int:
+    if account == null or not account.signed_in(): return 0
+    var n := 0
+    for f in data["friends"]: n += int(f.get("unread", 0))
+    return n
+
+func _emit_unread():
+    var n := total_unread()
+    if n == _last_unread: return
+    _last_unread = n
+    unread_changed.emit(n)
+
+func open_inbox():
+    open()
+    _show("inbox")
+
+func _build_inbox(narrow: bool):
+    _label(box, "MENSAGENS", 18, GOLD, true).name = "InboxTitle"
+    var with_msgs: Array = data["friends"].filter(func(f): return int(f.get("unread", 0)) > 0)
+    with_msgs.sort_custom(func(a, b): return int(a.get("unread", 0)) > int(b.get("unread", 0)))
+    if not has_list:
+        _label(box, "Carregando…", 15, DIM_TEXT, true)
+    elif with_msgs.is_empty():
+        _label(box, "Nenhuma mensagem nova.", 16, DIM_TEXT, true).name = "InboxEmpty"
+    for f in with_msgs:
+        var fid := String(f.get("user_id", ""))
+        var finfo: Dictionary = f.duplicate()
+        var n := int(f.get("unread", 0))
+        var r = _row(f, ("%d mensagem nova" if n == 1 else "%d mensagens novas") % n, GOLD, [["ABRIR", func(): open_dm(fid, finfo, "inbox"), true, "btn_azul", "ico_balao"]])
+        r.name = "InboxRow_" + fid
+    var all = _button(box, "VER TODOS OS AMIGOS", func(): _show("list"), false)
+    all.name = "InboxAllFriends"
 
 func _request_list():
     refresh_left = REFRESH_S
@@ -253,6 +304,8 @@ func _on_message(msg: Dictionary):
             data = {"friends": _arr(msg, "friends"), "received": _arr(msg, "received"), "sent": _arr(msg, "sent"), "blocked": _arr(msg, "blocked")}
             _merge_list_presence(String(msg.get("presence_epoch", "")))
             has_list = true
+            _emit_unread()
+            if screen == "inbox": _show("inbox")
             if screen == "list": _show("list")
             elif screen == "invite_friends": _show("invite_friends")
         "social_search":
@@ -791,6 +844,7 @@ func _build_body(which: String, narrow: bool):
             if which == "search": _build_search()
             else: _build_list(narrow)
         "profile": _build_profile(narrow)
+        "inbox": _build_inbox(narrow)
         "confirm": _build_confirm()
         "dm": _build_dm()
         "invite_pick": _build_invite_pick()
@@ -1265,6 +1319,9 @@ func close_dm():
     var back = dm_return
     dm_id = ""
     if back == "profile" and not profile.is_empty(): _show("profile")
+    elif back == "inbox":
+        _show("inbox")
+        _request_list()
     else:
         _show("list")
         _request_list()
@@ -1288,6 +1345,7 @@ func _load_older():
 func _set_unread(uid: String, count: int, rebuild := true):
     for f in data["friends"]:
         if String(f.get("user_id", "")) == uid: f["unread"] = count
+    _emit_unread()
     if rebuild and screen == "list": _show("list")
 
 func _on_dm(msg: Dictionary):
@@ -1335,7 +1393,8 @@ func _on_dm(msg: Dictionary):
             for f in data["friends"]:
                 var fid = String(f.get("user_id", ""))
                 f["unread"] = 0 if (screen == "dm" and fid == dm_id) else int(counts.get(fid, 0))
-            if screen == "list": _show("list")
+            _emit_unread()
+            if screen == "list" or screen == "inbox": _show(screen)
         "dm_error":
             if screen == "dm" and (uid.is_empty() or uid == dm_id):
                 if dm_loading:

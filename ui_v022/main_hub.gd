@@ -2444,7 +2444,7 @@ const WIDE_MIN_RATIO := 1.85
 const WIDE_BAND := Vector2(312, 905)   # y de cima/baixo da faixa do menu na arte (1672x941)
 const WIDE_PATCHES := {   # recorte (mesmos números de tools/home_wide_r153.py) e nós que andam junto
     "club": [Rect2(10, 4, 354, 84), ["ClubHomeEntry"]],
-    "icons": [Rect2(356, 6, 146, 82), ["SoundButton", "FullscreenButton", "TrophyTopButton", "ChatTopButton", "CrownsTopButton"]],
+    "icons": [Rect2(356, 6, 146, 82), ["SoundButton", "FullscreenButton", "TrophyTopButton", "ChatTopButton", "CrownsTopButton", "MailTopButton"]],
     "logo": [Rect2(470, 0, 732, 312), ["NewsTicker"]],
     "profile": [Rect2(1210, 18, 446, 232), ["RefProfileButton", "ProfilePanel", "ProfileStack"]],
     "account": [Rect2(20, 832, 354, 100), ["AccountCard", "AccountPanel", "RefAccountAvatar", "RefAccountAvatarFrameHost"]],
@@ -2953,6 +2953,27 @@ func crowns_client():
     return crowns
 
 ## R96 · RANKING (XADREZ por fila, XEQUE, MARCHA REAL) e CHAT GLOBAL — painéis por cima da Home.
+## R162 · MENSAGENS (envelope ao lado da coroa). O número vem do social_ui (stage liga o sinal unread_changed).
+var mail_buttons: Array = []
+var unread_messages := 0
+func make_mail_button(side := 62.0) -> Button:
+    var b: Button = make_top_button("mail", "Mensagens", open_messages, side)
+    b.name = "MailTopButton"
+    b.badge = unread_messages
+    mail_buttons.append(b)
+    return b
+
+func set_unread(n: int):
+    unread_messages = n
+    for b in mail_buttons:
+        if is_instance_valid(b):
+            b.badge = n
+            b.tooltip_text = "Mensagens" if n <= 0 else ("%d mensagem nova" % n if n == 1 else "%d mensagens novas" % n)
+
+func open_messages():
+    var st = get_parent()
+    if st != null and st.has_method("_open_messages"): st._open_messages()
+
 ## R161 · NOVIDADES (outdoor embaixo da logo + tela com abas)
 var news_feed = null
 var news_ui = null
@@ -3761,6 +3782,10 @@ func _build_reference_chrome():
     crown_chip.set_frame(TOP_FRAME_PC, 14.0)
     crown_chip.position = Vector2(644, 16)
     canvas.add_child(crown_chip)
+    # R162 · MENSAGENS: envelope ao lado da coroa, com a bolinha das não lidas; abre a caixa de mensagens
+    var mail := make_mail_button(62.0)
+    mail.position = Vector2(714, 16)
+    canvas.add_child(mail)
     # R122 · COMUNIDADE (Discord): canto de baixo à direita, espelhando o cartão ENTRAR / CRIAR CONTA
     var community := make_community_button(Vector2(262, 64), TOP_FRAME_PC, 22)
     community.position = Vector2(1388, 856)

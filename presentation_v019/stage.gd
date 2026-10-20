@@ -564,6 +564,7 @@ func _setup_account():
     social_ui.name = "SocialUI"
     add_child(social_ui)
     social_ui.setup(account, hub.avatar_texture)
+    social_ui.unread_changed.connect(hub.set_unread)   # R162 · bolinha do envelope (MENSAGENS) na Home
     # R35.1 · JOGAR ONLINE (casual) → CONVIDAR AMIGO: lista de amigos e escolha do ritmo (Ranqueado não tem)
     casual_ui.invite_requested.connect(func(): social_ui.open_invite_picker("chess"))
     account.changed.connect(func(): if social_ui.is_open() and not account.has_profile() and not account.account_pending(): social_ui.hide_ui())
@@ -664,6 +665,16 @@ func _open_ranked():
         _refresh_input()
         return
     account_ui.open("", "Crie uma conta ou entre para jogar partidas ranqueadas.", true)
+
+## R162 · MENSAGENS (envelope da Home): caixa com as conversas que têm mensagem nova
+func _open_messages():
+    if account.has_profile() or (account.account_pending() and not (account.server_ready and account.needs_nickname)):
+        social_ui.open_inbox()
+        return
+    if account.signed_in() and account.needs_nickname:
+        account_ui.open("nickname", "Escolha seu nome de jogador para usar as mensagens.")
+        return
+    account_ui.open("", "Entre ou crie uma conta para conversar com seus amigos.")
 
 func _open_friends():
     # Área de Amigos: só para contas. Conta ainda conectando abre em "Conectando…" (não pede login).
