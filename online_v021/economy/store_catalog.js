@@ -31,6 +31,16 @@ const ITEMS = [
   { id: 'av_cavaleiro_escarlate', kind: 'avatar', name: 'Cavaleiro Escarlate', price: 1500 },
   { id: 'av_guardiao_torre', kind: 'avatar', name: 'Guardião da Torre', price: 1800 },
   { id: 'av_rainha_sombria', kind: 'avatar', name: 'Rainha Sombria', price: 2000 },
+  { id: 'av_tab_engrenagens', kind: 'avatar', name: 'Mesa de Engrenagens', price: 1000 },
+  { id: 'av_tab_neon', kind: 'avatar', name: 'Arena Neon', price: 1200 },
+  { id: 'av_tab_floresta', kind: 'avatar', name: 'Floresta Encantada', price: 1200 },
+  { id: 'av_tab_ametista', kind: 'avatar', name: 'Salão de Ametista', price: 1200 },
+  { id: 'av_tab_farao', kind: 'avatar', name: 'Areias do Faraó', price: 1200 },
+  { id: 'av_tab_rubi', kind: 'avatar', name: 'Trono de Rubi', price: 1500 },
+  { id: 'av_tab_cristal', kind: 'avatar', name: 'Palácio de Cristal', price: 1500 },
+  { id: 'av_tab_vulcao', kind: 'avatar', name: 'Tabuleiro do Vulcão', price: 1500 },
+  { id: 'av_tab_oceano', kind: 'avatar', name: 'Reino do Oceano', price: 1500 },
+  { id: 'av_tab_astral', kind: 'avatar', name: 'Observatório Astral', price: 1500 },
   // R119 · emotes das partidas online (o nome É o texto que aparece para o adversário)
   { id: 'emote_uau', kind: 'emote', name: 'Uau!', price: 300 },
   { id: 'emote_pensando', kind: 'emote', name: 'Hmm… pensando', price: 300 },
@@ -43,7 +53,7 @@ const ITEMS = [
 ];
 const BY_ID = Object.fromEntries(ITEMS.map(i => [i.id, i]));
 // R163 · avatares que só o PASSE entrega (não estão à venda; ficam na conta como item da loja, preço 0)
-const PASS_AVATARS = [{ id: 'av_rei_onix', track: 'free', name: 'Rei de Ônix' }, { id: 'av_rainha_onix', track: 'free', name: 'Rainha de Ônix' }, { id: 'av_torre_onix', track: 'free', name: 'Torre de Ônix' }, { id: 'av_cavalo_onix', track: 'free', name: 'Cavalo de Ônix' }, { id: 'av_principe_sombras', track: 'club', name: 'Príncipe das Sombras' }, { id: 'av_principe_esmeralda', track: 'club', name: 'Príncipe Esmeralda' }, { id: 'av_aristocrata', track: 'club', name: 'Aristocrata do Relógio' }];
+const PASS_AVATARS = [{ id: 'av_rei_onix', track: 'free', name: 'Rei de Ônix' }, { id: 'av_rainha_onix', track: 'free', name: 'Rainha de Ônix' }, { id: 'av_torre_onix', track: 'free', name: 'Torre de Ônix' }, { id: 'av_cavalo_onix', track: 'free', name: 'Cavalo de Ônix' }, { id: 'av_principe_sombras', track: 'club', name: 'Príncipe das Sombras' }, { id: 'av_principe_esmeralda', track: 'club', name: 'Príncipe Esmeralda' }, { id: 'av_aristocrata', track: 'club', name: 'Aristocrata do Relógio' }, { id: 'av_tab_ametista_pixel', track: 'free', name: 'Ametista Pixel' }, { id: 'av_tab_gelo_pixel', track: 'free', name: 'Fortaleza de Gelo' }, { id: 'av_tab_atlantida_pixel', track: 'free', name: 'Atlântida Pixel' }, { id: 'av_tab_ruinas_pixel', track: 'free', name: 'Ruínas da Floresta' }, { id: 'av_tab_lava_pixel', track: 'free', name: 'Fortaleza de Lava' }, { id: 'av_principe_deserto', track: 'club', name: 'Príncipe do Deserto' }, { id: 'av_principe_astral', track: 'club', name: 'Príncipe Astral' }, { id: 'av_cavaleiro_prata', track: 'club', name: 'Cavaleiro de Prata' }];
 const PASS_BY_ID = Object.fromEntries(PASS_AVATARS.map(a => [a.id, a]));
 const ofKind = kind => ITEMS.filter(i => i.kind === kind).map(i => i.id);
 // R119 · emotes de graça (todo jogador com conta ou convidado)

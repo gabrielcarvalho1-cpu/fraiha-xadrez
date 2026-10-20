@@ -9,12 +9,12 @@ const { rewards, seasonAvatars, AVATAR_LEVEL } = require('../../online_v021/econ
 
 test('cada avatar novo tem arte e um dono certo', () => {
   const novos = fs.readdirSync(path.join(__dirname, '../../profile/avatars')).filter(f => /^av_.*\.webp$/.test(f)).map(f => f.replace('.webp', ''));
-  assert.equal(novos.length, 34);
+  assert.equal(novos.length, 64);   // R163 34 + R164 30
   for (const id of novos) assert.ok(C.ALL_AVATARS.includes(id), id + ' no servidor');
   const groups = [C.FREE_AVATARS, C.CLUB_AVATARS, C.FOUNDER_AVATARS, C.LEGEND_AVATARS, C.OWNED_AVATARS];
   for (const id of novos) assert.equal(groups.filter(g => g.includes(id)).length, 1, id + ' em um grupo só');
-  assert.equal(Shop.ofKind('avatar').length, 10);
-  assert.equal(Shop.PASS_AVATARS.length, 7);
+  assert.equal(Shop.ofKind('avatar').length, 20);
+  assert.equal(Shop.PASS_AVATARS.length, 15);
 });
 
 test('regras de uso', () => {

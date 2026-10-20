@@ -5,11 +5,11 @@
 const LADDER = require('../../bot/bot_ladder.json');
 const ShopCatalog = require('../economy/store_catalog');   // R116 · itens da Loja de Coroas
 
-const FREE_AVATARS = ['warrior', 'archer', 'peao_branco', 'peao_negro', 'av_peao_dourado', 'av_torre_marmore', 'av_bispo_marmore', 'av_cavalo_marmore', 'av_heroi', 'av_principe_dourado'];   // R163 · +6 grátis
+const FREE_AVATARS = ['warrior', 'archer', 'peao_branco', 'peao_negro', 'av_peao_dourado', 'av_torre_marmore', 'av_bispo_marmore', 'av_cavalo_marmore', 'av_heroi', 'av_principe_dourado', 'av_tab_mogno', 'av_tab_torneio_pixel', 'av_tab_salao_pixel', 'av_tab_oficina_pixel'];   // R163 · +6 grátis
 const LEGACY_AVATARS = ['mage', 'paladin'];            // recompensas antigas: quem já tem continua exibindo
-const FOUNDER_AVATARS = ['fundador', 'av_mestre_dourado', 'av_mestre_sombras', 'av_grao_mestre', 'av_rainha_invernal'];
-const LEGEND_AVATARS = ['av_lenda_mistica'];   // R163 · só Fundador Lendário
-const CLUB_AVATARS = ['club_avatar_a', 'club_avatar_b', 'club_avatar_c', 'av_rainha_purpura', 'av_dama_esmeralda', 'av_dama_bispo', 'av_dama_torre', 'av_mestre_purpura', 'av_rainha_neon'];
+const FOUNDER_AVATARS = ['fundador', 'av_mestre_dourado', 'av_mestre_sombras', 'av_grao_mestre', 'av_rainha_invernal', 'av_rei_dourado_coroa', 'av_rainha_purpura_coroa', 'av_rainha_gelo'];
+const LEGEND_AVATARS = ['av_lenda_mistica', 'av_rei_rubi_coroa'];   // R163 · só Fundador Lendário
+const CLUB_AVATARS = ['club_avatar_a', 'club_avatar_b', 'club_avatar_c', 'av_rainha_purpura', 'av_dama_esmeralda', 'av_dama_bispo', 'av_dama_torre', 'av_mestre_purpura', 'av_rainha_neon', 'av_tab_cidade_neon', 'av_rainha_punk', 'av_bispa_esmeralda', 'av_rainha_floresta'];
 // R163 · avatares da Loja de Coroas e do Passe: a conta precisa TER o item (crown_items), para sempre
 const OWNED_AVATARS = [...ShopCatalog.ofKind('avatar'), ...ShopCatalog.PASS_AVATARS.map(a => a.id)];
 const LADDER_AVATARS = {};                              // avatar_id -> bot_id
