@@ -5,7 +5,9 @@
 // Mesmas regras do chat da partida (texto limpo, 200 caracteres, sem spam/rajada) + intervalo mínimo próprio.
 // DENUNCIAR: registra no log do servidor (quem, qual mensagem) para moderação; SILENCIAR é só no aparelho.
 const { clean } = require('../chat');
-const HISTORY = 80;
+const HISTORY = 80;          // por canal
+// R168 · CANAIS (abas): GERAL, PROCURANDO PARCEIROS (achar gente para jogar) e DÚVIDAS E AJUDA.
+const CHANNELS = ['geral', 'parceiros', 'ajuda'];
 const MIN_GAP_MS = 2500;        // no global, no máximo 1 mensagem a cada 2,5 s por conta
 const MAX_MEMBERS_PUSH = 5000;  // proteção: não percorre mais que isso por mensagem
 
@@ -34,7 +36,7 @@ class GlobalChat {
     const fail = (message, code) => this.send(ws, { type: 'gchat_error', message, code });
     if (a === 'gchat_join') {
       this.members.add(ws);
-      return this.send(ws, { type: 'gchat_history', messages: this.messages, can_send: this.canSend(ws), online: this.count() });
+      return this.send(ws, { type: 'gchat_history', messages: this.messages, channels: CHANNELS, can_send: this.canSend(ws), online: this.count() });
     }
     if (a === 'gchat_leave') { this.members.delete(ws); return; }
     if (a === 'gchat_send') {
@@ -49,9 +51,12 @@ class GlobalChat {
       this.lastAt.set(uid, now);
       this.members.add(ws);
       const p = ws.profile;
-      const entry = { id: ++this.seq, user_id: uid, nickname: String(p.nickname || 'Jogador'), avatar_id: String(p.avatar_id || ''),
+      const channel = CHANNELS.includes(String(m.channel || '')) ? String(m.channel) : 'geral';
+      const entry = { id: ++this.seq, channel, user_id: uid, nickname: String(p.nickname || 'Jogador'), avatar_id: String(p.avatar_id || ''),
         text: c.text, ts: new Date(now).toISOString() };
-      this.messages.push(entry); if (this.messages.length > HISTORY) this.messages.shift();
+      this.messages.push(entry);
+      // guarda as últimas HISTORY de CADA canal (um canal movimentado não apaga os outros)
+      if (this.messages.filter(x => x.channel === channel).length > HISTORY) this.messages.splice(this.messages.findIndex(x => x.channel === channel), 1);
       return this.broadcast({ type: 'gchat_msg', ...entry });
     }
     if (a === 'gchat_report') {
@@ -73,4 +78,4 @@ class GlobalChat {
   }
 }
 
-module.exports = { GlobalChat, HISTORY, MIN_GAP_MS };
+module.exports = { GlobalChat, HISTORY, MIN_GAP_MS, CHANNELS };

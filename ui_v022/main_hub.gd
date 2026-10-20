@@ -124,8 +124,10 @@ var avatar_detail := {}         # área de detalhe do avatar em foco
 var gallery_count: Label
 var inspected_avatar := ""
 var inspected_badge := "auto"   # R32: ícone em foco na aba ÍCONES do Perfil
-var profile_tab := "avatars"    # "avatars" | "icons"
+var profile_tab := "avatars"    # "avatars" | "icons" | "frames"
 var badge_gallery = null        # profile/badge_gallery.gd
+var frame_gallery = null        # R168 · profile/frame_gallery.gd (aba MOLDURAS)
+var inspected_frame := ""
 var profile_tabs := {}
 var gallery_scrolls := {}
 const AvatarCatalog = preload("res://profile/avatar_catalog.gd")
@@ -721,9 +723,25 @@ func _build_pages():
     badge_gallery.setup(self, 4, Vector2(152, 190))
     for c in ["h_separation", "v_separation"]: badge_gallery.add_theme_constant_override(c, 14)
     badge_gallery.inspected.connect(_inspect_badge)
-    gallery_scrolls = {"avatars": gscroll, "icons": bscroll}
-    # barra de rolagem da arte (trilho azul + alça dourada), funcional para as duas galerias
-    for sc in [gscroll, bscroll]:
+    # R168 · MOLDURAS: terceira aba, mesma área, botão APLICAR MOLDURA no detalhe.
+    var fscroll = ScrollContainer.new()
+    fscroll.name = "FrameGalleryScroll"
+    fscroll.position = gscroll.position
+    fscroll.size = gscroll.size
+    fscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    fscroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+    fscroll.visible = false
+    profile_panel.add_child(fscroll)
+    preload("res://ui_v022/touch_scroll.gd").attach(fscroll)
+    frame_gallery = load("res://profile/frame_gallery.gd").new()
+    frame_gallery.name = "FrameGallery"
+    fscroll.add_child(frame_gallery)
+    frame_gallery.setup(self, 4, Vector2(152, 190))
+    for c in ["h_separation", "v_separation"]: frame_gallery.add_theme_constant_override(c, 14)
+    frame_gallery.inspected.connect(_inspect_frame)
+    gallery_scrolls = {"avatars": gscroll, "icons": bscroll, "frames": fscroll}
+    # barra de rolagem da arte (trilho azul + alça dourada), funcional para as três galerias
+    for sc in [gscroll, bscroll, fscroll]:
         var bar := _art_scrollbar(profile_panel, sc, "perfil_bg", PF_BAR, PF_BAR_GRAB, PF_BAR_TRACK, PF_BAR_UP, PF_BAR_DOWN, 204, "GalleryBar")
         var scr: ScrollContainer = sc
         for n in bar: n.visible = scr.visible
@@ -734,7 +752,7 @@ func _build_pages():
     tabs.mouse_filter = Control.MOUSE_FILTER_IGNORE
     profile_panel.add_child(tabs)
     var ti := 0
-    for pair in [["avatars", "AVATARES", "pf_ico_avatares"], ["icons", "ÍCONES", "pf_ico_icones"]]:
+    for pair in [["avatars", "AVATARES", "pf_ico_avatares"], ["icons", "ÍCONES", "pf_ico_icones"], ["frames", "MOLDURAS", ""]]:
         var tab_id: String = pair[0]
         var tr := Rect2(90, 226 + ti * 104, 228, 84)
         ti += 1
@@ -747,11 +765,22 @@ func _build_pages():
         tart.mouse_filter = Control.MOUSE_FILTER_IGNORE
         tart.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
         tabs.add_child(tart)
-        RefPage.image(tabs, RefPage.tex(pair[2]), Rect2(tr.position.x + 18, tr.position.y + 16, 48, 52))
-        var tl := RefPage.text(tabs, pair[1], Rect2(tr.position.x + 74, tr.position.y, 146, tr.size.y), 23, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
+        if pair[2] != "": RefPage.image(tabs, RefPage.tex(pair[2]), Rect2(tr.position.x + 18, tr.position.y + 16, 48, 52))
+        else:
+            var fi := TextureRect.new()
+            fi.name = "TabFrameIcon"
+            fi.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+            fi.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+            fi.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+            fi.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            fi.texture = load("res://monetization/frames/elo_ouro.png")
+            fi.position = Vector2(tr.position.x + 12, tr.position.y + 8)
+            fi.size = Vector2(60, 68)
+            tabs.add_child(fi)
+        var tl := RefPage.text(tabs, pair[1], Rect2(tr.position.x + 74, tr.position.y, 146, tr.size.y), 20 if tab_id == "frames" else 23, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
         tl.add_theme_font_override("font", FONT_CINZEL)
         var tb := RefPage.hotspot(tabs, tr, func(): set_profile_tab(tab_id), "Tab_" + tab_id)
-        tb.name = "ProfileTabIcons" if tab_id == "icons" else "ProfileTabAvatars"
+        tb.name = {"icons": "ProfileTabIcons", "frames": "ProfileTabFrames"}.get(tab_id, "ProfileTabAvatars")
         tb.set_meta("art", tart)
         profile_tabs[tab_id] = tb
     for id in avatar_gallery.cards:
@@ -768,7 +797,7 @@ func _build_pages():
     personalize.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     personalize.tooltip_text = "Ícone, título, moldura, tabuleiro e peças"
     # avisos (bloqueado, aplicado…) na coluna da esquerda, abaixo das abas
-    avatar_note = RefPage.text(profile_panel, "", Rect2(104, 440, 200, 380), 17, MUTED, false)
+    avatar_note = RefPage.text(profile_panel, "", Rect2(104, 544, 200, 280), 17, MUTED, false)
     avatar_note.name = "AvatarNote"
     avatar_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     avatar_note.vertical_alignment = VERTICAL_ALIGNMENT_TOP
@@ -781,7 +810,9 @@ func _build_pages():
     pic.size = Vector2(138, 138)
     var circle := ShaderMaterial.new()
     circle.shader = Shader.new()
-    circle.shader.code = "shader_type canvas_item;\nuniform bool gray = false;\nvoid fragment(){ vec4 c = texture(TEXTURE, UV); float d = distance(UV, vec2(0.5)); vec3 rgb = c.rgb; if (gray) { float l = dot(rgb, vec3(0.3, 0.59, 0.11)); rgb = vec3(l) * 0.75; } COLOR = vec4(rgb, c.a * (1.0 - smoothstep(0.485, 0.5, d))); }"
+    # R168 · o círculo é medido pelo retângulo do retrato (não pela UV): arte retangular (ex.: Arqueira) não vaza mais
+    circle.shader.code = "shader_type canvas_item;\nuniform bool gray = false;\nuniform vec2 box = vec2(138.0);\nvarying vec2 lp;\nvoid vertex(){ lp = VERTEX; }\nvoid fragment(){ vec4 c = texture(TEXTURE, UV); float d = distance(lp / box, vec2(0.5)); vec3 rgb = c.rgb; if (gray) { float l = dot(rgb, vec3(0.3, 0.59, 0.11)); rgb = vec3(l) * 0.75; } COLOR = vec4(rgb, c.a * (1.0 - smoothstep(0.485, 0.5, d))); }"
+    circle.set_shader_parameter("box", pic.size)
     pic.set_meta("circle", circle)
     pic.material = circle
     var ring := TextureRect.new()
@@ -1398,13 +1429,28 @@ func _build_avatar_detail(parent: Control, r: Rect2) -> Dictionary:
     pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
     box.add_child(pic)
-    var words = _stack(box, Vector2(r.size.y + 4, 14), Vector2(r.size.x - r.size.y - 16, r.size.y - 24), Vector4.ZERO, 4)
+    # R168 · os textos ficam ACIMA do botão APLICAR (antes o título quebrava em 2 linhas e empurrava o resto para trás dele)
+    var words = _stack(box, Vector2(r.size.y + 4, 12), Vector2(r.size.x - r.size.y - 16, r.size.y - 12 - 60), Vector4.ZERO, 2)
+    words.get_parent().clip_contents = true
     var title = _label(words, "", 24, GOLD)
     title.add_theme_font_override("font", FONT_CINZEL)
     title.add_theme_font_size_override("font_size", 28)
-    var origin = _label(words, "", 17, CREAM)
-    var status = _label(words, "", 17, MUTED)
+    title.autowrap_mode = TextServer.AUTOWRAP_OFF
+    title.clip_text = true
+    var origin = _label(words, "", 16, CREAM)
+    var status = _label(words, "", 16, MUTED)
     var brief = _label(words, "", 13, MUTED)
+    for l in [origin, status]:
+        l.autowrap_mode = TextServer.AUTOWRAP_OFF
+        l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    # R168 · aba MOLDURAS: retrato com a moldura no lugar do círculo
+    var frame_slot := Control.new()
+    frame_slot.name = "DetailFrame"
+    frame_slot.position = Vector2(6, 2)
+    frame_slot.size = Vector2(r.size.y - 4, r.size.y - 4)
+    frame_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    frame_slot.visible = false
+    box.add_child(frame_slot)
     # R32: aplicar é explícito (tocar no cartão só inspeciona)
     var apply = _hud_text_button("APLICAR AVATAR", Vector2(230,42))
     var dim := StyleBoxTexture.new()
@@ -1417,7 +1463,16 @@ func _build_avatar_detail(parent: Control, r: Rect2) -> Dictionary:
     apply.mouse_filter = Control.MOUSE_FILTER_STOP
     apply.pressed.connect(apply_inspected)
     box.add_child(apply)
-    return {"box": box, "pic": pic, "title": title, "origin": origin, "status": status, "brief": brief, "apply": apply}
+    return {"box": box, "pic": pic, "title": title, "origin": origin, "status": status, "brief": brief, "apply": apply, "frame_slot": frame_slot}
+
+## R168 · título do detalhe numa linha só: diminui a letra até caber
+func _fit_detail_title():
+    var t: Label = avatar_detail.title
+    var w: float = t.get_parent().size.x if t.get_parent().size.x > 0.0 else 360.0
+    var f: Font = FONT_CINZEL
+    var px := 28
+    while px > 16 and f.get_string_size(t.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > w - 4: px -= 1
+    t.add_theme_font_size_override("font_size", px)
 
 ## R54 · o detalhe do Perfil volta para o visual EM USO (avatar aplicado ou a foto do jogador): ao abrir o Perfil e
 ## sempre que o visual muda (foto enviada/removida, avatar vindo da conta). Tocar num cartão continua só inspecionando.
@@ -1433,6 +1488,10 @@ func _inspect_badge(id: String):
     inspected_badge = id
     _refresh_avatar_detail()
 
+func _inspect_frame(id: String):
+    inspected_frame = id
+    _refresh_avatar_detail()
+
 func set_profile_tab(tab: String):
     profile_tab = tab
     for k in gallery_scrolls: gallery_scrolls[k].visible = k == tab
@@ -1441,6 +1500,10 @@ func set_profile_tab(tab: String):
         if tb.has_meta("art"): tb.get_meta("art").texture = RefPage.tex("pf_tab_sel" if k == tab else "pf_tab")
         else: tb.modulate = Color.WHITE if k == tab else Color(0.62, 0.66, 0.62)
     if tab == "icons": inspected_badge = cosmetic_pref("badge")
+    if tab == "frames": inspected_frame = cosmetic_pref("frame")
+    if frame_gallery != null:
+        frame_gallery.focus_id = inspected_frame
+        frame_gallery.update_states()
     if badge_gallery != null:
         badge_gallery.focus_id = inspected_badge
         badge_gallery.update_states()
@@ -1449,6 +1512,7 @@ func set_profile_tab(tab: String):
 ## R32 · botão APLICAR da área de detalhe: aplica o avatar ou o ícone em foco.
 func apply_inspected() -> bool:
     if profile_tab == "icons": return apply_badge(inspected_badge)
+    if profile_tab == "frames": return apply_frame(inspected_frame)
     return apply_avatar(inspected_avatar if not inspected_avatar.is_empty() else avatar_id)
 
 func apply_badge(bid: String) -> bool:
@@ -1459,6 +1523,16 @@ func apply_badge(bid: String) -> bool:
         _avatar_message("Ícone aplicado: " + preload("res://profile/badge_gallery.gd").display_name(bid) + ".", false)
         return true
     return false
+
+## R168 · aplica a moldura do retrato (aba MOLDURAS)
+func apply_frame(fid: String) -> bool:
+    if fid.is_empty(): fid = "auto"
+    if not set_cosmetic("frame", fid):
+        _avatar_message("Bloqueado · " + Cosmetics.lock_hint("frame", fid) + ".", true)
+        return false
+    _avatar_message("Moldura aplicada: " + preload("res://profile/frame_gallery.gd").display_name(fid) + ".", false)
+    _refresh_avatars()
+    return true
 
 func apply_avatar(id: String) -> bool:
     if not avatar_unlocked(id) or not AvatarCatalog.has_art(id):
@@ -1472,9 +1546,19 @@ func apply_avatar(id: String) -> bool:
 
 func _refresh_avatar_detail():
     if avatar_detail.is_empty() or avatar_gallery == null: return
+    _show_detail_frame("")
     if profile_tab == "icons" and badge_gallery != null:
         _refresh_badge_detail()
+        _fit_detail_title()
         return
+    if profile_tab == "frames" and frame_gallery != null:
+        _refresh_frame_detail()
+        _fit_detail_title()
+        return
+    _refresh_avatar_detail_inner()
+    _fit_detail_title()
+
+func _refresh_avatar_detail_inner():
     var photo := custom_avatar() if inspected_avatar.is_empty() else null
     if photo != null:
         avatar_detail.pic.texture = photo
@@ -1498,16 +1582,16 @@ func _refresh_avatar_detail():
     avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else (avatar_lock_hint(id) if src in ["founder", "club", "shop", "pass"] else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot")))
     match st:
         "locked":
-            avatar_detail.status.text = "BLOQUEADO · " + avatar_gallery.hint(id)
+            avatar_detail.status.text = "BLOQUEADO"
             avatar_detail.status.add_theme_color_override("font_color", Color("e89a7a"))
         "selected":
             avatar_detail.status.text = "EM USO no seu perfil"
             avatar_detail.status.add_theme_color_override("font_color", Color("49d17a"))
         "no_art_unlocked":
-            avatar_detail.status.text = "CONQUISTADO · a arte será adicionada em breve"
+            avatar_detail.status.text = "CONQUISTADO · arte em breve"
             avatar_detail.status.add_theme_color_override("font_color", GOLD)
         _:
-            avatar_detail.status.text = "CONQUISTADO · toque em APLICAR AVATAR"
+            avatar_detail.status.text = "CONQUISTADO"
             avatar_detail.status.add_theme_color_override("font_color", GOLD)
     avatar_detail.brief.text = "" if AvatarCatalog.has_art(id) else "Arte em produção."
     if avatar_detail.has("apply"):
@@ -1533,21 +1617,67 @@ func _refresh_badge_detail():
     _detail_material(st == "locked")
     avatar_detail.title.text = badge_gallery.display_name(id).to_upper()
     var req := Cosmetics.requirement("badge", id) if id != "auto" else ""
-    avatar_detail.origin.text = "Selo ao lado do seu nome (Home, Perfil, Amigos, chat e partidas)" if req.is_empty() else ("Exclusivo do Pacote Fundador" if req == "founder" else "Exclusivo do Club FRAIHA")
+    avatar_detail.origin.text = "Selo ao lado do seu nome" if req.is_empty() else ("Exclusivo do Pacote Fundador" if req == "founder" else "Exclusivo do Club FRAIHA")
     match st:
         "locked":
-            avatar_detail.status.text = "BLOQUEADO · " + badge_gallery.hint(id)
+            avatar_detail.status.text = "BLOQUEADO"
             avatar_detail.status.add_theme_color_override("font_color", Color("e89a7a"))
         "selected":
             avatar_detail.status.text = "EM USO"
             avatar_detail.status.add_theme_color_override("font_color", Color("49d17a"))
         _:
-            avatar_detail.status.text = "DISPONÍVEL · toque em APLICAR ÍCONE"
+            avatar_detail.status.text = "DISPONÍVEL"
             avatar_detail.status.add_theme_color_override("font_color", GOLD)
-    avatar_detail.brief.text = "Automático usa o melhor selo que você tem." if id == "auto" else ("Sem selo ao lado do nome." if id.is_empty() else "")
+    avatar_detail.brief.text = "Usa o melhor selo que você tem." if id == "auto" else ""
     var b: Button = avatar_detail.apply
     b.text = "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR ÍCONE")
     b.disabled = st != "unlocked"
+
+## R168 · detalhe da aba MOLDURAS
+func _refresh_frame_detail():
+    var FG = preload("res://profile/frame_gallery.gd")
+    var id: String = inspected_frame if not inspected_frame.is_empty() else cosmetic_pref("frame")
+    var st: String = frame_gallery.state_of(id)
+    _show_detail_frame(frame_gallery.shown(id))
+    var holder: Control = avatar_detail.frame_slot
+    holder.modulate = Color(0.5, 0.5, 0.5) if st == "locked" else Color.WHITE
+    avatar_detail.title.text = FG.display_name(id).to_upper()
+    var req := Cosmetics.requirement("frame", id) if id != "auto" else ""
+    avatar_detail.origin.text = ("Moldura em volta do seu retrato" if req.is_empty() else Cosmetics.lock_hint("frame", id))
+    if id == "liga": avatar_detail.origin.text = "Muda sozinha com a sua liga"
+    match st:
+        "locked":
+            avatar_detail.status.text = "BLOQUEADO"
+            avatar_detail.status.add_theme_color_override("font_color", Color("e89a7a"))
+        "selected":
+            avatar_detail.status.text = "EM USO"
+            avatar_detail.status.add_theme_color_override("font_color", Color("49d17a"))
+        _:
+            avatar_detail.status.text = "DISPONÍVEL"
+            avatar_detail.status.add_theme_color_override("font_color", GOLD)
+    avatar_detail.brief.text = "Usa a melhor moldura que você tem." if id == "auto" else ""
+    var b: Button = avatar_detail.apply
+    b.text = "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR MOLDURA")
+    b.disabled = st != "unlocked"
+
+## mostra o retrato com moldura (aba MOLDURAS) ou o círculo de sempre (fid vazio)
+func _show_detail_frame(fid: String):
+    if not avatar_detail.has("frame_slot"): return
+    var slot: Control = avatar_detail.frame_slot
+    slot.visible = not fid.is_empty()
+    avatar_detail.pic.visible = fid.is_empty()
+    if fid.is_empty() or String(slot.get_meta("fid", "")) == fid:
+        if not fid.is_empty():
+            var old = slot.get_node_or_null("Preview/FramePic")
+            if old != null: old.texture = avatar_texture()
+        return
+    for c in slot.get_children():
+        slot.remove_child(c)
+        c.queue_free()
+    var pv: Control = preload("res://profile/frame_gallery.gd").preview(self, fid, slot.size.x)
+    pv.name = "Preview"
+    slot.add_child(pv)
+    slot.set_meta("fid", fid)
 
 func _refresh_avatars():
     if is_instance_valid(profile_portrait): profile_portrait.texture = slot_avatar_texture() if ref_mode else avatar_texture()
@@ -1560,6 +1690,9 @@ func _refresh_avatars():
     if badge_gallery != null:
         badge_gallery.update_states()
         if profile_tab == "icons": gallery_count.text = "Ícone em uso: " + badge_gallery.display_name(cosmetic_pref("badge"))
+    if frame_gallery != null:
+        frame_gallery.update_states()
+        if profile_tab == "frames": gallery_count.text = "%d de %d molduras liberadas" % [frame_gallery.count_unlocked(), frame_gallery.cards.size() - 1]
     _refresh_avatar_detail()
     if get_parent().has_method("refresh_player_card"): get_parent().refresh_player_card()
 
@@ -2277,7 +2410,8 @@ func _show_league_rewards(id: String, nome: String):
     var pic := 150.0
     var items := [["BRASÃO", "badge"], ["MOLDURA NO AVATAR", "frame"], ["TABULEIRO " + nome.to_upper() if id != "madeira" else "TABULEIRO PADRÃO", "board"]]
     for i in 3:
-        var box := Rect2(Vector2(i * cw + (cw - pic) / 2.0, 8), Vector2(pic, pic))
+        # R167 · os 3 mais para baixo (a moldura de arte passa por cima do retrato e pegava o título "Recompensas")
+        var box := Rect2(Vector2(i * cw + (cw - pic) / 2.0, 34), Vector2(pic, pic))
         var kind: String = items[i][1]
         if kind == "badge":
             var t := TextureRect.new()
@@ -2293,8 +2427,8 @@ func _show_league_rewards(id: String, nome: String):
         elif kind == "frame":
             var holder := Control.new()
             holder.name = "RewardFrame"
-            holder.position = box.position + Vector2(12, 12)
-            holder.size = box.size - Vector2(24, 24)
+            holder.position = box.position + Vector2(26, 30)
+            holder.size = box.size - Vector2(52, 52)
             holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
             league_rewards.add_child(holder)
             var av := TextureRect.new()
@@ -2345,7 +2479,7 @@ func _show_league_rewards(id: String, nome: String):
         cap.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
         cap.add_theme_constant_override("outline_size", 3)
         cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        cap.position = Vector2(i * cw + 6, pic + 16)
+        cap.position = Vector2(i * cw + 6, pic + 40)
         cap.custom_minimum_size = Vector2(cw - 12, 0)
         cap.size = Vector2(cw - 12, 60)
         league_rewards.add_child(cap)
@@ -3290,6 +3424,15 @@ func attach_club_frame(portrait: Control, round_shape := false, compact := false
         frame = preload("res://monetization/club_frame.gd").new()
         portrait.add_child(frame)
     frame.style = fr
+    # R168 · moldura de ARTE: o buraco dela encaixa no retrato de verdade (o host da Home é 4 px maior que o retrato
+    # por causa da moldura Club desenhada; com a arte sobrava uma fresta azul em cima e embaixo)
+    var inset: float = float(portrait.get_meta("art_inset", 0.0)) if preload("res://monetization/club_frame.gd").is_art(fr) else 0.0
+    frame.fill_parent = false
+    frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+    frame.offset_left = inset
+    frame.offset_top = inset
+    frame.offset_right = -inset
+    frame.offset_bottom = -inset
     frame.round_shape = round_shape
     frame.compact = compact or portrait.size.x < 60.0
     frame.visible = true
@@ -3381,7 +3524,7 @@ const PROFILE_UNDER_SIZE := Vector2(476, 252)
 const PROFILE_UNDER_POS := Vector2(1196, 6)
 const PROFILE_FRAME_RECT := Rect2(1198, 19.5, 470, 235)
 const PROFILE_BODY := Rect2(1214, 36.5, 438, 200)     # área clicável (corpo da moldura, sem os ornamentos de fora)
-const PROFILE_PORTRAIT := Rect2(1254, 77.5, 86.5, 78)   # R65: o retrato preenche todo o vão da moldura (medido em home_profile_frame.png: 1254.2,77.8 · 85.9×77.4)
+const PROFILE_PORTRAIT := Rect2(1253.5, 77, 87, 83)   # R168: medido no print (o vão vai de y 77 a 159; antes sobrava azul em cima e embaixo) · R65: o retrato preenche todo o vão da moldura (medido em home_profile_frame.png: 1254.2,77.8 · 85.9×77.4)
 const PROFILE_NAME := Rect2(1410, 64, 150, 40)
 const PROFILE_LEAGUE := Rect2(1360, 102, 196, 30)
 const PROFILE_BAR := Rect2(1366, 137, 176, 10)
@@ -3836,6 +3979,7 @@ func _build_reference_chrome():
     club_host.size = clip.size + Vector2(8, 8)
     club_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
     pbtn.add_child(club_host)
+    club_host.set_meta("art_inset", 6.0)   # R168 · arte cobre 2 px da borda do retrato: nada de fresta
     ref_profile_club_host = club_host
     attach_club_frame(club_host)
     var name_label = _label(pbtn, player_name, 30, Color("f8ebc8"))

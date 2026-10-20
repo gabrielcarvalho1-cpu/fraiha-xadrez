@@ -560,6 +560,31 @@ func _profile(content: VBoxContainer, width := 0.0):
             apply_bd.disabled = true
             _set_btn(apply_bd, "EM USO")
             bdetail.text = badges.display_name(String(chosen.badge)).to_upper() + " · EM USO")
+    # R168 · MOLDURA do retrato: galeria própria, como avatares e ícones.
+    _text(content, "SUA MOLDURA", 16).name = "FrameTitleMobile"
+    var frames = load("res://profile/frame_gallery.gd").new()
+    frames.name = "FrameGalleryMobile"
+    frames.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    content.add_child(frames)
+    frames.setup(hub, cols, Vector2(cw, cw + 48.0))
+    var fdetail = _text(content, "", 14)
+    fdetail.name = "FrameDetailMobile"
+    var apply_fr = _button(content, "APLICAR MOLDURA", func(): pass)
+    apply_fr.name = "ApplyFrameMobile"
+    apply_fr.disabled = true
+    chosen["frame"] = ""
+    frames.inspected.connect(func(id):
+        chosen.frame = id
+        var st: String = frames.state_of(id)
+        fdetail.text = frames.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + frames.hint(id) if st == "locked" else ("EM USO" if st == "selected" else "toque em APLICAR MOLDURA"))
+        apply_fr.disabled = st != "unlocked"
+        _set_btn(apply_fr, "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR MOLDURA")))
+    apply_fr.pressed.connect(func():
+        if hub.apply_frame(String(chosen.frame)):
+            frames.update_states()
+            apply_fr.disabled = true
+            _set_btn(apply_fr, "EM USO")
+            fdetail.text = frames.display_name(String(chosen.frame)).to_upper() + " · EM USO")
     # Foto própria (escolher → enquadrar → salvar) e remover.
     var photo_row = HBoxContainer.new()
     photo_row.add_theme_constant_override("separation", 8)

@@ -118,19 +118,34 @@ class Backdrop extends Control:
 			var ts := tex.get_size()
 			var k := maxf(size.x / ts.x, size.y / ts.y)
 			var d := ts * k
-			draw_texture_rect(tex, Rect2((size - d) / 2.0, d), false)
-		# laterais e base escurecidas (gradiente em faixas)
-		var n := 24
-		for i in n:
-			var t := float(i) / n
-			var a := 0.72 * pow(1.0 - t, 1.6)
-			var wcol := size.x * 0.36 / n
-			draw_rect(Rect2(i * wcol, 0, wcol + 1, size.y), Color(0, 0, 0, a))
-			draw_rect(Rect2(size.x - (i + 1) * wcol, 0, wcol + 1, size.y), Color(0, 0, 0, a))
-			var hrow := size.y * 0.42 / n
-			draw_rect(Rect2(0, size.y - (i + 1) * hrow, size.x, hrow + 1), Color(0, 0, 0, 0.55 * pow(1.0 - t, 1.4)))
+			# R168 · a arte desce um pouco: a cruz do rei não corta mais no alto (o fundo de cima da arte é escuro)
+			var y0 := 8.0 if d.y > size.y + 8.0 else (size.y - d.y) / 2.0
+			draw_texture_rect(tex, Rect2(Vector2((size.x - d.x) / 2.0, y0), d), false)
+		# laterais e base escurecidas: degradê contínuo (antes eram faixas sobrepostas, que davam listras pretas)
+		var side := size.x * 0.36
+		var steps := 12
+		for i in steps:
+			var t0 := float(i) / steps
+			var t1 := float(i + 1) / steps
+			var a0 := 0.72 * pow(1.0 - t0, 1.6)
+			var a1 := 0.72 * pow(1.0 - t1, 1.6)
+			_grad_h(Rect2(side * t0, 0, side * (t1 - t0), size.y), a0, a1)
+			_grad_h(Rect2(size.x - side * t1, 0, side * (t1 - t0), size.y), a1, a0)
+		var base := size.y * 0.42
+		for i in steps:
+			var t0 := float(i) / steps
+			var t1 := float(i + 1) / steps
+			_grad_v(Rect2(0, size.y - base * t1, size.x, base * (t1 - t0)), 0.55 * pow(1.0 - t1, 1.4), 0.55 * pow(1.0 - t0, 1.4))
 		draw_rect(r, Color("d9b25f", 0.85), false, 1.5)
 		draw_rect(r.grow(-5), Color("d9b25f", 0.25), false, 1.0)
+	func _grad_h(q: Rect2, a_left: float, a_right: float):
+		var cl := Color(0, 0, 0, a_left)
+		var cr := Color(0, 0, 0, a_right)
+		draw_polygon(PackedVector2Array([q.position, Vector2(q.end.x, q.position.y), q.end, Vector2(q.position.x, q.end.y)]), PackedColorArray([cl, cr, cr, cl]))
+	func _grad_v(q: Rect2, a_top: float, a_bottom: float):
+		var ct := Color(0, 0, 0, a_top)
+		var cb := Color(0, 0, 0, a_bottom)
+		draw_polygon(PackedVector2Array([q.position, Vector2(q.end.x, q.position.y), q.end, Vector2(q.position.x, q.end.y)]), PackedColorArray([ct, ct, cb, cb]))
 
 ## Faixa escura discreta atrás do resultado do duelo (lê bem por cima da arte), com filetes dourados nas pontas.
 class ResultPlate extends Control:
@@ -139,11 +154,14 @@ class ResultPlate extends Control:
 	func _draw():
 		var w := size.x
 		var h := size.y
-		var n := 16
+		# R168 · degradê contínuo (as faixas sobrepostas davam listras)
+		var n := 24
 		for i in n:
-			var t := float(i) / (n - 1)
-			var a := 0.78 * (1.0 - pow(absf(t - 0.5) * 2.0, 2.2))
-			draw_rect(Rect2(w * float(i) / n, 0, w / n + 1, h), Color(0.02, 0.012, 0.006, a))
+			var t0 := float(i) / n
+			var t1 := float(i + 1) / n
+			var c0 := Color(0.02, 0.012, 0.006, 0.78 * (1.0 - pow(absf(t0 - 0.5) * 2.0, 2.2)))
+			var c1 := Color(0.02, 0.012, 0.006, 0.78 * (1.0 - pow(absf(t1 - 0.5) * 2.0, 2.2)))
+			draw_polygon(PackedVector2Array([Vector2(w * t0, 0), Vector2(w * t1, 0), Vector2(w * t1, h), Vector2(w * t0, h)]), PackedColorArray([c0, c1, c1, c0]))
 		draw_line(Vector2(w * 0.12, 0), Vector2(w * 0.88, 0), Color("d9b25f", 0.6), 1.0)
 		draw_line(Vector2(w * 0.12, h), Vector2(w * 0.88, h), Color("d9b25f", 0.6), 1.0)
 

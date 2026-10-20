@@ -37,7 +37,7 @@ const NAV := [
 const CLUB_RECT := Rect2(25, 45, 355, 73)
 const SOUND_RECT := Rect2(730, 45, 82, 75)
 const CARD_RECT := Rect2(108, 495, 637, 173)
-const PORTRAIT := Rect2(150, 524, 116, 118)
+const PORTRAIT := Rect2(145, 523, 125, 125)   # R168: vão medido (x 145–269, y 523–647); antes sobrava faixa escura nas bordas
 const SHIELD := Rect2(620, 515, 90, 133)
 ## R86 · cor do brilho atrás do elo, por liga
 const GLOW_COLORS := {"ferro": Color(0.75, 0.8, 0.9), "bronze": Color(1.0, 0.65, 0.35), "prata": Color(0.85, 0.9, 1.0), "ouro": Color(1.0, 0.8, 0.3), "platina": Color(0.5, 0.9, 1.0), "esmeralda": Color(0.35, 1.0, 0.55), "diamante": Color(0.4, 0.65, 1.0), "mestre": Color(0.8, 0.45, 1.0), "grande_mestre": Color(1.0, 0.35, 0.3), "challenger": Color(0.55, 0.75, 1.0)}

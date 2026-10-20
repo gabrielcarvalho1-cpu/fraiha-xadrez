@@ -121,6 +121,41 @@ export function entitlementDialog({ kind, action, playerName }) {
   });
 }
 
+// R168 · ENVIAR / TIRAR COROAS: quantidade + motivo. Resolve { amount, reason } ou null.
+export function crownsDialog({ playerName, balance, take = false }) {
+  return new Promise(resolve => {
+    const amount = h('input', { type: 'number', min: 1, step: 1, placeholder: 'Quantidade', name: 'amount', style: 'width:160px' });
+    const quick = [100, 1000, 10000, 50000].map(v => h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { amount.value = String(v); sync(); } }, v.toLocaleString('pt-BR')));
+    const reason = h('textarea', { rows: 2, placeholder: 'Obrigatório (vai para o Admin Log)', maxlength: 300 });
+    reason.value = take ? '' : 'Teste do dono';
+    const after = h('b', {});
+    const go = h('button', { class: 'btn ' + (take ? 'danger' : 'ok'), disabled: true }, take ? 'TIRAR COROAS' : 'ENVIAR COROAS');
+    const n = () => Math.floor(Number(amount.value));
+    const sync = () => {
+      const v = n();
+      const ok = Number.isFinite(v) && v > 0 && v <= 10000000 && (!take || v <= (balance || 0));
+      after.textContent = ok ? ((balance || 0) + (take ? -v : v)).toLocaleString('pt-BR') + ' Coroas' : '—';
+      go.disabled = !(ok && reason.value.trim().length >= 3);
+    };
+    amount.addEventListener('input', sync); reason.addEventListener('input', sync);
+    let done = false;
+    const close = v => { if (done) return; done = true; openModals.delete(close); bg.remove(); resolve(v); };
+    openModals.add(close);
+    const bg = h('div', { class: 'modal-bg', onclick: e => { if (e.target === bg) close(null); } },
+      h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', dataset: { crowns: take ? 'take' : 'give' } },
+        h('h3', {}, take ? 'Tirar Coroas' : 'Enviar Coroas'),
+        h('div', { class: 'kv' },
+          h('span', { class: 'k' }, 'Jogador'), h('span', { class: 'v' }, h('b', {}, playerName)),
+          h('span', { class: 'k' }, 'Saldo atual'), h('span', { class: 'v' }, (balance || 0).toLocaleString('pt-BR') + ' Coroas'),
+          h('span', { class: 'k' }, 'Quantidade'), h('span', { class: 'v' }, amount, h('div', { style: 'display:flex;gap:6px;margin-top:6px;flex-wrap:wrap' }, quick)),
+          h('span', { class: 'k' }, 'Saldo depois'), h('span', { class: 'v' }, after)),
+        h('div', { class: 'fields' }, h('label', {}, 'Motivo', reason)),
+        h('div', { class: 'actions' }, h('button', { class: 'btn ghost', onclick: () => close(null) }, 'Cancelar'), go)));
+    go.addEventListener('click', () => { if (go.disabled) return; close({ amount: take ? -n() : n(), reason: reason.value.trim() }); });
+    document.body.append(bg); sync(); amount.focus();
+  });
+}
+
 // Gráfico de linhas em SVG (sem biblioteca). series = [{at,...}], keys = [{key,label,color}]
 export function lineChart(series, keys, { height = 200, empty = 'Sem amostras ainda.' } = {}) {
   const NS = 'http://www.w3.org/2000/svg';

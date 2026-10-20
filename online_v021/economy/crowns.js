@@ -21,7 +21,7 @@ const POOL = [
   { id: 'marcha1', title: 'Jogue 1 partida de MARCHA', key: 'marcha', target: 1, reward: 20, group: 'marcha' },
   { id: 'ranked2', title: 'Jogue 2 partidas Ranqueadas', key: 'ranked', target: 2, reward: 30, group: 'ranked' },
 ];
-const REASONS = { game: 'Partida', daily: 'Entrada do dia', streak: 'Sequência de dias', mission: 'Missão do dia', buy: 'Compra na Loja', tournament: 'Prêmio de torneio' };
+const REASONS = { game: 'Partida', daily: 'Entrada do dia', streak: 'Sequência de dias', mission: 'Missão do dia', buy: 'Compra na Loja', tournament: 'Prêmio de torneio', admin: 'Presente do FRAIHA', pass: 'Passe da Temporada' };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const missing = e => /42P01|42703|42883|PGRST200|PGRST202|PGRST204|PGRST205|does not exist|Could not find/.test(String(e && e.code) + ' ' + String(e && e.message));
 

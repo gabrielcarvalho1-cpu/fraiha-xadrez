@@ -74,6 +74,8 @@ class AdminService {
         if (path === '/admin/api/matches') return need('matches.read') && out(200, this.matches());
         if (path === '/admin/api/players') return need('players.read') && out(200, await this.players(url.searchParams.get('q'), url.searchParams.get('limit')));
         if (path === '/admin/api/online') return need('players.read') && out(200, await this.onlinePlayers());
+        const cg = /^\/admin\/api\/players\/([0-9a-fA-F-]{36})\/crowns$/.exec(path);   // R168 · saldo de Coroas
+        if (cg) { if (!need('players.read')) return; return out(200, await this.crownsOf(cg[1].toLowerCase())); }
         const pm = /^\/admin\/api\/players\/([0-9a-fA-F-]{36})$/.exec(path);
         if (pm) { if (!need('players.read')) return; const d = await this.player(pm[1].toLowerCase()); return d ? out(200, d) : out(404, { error: 'not_found' }); }
         if (path === '/admin/api/audit') return need('audit.read') && out(200, { persistent: this.audit.persistent, items: this.audit.list({ limit: url.searchParams.get('limit'), action: url.searchParams.get('action') || '' }) });
@@ -173,6 +175,16 @@ class AdminService {
           catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
           return rp ? this.reportUpdate(admin, rp[1].toLowerCase(), body || {}, out) : this.suspendPlayer(admin, sp[1].toLowerCase(), sp[2], body || {}, out);
         }
+        // R168 · ENVIAR (ou tirar) COROAS de um jogador — o dono testa a Loja/Passe sem precisar jogar
+        const crp = /^\/admin\/api\/players\/([0-9a-fA-F-]{36})\/crowns$/.exec(path);
+        if (crp) {
+          if (!need('entitlements.write')) return;
+          if (this.limited('write:' + admin.id, 30)) return out(429, { error: 'rate_limited' });
+          let body;
+          try { body = await readJson(req, 4096); }
+          catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
+          return this.crownsGive(admin, crp[1].toLowerCase(), body || {}, out);
+        }
         const em = /^\/admin\/api\/players\/([0-9a-fA-F-]{36})\/(club|founder)$/.exec(path);
         if (em) {
           if (!need('entitlements.write')) return;
@@ -190,6 +202,47 @@ class AdminService {
       console.error('[admin] api error', e && e.message);
       return out(500, { error: 'server_error' });
     }
+  }
+  // ---------------------------------------------------------------- R168 · COROAS (Admin)
+  async crownsOf(uid) {
+    const st = this.backend.store;
+    if (!st || !st.crownWallet) return { available: false };
+    try {
+      const [w, recent] = await Promise.all([st.crownWallet(uid), st.crownLedger ? st.crownLedger(uid, 10) : []]);
+      return { available: true, balance: w ? w.balance : 0, earned_total: w ? w.earned_total : 0,
+        recent: (recent || []).map(r => ({ delta: r.delta, reason: r.reason, at: r.created_at })) };
+    } catch (e) {
+      if (/42P01|PGRST205|does not exist|Could not find/.test(String(e && e.code) + ' ' + String(e && e.message))) return { available: false, error: 'migration_0016_missing' };
+      throw e;
+    }
+  }
+  async crownsGive(admin, uid, b, out) {
+    const st = this.backend.store;
+    if (!st || !st.crownAward) return out(503, { error: 'unavailable' });
+    const amount = Number(b.amount);
+    if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 10000000) return out(400, { error: 'invalid_amount' });
+    const reason = String(b.reason || '').trim().slice(0, 300);
+    if (reason.length < 3) return out(400, { error: 'reason_required' });
+    if (st.getProfile) { const prof = await st.getProfile(uid).catch(() => null); if (!prof) return out(404, { error: 'not_found' }); }
+    const before = await st.crownWallet(uid).catch(() => null);
+    const ref = `${this.now()}:${String(admin.id || 'admin').slice(0, 40)}:${Math.random().toString(36).slice(2, 8)}`;
+    let balance;
+    try { balance = await st.crownAward(uid, amount, 'admin', ref); }
+    catch (e) {
+      const t = String(e && e.code) + ' ' + String(e && e.message);
+      if (/23514|balance/.test(t)) return out(400, { error: 'insufficient_balance' });
+      if (/42P01|PGRST20|does not exist|Could not find/.test(t)) return out(503, { error: 'migration_0016_missing' });
+      throw e;
+    }
+    this.audit.record({ actor: admin, action: amount > 0 ? 'crowns_give' : 'crowns_take', target: { type: 'player', id: uid },
+      before: { balance: before ? before.balance : 0 }, after: { balance, amount }, result: 'ok', reason });
+    // o jogador online vê na hora (aviso + saldo novo)
+    const C = this.backend.crowns;
+    if (C) {
+      if (amount > 0) C.notify(uid, amount, [`Presente do FRAIHA +${amount}`]).catch(() => {});
+      else for (const ws of (this.backend.socketsOf ? this.backend.socketsOf(uid) : [])) C.sendState(ws, uid).catch(() => {});
+    }
+    return out(200, { balance, amount });
   }
   // ---------------------------------------------------------------- R121 · CRIADORES
   async creatorsList() {

@@ -1,6 +1,6 @@
 // FRAIHA Admin · telas. Regra: número só aparece quando o servidor o entrega; o que não existe aparece
 // como INDISPONÍVEL com o motivo. Ação sem backend aparece desabilitada com "BACKEND NECESSÁRIO".
-import { h, metricCard, statusBadge, stateBox, loadingCards, lineChart, confirmAction, entitlementDialog, toast, unavailable,
+import { h, metricCard, statusBadge, stateBox, loadingCards, lineChart, confirmAction, entitlementDialog, crownsDialog, toast, unavailable,
   fmtInt, fmtDur, fmtDate, fmtAgo, FAMILY_LABEL, PLACE_LABEL } from '../ui.js';
 import { ApiError } from '../api.js';
 
@@ -269,6 +269,7 @@ function player(ctx) {
             h('span', { class: 'k' }, 'Badge / moldura'), h('span', { class: 'v dim' }, 'futuro')),
             h('p', { class: 'dim', style: 'font-size:12px;margin-top:12px' }, 'Conceder/revogar Fundador: no quadro Clube FRAIHA (os dois benefícios são independentes).'),
             h('p', { class: 'dim', style: 'font-size:12px' }, 'INDISPONÍVEL — BACKEND NECESSÁRIO.'))),
+        crownsPanel(ctx, p),
         h('div', { class: 'panel' }, h('h2', {}, 'Ranked (por modo)'), ranked.length ? h('div', { class: 'tablewrap' }, h('table', {},
           h('thead', {}, h('tr', {}, ['Modo', 'Liga', 'PL', 'Partidas', 'Vitórias', 'Derrotas', 'Empates', 'Maior liga'].map(t => h('th', {}, t)))),
           h('tbody', {}, ranked.map(([k, s]) => h('tr', {}, h('td', {}, MODE_NAME[k]), h('td', {}, LEAGUES[s.league] || s.league), h('td', {}, fmtInt(s.pl)), h('td', {}, fmtInt(s.matches)), h('td', {}, fmtInt(s.wins)), h('td', {}, fmtInt(s.losses)), h('td', {}, fmtInt(s.draws)), h('td', {}, LEAGUES[s.highest_league] || '—'))))))
@@ -277,6 +278,41 @@ function player(ctx) {
         h('div', { class: 'panel' }, h('h2', {}, 'Outros modos'), modes.length ? h('div', { class: 'mini' }, modes.map(([k, s]) => h('div', {}, h('span', { class: 'dim' }, (FAMILY_LABEL[k] || k)), h('b', {}, `${fmtInt(s.wins)} V · ${fmtInt(s.losses)} D`)))) : d.modes && !d.modes.ok ? readErr(d.modes) : stateBox('empty', 'Sem registros.')));
     },
   };
+}
+
+// ---------------------------------------------------------------- R168 · COROAS do jogador
+const CROWN_REASON = { game: 'Partida', daily: 'Entrada do dia', streak: 'Sequência', mission: 'Missão', buy: 'Compra na Loja', tournament: 'Torneio', admin: 'Admin', pass: 'Passe', creator: 'Criador' };
+function crownsPanel(ctx, p) {
+  const bal = h('b', { id: 'crowns-balance', style: 'font-size:22px' }, '…');
+  const list = h('div', { class: 'mini', id: 'crowns-recent' });
+  const write = canEnt(ctx);
+  let balance = 0;
+  const load = async () => {
+    try {
+      const d = await ctx.api.get(`/admin/api/players/${p.user_id}/crowns`);
+      if (!ctx.alive()) return;
+      if (!d.available) { bal.textContent = 'INDISPONÍVEL'; return; }
+      balance = d.balance || 0;
+      bal.textContent = balance.toLocaleString('pt-BR') + ' Coroas';
+      list.replaceChildren(...(d.recent || []).filter(r => r.delta !== 0).slice(0, 8).map(r => h('div', {}, h('span', { class: 'dim' }, (CROWN_REASON[r.reason] || r.reason) + ' · ' + fmtDay(r.at)), h('b', { style: 'color:' + (r.delta > 0 ? '#7fd99a' : '#ff8a7a') }, (r.delta > 0 ? '+' : '') + r.delta.toLocaleString('pt-BR')))));
+    } catch (e) { if (ctx.alive()) bal.textContent = 'ERRO DE CONSULTA'; }
+  };
+  const act = async take => {
+    const ok = await crownsDialog({ playerName: p.nickname || p.user_id.slice(0, 8), balance, take });
+    if (!ok || !ctx.alive()) return;
+    try {
+      const r = await ctx.api.post(`/admin/api/players/${p.user_id}/crowns`, ok);
+      toast(`${ok.amount > 0 ? 'Enviadas' : 'Retiradas'} ${Math.abs(ok.amount).toLocaleString('pt-BR')} Coroas · saldo ${Number(r.balance).toLocaleString('pt-BR')} · registrado no Admin Log`);
+    } catch (e) { if (!ctx.alive() || (e instanceof ApiError && e.kind === 'revoked')) return; toast(e instanceof ApiError ? e.text : 'Falha ao enviar', 'err'); }
+    load();
+  };
+  load();
+  return h('div', { class: 'panel', id: 'crowns-panel' }, h('h2', {}, 'Coroas'),
+    h('div', { style: 'display:flex;align-items:center;gap:12px;flex-wrap:wrap' }, h('span', { class: 'dim' }, 'Saldo'), bal,
+      write ? h('button', { class: 'btn sm ok', id: 'crowns-give', onclick: () => act(false) }, 'ENVIAR COROAS') : '',
+      write ? h('button', { class: 'btn sm danger', id: 'crowns-take', onclick: () => act(true) }, 'TIRAR') : ''),
+    h('p', { class: 'dim', style: 'font-size:12px' }, 'O jogador online recebe o aviso na hora. Tudo fica no Admin Log.'),
+    list);
 }
 
 // ---------------------------------------------------------------- CLUBE / FUNDADOR
@@ -532,7 +568,7 @@ export function reports(ctx) {
 // ---------------------------------------------------------------- ADMIN LOG
 export function audit(ctx) {
   const f = frame(ctx, 'Admin Log', 'Toda ação administrativa real é registrada pelo SERVIDOR antes de responder.');
-  const ACT = { 'queue.disable': 'desativou', 'queue.enable': 'ativou', 'queue.mode_disable': 'desativou ritmo', 'queue.mode_enable': 'ativou ritmo', clube_grant: 'concedeu Clube', clube_change: 'alterou Clube', clube_revoke: 'revogou Clube', founder_grant: 'concedeu Fundador', founder_revoke: 'revogou Fundador', 'leagues.preview_on': 'liberou todas as ligas', 'leagues.preview_off': 'voltou as ligas ao normal' };
+  const ACT = { 'queue.disable': 'desativou', 'queue.enable': 'ativou', 'queue.mode_disable': 'desativou ritmo', 'queue.mode_enable': 'ativou ritmo', clube_grant: 'concedeu Clube', clube_change: 'alterou Clube', clube_revoke: 'revogou Clube', founder_grant: 'concedeu Fundador', founder_revoke: 'revogou Fundador', crowns_give: 'enviou Coroas', crowns_take: 'tirou Coroas', 'leagues.preview_on': 'liberou todas as ligas', 'leagues.preview_off': 'voltou as ligas ao normal' };
   const st = x => !x ? '—' : 'enabled' in x ? (x.enabled ? 'ativo' : 'desativado') : `Clube ${x.club}${x.club_expires_at ? ' até ' + new Date(x.club_expires_at).toLocaleDateString('pt-BR') : x.club === 'ATIVO' ? ' sem expiração' : ''} · Fundador ${x.founder ? 'SIM' : 'NÃO'}`;
   const tgt = t => !t ? '—' : t.mode ? `${FAMILY_LABEL[t.family]} ${t.mode.replace(/^(ranked|casual)_/, '')}` : t.family ? FAMILY_LABEL[t.family] : t.type === 'leagues' ? 'Ligas (visual, todos)' : t.user_id ? `${t.nickname || '?'} (${t.user_id.slice(0, 8)})` : JSON.stringify(t);
   return {

@@ -8,7 +8,7 @@ const CREAM := Color("efe3c4")
 const DIM := Color("b9ad8e")
 const FONT := preload("res://account/fonts/Cinzel-Bold.woff")
 const FONT_SEMI := preload("res://account/fonts/Cinzel-SemiBold.woff")
-const FRAME_PC := preload("res://ui_kit/modal/moldura_pc.png")     # 1672 x 941
+const FRAME_PC := preload("res://ui_kit/modal/moldura_pc_voltar.png")     # 1672 x 941 · R168: o botão da arte diz só VOLTAR
 const FRAME_CEL := preload("res://ui_kit/modal/moldura_cel.png")   # 900 x 1116 (meio repete na vertical)
 # retângulos na arte (pixels da textura)
 const PC_TITLE := Rect2(500, 96, 676, 70)
@@ -21,6 +21,9 @@ const CEL_BOTTOM := 188.0       # rodapé fixo
 const CEL_BODY_X := Vector2(122, 778)
 
 signal closed
+## R168 · VOLTAR passo a passo: quem abriu esta tela de dentro de outra (ex.: COROAS → LOJA) guarda aqui como
+## reabrir a anterior. VOLTAR / ESC / toque fora volta para ela; sem anterior, volta para a Home (como antes).
+var back_to: Callable = Callable()
 var hub
 var account
 var shade: ColorRect
@@ -64,7 +67,7 @@ func build(p_hub, p_title: String):
 	for st in ["normal", "focus", "disabled"]: close_button.add_theme_stylebox_override(st, StyleBoxEmpty.new())
 	close_button.add_theme_stylebox_override("hover", glow)
 	close_button.add_theme_stylebox_override("pressed", glow)
-	close_button.pressed.connect(close)
+	close_button.pressed.connect(go_back)
 	add_child(close_button)
 	body = VBoxContainer.new()
 	body.add_theme_constant_override("separation", 8)
@@ -132,6 +135,15 @@ func open():
 		n.modulate.a = 0.0
 		create_tween().tween_property(n, "modulate:a", 1.0, 0.14)
 
+func go_back():
+	var prev := back_to
+	back_to = Callable()
+	close()
+	if prev.is_valid(): prev.call()
+
+func esc_close():
+	go_back()
+
 func close():
 	preload("res://ui_v022/web_text_field.gd").set_covered(self, false)
 	if not visible: return
@@ -142,7 +154,7 @@ func close():
 func _shade_input(e: InputEvent):
 	var down: bool = (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT) or (e is InputEventScreenTouch and e.pressed)
 	# o mesmo toque que abriu chega duas vezes no celular (toque + clique emulado): não fecha na hora
-	if down and Time.get_ticks_msec() - opened_ms > 400: close()
+	if down and Time.get_ticks_msec() - opened_ms > 400: go_back()
 
 func portrait() -> bool:
 	var vs := get_viewport().get_visible_rect().size

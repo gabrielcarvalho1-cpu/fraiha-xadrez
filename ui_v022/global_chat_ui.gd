@@ -18,6 +18,14 @@ var muted_bar: HFlowContainer   # R161 · silenciados: um botão por pessoa para
 var reported := {}       # id -> true
 var selected := -1
 var can_send := false
+## R168 · ABAS (canais do servidor): GERAL, PROCURANDO PARCEIROS, DÚVIDAS E AJUDA
+const CHANNELS := [["geral", "GERAL", "Escreva para todos…", "GERAL"], ["parceiros", "PROCURANDO PARCEIROS", "Ex.: alguém pra uma Rápida 5 min?", "PARCEIROS"], ["ajuda", "DÚVIDAS E AJUDA", "Pergunte sobre o jogo…", "AJUDA"]]
+func _tab_text(c: Array) -> String:
+	return c[3] if narrow() else c[1]
+var channel := "geral"
+var tab_row: HBoxContainer
+var tab_buttons := {}
+var unread := {}
 
 func setup(p_hub, acc):
 	build(p_hub, "CHAT GLOBAL")
@@ -27,6 +35,20 @@ func setup(p_hub, acc):
 	online_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_child(online_label)
 	body.move_child(online_label, 0)
+	tab_row = HBoxContainer.new()
+	tab_row.name = "GchatTabs"
+	tab_row.add_theme_constant_override("separation", 6)
+	body.add_child(tab_row)
+	body.move_child(tab_row, 0)
+	for c in CHANNELS:
+		var cid: String = c[0]
+		var b := button(_tab_text(c), 11 if narrow() else 15, cid == channel)
+		b.name = "GchatTab_" + cid
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.clip_text = true
+		b.pressed.connect(func(): set_channel(cid))
+		tab_row.add_child(b)
+		tab_buttons[cid] = b
 	muted_bar = HFlowContainer.new()
 	muted_bar.name = "GchatMutedBar"
 	muted_bar.add_theme_constant_override("h_separation", 8)
@@ -75,6 +97,25 @@ func setup(p_hub, acc):
 	body.add_child(guest_label)
 	WebTextField.attach(input, true)   # celular: campo HTML real (abre o teclado no iPhone) com ENVIAR acima do teclado
 
+func set_channel(cid: String):
+	channel = cid
+	unread.erase(cid)
+	selected = -1
+	for c in CHANNELS:
+		var cid2: String = c[0]
+		var b: Button = tab_buttons[cid2]
+		b.text = _tab_text(c) + ("  •" if unread.has(cid2) else "")
+		_style_tab(b, cid2 == channel)
+		if cid2 == channel: input.placeholder_text = c[2]
+	_rebuild()
+
+func _style_tab(b: Button, on: bool):
+	style_button(b, on)
+
+static func channel_of(m: Dictionary) -> String:
+	var c := String(m.get("channel", "geral"))
+	return c if c in ["geral", "parceiros", "ajuda"] else "geral"
+
 func show_chat():
 	open()
 	selected = -1
@@ -94,7 +135,7 @@ func _apply_can_send(v: bool):
 func send_current():
 	var t := input.text.strip_edges()
 	if t.is_empty(): return
-	if account == null or not account.send_server({"type": "gchat_send", "text": t}):
+	if account == null or not account.send_server({"type": "gchat_send", "text": t, "channel": channel}):
 		status.text = "Sem conexão com o servidor."
 		return
 	input.text = ""
@@ -108,13 +149,17 @@ func _on_message(msg: Dictionary):
 			_apply_can_send(bool(msg.get("can_send", false)))
 			var n := int(msg.get("online", 0))
 			online_label.text = (("%d pessoa%s no chat agora" % [n, "" if n == 1 else "s"]) if n > 0 else "") + ("  ·  toque numa mensagem para ver o perfil" if can_send else "")
-			status.text = "" if not messages.is_empty() else "Seja o primeiro a dizer olá!"
-			_rebuild()
+			status.text = ""
+			set_channel(channel)
 		"gchat_msg":
 			messages.append(msg)
-			if messages.size() > 80: messages.pop_front()
+			if messages.size() > 240: messages.pop_front()
 			status.text = ""
-			if visible: _rebuild()
+			var mc := channel_of(msg)
+			if mc != channel and not unread.has(mc):
+				unread[mc] = true
+				(tab_buttons[mc] as Button).text += "  •"
+			if visible and mc == channel: _rebuild()
 		"gchat_error":
 			status.text = String(msg.get("message", "Não foi possível enviar."))
 		"gchat_reported":
@@ -147,10 +192,15 @@ func _rebuild():
 	_rebuild_muted()
 	for ch in list.get_children(): ch.queue_free()
 	var me := String(account.get("user_id")) if account != null else ""
+	var shown := 0
 	for m in messages:
+		if channel_of(m) != channel: continue
 		var uid := String(m.get("user_id", ""))
 		if muted.has(uid): continue
 		list.add_child(_message_row(m, uid == me and me != ""))
+		shown += 1
+	if shown == 0 and status.text.is_empty() or status.text.begins_with("Ninguém escreveu"):
+		status.text = "" if shown > 0 else {"geral": "Ninguém escreveu aqui ainda. Seja o primeiro a dizer olá!", "parceiros": "Ninguém escreveu aqui ainda. Procurando alguém pra jogar? Escreva aqui!", "ajuda": "Ninguém escreveu aqui ainda. Tem alguma dúvida? Pergunte aqui!"}.get(channel, "")
 	_scroll_end.call_deferred()
 
 func _scroll_end():

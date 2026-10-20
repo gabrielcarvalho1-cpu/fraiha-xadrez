@@ -93,7 +93,9 @@ func open_creator():
 		creator_panel = load("res://economy/creator_ui.gd").new()
 		hub.add_child(creator_panel)
 		creator_panel.setup(hub, account, self)
-	if is_instance_valid(panel) and panel.is_open(): panel.close()
+	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
+	if from_panel: panel.close()
+	creator_panel.back_to = open_panel if from_panel else Callable()   # R168 · VOLTAR volta para COROAS
 	creator_panel.show_creator()
 
 var pass_panel = null
@@ -103,7 +105,9 @@ func open_pass():
 		pass_panel = load("res://economy/season_pass_ui.gd").new()
 		hub.add_child(pass_panel)
 		pass_panel.setup(hub, account, self)
-	if is_instance_valid(panel) and panel.is_open(): panel.close()
+	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
+	if from_panel: panel.close()
+	pass_panel.back_to = open_panel if from_panel else Callable()   # R168 · VOLTAR volta para COROAS
 	pass_panel.show_pass()
 
 var tourn_panel = null
@@ -113,7 +117,9 @@ func open_tournament(g := "chess"):
 		tourn_panel = load("res://economy/tournament_ui.gd").new()
 		hub.add_child(tourn_panel)
 		tourn_panel.setup(hub, account, self)
-	if is_instance_valid(panel) and panel.is_open(): panel.close()
+	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
+	if from_panel: panel.close()
+	tourn_panel.back_to = open_panel if from_panel else Callable()   # R168 · VOLTAR volta para COROAS
 	tourn_panel.show_tournament(g)
 
 func open_store(tab := "title"):
@@ -121,7 +127,9 @@ func open_store(tab := "title"):
 		store_panel = load("res://economy/crown_store_ui.gd").new()
 		hub.add_child(store_panel)
 		store_panel.setup(hub, account, self)
-	if is_instance_valid(panel) and panel.is_open(): panel.close()
+	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
+	if from_panel: panel.close()
+	store_panel.back_to = open_panel if from_panel else Callable()   # R168 · VOLTAR volta para COROAS
 	store_panel.show_store(tab)
 	request()
 

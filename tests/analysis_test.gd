@@ -136,6 +136,10 @@ func run():
     check(node("ProgressBar") != null and node("AnalysisCancel") != null and node("ProgressLabel") != null, "progresso: barra, lance, cancelar")
     check(await wait_until(func(): return ui.page == "report", 60.0), "relatório pronto (motor %s)" % stage.analysis_engine.engine_name)
     var rep = ui.report
+    if OS.get_environment("SHOT_DIR") != "":
+        for i in 10: await process_frame
+        await RenderingServer.frame_post_draw
+        root.get_texture().get_image().save_png(OS.get_environment("SHOT_DIR").path_join(("cel_" if mobile else "pc_") + "analise.png"))
     check(rep.moves.size() == rec.moves.size() and rep.players.has("w") and rep.players.has("b"), "relatório com todos os lances e dois jogadores")
     check(node("AccuracyMe") != null and node("AccuracyOpp") != null and "%" in node("AccuracyMe").text, "precisão VOCÊ / ADVERSÁRIO")
     check(node("EvalGraph") != null and node("ReviewBoard") != null and node("MoveListPanel") != null, "gráfico, tabuleiro e lista")
