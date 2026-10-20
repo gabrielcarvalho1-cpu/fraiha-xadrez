@@ -38,6 +38,8 @@ const hookHits=new Map();function webhookLimited(req){const ip=String(req.header
 const server=http.createServer((req,res)=>{
   if(admin.owns(req))return void admin.handle(req,res);
   if(adminStatic.owns(req))return void adminStatic.handle(req,res);
+  // R161 · NOVIDADES (público, CORS): o jogo lê o outdoor da Home e as abas de novidades
+  if(req.method==='GET'&&(req.url==='/news'||String(req.url).startsWith('/news?'))){backend.news.http(req,res).catch(e=>{console.error('news',e&&e.message);if(!res.headersSent){res.writeHead(500);res.end('error')}});return}
   // Webhook do provedor de pagamento (V2). Corpo bruto é necessário para verificar a assinatura.
   if(req.method==='POST'&&(req.url==='/webhooks/payments'||String(req.url).startsWith('/webhooks/payments?'))){if(webhookLimited(req)){res.writeHead(429);return void res.end('slow down')}let raw='';req.on('data',d=>{raw+=d;if(raw.length>1e6)req.destroy()});req.on('end',async()=>{try{const r=await backend.payments.webhook(req,raw);res.writeHead(r.status,{'content-type':'text/plain'});res.end(r.body)}catch(e){console.error('webhook',e&&e.message);res.writeHead(500);res.end('error')}});return}
   res.writeHead(200,{'content-type':'text/plain'});res.end('FRAIHA multiplayer server\n')});

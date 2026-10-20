@@ -99,7 +99,11 @@ class Social {
         ranked[mode] = { league: s.league || 0, pl: s.pl || 0, wins: s.wins || 0, losses: s.losses || 0, draws: s.draws || 0, matches: s.matches || 0, highest_league: s.highest_league || 0 };
         highest = Math.max(highest, ranked[mode].highest_league);
       }
-      return this.send(ws, { type: 'social_profile', profile: { ...target, highest_league: highest, ranked,
+      // R161 · placar de Casual / XEQUE / MARCHA no perfil (mode_stats; sem a tabela, o perfil sai sem ele)
+      let modes = null;
+      try { const all = st.getModeStats ? await op.wait(() => st.getModeStats(other)) : null; if (all && !all.not_configured) modes = all; }
+      catch (e) { modes = null; }
+      return this.send(ws, { type: 'social_profile', profile: { ...target, highest_league: highest, ranked, modes,
         presence: relation === 'friend' ? this.presenceOf(other) : '', relation } });   // presença só para amigos
     }
     const done = async (action, notifyEvent) => {

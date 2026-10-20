@@ -451,6 +451,18 @@ class MemoryStore {
     return { paid: n, commission_cents: cents };
   }
   // R157 · Torneios de evento (em memória)
+  // R161 · NOVIDADES (0022_fraiha_novidades)
+  async newsList() { return [...(this.news || new Map()).values()].map(n => ({ ...n })).sort((a, b) => String(b.published_at).localeCompare(String(a.published_at))); }
+  async newsGet(id) { const n = (this.news || new Map()).get(id); return n ? { ...n } : null; }
+  async newsSave(n) {
+    this.news = this.news || new Map();
+    const now = new Date().toISOString();
+    const cur = n.id ? this.news.get(n.id) : null;
+    const row = { pinned: false, published: true, body: '', button_label: '', button_action: '', published_at: now, created_at: now, ...(cur || {}), ...n, id: n.id || require('crypto').randomUUID(), updated_at: now };
+    this.news.set(row.id, row);
+    return { ...row };
+  }
+  async newsDelete(id) { (this.news || new Map()).delete(id); }
   async evList() { return [...(this.events || new Map()).values()].map(e => ({ ...e })).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))); }
   async evGet(id) { const e = (this.events || new Map()).get(id); return e ? { ...e } : null; }
   async evByCode(code) { return (await this.evList()).find(e => e.code === code) || null; }
@@ -1011,6 +1023,18 @@ class SupabaseStore {
     return { paid: rows.length, commission_cents: rows.reduce((s, r) => s + (r.commission_cents || 0), 0) };
   }
   // R157 · Torneios de evento (0021)
+  // R161 · NOVIDADES (0022_fraiha_novidades)
+  async newsList() { return this.req('/news_items?select=*&order=published_at.desc&limit=300'); }
+  async newsGet(id) { const r = await this.req('/news_items?id=eq.' + encodeURIComponent(id) + '&select=*'); return r[0] || null; }
+  async newsSave(n) {
+    const body = { ...n, updated_at: new Date().toISOString() };
+    if (!body.id) delete body.id;
+    const rows = body.id
+      ? await this.req('/news_items?id=eq.' + encodeURIComponent(body.id), { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) })
+      : await this.req('/news_items', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
+    return rows[0];
+  }
+  async newsDelete(id) { await this.req('/news_items?id=eq.' + encodeURIComponent(id), { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); }
   async evList() { return this.req('/event_tournaments?select=*&order=created_at.desc&limit=200'); }
   async evGet(id) { const r = await this.req('/event_tournaments?id=eq.' + encodeURIComponent(id) + '&select=*'); return r[0] || null; }
   async evByCode(code) { const r = await this.req('/event_tournaments?code=eq.' + encodeURIComponent(code) + '&select=*'); return r[0] || null; }

@@ -13,7 +13,8 @@ var input: LineEdit
 var send_button: Button
 var guest_label: Label
 var messages: Array = []
-var muted := {}          # user_id -> true (só nesta sessão)
+var muted := {}          # user_id -> nickname (só nesta sessão)
+var muted_bar: HFlowContainer   # R161 · silenciados: um botão por pessoa para voltar a ver (REATIVAR)
 var reported := {}       # id -> true
 var selected := -1
 var can_send := false
@@ -26,6 +27,13 @@ func setup(p_hub, acc):
 	online_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_child(online_label)
 	body.move_child(online_label, 0)
+	muted_bar = HFlowContainer.new()
+	muted_bar.name = "GchatMutedBar"
+	muted_bar.add_theme_constant_override("h_separation", 8)
+	muted_bar.add_theme_constant_override("v_separation", 6)
+	muted_bar.hide()
+	body.add_child(muted_bar)
+	body.move_child(muted_bar, 1)
 	scroll = ScrollContainer.new()
 	preload("res://ui_v022/touch_scroll.gd").attach(scroll)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -115,7 +123,27 @@ func _on_message(msg: Dictionary):
 			selected = -1
 			_rebuild()
 
+func unmute(uid: String):
+	var nick := String(muted.get(uid, ""))
+	muted.erase(uid)
+	status.text = "Você voltou a ver as mensagens de %s." % nick if nick != "" else ""
+	_rebuild()
+
+func _rebuild_muted():
+	for ch in muted_bar.get_children(): ch.queue_free()
+	muted_bar.visible = not muted.is_empty()
+	if muted.is_empty(): return
+	var t := label("Silenciados:", 13, DIM, false)
+	muted_bar.add_child(t)
+	for uid in muted:
+		var u := String(uid)
+		var b := button("%s  ·  REATIVAR" % String(muted[uid]), 13)
+		b.name = "GchatUnmute_" + u
+		b.pressed.connect(func(): unmute(u))
+		muted_bar.add_child(b)
+
 func _rebuild():
+	_rebuild_muted()
 	for ch in list.get_children(): ch.queue_free()
 	var me := String(account.get("user_id")) if account != null else ""
 	for m in messages:
@@ -178,9 +206,9 @@ func _message_row(m: Dictionary, mine: bool) -> Control:
 			acts.add_child(prof)
 		var mute := button("SILENCIAR", 13)
 		mute.pressed.connect(func():
-			muted[uid] = true
+			muted[uid] = String(m.get("nickname", "Jogador"))
 			selected = -1
-			status.text = "Você não verá mais as mensagens de %s (até fechar o jogo)." % String(m.get("nickname", ""))
+			status.text = "Você não verá mais as mensagens de %s. Para voltar a ver, toque em REATIVAR lá em cima." % String(m.get("nickname", ""))
 			_rebuild())
 		acts.add_child(mute)
 		var rep := button("DENUNCIAR" if not reported.has(id) else "DENUNCIADA", 13)

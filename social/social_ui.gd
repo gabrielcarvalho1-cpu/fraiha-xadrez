@@ -318,6 +318,8 @@ func show_toast(text: String):
 
 # ---------- R51 · Pedido de amizade recebido: cartãozinho com ACEITAR / RECUSAR (fora da tela de AMIGOS) ----------
 const Kit = preload("res://ui_kit/kit.gd")
+const ThemeCatalog = preload("res://cosmetics/theme_catalog.gd")
+const LeagueIds = preload("res://league/catalog.gd")
 var req_card: PanelContainer
 var req_left := 0.0
 var req_uid := ""
@@ -925,47 +927,116 @@ func _build_profile(narrow: bool):
     if profile.get("loading", false):
         _label(box, "Carregando perfil…", 16, GOLD, true)
         return
-    var top = HBoxContainer.new() if not narrow else VBoxContainer.new()
-    top.add_theme_constant_override("separation", 12)
-    box.add_child(top)
-    var av = _avatar(top, profile, 88)
+    # R161 · perfil novo: cabeçalho centrado, ELO do xadrez em destaque, os 4 ritmos em quadradinhos e
+    # Casual / XEQUE / MARCHA em linhas simples (vitórias, derrotas, empates e % de vitórias)
+    var head = VBoxContainer.new()
+    head.add_theme_constant_override("separation", 4)
+    box.add_child(head)
+    var av_row = CenterContainer.new()
+    head.add_child(av_row)
+    var av = _avatar(av_row, profile, 92)
     _frame(av, profile)
-    if narrow: av.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-    var info = VBoxContainer.new()
-    info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    top.add_child(info)
     var nick_row = HBoxContainer.new()
+    nick_row.alignment = BoxContainer.ALIGNMENT_CENTER
     nick_row.add_theme_constant_override("separation", 8)
-    info.add_child(nick_row)
-    var nick = _label(nick_row, String(profile.get("nickname", "")), 24, Color("f4edda"), narrow)
+    head.add_child(nick_row)
+    var nick = _label(nick_row, String(profile.get("nickname", "")), 24, Color("f4edda"), true)
     nick.name = "ProfileNickname"
     # R35.1 · nickname numa linha só (antes quebrava letra a letra: o rótulo ficava com largura 0)
     nick.autowrap_mode = TextServer.AUTOWRAP_OFF
     nick.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     nick.clip_text = true
-    nick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     nick.custom_minimum_size.x = 120
-    _seal(nick_row, profile, 44)
+    _seal(nick_row, profile, 40)
     var ttl := Cosmetics.title_text(String(profile.get("title", "")))
-    if not ttl.is_empty(): _label(info, ttl.to_upper(), 15, GOLD, narrow).name = "ProfileTitle"
+    if not ttl.is_empty(): _label(head, ttl.to_upper(), 14, GOLD, true).name = "ProfileTitle"
     var pres = String(profile.get("presence", ""))
     if not pres.is_empty():   # o servidor só envia presença de amigos
         var pinfo = PRESENCE.get(pres, PRESENCE["offline"])
-        _label(info, "- " + pinfo[0], 15, pinfo[1], narrow).name = "ProfilePresence"
-    var hl = int(profile.get("highest_league", 0))
-    _label(info, "Maior liga: " + LEAGUES[clampi(hl, 0, 10)], 15, GOLD, narrow).name = "ProfileHighest"
-    _label(box, "RANQUEADO", 15, GOLD)
+        _label(head, "●  " + pinfo[0], 14, pinfo[1], true).name = "ProfilePresence"
     var ranked: Dictionary = profile.get("ranked", {}) if profile.get("ranked") is Dictionary else {}
+    # ---- ELO DO XADREZ: o melhor ritmo jogado (liga mais alta, depois mais PL)
+    var best := -1
+    var best_key := -1
+    for i in MODES.size():
+        var s0: Dictionary = ranked.get(MODES[i][0], {}) if ranked.get(MODES[i][0]) is Dictionary else {}
+        if int(s0.get("matches", 0)) <= 0: continue
+        var key := int(s0.get("league", 0)) * 1000 + int(s0.get("pl", 0))
+        if key > best_key: best_key = key; best = i
+    var hl := clampi(int(profile.get("highest_league", 0)), 0, 10)
+    var elo := _stat_box(box)
+    elo.name = "ProfileElo"
+    var er = HBoxContainer.new()
+    er.add_theme_constant_override("separation", 12)
+    elo.add_child(er)
+    var lg := 0
+    var line2 := "Ainda sem partidas ranqueadas"
+    if best >= 0:
+        var bs: Dictionary = ranked[MODES[best][0]]
+        lg = clampi(int(bs.get("league", 0)), 0, 10)
+        line2 = "%s · %d PL" % [LEAGUES[lg].to_upper(), int(bs.get("pl", 0))]
+    _badge(er, lg, 64)
+    var ev = VBoxContainer.new()
+    ev.alignment = BoxContainer.ALIGNMENT_CENTER
+    ev.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    ev.add_theme_constant_override("separation", 0)
+    er.add_child(ev)
+    _label(ev, "ELO NO XADREZ" + (("  ·  " + MODES[best][1]) if best >= 0 else ""), 13, GOLD).name = "ProfileEloMode"
+    var el = _label(ev, line2, 21 if best >= 0 else 15, Color("f4edda") if best >= 0 else DIM_TEXT)
+    el.name = "ProfileEloLeague"
+    _label(ev, "Maior liga já alcançada: " + LEAGUES[hl], 13, DIM_TEXT).name = "ProfileHighest"
+    # ---- XADREZ RANKEADO: um quadradinho por ritmo
+    _pf_section(box, "XADREZ RANQUEADO")
     var grid = GridContainer.new()
-    grid.columns = 1 if narrow else 2
-    grid.add_theme_constant_override("h_separation", 14)
-    grid.add_theme_constant_override("v_separation", 4)
+    grid.name = "ProfileRankedGrid"
+    grid.columns = 2 if narrow else 4
+    grid.add_theme_constant_override("h_separation", 8)
+    grid.add_theme_constant_override("v_separation", 8)
     box.add_child(grid)
     for m in MODES:
         var s: Dictionary = ranked.get(m[0], {}) if ranked.get(m[0]) is Dictionary else {}
-        var line = "%s · %s %d PL\n%dV %dD %dE · %d partidas" % [m[1], LEAGUES[clampi(int(s.get("league", 0)), 0, 10)], int(s.get("pl", 0)), int(s.get("wins", 0)), int(s.get("losses", 0)), int(s.get("draws", 0)), int(s.get("matches", 0))]
-        var l = _label(grid, line, 14, TEXT)
-        l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        var t := _stat_box(grid)
+        t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        var tv = VBoxContainer.new()
+        tv.add_theme_constant_override("separation", 2)
+        t.add_child(tv)
+        _label(tv, m[1], 13, GOLD, true)
+        var games := int(s.get("matches", 0))
+        var tr = CenterContainer.new()
+        tv.add_child(tr)
+        var li := clampi(int(s.get("league", 0)), 0, 10)
+        var bd := _badge(tr, li, 40)
+        if games <= 0: bd.modulate = Color(1, 1, 1, 0.45)
+        var lt := _label(tv, "%s · %d PL" % [LEAGUES[li], int(s.get("pl", 0))], 15, Color("f4edda") if games > 0 else DIM_TEXT, true)
+        lt.autowrap_mode = TextServer.AUTOWRAP_OFF
+        if games > 0:
+            _label(tv, _wld(int(s.get("wins", 0)), int(s.get("losses", 0)), int(s.get("draws", 0))), 13, TEXT, true)
+            _label(tv, "%d partidas · %d%% vitórias" % [games, _pct(int(s.get("wins", 0)), games)], 12, DIM_TEXT, true)
+        else:
+            _label(tv, "Sem partidas", 13, DIM_TEXT, true)
+    # ---- OUTROS MODOS: Casual / XEQUE / MARCHA
+    var modes: Dictionary = profile.get("modes", {}) if profile.get("modes") is Dictionary else {}
+    _pf_section(box, "OUTROS MODOS")
+    var om := _stat_box(box)
+    om.name = "ProfileModes"
+    var ol = VBoxContainer.new()
+    ol.add_theme_constant_override("separation", 6)
+    om.add_child(ol)
+    for o in [["casual", "XADREZ CASUAL"], ["xeque", "XEQUE"], ["marcha", "MARCHA"]]:
+        var ms: Dictionary = modes.get(o[0], {}) if modes.get(o[0]) is Dictionary else {}
+        var w := int(ms.get("wins", 0))
+        var lo := int(ms.get("losses", 0))
+        var d := int(ms.get("draws", 0))
+        var n := w + lo + d
+        var r = HBoxContainer.new()
+        r.add_theme_constant_override("separation", 8)
+        ol.add_child(r)
+        var nm = _label(r, o[1], 14, GOLD)
+        nm.autowrap_mode = TextServer.AUTOWRAP_OFF
+        nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        var v = _label(r, (_wld(w, lo, d) + "   " + ("%d%%" % _pct(w, n))) if n > 0 else ("—" if modes.is_empty() else "Sem partidas"), 14, TEXT if n > 0 else DIM_TEXT)
+        v.autowrap_mode = TextServer.AUTOWRAP_OFF
+        v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     var uid = String(profile.get("user_id", ""))
     var nickname = String(profile.get("nickname", ""))
     var actions = VBoxContainer.new()
@@ -1002,6 +1073,35 @@ func _build_profile(narrow: bool):
     # R104 · denunciar (perfil, nome, foto ou mensagens privadas)
     var rep = _button(actions, "DENUNCIAR", func(): _ask("report", uid, "DENUNCIAR JOGADOR?", "A equipe FRAIHA vai analisar o perfil de %s (nome e foto) e as mensagens privadas que ele te enviou. Use para ofensa, assédio, golpe ou nome impróprio. Denúncia falsa pode gerar punição." % nickname))
     rep.name = "ProfileReport"
+
+## R161 · caixinha do perfil (mesma moldura das linhas da lista)
+func _stat_box(parent: Node) -> PanelContainer:
+    var holder = PanelContainer.new()
+    holder.add_theme_stylebox_override("panel", Kit.box("fr_caixa_linha", WIDE_K, Vector2(16, 10)) if _wide() else Kit.box("caixa_linha", ART_K, Vector2(12, 9)))
+    parent.add_child(holder)
+    return holder
+
+func _pf_section(parent: Node, text: String) -> void:
+    var l = _label(parent, text, 14, GOLD)
+    l.custom_minimum_size.y = 26
+    l.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+
+func _badge(parent: Node, league: int, px: int) -> TextureRect:
+    var t = TextureRect.new()
+    t.texture = ThemeCatalog.badge_texture(LeagueIds.IDS[clampi(league, 0, 10)])
+    t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    t.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+    t.custom_minimum_size = Vector2(px, px)
+    t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(t)
+    return t
+
+static func _wld(w: int, l: int, d: int) -> String:
+    return "%dV · %dD · %dE" % [w, l, d]
+
+static func _pct(w: int, n: int) -> int:
+    return 0 if n <= 0 else int(round(100.0 * w / n))
 
 func _ask(action: String, uid: String, title: String, text: String):
     confirm = {"action": action, "user_id": uid, "title": title, "text": text, "return": "profile"}

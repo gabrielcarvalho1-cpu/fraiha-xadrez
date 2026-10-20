@@ -82,6 +82,7 @@ class AdminService {
         if (path === '/admin/api/reports') return need('reports.read') && out(200, await this.reportsList(url.searchParams.get('status') || 'open'));
         if (path === '/admin/api/creators') return need('payments.read') && out(200, await this.creatorsList());   // R121
         if (path === '/admin/api/events') return need('events.read') && out(200, this.backend.events ? await this.backend.events.adminList() : { available: false });   // R157
+        if (path === '/admin/api/news') return need('events.read') && out(200, this.backend.news ? await this.backend.news.adminList() : { available: false });   // R161
         return out(404, { error: 'not_found' });
       }
       if (req.method === 'POST') {
@@ -127,6 +128,22 @@ class AdminService {
           try { body = await readJson(req, 4096); }
           catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
           return cp[1] ? this.creatorPay(admin, cp[1], body || {}, out) : this.creatorSave(admin, body || {}, out);
+        }
+        // R161 · NOVIDADES: criar/editar/apagar (outdoor da Home e abas do jogo)
+        const nw = /^\/admin\/api\/news(?:\/([0-9a-fA-F-]{36})(?:\/(delete))?)?$/.exec(path);
+        if (nw) {
+          if (!need('events.write')) return;
+          if (this.limited('write:' + admin.id, 40)) return out(429, { error: 'rate_limited' });
+          if (!this.backend.news) return out(503, { error: 'unavailable' });
+          let body;
+          try { body = await readJson(req, 16384); }
+          catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
+          body = body || {};
+          const id = nw[1] ? nw[1].toLowerCase() : null;
+          const r = nw[2] === 'delete' ? await this.backend.news.adminDelete(id) : await this.backend.news.adminSave(id, body);
+          this.audit.record({ actor: admin, action: 'news_' + (nw[2] || (id ? 'edit' : 'create')), target: id || (r.body.item && r.body.item.id) || null,
+            before: r.before || null, after: r.after || null, result: r.status === 200 ? 'ok' : String(r.body.error || 'error'), reason: String(body.reason || '').slice(0, 300) });
+          return out(r.status, r.body);
         }
         // R157 · torneios de evento: criar/editar, montar chaves, marcar vencedor
         const ev = /^\/admin\/api\/events(?:\/([0-9a-fA-F-]{36})(?:\/(bracket|result))?)?$/.exec(path);

@@ -1078,28 +1078,38 @@ func _layout_panel():
     var mobile = Mobile.active(get_viewport())
     var area = Mobile.safe_rect(get_viewport()) if mobile else get_viewport().get_visible_rect()
     dim.size = get_viewport().get_visible_rect().size
-    var ui_scale = 1.0 if mobile else 1.4
-    panel.scale = Vector2.ONE * ui_scale
-    var max_w = 640.0 if screen == "modes" and not _narrow() else 460.0
-    var width = minf(max_w, (area.size.x - 16.0) / ui_scale)
-    box.custom_minimum_size.x = width - (44.0 if mobile else 68.0)
-    var foot = (footer.get_combined_minimum_size().y + 10.0) if footer.visible else 0.0
-    # Celular: moldura mais enxuta (mais espaço para a lista, principalmente deitado).
+    var base_scale = 1.0 if mobile else 1.4
+    var ui_scale = base_scale
     var st: StyleBoxEmpty = panel.get_theme_stylebox("panel")
+    # Celular: moldura mais enxuta (mais espaço para a lista, principalmente deitado).
     st.content_margin_top = 40 if mobile else 64
     st.content_margin_bottom = 14 if mobile else 24
     st.content_margin_left = 22 if mobile else 34
     st.content_margin_right = st.content_margin_left
     var pad_v = st.content_margin_top + st.content_margin_bottom
     var pad_h = st.content_margin_left * 2.0
-    var wanted = box.get_combined_minimum_size().y + foot + pad_v
-    var above = 26.0 if mobile else 56.0   # cavalos e brasão acima da moldura
-    var height = minf(wanted, (area.size.y - 16.0) / ui_scale - above)
+    var max_w = 640.0 if screen == "modes" and not _narrow() else 460.0
+    # R161 · cavalos e brasão saem acima da moldura: a arte inteira (com eles) tem que caber na tela.
+    # Celular deitado (tela baixa): o painel inteiro diminui até caber, em vez de cortar os cavalos e rolar.
+    var above = 52.0 if mobile else 60.0
+    var width := 0.0
+    var foot := 0.0
+    var wanted := 0.0
+    for pass_i in 2:
+        width = minf(max_w, (area.size.x - 16.0) / ui_scale)
+        box.custom_minimum_size.x = width - (44.0 if mobile else 68.0)
+        foot = (footer.get_combined_minimum_size().y + 10.0) if footer.visible else 0.0
+        wanted = box.get_combined_minimum_size().y + foot + pad_v
+        var fit = (area.size.y - 12.0) / (wanted + above)
+        ui_scale = clampf(minf(base_scale, fit), 0.62 if mobile else 0.8, base_scale)
+    panel.scale = Vector2.ONE * ui_scale
+    var height = minf(wanted, (area.size.y - 12.0) / ui_scale - above)
     scroll.custom_minimum_size = Vector2(width - pad_h, maxf(40.0, height - pad_v - foot))
     panel.custom_minimum_size = Vector2.ZERO
     panel.reset_size()
     panel.size = Vector2(width, height)
     panel.position = area.position + (area.size - panel.size * ui_scale) / 2.0 + Vector2(0, above * ui_scale * 0.5)
+    panel.position.x = area.position.x + (area.size.x - panel.size.x * ui_scale) / 2.0
     art_frame.compact = mobile
     art_frame.visible = panel.visible
     art_frame.position = panel.position

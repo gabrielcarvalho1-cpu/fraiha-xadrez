@@ -25,7 +25,7 @@ func setup(p_hub):
 	# prévia
 	preview = Control.new()
 	preview.name = "BoardPreview"
-	preview.clip_contents = true
+	preview.clip_contents = false   # R161 · as peças altas da fileira de cima saem um pouco da casa (sem corte)
 	_main.add_child(preview)
 	preview_casas = TextureRect.new()
 	preview_casas.texture = BoardColors.casas()
@@ -41,6 +41,7 @@ func setup(p_hub):
 	preview_pieces.draw.connect(_draw_preview_pieces)
 	preview.add_child(preview_pieces)
 	var frame_line := Panel.new()
+	frame_line.name = "FrameLine"
 	var st := StyleBoxFlat.new()
 	st.draw_center = false
 	st.border_color = Color("c99a45")
@@ -49,6 +50,7 @@ func setup(p_hub):
 	frame_line.set_anchors_preset(Control.PRESET_FULL_RECT)
 	frame_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(frame_line)
+	preview.move_child(preview_pieces, -1)   # R161 · peças por cima do fio dourado (a ponta do rei e da dama não somem)
 	# listas
 	scroll = ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -224,7 +226,7 @@ func _classic() -> Dictionary:
 
 func _draw_preview_pieces():
 	var d := _pieces_dict()
-	var cs := preview.size.x / 8.0
+	var cs := preview_pieces.size.x / 8.0
 	var back := ["R", "N", "B", "Q", "K", "B", "N", "R"]
 	for x in 8:
 		for row in [[0, "b" + back[x]], [1, "bP"], [6, "wP"], [7, "w" + back[x]]]:
@@ -265,9 +267,18 @@ func _layout():
 		_main.queue_free()
 		_main = nb
 	var side: float
-	if vertical: side = minf(_body_rect.size.x * 0.72, _body_rect.size.y * 0.33)
+	# R161 · celular em pé: prévia maior (antes ~1/3 da altura e 72% da largura) e as peças da fileira de cima
+	# não são mais cortadas: a prévia tem uma folga em cima (as peças altas passam da casa, como na partida)
+	if vertical: side = minf(_body_rect.size.x * 0.92, _body_rect.size.y * 0.44)
 	else: side = minf(_body_rect.size.y - ts(16) * 2.4, _body_rect.size.x * 0.42)
-	preview.custom_minimum_size = Vector2(side, side)
+	var top := side / 8.0 * 0.32
+	side -= top   # a folga de cima cabe no mesmo espaço
+	preview.custom_minimum_size = Vector2(side, side + top + 4.0)
+	for n in [preview_casas, preview_pieces, preview.get_node_or_null("FrameLine")]:
+		if n == null: continue
+		n.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		n.position = Vector2(0, top)
+		n.size = Vector2(side, side)
 	preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	preview.size_flags_vertical = Control.SIZE_SHRINK_BEGIN   # sempre quadrada: casas e peças na mesma grade
 	_list_w = _body_rect.size.x if vertical else _body_rect.size.x - side - 22.0

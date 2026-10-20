@@ -17,6 +17,7 @@ const ROUTES = [
   { id: 'reports', label: 'Denúncias', ico: '⚑', view: V.reports, every: 30000 },
   { id: 'creators', label: 'Criadores', ico: '★', view: V.creators, every: 30000 },
   { id: 'events', label: 'Torneios', ico: '♜', view: V.events, every: 15000 },
+  { id: 'news', label: 'Novidades', ico: '✦', view: V.news, every: 30000 },
   { sep: true },
   { id: 'audit', label: 'Admin Log', ico: '≡', view: V.audit, every: 10000 },
   { id: 'system', label: 'Sistema', ico: '⚙', view: V.system, every: 15000 },

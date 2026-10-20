@@ -57,5 +57,33 @@ func run():
 	var soc = stage.social_ui
 	check(not gc.visible and soc.is_open() and soc.profile_id == "u2" and soc.screen == "profile", "um toque em VER PERFIL abre o perfil de quem escreveu")
 	check(sent.any(func(m): return String(m.get("type", "")) == "social_profile" and String(m.get("user_id", "")) == "u2"), "perfil pedido ao servidor")
+	# R161 · SILENCIAR e depois REATIVAR (antes não tinha como voltar a ver)
+	hub.open_global_chat()
+	await frames(4)
+	acc.server_message.emit({"type": "gchat_history", "can_send": true, "online": 2, "messages": [
+		{"id": 1, "user_id": "u2", "nickname": "Isabela_Godoy", "text": "Oi mor, tá aí?", "ts": "2026-10-19T23:42:00.000Z"},
+		{"id": 2, "user_id": "u1", "nickname": "SextoSentro", "text": "Oiii", "ts": "2026-10-19T23:43:00.000Z"}]})
+	await frames(8)
+	rows = gc.list.get_children().filter(func(n): return not n.is_queued_for_deletion())
+	await tap(rows[0].get_child(0).get_global_rect().get_center())
+	await frames(6)
+	var mute: Button = null
+	for b in gc.list.find_children("*", "Button", true, false):
+		if (b as Button).text == "SILENCIAR": mute = b
+	check(mute != null, "SILENCIAR aparece")
+	if mute != null:
+		await tap(mute.get_global_rect().get_center())
+		await frames(6)
+	var live := func(): return gc.list.get_children().filter(func(n): return not n.is_queued_for_deletion()).size()
+	check(live.call() == 1 and gc.muted_bar.visible, "silenciado: some a mensagem e aparece a faixa Silenciados")
+	if OS.get_environment("SHOT_DIR") != "":
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(OS.get_environment("SHOT_DIR").path_join("chat_silenciados.png"))
+	var un: Button = gc.muted_bar.find_child("GchatUnmute_u2", true, false)
+	check(un != null and un.is_visible_in_tree() and "REATIVAR" in un.text, "botão REATIVAR com o nome")
+	if un != null:
+		await tap(un.get_global_rect().get_center())
+		await frames(6)
+	check(live.call() == 2 and not gc.muted_bar.visible, "REATIVAR: as mensagens voltam")
 	print("FAILS ", failures)
 	quit(1 if failures else 0)

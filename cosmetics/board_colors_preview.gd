@@ -13,7 +13,7 @@ var _pieces: Control
 func _init(p_board := "madeira", p_pieces := "original"):
 	board_id = p_board
 	piece_id = p_pieces
-	clip_contents = true
+	clip_contents = false   # R161 · as peças altas da fileira de cima passam um pouco da casa (sem corte)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_casas = TextureRect.new()
 	_casas.texture = BoardColors.casas()
@@ -39,9 +39,14 @@ func _ready():
 	set_colors(board_id, piece_id)
 	_fit()
 
+func _sq() -> Rect2:
+	# folga em cima para a ponta do rei e da dama (como na partida)
+	var side := minf(size.x, size.y / (1.0 + 0.32 / 8.0))
+	var top := side / 8.0 * 0.32
+	return Rect2(Vector2((size.x - side) / 2.0, (size.y - side - top) / 2.0 + top), Vector2(side, side))
+
 func _fit():
-	var side := minf(size.x, size.y)
-	var r := Rect2((size - Vector2(side, side)) / 2.0, Vector2(side, side))
+	var r := _sq()
 	for n in [_casas, _pieces]:
 		n.position = r.position
 		n.size = r.size
@@ -49,8 +54,7 @@ func _fit():
 	_pieces.queue_redraw()
 
 func _draw():
-	var side := minf(size.x, size.y)
-	draw_rect(Rect2((size - Vector2(side, side)) / 2.0, Vector2(side, side)).grow(2.0), Color("c99a45"), false, 3.0)
+	draw_rect(_sq().grow(2.0), Color("c99a45"), false, 3.0)
 
 func _dict() -> Dictionary:
 	if piece_id == BoardColors.CLASSICAS:

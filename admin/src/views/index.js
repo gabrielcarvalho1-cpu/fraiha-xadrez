@@ -666,3 +666,101 @@ export function events(ctx) {
     },
   };
 }
+
+// ---------------------------------------------------------------- R161 · NOVIDADES (outdoor da Home + abas do jogo)
+const NW_KIND = { banner: 'Outdoor da Home', atualizacao: 'Atualização', noticia: 'Notícia', campeonato: 'Campeonato', evento: 'Evento' };
+const NW_ACT = { '': 'Sem botão', torneios: 'Abrir TORNEIOS', ranking: 'Abrir RANKING', premium: 'Abrir SEJA MEMBRO (Premium)', loja: 'Abrir LOJA (Premium)', loja_coroas: 'Abrir LOJA DE COROAS', url: 'Abrir um link (https://…)' };
+const NW_ERR = { invalid_kind: 'Escolha o tipo.', invalid_title: 'Título de 2 a 90 letras.', invalid_body: 'Texto até 4000 letras.', invalid_button: 'Nome do botão até 30 letras.',
+  invalid_action: 'Botão: escolha o que ele abre (ou um link começando com https://).', invalid_date: 'Data inválida.', migration_0022_missing: 'Banco sem a migração 0022 (novidades).' };
+function newsDialog(it, kind0) {
+  return new Promise(resolve => {
+    const f = (label, el, hint) => h('label', {}, label, el, hint ? h('small', { class: 'dim', style: 'display:block' }, hint) : '');
+    const kind = h('select', {}, Object.keys(NW_KIND).map(k => h('option', { value: k, selected: (it ? it.kind : kind0) === k }, NW_KIND[k])));
+    const title = h('input', { type: 'text', value: it ? it.title : '', maxlength: 90, placeholder: 'Ex.: TORNEIO SÁBADO ÀS 20H · INSCREVA-SE!' });
+    const body = h('textarea', { rows: 8, maxlength: 4000, placeholder: 'Texto que aparece na tela NOVIDADES (pode usar • no começo das linhas)' }, it ? it.body : '');
+    const curAct = it ? it.button_action || '' : '';
+    const isUrl = curAct.startsWith('https://');
+    const act = h('select', {}, Object.keys(NW_ACT).map(k => h('option', { value: k, selected: isUrl ? k === 'url' : curAct === k }, NW_ACT[k])));
+    const url = h('input', { type: 'text', value: isUrl ? curAct : '', placeholder: 'https://…', maxlength: 290 });
+    const blabel = h('input', { type: 'text', value: it ? it.button_label : '', maxlength: 30, placeholder: 'Ex.: Ver torneios' });
+    const when = h('input', { type: 'datetime-local', value: it ? localInput(it.published_at) : '' });
+    const pinned = h('input', { type: 'checkbox', checked: it ? !!it.pinned : false });
+    const published = h('input', { type: 'checkbox', checked: it ? it.published !== false : true });
+    const reason = h('textarea', { rows: 2, placeholder: 'Motivo (vai para o Admin Log)', maxlength: 300 });
+    const bodyRow = f('Texto', body), btnRow = h('div', {}, f('Botão (opcional): o que abre', act), f('Link', url), f('Nome do botão', blabel));
+    const sync = () => {
+      const b = kind.value === 'banner';
+      bodyRow.style.display = b ? 'none' : ''; btnRow.style.display = b ? 'none' : '';
+      url.parentElement.style.display = act.value === 'url' ? '' : 'none';
+      title.placeholder = b ? 'Frase do outdoor (curta fica melhor; comprida corre na faixa)' : 'Título da novidade';
+    };
+    kind.onchange = sync; act.onchange = sync;
+    const close = v => { bg.remove(); resolve(v); };
+    const bg = h('div', { class: 'modal-bg', onclick: e => { if (e.target === bg) close(null); } },
+      h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', style: 'max-width:640px' },
+        h('h3', {}, it ? 'Editar novidade' : 'Nova novidade'),
+        h('div', { class: 'fields' }, f('Tipo', kind, 'Outdoor da Home = a frase da faixa embaixo da logo (aparece rodando se houver mais de uma).'),
+          f('Título / frase', title), bodyRow, btnRow,
+          f('Data de publicação (vazio = agora)', when, 'Com data no futuro, só aparece a partir dela.'),
+          h('label', { style: 'display:flex;gap:8px;align-items:center' }, pinned, 'Destaque (fica no topo da aba / primeira frase do outdoor)'),
+          h('label', { style: 'display:flex;gap:8px;align-items:center' }, published, 'Publicado (desmarque para esconder sem apagar)'),
+          f('Motivo', reason)),
+        h('div', { class: 'actions' }, h('button', { class: 'btn ghost', onclick: () => close(null) }, 'Cancelar'),
+          h('button', { class: 'btn ok', onclick: () => {
+            const a = act.value === 'url' ? url.value.trim() : act.value;
+            close({ kind: kind.value, title: title.value.trim(), body: body.value, button_action: a, button_label: a ? blabel.value.trim() : '',
+              published_at: when.value ? new Date(when.value).toISOString() : (it ? it.published_at : null), pinned: pinned.checked, published: published.checked, reason: reason.value.trim() });
+          } }, 'Salvar'))));
+    document.body.append(bg); sync(); title.focus();
+  });
+}
+export function news(ctx) {
+  const f = frame(ctx, 'Novidades', 'O que aparece no jogo: a frase do OUTDOOR (faixa embaixo da logo da Home) e as abas ATUALIZAÇÕES, NOTÍCIAS, CAMPEONATOS e EVENTOS (o jogador toca no outdoor e abre). Muda no jogo em até 1 minuto.');
+  const can = () => ctx.session && ctx.session.admin && (ctx.session.admin.perms || []).includes('events.write');
+  const err = e => toast(NW_ERR[e && e.code] || 'Não foi possível concluir.');
+  const save = async (it, kind0) => {
+    const v = await newsDialog(it, kind0 || 'noticia');
+    if (!v) return;
+    try { await ctx.api.post('/admin/api/news' + (it ? '/' + it.id : ''), v); toast('Novidade salva.'); } catch (e) { err(e); }
+    ctx.refresh();
+  };
+  const toggle = async (it, patch, label) => {
+    try { await ctx.api.post('/admin/api/news/' + it.id, patch); toast(label); } catch (e) { err(e); }
+    ctx.refresh();
+  };
+  const del = async it => {
+    const ok = await confirmAction({ title: 'Apagar "' + it.title + '"', body: 'Some do jogo na hora. Para só esconder, use "Esconder".', confirmWord: 'APAGAR', actionLabel: 'Apagar', danger: true });
+    if (!ok) return;
+    try { await ctx.api.post('/admin/api/news/' + it.id + '/delete', { reason: ok.reason }); toast('Apagada.'); } catch (e) { err(e); }
+    ctx.refresh();
+  };
+  return {
+    error: f.error,
+    async load() {
+      const d = await ctx.api.get('/admin/api/news');
+      if (!ctx.alive()) return;
+      if (!d.available) return f.show(stateBox('error', d.error === 'migration_0022_missing' ? 'Banco sem a migração 0022 (novidades). Aplique supabase/migrations/0022_fraiha_novidades.sql no SQL Editor.' : 'Novidades indisponíveis neste servidor.'));
+      const row = it => h('div', { class: 'panel', style: it.published ? '' : 'opacity:.6' },
+        h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' },
+          h('span', { class: 'badge' }, NW_KIND[it.kind] || it.kind), it.pinned ? h('span', { class: 'badge on' }, 'DESTAQUE') : '',
+          it.published ? '' : h('span', { class: 'badge off' }, 'ESCONDIDA'),
+          h('strong', {}, it.title), h('span', { class: 'dim' }, fmtDate(it.published_at)),
+          can() ? h('span', { style: 'margin-left:auto;display:flex;gap:8px;flex-wrap:wrap' },
+            h('button', { class: 'btn', onclick: () => save(it) }, 'Editar'),
+            h('button', { class: 'btn', onclick: () => toggle(it, { published: !it.published }, it.published ? 'Escondida.' : 'Publicada.') }, it.published ? 'Esconder' : 'Publicar'),
+            h('button', { class: 'btn', onclick: () => toggle(it, { pinned: !it.pinned }, it.pinned ? 'Sem destaque.' : 'Em destaque.') }, it.pinned ? 'Tirar destaque' : 'Destacar'),
+            h('button', { class: 'btn danger', onclick: () => del(it) }, 'Apagar')) : ''),
+        it.body ? h('p', { class: 'dim', style: 'white-space:pre-wrap;margin:6px 0 0' }, it.body.length > 400 ? it.body.slice(0, 400) + '…' : it.body) : '',
+        it.button_label ? h('p', { class: 'dim', style: 'margin:4px 0 0' }, 'Botão: ' + it.button_label + ' → ' + (NW_ACT[it.button_action] || it.button_action)) : '');
+      const banners = d.items.filter(x => x.kind === 'banner'), others = d.items.filter(x => x.kind !== 'banner');
+      f.show(
+        h('div', { class: 'panel' }, h('h2', {}, 'Outdoor da Home'),
+          h('p', { class: 'dim' }, banners.some(b => b.published) ? 'Frases publicadas aparecem rodando na faixa (a de destaque primeiro).' : 'Nenhuma frase publicada: a faixa mostra "ESTRATÉGIA PARA IR MAIS LONGE".'),
+          can() ? h('button', { class: 'btn primary', style: 'margin:6px 0', onclick: () => save(null, 'banner') }, '+ Nova frase do outdoor') : '',
+          banners.length ? h('div', {}, banners.map(row)) : ''),
+        h('div', { class: 'panel' }, h('h2', {}, 'Abas do jogo (Atualizações, Notícias, Campeonatos, Eventos)'),
+          can() ? h('button', { class: 'btn primary', style: 'margin:6px 0', onclick: () => save(null, 'atualizacao') }, '+ Nova novidade') : '',
+          others.length ? h('div', {}, others.map(row)) : stateBox('empty', 'Nenhuma novidade ainda.')));
+    },
+  };
+}

@@ -2445,7 +2445,7 @@ const WIDE_BAND := Vector2(312, 905)   # y de cima/baixo da faixa do menu na art
 const WIDE_PATCHES := {   # recorte (mesmos números de tools/home_wide_r153.py) e nós que andam junto
     "club": [Rect2(10, 4, 354, 84), ["ClubHomeEntry"]],
     "icons": [Rect2(356, 6, 146, 82), ["SoundButton", "FullscreenButton", "TrophyTopButton", "ChatTopButton", "CrownsTopButton"]],
-    "logo": [Rect2(470, 0, 732, 312), []],
+    "logo": [Rect2(470, 0, 732, 312), ["NewsTicker"]],
     "profile": [Rect2(1210, 18, 446, 232), ["RefProfileButton", "ProfilePanel", "ProfileStack"]],
     "account": [Rect2(20, 832, 354, 100), ["AccountCard", "AccountPanel", "RefAccountAvatar", "RefAccountAvatarFrameHost"]],
     "community": [Rect2(1388, 856, 262, 64), ["CommunityButton"]],
@@ -2953,6 +2953,29 @@ func crowns_client():
     return crowns
 
 ## R96 · RANKING (XADREZ por fila, XEQUE, MARCHA REAL) e CHAT GLOBAL — painéis por cima da Home.
+## R161 · NOVIDADES (outdoor embaixo da logo + tela com abas)
+var news_feed = null
+var news_ui = null
+func news():
+    if not is_instance_valid(news_feed):
+        news_feed = load("res://ui_v022/news_feed.gd").new()
+        add_child(news_feed)
+    return news_feed
+
+func open_news(tab := ""):
+    if not is_instance_valid(news_ui):
+        news_ui = load("res://ui_v022/news_ui.gd").new()
+        add_child(news_ui)
+        news_ui.setup(self, news())
+    if is_instance_valid(global_chat_ui): global_chat_ui.close()
+    news_ui.show_news(tab)
+
+func make_news_ticker(font_px: int, top_col: Color, bottom_col: Color) -> Button:
+    var t: Button = load("res://ui_v022/news_ticker.gd").new()
+    t.setup(news(), font_px, top_col, bottom_col)
+    t.pressed.connect(func(): open_news())
+    return t
+
 func open_leaderboard():
     if not is_instance_valid(leaderboard_ui):
         leaderboard_ui = load("res://ui_v022/leaderboard_ui.gd").new()
@@ -3742,6 +3765,11 @@ func _build_reference_chrome():
     var community := make_community_button(Vector2(262, 64), TOP_FRAME_PC, 22)
     community.position = Vector2(1388, 856)
     canvas.add_child(community)
+    # R161 · OUTDOOR: a faixa "ESTRATÉGIA PARA IR MAIS LONGE" vira a frase do Admin e abre NOVIDADES
+    var ticker := make_news_ticker(19, Color("010612"), Color("030b1c"))
+    ticker.position = Vector2(631, 273)
+    ticker.size = Vector2(390, 29)
+    canvas.add_child(ticker)
     _refresh_sound_button()
     var clip = Control.new()
     clip.name = "RefPortraitClip"

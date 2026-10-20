@@ -26,6 +26,7 @@ const { Crowns } = require('./economy/crowns');   // R112 · Coroas
 const { Store: CrownStore } = require('./economy/store');   // R116 · Loja de Coroas
 const { Tournaments } = require('./economy/tournaments');   // R118 · Torneio da Semana
 const { Events } = require('./economy/events');   // R157 · Torneios de evento (código)
+const { News } = require('./economy/news');   // R161 · Novidades (outdoor da Home + abas)
 const { SeasonPass } = require('./economy/season_pass');   // R120 · Passe da Temporada
 const { Creators } = require('./social/creators');   // R121 · Apoie um Criador
 
@@ -98,6 +99,7 @@ class Backend {
     this.tournaments = new Tournaments({ backend: this, send: (ws, o) => this.send(ws, o) });   // R118
     this.tournaments.start();
     this.events = new Events({ backend: this, send: (ws, o) => this.send(ws, o) });   // R157
+    this.news = new News({ backend: this });   // R161
     this.seasonPass = new SeasonPass({ backend: this, send: (ws, o) => this.send(ws, o) });   // R120
     this.creators = new Creators({ backend: this, send: (ws, o) => this.send(ws, o) });   // R121
     this.chat.ownedEmotes = uid => this.crownStore.owned(uid);   // R119 · emotes comprados na Loja de Coroas

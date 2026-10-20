@@ -182,9 +182,35 @@ class Card extends Button:
         ref_sub.add_theme_font_size_override("font_size", maxi(7, _fit(ref_sub.get_theme_font("font"), sub, int(round(28 * k)), ref_sub.size.x - 6.0)))
         ref_sub.add_theme_color_override("font_color", Color("f08a7c") if locked else (Color("c9ffd9") if st == "selected" else Color("efe6cf")))
         tooltip_text = _tip(st, e2)
+    # R161 · destaque FORTE da carta tocada (dourado) e da carta em uso (verde): halo por cima da moldura.
+    # Antes era só um leve clarear da moldura e o dono não via qual carta estava escolhendo.
+    var glow: Control
+    func _glow_sync(st: String):
+        if glow == null:
+            glow = Control.new()
+            glow.name = "SelGlow"
+            glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            glow.draw.connect(func():
+                var focused: bool = gallery != null and gallery.focus_id == avatar
+                var cur: String = gallery.state_of(avatar) if gallery != null else ""
+                if not focused and cur != "selected": return
+                var c := Color(1.0, 0.9, 0.4) if focused else Color(0.35, 1.0, 0.6)
+                var r := Rect2(Vector2.ZERO, glow.size)
+                for i in 4:
+                    var g := 7.0 - i * 2.0
+                    glow.draw_rect(r.grow(g), Color(c, 0.22 + i * 0.14), false, 3.0)
+                glow.draw_rect(r.grow(-2.5), Color(c, 1.0), false, 5.0 if focused else 3.0)
+                glow.draw_rect(r.grow(-5.5), Color(1, 1, 1, 0.7 if focused else 0.35), false, 1.5)
+                if focused: glow.draw_rect(r.grow(-3.0), Color(1.0, 0.9, 0.4, 0.10)))
+            add_child(glow)
+        if glow.get_index() != get_child_count() - 1: move_child(glow, -1)
+        glow.position = Vector2.ZERO
+        glow.size = size
+        glow.queue_redraw()
     func _draw():
         if gallery == null or portrait == null: return
         var st: String = gallery.state_of(avatar)
+        _glow_sync(st)
         var has_art: bool = Catalog.has_art(avatar)
         var tex: Texture2D = gallery.hub.avatar_texture(avatar) if has_art else null
         portrait.texture = tex

@@ -226,6 +226,12 @@ func _build_top():
     chip.name = "CrownsTopButtonMobile"
     chip.position = SOUND_RECT.position - Vector2((SOUND_RECT.size.x + 8.0) * 3.0, 0)
     top.add_child(chip)
+    # R161 · OUTDOOR embaixo da logo: frase do Admin + símbolo de toque; abre NOVIDADES
+    var ticker: Button = hub.make_news_ticker(25, Color("011410"), Color("02241a"))
+    ticker.name = "NewsTickerMobile"
+    ticker.position = Vector2(224, 410)
+    ticker.size = Vector2(406, 39)
+    top.add_child(ticker)
     # cartão do jogador (toque abre o Perfil)
     var card := _hit(top, CARD_RECT, "PERFIL", func(): hub.show_page("profile"))
     card.name = "RefProfileCard"
