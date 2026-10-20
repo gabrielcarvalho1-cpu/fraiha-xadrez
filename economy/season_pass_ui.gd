@@ -33,8 +33,31 @@ func setup(p_hub, acc, p_client):
 
 func show_pass():
 	open()
+	_waited = 0.0
+	_tries = 0
 	_render()
+	_ask()
+
+## R165 · o pedido do passe se perdia quando a conexão com o servidor ainda não estava pronta (ou caía na hora):
+## a tela ficava para sempre em "Abrindo o passe…". Agora pede de novo a cada 3 s e, depois de 15 s, avisa.
+var _waited := 0.0
+var _tries := 0
+func _ask():
+	_tries += 1
 	if account != null and account.has_method("send_server"): account.send_server({"type": "pass_get"})
+
+func _process(d: float):
+	super._process(d)
+	if not visible or not state.is_empty(): return
+	_waited += d
+	if _waited >= 3.0 * _tries and _tries < 5: _ask()
+	elif _waited >= 15.0 and _tries >= 5 and head.get_node_or_null("PassRetry") == null:
+		for c in head.get_children(): c.queue_free()
+		head.add_child(_wrap(label("Não foi possível abrir o passe agora. Verifique a conexão e tente de novo.", 16, CREAM, true)))
+		var b := button("TENTAR DE NOVO", 15, true)
+		b.name = "PassRetry"
+		b.pressed.connect(show_pass)
+		head.add_child(b)
 
 func _on_message(m: Dictionary):
 	var t := String(m.get("type", ""))

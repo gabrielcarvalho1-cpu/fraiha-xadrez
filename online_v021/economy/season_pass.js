@@ -51,7 +51,7 @@ function rewards(s) {
 class SeasonPass {
   constructor({ backend, send, now = () => Date.now(), log = (...a) => console.log(...a) }) {
     this.backend = backend; this.send = send; this.now = now; this.log = log;
-    this.offUntil = 0; this.busy = new Map();
+    this.offUntil = 0; this.busy = new Map(); this.granted = new Map();
   }
   get store() { return this.backend.store; }
   ok() { return !!(this.store && this.store.crownBump && this.store.crownAward) && this.offUntil <= this.now(); }
@@ -127,7 +127,10 @@ class SeasonPass {
       const club = await this.club(uid);
       const c = await this.store.crownDaily(uid, seasonDay(s)) || {};
       const xp = c.pass_xp || 0, level = levelOf(xp);
-      if (club && level > 0) await this.grant(uid, s, 1, level, true);   // assinou depois: entrega a faixa Club já alcançada
+      // assinou depois: entrega a faixa Club já alcançada. R165 · uma vez por nível/temporada (antes repetia ~60 consultas ao banco
+      // a cada abertura do passe e a resposta podia demorar muito); a entrega é idempotente de qualquer forma.
+      const gk = uid + ':' + s;
+      if (club && level > 0 && (this.granted.get(gk) || 0) < level) { await this.grant(uid, s, 1, level, true); this.granted.set(gk, level); if (this.granted.size > 5000) this.granted.clear(); }
       this.send(ws, { ...base, available: true, xp, level, club });
     } catch (e) { this.off(e, 'estado'); this.send(ws, { ...base, available: false }); }
   }
