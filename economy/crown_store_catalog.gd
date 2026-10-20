@@ -18,6 +18,17 @@ const ITEMS := [
 	{"id": "jade", "kind": "frame", "name": "Moldura Jade", "price": 1200},
 	{"id": "ametista", "kind": "frame", "name": "Moldura Ametista", "price": 1500},
 	{"id": "obsidiana", "kind": "frame", "name": "Moldura Obsidiana", "price": 2000},
+	# R163 · AVATARES da Loja (arte em profile/avatars/<id>.webp)
+	{"id": "av_cavalo_dourado", "kind": "avatar", "name": "Cavalo Dourado", "price": 1000},
+	{"id": "av_rainha_marmore", "kind": "avatar", "name": "Rainha de Mármore", "price": 1000},
+	{"id": "av_rainha_ametista", "kind": "avatar", "name": "Rainha de Ametista", "price": 1200},
+	{"id": "av_rei_rubi", "kind": "avatar", "name": "Rei de Rubi", "price": 1200},
+	{"id": "av_bispo_safira", "kind": "avatar", "name": "Bispo de Safira", "price": 1200},
+	{"id": "av_rei_luz", "kind": "avatar", "name": "Rei da Luz Dourada", "price": 1500},
+	{"id": "av_cavaleiro_real", "kind": "avatar", "name": "Cavaleiro Real", "price": 1500},
+	{"id": "av_cavaleiro_escarlate", "kind": "avatar", "name": "Cavaleiro Escarlate", "price": 1500},
+	{"id": "av_guardiao_torre", "kind": "avatar", "name": "Guardião da Torre", "price": 1800},
+	{"id": "av_rainha_sombria", "kind": "avatar", "name": "Rainha Sombria", "price": 2000},
 	{"id": "emote_uau", "kind": "emote", "name": "Uau!", "price": 300},
 	{"id": "emote_pensando", "kind": "emote", "name": "Hmm… pensando", "price": 300},
 	{"id": "emote_sorte", "kind": "emote", "name": "Que sorte!", "price": 400},
@@ -27,6 +38,9 @@ const ITEMS := [
 	{"id": "emote_rei_chegou", "kind": "emote", "name": "O rei chegou!", "price": 600},
 	{"id": "emote_respeito", "kind": "emote", "name": "Respeito, mestre.", "price": 600},
 ]
+
+## R163 · avatares que só o PASSE entrega (não estão à venda): faixa grátis e faixa Club, nível 25, em rodízio
+const PASS_AVATARS := [{"id": "av_rei_onix", "track": "free", "name": "Rei de Ônix"}, {"id": "av_rainha_onix", "track": "free", "name": "Rainha de Ônix"}, {"id": "av_torre_onix", "track": "free", "name": "Torre de Ônix"}, {"id": "av_cavalo_onix", "track": "free", "name": "Cavalo de Ônix"}, {"id": "av_principe_sombras", "track": "club", "name": "Príncipe das Sombras"}, {"id": "av_principe_esmeralda", "track": "club", "name": "Príncipe Esmeralda"}, {"id": "av_aristocrata", "track": "club", "name": "Aristocrata do Relógio"}]
 
 ## R119 · emotes de graça (aparecem para todos, sem comprar)
 const FREE_EMOTES := [

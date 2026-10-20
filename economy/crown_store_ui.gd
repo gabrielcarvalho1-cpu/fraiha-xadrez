@@ -132,7 +132,8 @@ func _card(it: Dictionary) -> Control:
 	var id := String(it.id)
 	var price := int(it.price)
 	var has: bool = client.owned(id)
-	var in_use: bool = has and ((tab == "title" and hub.has_method("current_title") and hub.current_title() == id)
+	var in_use: bool = has and ((tab == "avatar" and String(hub.get("avatar_id")) == id and (not hub.has_method("custom_avatar") or hub.custom_avatar() == null))
+		or (tab == "title" and hub.has_method("current_title") and hub.current_title() == id)
 		or (tab == "frame" and hub.has_method("current_frame") and hub.current_frame() == id))
 	var p := PanelContainer.new()
 	p.name = "StoreItem_" + id
@@ -148,9 +149,10 @@ func _card(it: Dictionary) -> Control:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	p.add_child(v)
-	var kind := label({"title": "TÍTULO", "frame": "MOLDURA DO RETRATO", "emote": "EMOTE NAS PARTIDAS ONLINE"}.get(tab, ""), 11, DIM, true)
+	var kind := label({"title": "TÍTULO", "frame": "MOLDURA DO RETRATO", "emote": "EMOTE NAS PARTIDAS ONLINE", "avatar": "AVATAR"}.get(tab, ""), 11, DIM, true)
 	v.add_child(kind)
 	if tab == "frame": v.add_child(_frame_preview(id))
+	if tab == "avatar": v.add_child(_avatar_preview(id))
 	var name_l := label(String(it.name), 17 if narrow() else 20, GOLD)
 	name_l.add_theme_constant_override("outline_size", 5)
 	name_l.add_theme_color_override("font_outline_color", Color(0.10, 0.05, 0.0))
@@ -213,6 +215,21 @@ func _frame_preview(id: String) -> Control:
 	box.add_child(holder)
 	return box
 
+## R163 · retrato do avatar à venda
+func _avatar_preview(id: String) -> Control:
+	var holder := CenterContainer.new()
+	var Cat = preload("res://profile/avatar_catalog.gd")
+	var pic := TextureRect.new()
+	pic.name = "StoreAvatar_" + id
+	pic.texture = load(Cat.art_path(id)) if Cat.has_art(id) else null
+	var side := 120.0 if narrow() else 150.0
+	pic.custom_minimum_size = Vector2(side, side)
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	holder.add_child(pic)
+	return holder
+
 func _buy(id: String):
 	if confirm_id == id and Time.get_ticks_msec() < confirm_until:
 		confirm_id = ""
@@ -225,6 +242,12 @@ func _buy(id: String):
 	_rebuild()
 
 func _use(id: String):
+	if tab == "avatar":   # R163 · avatar comprado: aplica direto (o servidor confere a posse)
+		hub.inspected_avatar = ""
+		hub.choose_avatar(id)
+		message_label.text = "Pronto: \"%s\" agora é o seu avatar." % String(Catalog.item(id).get("name", id))
+		_rebuild()
+		return
 	if hub.has_method("set_cosmetic") and hub.set_cosmetic(tab, id):
 		message_label.text = "Pronto: \"%s\" agora aparece no seu perfil." % String(Catalog.item(id).get("name", id))
 	_rebuild()

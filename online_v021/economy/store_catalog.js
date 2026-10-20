@@ -20,6 +20,17 @@ const ITEMS = [
   { id: 'jade', kind: 'frame', name: 'Moldura Jade', price: 1200 },
   { id: 'ametista', kind: 'frame', name: 'Moldura Ametista', price: 1500 },
   { id: 'obsidiana', kind: 'frame', name: 'Moldura Obsidiana', price: 2000 },
+  // R163 · AVATARES da Loja (o jogo tem a arte; ganha-se para sempre)
+  { id: 'av_cavalo_dourado', kind: 'avatar', name: 'Cavalo Dourado', price: 1000 },
+  { id: 'av_rainha_marmore', kind: 'avatar', name: 'Rainha de Mármore', price: 1000 },
+  { id: 'av_rainha_ametista', kind: 'avatar', name: 'Rainha de Ametista', price: 1200 },
+  { id: 'av_rei_rubi', kind: 'avatar', name: 'Rei de Rubi', price: 1200 },
+  { id: 'av_bispo_safira', kind: 'avatar', name: 'Bispo de Safira', price: 1200 },
+  { id: 'av_rei_luz', kind: 'avatar', name: 'Rei da Luz Dourada', price: 1500 },
+  { id: 'av_cavaleiro_real', kind: 'avatar', name: 'Cavaleiro Real', price: 1500 },
+  { id: 'av_cavaleiro_escarlate', kind: 'avatar', name: 'Cavaleiro Escarlate', price: 1500 },
+  { id: 'av_guardiao_torre', kind: 'avatar', name: 'Guardião da Torre', price: 1800 },
+  { id: 'av_rainha_sombria', kind: 'avatar', name: 'Rainha Sombria', price: 2000 },
   // R119 · emotes das partidas online (o nome É o texto que aparece para o adversário)
   { id: 'emote_uau', kind: 'emote', name: 'Uau!', price: 300 },
   { id: 'emote_pensando', kind: 'emote', name: 'Hmm… pensando', price: 300 },
@@ -31,6 +42,9 @@ const ITEMS = [
   { id: 'emote_respeito', kind: 'emote', name: 'Respeito, mestre.', price: 600 },
 ];
 const BY_ID = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+// R163 · avatares que só o PASSE entrega (não estão à venda; ficam na conta como item da loja, preço 0)
+const PASS_AVATARS = [{ id: 'av_rei_onix', track: 'free', name: 'Rei de Ônix' }, { id: 'av_rainha_onix', track: 'free', name: 'Rainha de Ônix' }, { id: 'av_torre_onix', track: 'free', name: 'Torre de Ônix' }, { id: 'av_cavalo_onix', track: 'free', name: 'Cavalo de Ônix' }, { id: 'av_principe_sombras', track: 'club', name: 'Príncipe das Sombras' }, { id: 'av_principe_esmeralda', track: 'club', name: 'Príncipe Esmeralda' }, { id: 'av_aristocrata', track: 'club', name: 'Aristocrata do Relógio' }];
+const PASS_BY_ID = Object.fromEntries(PASS_AVATARS.map(a => [a.id, a]));
 const ofKind = kind => ITEMS.filter(i => i.kind === kind).map(i => i.id);
 // R119 · emotes de graça (todo jogador com conta ou convidado)
 const FREE_EMOTES = [
@@ -41,4 +55,4 @@ const FREE_EMOTES = [
 ];
 const emoteText = id => { const f = FREE_EMOTES.find(e => e.id === id); if (f) return f.text; const i = BY_ID[id]; return i && i.kind === 'emote' ? i.name : null; };
 const isFreeEmote = id => FREE_EMOTES.some(e => e.id === id);
-module.exports = { ITEMS, BY_ID, ofKind, FREE_EMOTES, emoteText, isFreeEmote };
+module.exports = { ITEMS, BY_ID, ofKind, FREE_EMOTES, emoteText, isFreeEmote, PASS_AVATARS, PASS_BY_ID };

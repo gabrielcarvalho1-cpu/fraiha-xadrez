@@ -18,7 +18,7 @@ const BENEFITS := [
     ["hourglass", "HISTÓRICO DETALHADO", "Suas partidas analisadas organizadas para rever quando quiser.", "DISPONÍVEL"],
     ["trophy", "DESAFIOS CLUB", "Desafios semanais exclusivos, acompanhados automaticamente.", "DISPONÍVEL"],
     ["gem", "COSMÉTICOS CLUB", "Tabuleiro e peças em esmeralda — sem efeito no jogo.", "DISPONÍVEL"],
-    ["seal", "SELO CLUB", "3 ícones e 3 avatares exclusivos de membro.", "DISPONÍVEL"],
+    ["seal", "SELO CLUB", "3 ícones e 9 avatares exclusivos de membro.", "DISPONÍVEL"],
     ["brush", "PERSONALIZAÇÃO PREMIUM", "Cores exclusivas de tabuleiro e peças; escolha ícone, título e moldura.", "DISPONÍVEL"],
     ["star", "ACESSO ANTECIPADO", "Laboratório: novidades em teste antes do lançamento geral.", "DISPONÍVEL"],
 ]

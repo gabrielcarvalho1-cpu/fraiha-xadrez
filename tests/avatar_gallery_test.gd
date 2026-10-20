@@ -30,13 +30,16 @@ func run():
     check(Array(ids).slice(0, 4) == ["warrior", "archer", "peao_branco", "peao_negro"], "coleção começa pelos 4 avatares gratuitos (Guerreiro, Arqueira, Peão Branco, Peão Negro)")
     var rewards := []
     for id in Ladder.ids(): rewards.append(String(Ladder.reward(id).get("id", "")))
-    var tail := Array(ids).slice(4, 4 + rewards.size())
+    var nfree := 4 + Catalog.FREE_NEW.size()   # R163 · +6 grátis logo depois dos 4 iniciais
+    var tail := Array(ids).slice(nfree, nfree + rewards.size())
     check(tail == rewards, "recompensas na ordem da escada (IDs do bot_ladder.json)")
     check(rewards[0] == "madeira_reward" and rewards[1] == "ferro_reward" and rewards[10] == "challenger_reward", "R30: 11 artes novas das ligas (Madeira → Challenger)")
     check(not ("mage" in ids) and not ("paladin" in ids), "Mago/Paladino saíram da coleção")
-    check(ids[ids.size() - 4] == "fundador", "avatar Fundador depois da escada")
-    check(Array(ids).slice(ids.size() - 3) == ["club_avatar_a", "club_avatar_b", "club_avatar_c"], "R31: 3 avatares do Club no fim da coleção")
-    check(ids.size() == 4 + Ladder.ids().size() + 1 + 3, "todos os avatares aparecem (%d)" % ids.size())
+    # R163 · depois da escada: Loja, Passe, Club e Fundador (+Lendário) no fim
+    var after := Array(ids).slice(nfree + rewards.size())
+    check(after == Array(Catalog.SHOP) + Array(Catalog.PASS_FREE) + Array(Catalog.PASS_CLUB) + Array(Catalog.CLUB) + ["fundador"] + Array(Catalog.FOUNDER_MORE) + Array(Catalog.LEGEND), "avatar Fundador depois da escada")
+    check(Array(Catalog.CLUB).slice(0, 3) == ["club_avatar_a", "club_avatar_b", "club_avatar_c"], "R31: 3 avatares do Club no fim da coleção")
+    check(ids.size() == nfree + Ladder.ids().size() + Catalog.SHOP.size() + Catalog.PASS_FREE.size() + Catalog.PASS_CLUB.size() + Catalog.CLUB.size() + 1 + Catalog.FOUNDER_MORE.size() + Catalog.LEGEND.size(), "todos os avatares aparecem (%d)" % ids.size())
     check(Catalog.missing_art().is_empty(), "todas as artes presentes (nenhum 'ARTE EM BREVE')")
     print("INFO arte ausente: ", Catalog.missing_art())
 
@@ -56,7 +59,7 @@ func run():
     # dica do mouse (tooltip) só existe no PC: no celular a galeria é a página própria do celular
     var pc: bool = not "--mobile-test" in OS.get_cmdline_user_args()
     if pc: check(String(g.cards["madeira_reward"].tooltip_text).contains("BLOQUEADO") and String(g.cards["madeira_reward"].tooltip_text).contains("BOT MADEIRA"), "bloqueado: dica BLOQUEADO · Derrote o BOT MADEIRA")
-    check(g.count_unlocked() == 4, "4 avatares gratuitos liberados no início")
+    check(g.count_unlocked() == 4 + Catalog.FREE_NEW.size(), "4 avatares gratuitos liberados no início")
     # ---------- bloqueado não seleciona ----------
     g.cards["madeira_reward"].pressed.emit()
     await frames(2)
@@ -106,8 +109,9 @@ func run():
         check(hub.avatar_id == "madeira_reward", "avatar sem arte não é selecionado")
     else:
         check(g.state_of("bronze_reward") == "unlocked", "bronze_reward com arte e liberado")
-    check(g.count_unlocked() == 7, "contagem: 7 conquistados após 3 vitórias")
-    check(String(hub.gallery_count.text).contains("7 de %d" % ids.size()), "texto da contagem atualizado")
+    var n7 := 7 + Catalog.FREE_NEW.size()
+    check(g.count_unlocked() == n7, "contagem: 7 conquistados após 3 vitórias")
+    check(String(hub.gallery_count.text).contains("%d de %d" % [n7, ids.size()]), "texto da contagem atualizado")
     # ---------- Pacote Fundador: avatar + Selo ----------
     check(g.state_of("fundador") == "locked" and (not pc or String(g.cards["fundador"].tooltip_text).contains("Pacote Fundador")), "sem Pacote Fundador: avatar Fundador bloqueado (Exclusivo do Pacote Fundador)")
     var before_f = hub.avatar_id

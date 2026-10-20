@@ -5,13 +5,16 @@
 const LADDER = require('../../bot/bot_ladder.json');
 const ShopCatalog = require('../economy/store_catalog');   // R116 · itens da Loja de Coroas
 
-const FREE_AVATARS = ['warrior', 'archer', 'peao_branco', 'peao_negro'];
+const FREE_AVATARS = ['warrior', 'archer', 'peao_branco', 'peao_negro', 'av_peao_dourado', 'av_torre_marmore', 'av_bispo_marmore', 'av_cavalo_marmore', 'av_heroi', 'av_principe_dourado'];   // R163 · +6 grátis
 const LEGACY_AVATARS = ['mage', 'paladin'];            // recompensas antigas: quem já tem continua exibindo
-const FOUNDER_AVATARS = ['fundador'];
-const CLUB_AVATARS = ['club_avatar_a', 'club_avatar_b', 'club_avatar_c'];
+const FOUNDER_AVATARS = ['fundador', 'av_mestre_dourado', 'av_mestre_sombras', 'av_grao_mestre', 'av_rainha_invernal'];
+const LEGEND_AVATARS = ['av_lenda_mistica'];   // R163 · só Fundador Lendário
+const CLUB_AVATARS = ['club_avatar_a', 'club_avatar_b', 'club_avatar_c', 'av_rainha_purpura', 'av_dama_esmeralda', 'av_dama_bispo', 'av_dama_torre', 'av_mestre_purpura', 'av_rainha_neon'];
+// R163 · avatares da Loja de Coroas e do Passe: a conta precisa TER o item (crown_items), para sempre
+const OWNED_AVATARS = [...ShopCatalog.ofKind('avatar'), ...ShopCatalog.PASS_AVATARS.map(a => a.id)];
 const LADDER_AVATARS = {};                              // avatar_id -> bot_id
 for (const b of LADDER.bots) if (b.reward && b.reward.type === 'avatar') LADDER_AVATARS[b.reward.id] = b.id;
-const ALL_AVATARS = [...FREE_AVATARS, ...LEGACY_AVATARS, ...Object.keys(LADDER_AVATARS), ...FOUNDER_AVATARS, ...CLUB_AVATARS];
+const ALL_AVATARS = [...FREE_AVATARS, ...LEGACY_AVATARS, ...Object.keys(LADDER_AVATARS), ...FOUNDER_AVATARS, ...LEGEND_AVATARS, ...CLUB_AVATARS, ...OWNED_AVATARS];
 
 const BADGES = ['', 'fundador', 'club_a', 'club_b', 'club_c'];
 const SHOP_TITLES = ShopCatalog.ofKind('title');        // R116 · comprados com Coroas (para sempre)
@@ -41,6 +44,8 @@ function validate(m, ent, defeated, owned = []) {
     if (!ALL_AVATARS.includes(a)) return { error: 'Avatar desconhecido.', code: 'cosmetic_invalid', field: 'avatar_id' };
     if (FOUNDER_AVATARS.includes(a) && !(ent && ent.is_founder)) return { error: 'Avatar exclusivo do Pacote Fundador.', code: 'cosmetic_locked', field: 'avatar_id' };
     if (CLUB_AVATARS.includes(a) && !(ent && ent.club_active)) return { error: 'Avatar exclusivo do Club FRAIHA.', code: 'cosmetic_locked', field: 'avatar_id' };
+    if (LEGEND_AVATARS.includes(a) && !(ent && ent.is_founder && ent.founder_tier === 'legend')) return { error: 'Avatar exclusivo do Fundador Lendário.', code: 'cosmetic_locked', field: 'avatar_id' };
+    if (OWNED_AVATARS.includes(a) && !(Array.isArray(owned) && owned.includes(a))) return { error: ShopCatalog.BY_ID[a] ? 'Compre este avatar na Loja de Coroas.' : 'Avatar do Passe da Temporada.', code: 'cosmetic_locked', field: 'avatar_id' };
     if (LADDER_AVATARS[a]) {
       if (!defeated) return { error: 'Progresso dos bots indisponível no servidor.', code: 'not_configured', field: 'avatar_id' };
       if (!defeated.includes(LADDER_AVATARS[a])) return { error: 'Avatar ainda bloqueado: vença o bot da escada.', code: 'cosmetic_locked', field: 'avatar_id' };
@@ -65,7 +70,8 @@ function effective(p, ent) {
   const active = ent ? { is_founder: !!ent.is_founder, founder_tier: ent.founder_tier || null, club_active: !!ent.club_active && (!ent.club_expires_at || new Date(ent.club_expires_at) > new Date()) } : { is_founder: false, club_active: false };
   const pick = (kind, v, fallback) => (v && has(need(kind, v), active)) ? v : fallback;
   let avatar = p.avatar_id || 'warrior';
-  if ((FOUNDER_AVATARS.includes(avatar) && !active.is_founder) || (CLUB_AVATARS.includes(avatar) && !active.club_active)) avatar = 'warrior';
+  if ((FOUNDER_AVATARS.includes(avatar) && !active.is_founder) || (CLUB_AVATARS.includes(avatar) && !active.club_active)
+    || (LEGEND_AVATARS.includes(avatar) && !(active.is_founder && active.founder_tier === 'legend'))) avatar = 'warrior';
   return {
     avatar_id: avatar,
     badge: pick('badge', p.profile_badge || '', ''),
@@ -90,4 +96,4 @@ function look(o) {
     frame: FRAMES.includes(o.frame) ? o.frame : 'liga', founder: !!o.founder, club: !!o.club, avatar_url: photoUrl(o.avatar_url) };
 }
 
-module.exports = { look, photoUrl, validate, effective, SHOP_TITLES, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, CLUB_AVATARS, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };
+module.exports = { look, photoUrl, validate, effective, SHOP_TITLES, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, LEGEND_AVATARS, CLUB_AVATARS, OWNED_AVATARS, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };

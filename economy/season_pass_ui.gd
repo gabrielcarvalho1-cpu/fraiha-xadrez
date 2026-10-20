@@ -138,7 +138,7 @@ func _scroll_to(level: int):
 func _reward_text(rw) -> String:
 	if not (rw is Dictionary): return "—"
 	if rw.has("crowns"): return "%d COROAS" % int(rw.crowns)
-	return "%s: %s" % [{"emote": "EMOTE", "title": "TÍTULO", "frame": "MOLDURA"}.get(String(rw.get("kind", "")), "ITEM"), String(rw.get("name", ""))]
+	return "%s: %s" % [{"emote": "EMOTE", "title": "TÍTULO", "frame": "MOLDURA", "avatar": "AVATAR"}.get(String(rw.get("kind", "")), "ITEM"), String(rw.get("name", ""))]
 
 func _row(rw: Dictionary, level: int, club: bool) -> Control:
 	var l := int(rw.get("level", 0))
@@ -164,10 +164,40 @@ func _row(rw: Dictionary, level: int, club: bool) -> Control:
 	ft.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ft.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	h.add_child(ft)
+	_thumb(h, f, ft)
 	var c = rw.get("club")
 	var item: bool = c is Dictionary and not c.has("crowns")
 	var ct := label(("✓ " if done and club else "") + _reward_text(c), 13 if narrow() else 15, (BLUE if club and done else (GOLD if item else DIM)), not item)
 	ct.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ct.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	h.add_child(ct)
+	_thumb(h, c, ct)
 	return p
+
+## R163 · prêmio de AVATAR no Passe: mostra o retrato pequeno antes do texto
+func _thumb(row: HBoxContainer, rw, before: Control):
+	if not (rw is Dictionary) or String(rw.get("kind", "")) != "avatar": return
+	var Cat = preload("res://profile/avatar_catalog.gd")
+	var id := String(rw.get("item", ""))
+	if not Cat.has_art(id): return
+	var t := TextureRect.new()
+	t.name = "PassAvatar_" + id
+	t.texture = load(Cat.art_path(id))
+	t.custom_minimum_size = Vector2(ts(44), ts(44))
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	t.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	t.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	# retrato em cima, nome embaixo (lado a lado o texto quebrava letra por letra no celular)
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 2)
+	var at := before.get_index()
+	row.remove_child(before)
+	row.add_child(col)
+	row.move_child(col, at)
+	col.add_child(t)
+	col.add_child(before)
+	if before is Label:
+		(before as Label).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		(before as Label).text = String(rw.get("name", "")).to_upper()

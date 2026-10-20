@@ -1301,13 +1301,22 @@ func avatar_texture(id: String = "") -> Texture2D:
 ## Avatar liberado? Iniciais sempre; recompensas da escada pelo progresso dos bots; o do Fundador pelo
 ## Pacote Fundador (entitlements: servidor is_founder ou simulação de dev).
 func avatar_unlocked(id: String) -> bool:
+    if id in AvatarCatalog.FREE_NEW: return true   # R163 · gratuitos novos
+    if AvatarCatalog.is_legend_avatar(id): return is_legend()
     if AvatarCatalog.is_founder_avatar(id): return is_founder()
     if AvatarCatalog.is_club_avatar(id): return club_active()
+    if AvatarCatalog.is_owned_avatar(id): return id in Cosmetics.shop_owned   # R163 · Loja de Coroas / Passe (para sempre)
     return bot_progress == null or bot_progress.avatar_unlocked(id)
 
 func avatar_lock_hint(id: String) -> String:
+    if AvatarCatalog.is_legend_avatar(id): return "Exclusivo do Fundador Lendário"
     if AvatarCatalog.is_founder_avatar(id): return "Exclusivo do Pacote Fundador"
     if AvatarCatalog.is_club_avatar(id): return "Exclusivo do Club FRAIHA"
+    if id in AvatarCatalog.SHOP:
+        var it: Dictionary = preload("res://economy/crown_store_catalog.gd").item(id)
+        return "Compre na Loja de Coroas (%d Coroas)" % int(it.get("price", 0))
+    if id in AvatarCatalog.PASS_FREE: return "Prêmio do Passe da Temporada (nível 25)"
+    if id in AvatarCatalog.PASS_CLUB: return "Prêmio do Passe Club (nível 25)"
     return String(bot_progress.unlock_hint(id)) if bot_progress != null else ""
 
 func is_founder() -> bool:
@@ -1486,7 +1495,7 @@ func _refresh_avatar_detail():
     _detail_material(st == "locked")
     avatar_detail.title.text = String(e.get("name", id)).to_upper()
     var src := String(e.get("source", ""))
-    avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else ("Exclusivo do Pacote Fundador" if src == "founder" else ("Exclusivo do Club FRAIHA" if src == "club" else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot"))))
+    avatar_detail.origin.text = "Avatar inicial do FRAIHA" if src == "initial" else (avatar_lock_hint(id) if src in ["founder", "club", "shop", "pass"] else "Recompensa: 1ª vitória contra o " + String(BotLadder.bot(src).get("name", "bot")))
     match st:
         "locked":
             avatar_detail.status.text = "BLOQUEADO · " + avatar_gallery.hint(id)
