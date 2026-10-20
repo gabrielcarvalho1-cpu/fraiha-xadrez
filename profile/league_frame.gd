@@ -9,6 +9,11 @@ func _ready():
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     resized.connect(queue_redraw)
 func _draw():
+    # R166 · moldura de arte da liga (pacote do dono)
+    var art_id := "elo_" + league_id
+    if preload("res://monetization/club_frame.gd").is_art(art_id):
+        preload("res://monetization/club_frame.gd").draw_art(self, art_id, Rect2(Vector2.ZERO, size))
+        return
     var index = maxi(0,IDS.find(league_id))
     var color: Color = COLORS[index]
     var rect = Rect2(Vector2(2,2),size-Vector2(4,4))

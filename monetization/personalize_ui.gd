@@ -159,20 +159,24 @@ static func _frames(hub, parent: VBoxContainer, mh):
         var fid: String = id
         if Cosmetics.requirement("frame", fid) == "shop" and not Cosmetics.allowed("frame", fid, false, false): continue   # R116 · da loja: só as compradas
         var locked := not Cosmetics.allowed("frame", fid, mh.is_founder(), mh.club_active())
-        option(hub, row, "Frame_" + fid, _frame_preview(mh, fid), String(Cosmetics.FRAME_NAMES[fid]).to_upper(), pref == fid, locked, Cosmetics.lock_hint("frame", fid), func(): mh.set_cosmetic("frame", fid))
+        option(hub, row, "Frame_" + fid, _frame_preview(mh, fid, hub.narrow), String(Cosmetics.FRAME_NAMES[fid]).to_upper(), pref == fid, locked, Cosmetics.lock_hint("frame", fid), func(): mh.set_cosmetic("frame", fid))
     if mh.has_method("crowns_client"):
         var more := Art.Cta.new("MAIS MOLDURAS NA LOJA DE COROAS", "dark", 48 * maxf(hub.k, 0.8), int(16 * maxf(hub.k, 0.8)))
         more.name = "PersonalizeShopFrames"
         more.pressed.connect(func(): mh.crowns_client().open_store("frame"))
         v.add_child(more)
 
-static func _frame_preview(mh, fid: String) -> Control:
+static func _frame_preview(mh, fid: String, small := true) -> Control:
     var holder := CenterContainer.new()
     var pic := TextureRect.new()
     pic.texture = mh.avatar_texture()
-    pic.custom_minimum_size = Vector2(70, 70)
+    # R166 · molduras de arte saem bem para fora do retrato: retrato menor para a moldura caber na carta
+    var art: bool = fid == "liga" or ClubFrame.is_art(fid)
+    var ps := 46.0 if small else 66.0
+    pic.custom_minimum_size = Vector2(ps, ps) if art else Vector2(70, 70)
     pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    holder.custom_minimum_size = Vector2(ps * 1.5, ps * 1.75) if art else Vector2.ZERO
     holder.add_child(pic)
     if fid == "liga":
         var lf = preload("res://profile/league_frame.gd").new()

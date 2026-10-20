@@ -33,12 +33,26 @@ const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
 static var shop_owned: Array = []
 ## Molduras do retrato. "liga" = moldura da liga atual (padrão de todo jogador).
 ## R116 · + molduras da LOJA DE COROAS (o id é o estilo de monetization/club_frame.gd)
-const FRAMES := ["liga", "club", "fundador", "prata", "rubi", "safira", "jade", "ametista", "obsidiana"]
-const FRAME_NAMES := {"liga": "Moldura da Liga", "club": "Moldura Club", "fundador": "Moldura Fundador", "prata": "Moldura de Prata", "rubi": "Moldura Rubi", "safira": "Moldura Safira", "jade": "Moldura Jade", "ametista": "Moldura Ametista", "obsidiana": "Moldura Obsidiana"}
+## R166 · molduras de ARTE: as de ELO (liberadas ao ALCANÇAR a liga no Ranked; a maior liga já alcançada) e as da
+## Loja de Coroas (pacote novo). As antigas desenhadas da Loja (prata, rubi…) saíram.
+const ELO_FRAMES := ["elo_madeira", "elo_ferro", "elo_bronze", "elo_prata", "elo_ouro", "elo_platina", "elo_esmeralda", "elo_diamante", "elo_mestre", "elo_grande_mestre", "elo_challenger"]
+const LEAGUE_NAMES := ["Madeira", "Ferro", "Bronze", "Prata", "Ouro", "Platina", "Esmeralda", "Diamante", "Mestre", "Grande Mestre", "Challenger"]
+const FRAMES := ["liga", "club", "fundador", "elo_madeira", "elo_ferro", "elo_bronze", "elo_prata", "elo_ouro", "elo_platina", "elo_esmeralda", "elo_diamante", "elo_mestre", "elo_grande_mestre", "elo_challenger",
+	"m_safira_real", "m_ametista_real", "m_esmeralda_real", "m_rubi_real", "m_brasa", "m_diamante_prata", "m_marmore_esmeralda", "m_diamante_dourado", "m_noite_estrelada", "m_chama_eterna"]
+const FRAME_NAMES := {"liga": "Moldura da Liga", "club": "Moldura Club", "fundador": "Moldura Fundador",
+	"elo_madeira": "Elo Madeira", "elo_ferro": "Elo Ferro", "elo_bronze": "Elo Bronze", "elo_prata": "Elo Prata", "elo_ouro": "Elo Ouro", "elo_platina": "Elo Platina",
+	"elo_esmeralda": "Elo Esmeralda", "elo_diamante": "Elo Diamante", "elo_mestre": "Elo Mestre", "elo_grande_mestre": "Elo Grande Mestre", "elo_challenger": "Elo Challenger",
+	"m_safira_real": "Safira Real", "m_ametista_real": "Ametista Real", "m_esmeralda_real": "Esmeralda Real", "m_rubi_real": "Rubi Real", "m_brasa": "Brasa de Lava",
+	"m_diamante_prata": "Diamante de Prata", "m_marmore_esmeralda": "Mármore Esmeralda", "m_diamante_dourado": "Diamante Dourado", "m_noite_estrelada": "Noite Estrelada", "m_chama_eterna": "Chama Eterna"}
+## maior liga já alcançada pela conta (0 = Madeira … 10 = Challenger); o hub atualiza (main_hub.current_frame)
+static var highest_league := 0
+static func elo_index(id: String) -> int:
+    return ELO_FRAMES.find(id)
 
 ## Que direito cada item exige: "" (todos) | "founder" | "legend" (R103 · Fundador Lendário) | "club".
 static func requirement(kind: String, id: String) -> String:
     if id.is_empty() or id == "liga": return ""
+    if kind == "frame" and id in ELO_FRAMES: return "league"
     var shop := ShopCatalog.item(id)
     if not shop.is_empty() and String(shop.kind) == kind: return "shop"
     if id == "lendario": return "legend"
@@ -53,6 +67,7 @@ static func allowed(kind: String, id: String, founder: bool, club: bool, legend 
         "legend": return founder and legend
         "club": return club
         "shop": return id in shop_owned
+        "league": return highest_league >= elo_index(id)
     return true
 
 static func lock_hint(kind: String, id: String) -> String:
@@ -61,6 +76,7 @@ static func lock_hint(kind: String, id: String) -> String:
         "legend": return "Exclusivo do Fundador Lendário"
         "club": return "Exclusivo do Club FRAIHA"
         "shop": return "Loja de Coroas · %d Coroas" % int(ShopCatalog.item(id).get("price", 0))
+        "league": return "Alcance a liga %s no Ranked" % LEAGUE_NAMES[maxi(0, elo_index(id))]
     return ""
 
 ## Escolha automática (preferência vazia): o melhor item que o jogador possui.
@@ -87,6 +103,7 @@ static func effective(kind: String, pref: String, founder: bool, club: bool, leg
             "badge": return auto_badge(founder, club)
             "title": return auto_title(founder, club, legend)
             _: return auto_frame(founder, club)
+    if kind == "frame" and pref not in FRAMES: return auto_frame(founder, club)   # R166 · moldura antiga que saiu
     if not allowed(kind, pref, founder, club, legend):
         return "liga" if kind == "frame" else ""
     return pref

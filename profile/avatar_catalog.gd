@@ -15,14 +15,14 @@ const INITIAL := ["warrior", "archer", "peao_branco", "peao_negro"]   # gratuito
 ## R163 · 34 avatares novos (AVATARES_FRAIHA_34_5) + R164: mais 30 (tabuleiros e retratos pixel) divididos por função. O servidor (online_v021/accounts/cosmetics.js
 ## e economy/store_catalog.js) tem as MESMAS listas e é quem decide o que cada conta pode usar.
 const FREE_NEW := ["av_peao_dourado", "av_torre_marmore", "av_bispo_marmore", "av_cavalo_marmore", "av_heroi", "av_principe_dourado", "av_tab_mogno", "av_tab_torneio_pixel", "av_tab_salao_pixel", "av_tab_oficina_pixel"]
-const SHOP := ["av_cavalo_dourado", "av_rainha_marmore", "av_rainha_ametista", "av_rei_rubi", "av_bispo_safira", "av_rei_luz", "av_cavaleiro_real", "av_cavaleiro_escarlate", "av_guardiao_torre", "av_rainha_sombria", "av_tab_engrenagens", "av_tab_neon", "av_tab_floresta", "av_tab_ametista", "av_tab_farao", "av_tab_rubi", "av_tab_cristal", "av_tab_vulcao", "av_tab_oceano", "av_tab_astral"]   # Loja de Coroas (preço em economy/crown_store_catalog.gd)
-const PASS_FREE := ["av_rei_onix", "av_rainha_onix", "av_torre_onix", "av_cavalo_onix", "av_tab_ametista_pixel", "av_tab_gelo_pixel", "av_tab_atlantida_pixel", "av_tab_ruinas_pixel", "av_tab_lava_pixel"]   # Passe: faixa grátis, nível 25 (um por temporada, em rodízio)
-const PASS_CLUB := ["av_principe_sombras", "av_principe_esmeralda", "av_aristocrata", "av_principe_deserto", "av_principe_astral", "av_cavaleiro_prata"]   # Passe: faixa Club, nível 25 (um por temporada, em rodízio)
-const FOUNDER_MORE := ["av_mestre_dourado", "av_mestre_sombras", "av_grao_mestre", "av_rainha_invernal", "av_rei_dourado_coroa", "av_rainha_purpura_coroa", "av_rainha_gelo"]
+const SHOP := ["av_cavalo_dourado", "av_rainha_marmore", "av_rainha_ametista", "av_rei_rubi", "av_bispo_safira", "av_rei_luz", "av_cavaleiro_real", "av_cavaleiro_escarlate", "av_guardiao_torre", "av_rainha_sombria", "av_tab_engrenagens", "av_tab_neon", "av_tab_floresta", "av_tab_ametista", "av_tab_farao", "av_tab_rubi", "av_tab_cristal", "av_tab_vulcao", "av_tab_oceano", "av_tab_astral", "av_rainha_violeta", "av_lorde_escarlate", "av_peao_astuto", "av_cavaleiro_luar"]   # Loja de Coroas (preço em economy/crown_store_catalog.gd)
+const PASS_FREE := ["av_rei_onix", "av_rainha_onix", "av_torre_onix", "av_cavalo_onix", "av_tab_ametista_pixel", "av_tab_gelo_pixel", "av_tab_atlantida_pixel", "av_tab_ruinas_pixel", "av_tab_lava_pixel", "av_dama_dos_bosques"]   # Passe: faixa grátis, nível 25 (um por temporada, em rodízio)
+const PASS_CLUB := ["av_principe_sombras", "av_principe_esmeralda", "av_aristocrata", "av_principe_deserto", "av_principe_astral", "av_cavaleiro_prata", "av_principe_estelar"]   # Passe: faixa Club, nível 25 (um por temporada, em rodízio)
+const FOUNDER_MORE := ["av_mestre_dourado", "av_mestre_sombras", "av_grao_mestre", "av_rainha_invernal", "av_rei_dourado_coroa", "av_rainha_purpura_coroa", "av_rainha_gelo", "av_rainha_cristal", "av_rei_do_trono"]
 const LEGEND := ["av_lenda_mistica", "av_rei_rubi_coroa"]   # só Fundador Lendário
 const FOUNDER := "fundador"
 ## R31 · Club FRAIHA: 3 avatares exclusivos de quem tem o Club ativo (entitlements.club_active()).
-const CLUB := ["club_avatar_a", "club_avatar_b", "club_avatar_c", "av_rainha_purpura", "av_dama_esmeralda", "av_dama_bispo", "av_dama_torre", "av_mestre_purpura", "av_rainha_neon", "av_tab_cidade_neon", "av_rainha_punk", "av_bispa_esmeralda", "av_rainha_floresta"]
+const CLUB := ["club_avatar_a", "club_avatar_b", "club_avatar_c", "av_rainha_purpura", "av_dama_esmeralda", "av_dama_bispo", "av_dama_torre", "av_mestre_purpura", "av_rainha_neon", "av_tab_cidade_neon", "av_rainha_punk", "av_bispa_esmeralda", "av_rainha_floresta", "av_rainha_neon_punk", "av_bispa_ruiva"]
 
 const NAMES := {
     "warrior": "Guerreiro", "archer": "Arqueira", "mage": "Mago", "paladin": "Paladino",
@@ -35,6 +35,16 @@ const NAMES := {
     "fundador": "Fundador do Reino",
     "club_avatar_a": "Rainha Erudita", "club_avatar_b": "Bispo Estrategista", "club_avatar_c": "Cavaleiro Esmeralda",
     "peao_branco": "Peão Branco", "peao_negro": "Peão Negro",
+    "av_rainha_violeta": "Rainha Violeta",
+    "av_lorde_escarlate": "Lorde Escarlate",
+    "av_peao_astuto": "Peão Astuto",
+    "av_cavaleiro_luar": "Cavaleiro do Luar",
+    "av_dama_dos_bosques": "Dama dos Bosques",
+    "av_principe_estelar": "Príncipe Estelar",
+    "av_rainha_neon_punk": "Rainha Neon Punk",
+    "av_bispa_ruiva": "Bispa Ruiva",
+    "av_rainha_cristal": "Rainha de Cristal",
+    "av_rei_do_trono": "Rei do Trono Dourado",
     "av_tab_mogno": "Tabuleiro de Mogno",
     "av_tab_torneio_pixel": "Torneio Pixel",
     "av_tab_salao_pixel": "Salão do Castelo",

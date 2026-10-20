@@ -29,6 +29,46 @@ const GEMS := {
     "ametista": [Color("c38bff"), Color("37105e"), Color("e2c4ff"), Color("1c0a30"), Color(0.75, 0.5, 1.0)],
     "obsidiana": [Color("4a4f5c"), Color("07080b"), Color("ff6a3a"), Color("07080b"), Color(1.0, 0.45, 0.2)],
 }
+## R166 · MOLDURAS DE ARTE (pacote do dono): imagem por cima do retrato. [x, y, largura, altura] do buraco do meio,
+## em fração da imagem (monetization/frames/<id>.png): o buraco encaixa no retrato e a arte sai para fora dele.
+const ART := {
+    "elo_madeira": [0.1311, 0.2052, 0.7359, 0.6622],
+    "elo_ferro": [0.1631, 0.2031, 0.6728, 0.6337],
+    "elo_bronze": [0.1371, 0.2074, 0.7248, 0.6542],
+    "elo_prata": [0.1622, 0.2537, 0.6756, 0.6127],
+    "elo_ouro": [0.1568, 0.2255, 0.6893, 0.6305],
+    "elo_platina": [0.1415, 0.1766, 0.717, 0.6595],
+    "elo_esmeralda": [0.1323, 0.2115, 0.7365, 0.6595],
+    "elo_diamante": [0.1568, 0.2293, 0.6854, 0.6337],
+    "elo_mestre": [0.1544, 0.2318, 0.6912, 0.6376],
+    "elo_challenger": [0.1806, 0.2467, 0.6379, 0.5979],
+    "elo_grande_mestre": [0.1672, 0.2635, 0.6656, 0.6225],
+    "m_safira_real": [0.1958, 0.2509, 0.6064, 0.5901],
+    "m_ametista_real": [0.1513, 0.2213, 0.6963, 0.6431],
+    "m_diamante_dourado": [0.1747, 0.286, 0.6538, 0.5954],
+    "m_esmeralda_real": [0.1749, 0.2635, 0.6502, 0.5871],
+    "m_chama_eterna": [0.1833, 0.2707, 0.6335, 0.5864],
+    "m_brasa": [0.1779, 0.2419, 0.6452, 0.6347],
+    "m_rubi_real": [0.1818, 0.2531, 0.6474, 0.6141],
+    "m_noite_estrelada": [0.1848, 0.2669, 0.6273, 0.587],
+    "m_diamante_prata": [0.148, 0.2435, 0.7052, 0.6351],
+    "m_marmore_esmeralda": [0.1657, 0.2572, 0.6687, 0.6228],
+}
+static func is_art(s: String) -> bool:
+    return ART.has(s)
+static var _art_cache := {}
+static func art_texture(s: String) -> Texture2D:
+    if not ART.has(s): return null
+    if not _art_cache.has(s): _art_cache[s] = load("res://monetization/frames/%s.png" % s)
+    return _art_cache[s]
+## desenha a moldura de arte `s` em volta de `rect` (o retrato) no CanvasItem `c`
+static func draw_art(c: CanvasItem, s: String, rect: Rect2) -> void:
+    var tex := art_texture(s)
+    if tex == null: return
+    var h: Array = ART[s]
+    var sz := Vector2(rect.size.x / float(h[2]), rect.size.y / float(h[3]))
+    c.draw_texture_rect(tex, Rect2(rect.position - Vector2(float(h[0]) * sz.x, float(h[1]) * sz.y), sz), false)
+
 static func is_gem(s: String) -> bool:
     return GEMS.has(s)
 
@@ -66,6 +106,7 @@ func _ready():
     resized.connect(queue_redraw)
 
 func _process(delta):
+    if ART.has(style): return   # arte parada: não redesenha todo quadro
     if is_visible_in_tree():
         t += delta
         queue_redraw()
@@ -76,6 +117,9 @@ func band() -> float:
     return clampf(m * (0.07 if compact else 0.10), 4.0, 14.0)
 
 func _draw():
+    if ART.has(style):
+        draw_art(self, style, Rect2(Vector2.ZERO, size))
+        return
     var w := size.x
     var h := size.y
     var pulse := 0.5 + 0.5 * sin(t * 2.0)

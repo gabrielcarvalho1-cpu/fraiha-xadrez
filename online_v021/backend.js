@@ -628,7 +628,12 @@ class Backend {
         let defeated = null;
         if (m.avatar_id !== undefined && this.bots) { const b = await this.checked(ws, revision, this.bots.summary(accountId)); defeated = b.available ? b.defeated : null; }
         const owned = await this.checked(ws, revision, this.crownStore.owned(accountId));   // R116 · itens da Loja de Coroas
-        const v = Cosmetics.validate(m, ent, defeated, owned);
+        let highest = 0;   // R166 · molduras de elo: maior liga já alcançada (qualquer ritmo)
+        if (m.frame !== undefined && String(m.frame).startsWith('elo_')) {
+          const rs = await this.checked(ws, revision, this.store.getRankedStats(accountId));
+          for (const k of Object.keys(rs || {})) highest = Math.max(highest, Number(rs[k] && rs[k].highest_league) || 0, Number(rs[k] && rs[k].league) || 0);
+        }
+        const v = Cosmetics.validate(m, ent, defeated, owned, highest);
         if (v.error) return this.send(ws, { type: 'acct_cosmetics_error', code: v.code, field: v.field || '', message: v.error });
         const r = await op.wait(() => this.store.setCosmetics(accountId, v.values));
         if (r.error) return this.send(ws, { type: 'acct_cosmetics_error', code: r.code || 'profile_error', message: r.error });

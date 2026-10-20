@@ -3306,13 +3306,22 @@ func current_title() -> String:
     return Cosmetics.effective("title", title_pref, is_founder(), club_active(), is_legend())
 
 func current_frame() -> String:
+    _sync_highest_league()
     return Cosmetics.effective("frame", frame_pref, is_founder(), club_active())
+
+## R166 · molduras de ELO: liberadas pela maior liga já alcançada (dado do Ranked que a Home já tem)
+func _sync_highest_league():
+    if league_profile == null: return
+    var d = league_profile.data
+    var hid := String(d.get("highest_league", d.get("current_league", "madeira")))
+    Cosmetics.highest_league = maxi(LeagueCatalog.index_of(hid), LeagueCatalog.index_of(String(d.get("current_league", "madeira"))))
 
 func current_badge_texture(small := true) -> Texture2D:
     return Cosmetics.badge_texture(current_badge(), small)
 
 ## kind: "badge" | "title" | "frame". id "auto" volta ao automático. Bloqueado → false (nada muda).
 func set_cosmetic(kind: String, id: String) -> bool:
+    _sync_highest_league()
     var options: Array = Cosmetics.BADGES if kind == "badge" else (Cosmetics.TITLES if kind == "title" else Cosmetics.FRAMES)
     if id != "auto" and id not in options: return false
     if id != "auto" and not Cosmetics.allowed(kind, id, is_founder(), club_active(), is_legend()): return false

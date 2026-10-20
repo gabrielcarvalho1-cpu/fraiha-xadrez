@@ -12,12 +12,17 @@ const ITEMS := [
 	{"id": "lenda_xeque", "kind": "title", "name": "Lenda do XEQUE", "price": 1200},
 	{"id": "senhor_marcha", "kind": "title", "name": "Senhor da Marcha", "price": 1200},
 	{"id": "imperador", "kind": "title", "name": "Imperador do Tabuleiro", "price": 1500},
-	{"id": "prata", "kind": "frame", "name": "Moldura de Prata", "price": 900},
-	{"id": "rubi", "kind": "frame", "name": "Moldura Rubi", "price": 1200},
-	{"id": "safira", "kind": "frame", "name": "Moldura Safira", "price": 1200},
-	{"id": "jade", "kind": "frame", "name": "Moldura Jade", "price": 1200},
-	{"id": "ametista", "kind": "frame", "name": "Moldura Ametista", "price": 1500},
-	{"id": "obsidiana", "kind": "frame", "name": "Moldura Obsidiana", "price": 2000},
+	# R166 · MOLDURAS novas (arte do dono em monetization/frames/<id>.png)
+	{"id": "m_safira_real", "kind": "frame", "name": "Moldura Safira Real", "price": 1000},
+	{"id": "m_ametista_real", "kind": "frame", "name": "Moldura Ametista Real", "price": 1000},
+	{"id": "m_esmeralda_real", "kind": "frame", "name": "Moldura Esmeralda Real", "price": 1000},
+	{"id": "m_rubi_real", "kind": "frame", "name": "Moldura Rubi Real", "price": 1000},
+	{"id": "m_brasa", "kind": "frame", "name": "Moldura Brasa de Lava", "price": 1500},
+	{"id": "m_diamante_prata", "kind": "frame", "name": "Moldura Diamante de Prata", "price": 1500},
+	{"id": "m_marmore_esmeralda", "kind": "frame", "name": "Moldura Mármore Esmeralda", "price": 1500},
+	{"id": "m_diamante_dourado", "kind": "frame", "name": "Moldura Diamante Dourado", "price": 2000},
+	{"id": "m_noite_estrelada", "kind": "frame", "name": "Moldura Noite Estrelada", "price": 2000},
+	{"id": "m_chama_eterna", "kind": "frame", "name": "Moldura Chama Eterna", "price": 2500},
 	# R163 · AVATARES da Loja (arte em profile/avatars/<id>.webp)
 	{"id": "av_cavalo_dourado", "kind": "avatar", "name": "Cavalo Dourado", "price": 1000},
 	{"id": "av_rainha_marmore", "kind": "avatar", "name": "Rainha de Mármore", "price": 1000},
@@ -39,6 +44,10 @@ const ITEMS := [
 	{"id": "av_tab_vulcao", "kind": "avatar", "name": "Tabuleiro do Vulcão", "price": 1500},
 	{"id": "av_tab_oceano", "kind": "avatar", "name": "Reino do Oceano", "price": 1500},
 	{"id": "av_tab_astral", "kind": "avatar", "name": "Observatório Astral", "price": 1500},
+	{"id": "av_rainha_violeta", "kind": "avatar", "name": "Rainha Violeta", "price": 2500},
+	{"id": "av_lorde_escarlate", "kind": "avatar", "name": "Lorde Escarlate", "price": 2500},
+	{"id": "av_peao_astuto", "kind": "avatar", "name": "Peão Astuto", "price": 2000},
+	{"id": "av_cavaleiro_luar", "kind": "avatar", "name": "Cavaleiro do Luar", "price": 2000},
 	{"id": "emote_uau", "kind": "emote", "name": "Uau!", "price": 300},
 	{"id": "emote_pensando", "kind": "emote", "name": "Hmm… pensando", "price": 300},
 	{"id": "emote_sorte", "kind": "emote", "name": "Que sorte!", "price": 400},
@@ -50,7 +59,7 @@ const ITEMS := [
 ]
 
 ## R163 · avatares que só o PASSE entrega (não estão à venda): faixa grátis e faixa Club, nível 25, em rodízio
-const PASS_AVATARS := [{"id": "av_rei_onix", "track": "free", "name": "Rei de Ônix"}, {"id": "av_rainha_onix", "track": "free", "name": "Rainha de Ônix"}, {"id": "av_torre_onix", "track": "free", "name": "Torre de Ônix"}, {"id": "av_cavalo_onix", "track": "free", "name": "Cavalo de Ônix"}, {"id": "av_principe_sombras", "track": "club", "name": "Príncipe das Sombras"}, {"id": "av_principe_esmeralda", "track": "club", "name": "Príncipe Esmeralda"}, {"id": "av_aristocrata", "track": "club", "name": "Aristocrata do Relógio"}, {"id": "av_tab_ametista_pixel", "track": "free", "name": "Ametista Pixel"}, {"id": "av_tab_gelo_pixel", "track": "free", "name": "Fortaleza de Gelo"}, {"id": "av_tab_atlantida_pixel", "track": "free", "name": "Atlântida Pixel"}, {"id": "av_tab_ruinas_pixel", "track": "free", "name": "Ruínas da Floresta"}, {"id": "av_tab_lava_pixel", "track": "free", "name": "Fortaleza de Lava"}, {"id": "av_principe_deserto", "track": "club", "name": "Príncipe do Deserto"}, {"id": "av_principe_astral", "track": "club", "name": "Príncipe Astral"}, {"id": "av_cavaleiro_prata", "track": "club", "name": "Cavaleiro de Prata"}]
+const PASS_AVATARS := [{"id": "av_rei_onix", "track": "free", "name": "Rei de Ônix"}, {"id": "av_rainha_onix", "track": "free", "name": "Rainha de Ônix"}, {"id": "av_torre_onix", "track": "free", "name": "Torre de Ônix"}, {"id": "av_cavalo_onix", "track": "free", "name": "Cavalo de Ônix"}, {"id": "av_principe_sombras", "track": "club", "name": "Príncipe das Sombras"}, {"id": "av_principe_esmeralda", "track": "club", "name": "Príncipe Esmeralda"}, {"id": "av_aristocrata", "track": "club", "name": "Aristocrata do Relógio"}, {"id": "av_tab_ametista_pixel", "track": "free", "name": "Ametista Pixel"}, {"id": "av_tab_gelo_pixel", "track": "free", "name": "Fortaleza de Gelo"}, {"id": "av_tab_atlantida_pixel", "track": "free", "name": "Atlântida Pixel"}, {"id": "av_tab_ruinas_pixel", "track": "free", "name": "Ruínas da Floresta"}, {"id": "av_tab_lava_pixel", "track": "free", "name": "Fortaleza de Lava"}, {"id": "av_principe_deserto", "track": "club", "name": "Príncipe do Deserto"}, {"id": "av_principe_astral", "track": "club", "name": "Príncipe Astral"}, {"id": "av_cavaleiro_prata", "track": "club", "name": "Cavaleiro de Prata"}, {"id": "av_dama_dos_bosques", "track": "free", "name": "Dama dos Bosques"}, {"id": "av_principe_estelar", "track": "club", "name": "Príncipe Estelar"}]
 
 ## R119 · emotes de graça (aparecem para todos, sem comprar)
 const FREE_EMOTES := [

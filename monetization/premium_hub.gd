@@ -518,7 +518,7 @@ func founder_plans() -> Control:
     else: c1 = "QUERO SER FUNDADOR"
     row.add_child(plan_card("founder", "founder", "FUNDADOR", "", [
         "Selo, título e moldura de Fundador",
-        "8 avatares exclusivos de Fundador",
+        "10 avatares exclusivos de Fundador",
         "Tabuleiro e peças exclusivos do Fundador",
         "%d dias de Club FRAIHA inclusos" % Catalog.FOUNDER_CLUB_DAYS,
         "Grupo dos Fundadores no WhatsApp",

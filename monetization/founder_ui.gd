@@ -19,7 +19,7 @@ const WHY := [
 ## [ícone, título, descrição, estado depois de ativar (TESTE)]
 const BENEFITS := [
     ["seal", "SELO FUNDADOR PERMANENTE", "Emblema ao lado do seu nome, no perfil e na tela inicial.", "now"],
-    ["crown", "8 AVATARES EXCLUSIVOS DE FUNDADOR", "Retrato do Fundador e 7 avatares só de quem apoiou o começo (+2 só do Lendário).", "now"],
+    ["crown", "10 AVATARES EXCLUSIVOS DE FUNDADOR", "Retrato do Fundador e 9 avatares só de quem apoiou o começo (+2 só do Lendário).", "now"],
     ["scroll", "TÍTULO EXCLUSIVO", "“Fundador do Reino”.", "now"],
     ["frame", "MOLDURA DE PERFIL EXCLUSIVA", "Visual especial reservado aos Fundadores.", "now"],
     ["pawn", "CONJUNTO DE PEÇAS FUNDADOR", "Peças de marfim dourado e obsidiana, fora da progressão do Ranked.", "now"],

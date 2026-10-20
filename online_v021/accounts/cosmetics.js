@@ -7,9 +7,9 @@ const ShopCatalog = require('../economy/store_catalog');   // R116 · itens da L
 
 const FREE_AVATARS = ['warrior', 'archer', 'peao_branco', 'peao_negro', 'av_peao_dourado', 'av_torre_marmore', 'av_bispo_marmore', 'av_cavalo_marmore', 'av_heroi', 'av_principe_dourado', 'av_tab_mogno', 'av_tab_torneio_pixel', 'av_tab_salao_pixel', 'av_tab_oficina_pixel'];   // R163 · +6 grátis
 const LEGACY_AVATARS = ['mage', 'paladin'];            // recompensas antigas: quem já tem continua exibindo
-const FOUNDER_AVATARS = ['fundador', 'av_mestre_dourado', 'av_mestre_sombras', 'av_grao_mestre', 'av_rainha_invernal', 'av_rei_dourado_coroa', 'av_rainha_purpura_coroa', 'av_rainha_gelo'];
+const FOUNDER_AVATARS = ['fundador', 'av_mestre_dourado', 'av_mestre_sombras', 'av_grao_mestre', 'av_rainha_invernal', 'av_rei_dourado_coroa', 'av_rainha_purpura_coroa', 'av_rainha_gelo', 'av_rainha_cristal', 'av_rei_do_trono'];
 const LEGEND_AVATARS = ['av_lenda_mistica', 'av_rei_rubi_coroa'];   // R163 · só Fundador Lendário
-const CLUB_AVATARS = ['club_avatar_a', 'club_avatar_b', 'club_avatar_c', 'av_rainha_purpura', 'av_dama_esmeralda', 'av_dama_bispo', 'av_dama_torre', 'av_mestre_purpura', 'av_rainha_neon', 'av_tab_cidade_neon', 'av_rainha_punk', 'av_bispa_esmeralda', 'av_rainha_floresta'];
+const CLUB_AVATARS = ['club_avatar_a', 'club_avatar_b', 'club_avatar_c', 'av_rainha_purpura', 'av_dama_esmeralda', 'av_dama_bispo', 'av_dama_torre', 'av_mestre_purpura', 'av_rainha_neon', 'av_tab_cidade_neon', 'av_rainha_punk', 'av_bispa_esmeralda', 'av_rainha_floresta', 'av_rainha_neon_punk', 'av_bispa_ruiva'];
 // R163 · avatares da Loja de Coroas e do Passe: a conta precisa TER o item (crown_items), para sempre
 const OWNED_AVATARS = [...ShopCatalog.ofKind('avatar'), ...ShopCatalog.PASS_AVATARS.map(a => a.id)];
 const LADDER_AVATARS = {};                              // avatar_id -> bot_id
@@ -20,7 +20,9 @@ const BADGES = ['', 'fundador', 'club_a', 'club_b', 'club_c'];
 const SHOP_TITLES = ShopCatalog.ofKind('title');        // R116 · comprados com Coroas (para sempre)
 const TITLES = ['', 'fundador', 'lendario', 'club', ...SHOP_TITLES];   // R103 · lendario = Fundador Lendário
 const SHOP_FRAMES = ShopCatalog.ofKind('frame');        // R116 · molduras da Loja de Coroas
-const FRAMES = ['liga', 'club', 'fundador', ...SHOP_FRAMES];
+// R166 · molduras de ELO: liberadas ao alcançar a liga (maior liga já alcançada em qualquer ritmo do Ranked)
+const ELO_FRAMES = ['elo_madeira', 'elo_ferro', 'elo_bronze', 'elo_prata', 'elo_ouro', 'elo_platina', 'elo_esmeralda', 'elo_diamante', 'elo_mestre', 'elo_grande_mestre', 'elo_challenger'];
+const FRAMES = ['liga', 'club', 'fundador', ...ELO_FRAMES, ...SHOP_FRAMES];
 
 const need = (kind, id) => {
   if (!id || id === 'liga') return '';
@@ -37,7 +39,7 @@ const has = (req, ent, owned, id) => req === '' || (req === 'shop' ? (owned === 
 
 // Valida um pedido acct_set_cosmetics. ent = getEntitlements; defeated = bots vencidos (ou null se a
 // escada não estiver configurada no banco). Devolve { ok, values } ou { error, code, field }.
-function validate(m, ent, defeated, owned = []) {
+function validate(m, ent, defeated, owned = [], highest = 0) {
   const out = {};
   if (m.avatar_id !== undefined) {
     const a = String(m.avatar_id || '');
@@ -57,6 +59,7 @@ function validate(m, ent, defeated, owned = []) {
     const v = String(m[field] || (kind === 'frame' ? 'liga' : ''));
     if (!list.includes(v)) return { error: 'Opção inválida.', code: 'cosmetic_invalid', field };
     if (need(kind, v) === 'shop' && !has('shop', ent, owned || [], v)) return { error: 'Compre este item na Loja de Coroas.', code: 'cosmetic_locked', field };
+    if (kind === 'frame' && ELO_FRAMES.includes(v) && (Number(highest) || 0) < ELO_FRAMES.indexOf(v)) return { error: 'Moldura liberada ao alcançar essa liga no Ranked.', code: 'cosmetic_locked', field };
     if (!has(need(kind, v), ent, owned || [], v)) return { error: 'Item exclusivo (' + ({ founder: 'Pacote Fundador', legend: 'Fundador Lendário' }[need(kind, v)] || 'Club FRAIHA') + ').', code: 'cosmetic_locked', field };
     out[field] = v;
   }
@@ -96,4 +99,4 @@ function look(o) {
     frame: FRAMES.includes(o.frame) ? o.frame : 'liga', founder: !!o.founder, club: !!o.club, avatar_url: photoUrl(o.avatar_url) };
 }
 
-module.exports = { look, photoUrl, validate, effective, SHOP_TITLES, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, LEGEND_AVATARS, CLUB_AVATARS, OWNED_AVATARS, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };
+module.exports = { look, photoUrl, validate, effective, SHOP_TITLES, FREE_AVATARS, LEGACY_AVATARS, FOUNDER_AVATARS, LEGEND_AVATARS, CLUB_AVATARS, OWNED_AVATARS, ELO_FRAMES, LADDER_AVATARS, ALL_AVATARS, BADGES, TITLES, FRAMES };
