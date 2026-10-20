@@ -8,7 +8,8 @@ const check = (ok, m) => { checks++; if (!ok) fails++; console.log((ok ? 'PASS '
 function setup(env = {}) {
   const store = new MemoryStore(); const sent = [];
   const backend = { store, socketsOf: () => [], state: async () => {} };
-  const pay = new Payments({ send: (ws, o) => sent.push(o), backend, env: { FRAIHA_PAYMENT_PROVIDER: '', ...env } });
+  // R172: o Fundador só vende com limite de vagas positivo configurado (sem limite = fechado)
+  const pay = new Payments({ send: (ws, o) => sent.push(o), backend, env: { FRAIHA_PAYMENT_PROVIDER: '', FRAIHA_FOUNDER_LIMIT: '1000', ...env } });
   pay.provider = { name: 'fake', ready: () => true, createCharge: async ({ ref, amountCents }) => ({ id: ref, method: 'pix', status: 'pending', amount: amountCents }) };
   const ws = id => ({ user: { id, email: id + '@x.dev' }, profile: { nickname: id } });
   const last = t => [...sent].reverse().find(o => o.type === t);
@@ -20,7 +21,8 @@ function setup(env = {}) {
   await t.pay.handle(t.ws('ana'), { type: 'payment_offer' });
   const off = t.last('payment_offer');
   check(off.prices.founder_legend === 9990 && off.prices.club_yearly === 14990 && off.prices_pix.founder === 4490 && off.prices_pix.club_monthly === 1790, 'oferta com Lendário, anual e preços do PIX');
-  check(off.founder_open === true && off.founder_remaining === null, 'Fundador à venda, sem limite de vagas');
+  check(off.founder_open === true && off.founder_remaining === 1000, 'Fundador à venda com o limite de vagas configurado (1000)');
+  { const c = setup({ FRAIHA_FOUNDER_LIMIT: '' }); await c.pay.handle(c.ws('x'), { type: 'payment_offer' }); check(c.last('payment_offer').founder_open === false, 'R172: sem limite configurado o Fundador fica fechado (não existe ilimitado)'); }
   await t.pay.handle(t.ws('ana'), { type: 'payment_create', product_id: 'founder', method: 'pix' });
   check(t.last('payment_charge').charge.amount_cents === 4490, 'PIX do Fundador sai com desconto (R$ 44,90)');
   await t.pay.handle(t.ws('ana'), { type: 'payment_create', product_id: 'founder_legend', method: 'card' });

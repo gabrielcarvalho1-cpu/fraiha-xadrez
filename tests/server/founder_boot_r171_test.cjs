@@ -125,13 +125,15 @@ test('banco nasce fechado: MemoryStore (espelho da 0023) sem limite configurado 
   assert.equal(founders(s), 1, 'configurado: entrega respeitando o limite');
 });
 
-test('sem limite (FRAIHA_FOUNDER_LIMIT vazio) continua como antes depois de confirmar', async () => {
+test('R172 · FRAIHA_FOUNDER_LIMIT vazio (0) = FECHADO, não "sem limite": nenhum caminho entrega Fundador', async () => {
   const restore = quiet();
   try {
     const t = boot(0, { n: 6 });
     t.gate.resolve(); await new Promise(r => setTimeout(r, 10));
+    assert.equal(await t.pay.capacityReady(), false);
     await everyPath(t);
-    assert.equal(founders(t.store), 6);
+    assert.equal(founders(t.store), 0);
+    assert.ok(t.store.payments.every(p => p.status === 'pending'), 'continuam pendentes (sem perda)');
   } finally { restore(); }
 });
 

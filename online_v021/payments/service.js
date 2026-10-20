@@ -11,7 +11,8 @@
 // de cartão/CVV passa pelo FRAIHA (checkout hospedado do provedor). Provedor via env:
 //   FRAIHA_PAYMENT_PROVIDER = "" (nenhum) | "mercadopago"   (+ chaves em env, ver providers/mercadopago.js)
 //   FRAIHA_FOUNDER_UNTIL    = R103 · data em que o Pacote Fundador sai de venda (ex.: 2026-12-31). Vazio = à venda.
-//   FRAIHA_FOUNDER_LIMIT    = vagas do Fundador (opcional; 0 ou vazio = sem limite de vagas)
+//   FRAIHA_FOUNDER_LIMIT    = vagas do Fundador (OBRIGATÓRIO para vender: inteiro positivo. Ausente, vazio, 0, negativo
+//                             ou texto = Fundador FECHADO — não existe "Fundador ilimitado". R172 fail-closed)
 //   FRAIHA_FOUNDER_WHATSAPP_URL = link do grupo dos Fundadores (só vai para quem é Fundador de verdade)
 const crypto = require('crypto');
 
@@ -67,7 +68,11 @@ function createProvider(env = process.env) {
 class Payments {
   constructor({ send, backend, env = process.env }) {
     this.send = send; this.backend = backend; this.provider = createProvider(env);
-    this.founderLimit = Math.max(0, Number(env.FRAIHA_FOUNDER_LIMIT) || 0);   // 0 = sem limite de vagas
+    // R172 · fail-closed: só um inteiro positivo explícito abre o Fundador (ausente/vazio/0/negativo/texto = fechado)
+    const rawLimit = String(env.FRAIHA_FOUNDER_LIMIT == null ? '' : env.FRAIHA_FOUNDER_LIMIT).trim();
+    this.founderLimitValid = /^[1-9][0-9]{0,6}$/.test(rawLimit);
+    this.founderLimit = this.founderLimitValid ? Number(rawLimit) : 0;
+    if (!this.founderLimitValid) console.error('[pagamentos] FRAIHA_FOUNDER_LIMIT ausente ou inválido (' + JSON.stringify(rawLimit) + '): Pacote Fundador FECHADO (precisa ser um inteiro positivo)');
     const until = String(env.FRAIHA_FOUNDER_UNTIL || '').trim();
     this.founderUntil = until && !isNaN(Date.parse(until)) ? new Date(until.length <= 10 ? until + 'T23:59:59-03:00' : until).toISOString() : null;
     // R103 · encerrar a venda do Fundador quando o dono decidir: FRAIHA_FOUNDER_OPEN=0 (ou false/nao) no Render.
@@ -94,8 +99,10 @@ class Payments {
   async capacityReady() {
     const c = this.capacity;
     if (c.state === 'ready') return true;
+    if (c.state === 'closed') return false;
     if (c.promise) return this.within(c.promise);
     if (c.state === 'error' && Date.now() < c.retryAt) return false;
+    if (!this.founderLimitValid) { c.state = 'closed'; return false; }   // R172: sem limite positivo válido → fechado, nem consulta o banco
     const st = this.backend && this.backend.store;
     if (!st || !st.founderSetLimit) { c.state = 'error'; c.retryAt = Date.now() + 60e3; return false; }
     c.promise = (async () => {
@@ -106,12 +113,12 @@ class Payments {
           c.state = 'error'; c.retryAt = Date.now() + 60e3; return false;
         }
         const got = Array.isArray(r) ? Number(r[0]) : Number(r);
-        if (r === null || r === undefined || !Number.isFinite(got) || got !== this.founderLimit) {
+        if (r === null || r === undefined || !Number.isFinite(got) || got <= 0 || got !== this.founderLimit) {
           console.error('[pagamentos] limite do Fundador não confirmado (banco devolveu ' + JSON.stringify(r) + ', esperado ' + this.founderLimit + '): Fundador FECHADO');
           c.state = 'error'; c.retryAt = Date.now() + 5e3; return false;
         }
         c.state = 'ready';
-        console.log('[pagamentos] founder_ready: limite de vagas confirmado no banco = ' + (this.founderLimit || 'sem limite (FRAIHA_FOUNDER_LIMIT vazio)'));
+        console.log('[pagamentos] founder_ready: limite de vagas confirmado no banco = ' + this.founderLimit);
         return true;
       } catch (e) {
         console.error('[pagamentos] founderSetLimit falhou — Fundador fechado até confirmar o limite', e && e.message);
@@ -140,6 +147,7 @@ class Payments {
   async founderOpen() {
     if (this.founderClosedByEnv) return { open: false, reason: 'closed', message: 'O Pacote Fundador saiu de venda. Obrigado a todos que apoiaram o começo do reino!' };
     if (this.founderUntil && this.now() > Date.parse(this.founderUntil)) return { open: false, reason: 'closed', message: 'O Pacote Fundador saiu de venda. Obrigado a todos que apoiaram o começo do reino!' };
+    if (!this.founderLimitValid) return { open: false, reason: 'unavailable', message: 'As vendas do Pacote Fundador estão temporariamente indisponíveis.' };   // R172
     if (this.founderLimit > 0 && await this.foundersCount() >= this.founderLimit) return { open: false, reason: 'sold_out', message: 'As vagas do Pacote Fundador se esgotaram.' };
     return { open: true };
   }
@@ -200,6 +208,7 @@ class Payments {
         if (product.founder && this.founderLimit > 0 && this.store.founderReserve) {
           const r = await this.store.founderReserve({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref,
             amount_cents: amount, limit: this.founderLimit, hold_s: Math.round(OPEN_ORDER_MS / 1000) });
+          if (r && r.ok === false && r.reason === 'closed') return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');   // R172
           if (r && r.ok === false) return this.fail(ws, 'As vagas do Pacote Fundador se esgotaram.', 'founder_sold_out');
           if (r && r.missing) {   // R171b: sem a 0023 não vende Fundador limitado (nunca o caminho antigo sem lock)
             console.error('[pagamentos] migração 0023 ausente: venda de Fundador limitada FECHADA');

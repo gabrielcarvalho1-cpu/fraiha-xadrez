@@ -104,7 +104,7 @@ test('SEC-009: estorno automático só com FRAIHA_FOUNDER_AUTO_REFUND=1; reembol
   } finally { t.restore(); }
 });
 
-test('SEC-009: upgrade Fundador → Lendário com vagas esgotadas não ocupa vaga; sem limite tudo como antes', async () => {
+test('SEC-009: upgrade Fundador → Lendário com vagas esgotadas não ocupa vaga; R172: sem limite = fechado', async () => {
   const t = setup(1);
   try {
     await t.pay.handle(t.ws('ana'), { type: 'payment_create', product_id: 'founder', method: 'pix' });
@@ -117,11 +117,12 @@ test('SEC-009: upgrade Fundador → Lendário com vagas esgotadas não ocupa vag
     await t.pay.handle(t.ws('bia'), { type: 'payment_create', product_id: 'founder', method: 'pix' });
     assert.ok(t.sent.some(o => o.type === 'payment_error' && o.code === 'founder_sold_out'));
     assert.equal(await founders(t.store), 1);
+    // R172: limite 0/vazio não é "sem limite" — o Fundador fica fechado (nenhum pedido, nenhum Fundador)
     const free = setup(0);
     await Promise.all(Array.from({ length: 6 }, (_, i) => free.pay.handle(free.ws('f' + i), { type: 'payment_create', product_id: 'founder', method: 'pix' })));
-    const refs = free.sent.filter(o => o.type === 'payment_charge').map(o => o.charge.id);
-    await Promise.all(refs.map(r => paid(free, r)));
-    assert.equal(await founders(free.store), 6);
+    assert.equal(free.sent.filter(o => o.type === 'payment_charge').length, 0);
+    assert.equal(free.sent.filter(o => o.code === 'founder_unavailable').length, 6);
+    assert.equal(await founders(free.store), 0);
     free.restore();
   } finally { t.restore(); }
 });

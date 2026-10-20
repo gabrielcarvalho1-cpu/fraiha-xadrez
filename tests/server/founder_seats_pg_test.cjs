@@ -82,11 +82,21 @@ test('SEC-009 (Postgres real): corrida de pagamentos nunca passa do limite', { s
     assert.equal(await pay(order(b)), 'sold_out', 'outra pessoa não passa do limite');
     assert.equal(founders(), 1);
   });
-  await t.test('sem limite (0): todos recebem, como antes', async () => {
+  await t.test('R172 · limite 0 / nulo / negativo = FECHADO (não existe "sem limite"): nada é entregue nem reservado', async () => {
     reset(0);
     const refs = users(6).map(u => order(u));
-    const res = await Promise.all(refs.map(pay));
-    assert.equal(res.filter(r => r === 'paid').length, 6);
+    const res = await Promise.allSettled(refs.map(pay));
+    assert.equal(res.filter(r => r.status === 'rejected' && /founder_capacity_not_configured/.test(String(r.reason))).length, 6);
+    assert.equal(founders(), 0);
+    for (const v of ['0', 'null', '-3']) {
+      assert.equal(q(`select public.fraiha_founder_set_limit(${v})`), '0');
+      assert.equal(q('select configured from public.founder_capacity'), 'f', 'set_limit(' + v + ') deixa fechado');
+      const [u] = users(1);
+      assert.equal(await qAsync(`select public.fraiha_founder_reserve('${u}', 'founder', 'pix', 'mp', '${uuid()}', 4490, ${v}, 1800)->>'reason'`), 'closed');
+    }
+    assert.equal(statusCount('pending'), 6, 'pendentes, sem perda');
+    assert.equal(q('select public.fraiha_founder_set_limit(5)'), '5');
+    assert.equal(q('select configured from public.founder_capacity'), 't', 'inteiro positivo configura');
   });
 });
 

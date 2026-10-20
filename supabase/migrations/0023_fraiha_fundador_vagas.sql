@@ -7,7 +7,7 @@
 -- não conferia vagas. Dois pedidos abertos com 1 vaga restante, pagos juntos, viravam 2 Fundadores.
 --
 -- Solução (tudo dentro do banco, numa transação, serializado por um lock):
---   founder_capacity   1 linha com o limite (o servidor grava o valor de FRAIHA_FOUNDER_LIMIT; 0 = sem limite).
+--   founder_capacity   1 linha com o limite (o servidor grava o valor de FRAIHA_FOUNDER_LIMIT; R172: só inteiro positivo; 0 = FECHADO).
 --                      Toda reserva e toda entrega de Fundador trava ESTA linha (FOR UPDATE): uma de cada vez.
 --   reserva            ao criar um pedido de Fundador (fraiha_founder_reserve) a vaga fica guardada por um tempo
 --                      (payments.seat_hold_until, padrão 30 min = validade do PIX). Ocupadas = Fundadores atuais
@@ -22,7 +22,9 @@
 -- R171b · NASCE FECHADA (reteste Orca): a capacidade começa "não configurada" (configured=false). Enquanto o servidor
 -- não gravar o limite (fraiha_founder_set_limit, chamado ao iniciar), NENHUMA entrega/reserva de Fundador acontece:
 -- fraiha_pay_and_grant levanta erro (o pagamento continua 'pending' e o aviso é repetido depois) e a reconciliação
--- pula os Fundadores. Assim não existe janela de boot em que o limite valha 0 (= sem limite) por engano.
+-- pula os Fundadores. Assim não existe janela de boot em que o limite valha 0 por engano (e 0 nunca é "sem limite": é fechado).
+-- R172 · SEM "FUNDADOR ILIMITADO": limite 0 (ou nulo/negativo) nunca significa "sem limite" — significa FECHADO.
+-- fraiha_founder_set_limit só configura com inteiro positivo; reserva/entrega/reconciliação exigem configured E seat_limit > 0.
 -- Consequência prática: aplique a 0023 junto com a publicação do servidor R171b (o servidor antigo nunca configura;
 -- entregas de Fundador ficam em espera — sem perda — até o servidor novo subir).
 -- (Concessão manual pelo Admin continua sendo decisão do dono e não passa por aqui.)
@@ -69,8 +71,13 @@ $$;
 create or replace function public.fraiha_founder_set_limit(p_limit integer)
 returns integer language plpgsql security definer set search_path = public as $$
 begin
-  update public.founder_capacity set seat_limit = greatest(0, coalesce(p_limit, 0)), configured = true, updated_at = now() where id = 1;
-  return greatest(0, coalesce(p_limit, 0));
+  -- R172: só inteiro positivo configura; 0/nulo/negativo deixa FECHADO (configured=false) e devolve 0
+  if coalesce(p_limit, 0) <= 0 then
+    update public.founder_capacity set seat_limit = 0, configured = false, updated_at = now() where id = 1;
+    return 0;
+  end if;
+  update public.founder_capacity set seat_limit = p_limit, configured = true, updated_at = now() where id = 1;
+  return p_limit;
 end $$;
 
 -- cria o pedido de Fundador SÓ se houver vaga, guardando a vaga por p_hold_s segundos
@@ -83,10 +90,12 @@ declare
   taken integer;
 begin
   if p_product not in ('founder', 'founder_legend') then raise exception 'product_invalid:%', p_product; end if;
-  update public.founder_capacity set seat_limit = greatest(0, coalesce(p_limit, 0)), configured = true, updated_at = now() where id = 1;
+  if coalesce(p_limit, 0) <= 0 then return jsonb_build_object('ok', false, 'reason', 'closed'); end if;   -- R172: sem limite = fechado
+  update public.founder_capacity set seat_limit = p_limit, configured = true, updated_at = now() where id = 1;
   select * into cap from public.founder_capacity where id = 1 for update;   -- uma reserva/entrega de cada vez
+  if not found or not cap.configured or cap.seat_limit <= 0 then return jsonb_build_object('ok', false, 'reason', 'closed'); end if;
   select coalesce(bool_or(is_founder), false) into already from public.entitlements where user_id = p_user;
-  if not already and cap.seat_limit > 0 then
+  if not already then
     taken := public.fraiha_founder_taken(p_user);
     if taken >= cap.seat_limit then
       return jsonb_build_object('ok', false, 'reason', 'sold_out', 'taken', taken, 'limit', cap.seat_limit);
@@ -112,11 +121,11 @@ begin
   if pay.product_id in ('founder', 'founder_legend') then
     select * into cap from public.founder_capacity where id = 1 for update;   -- serializa TODAS as entregas de Fundador
     -- R171b: limite ainda não configurado pelo servidor → não entrega (erro = transação desfeita, pedido segue pendente)
-    if not found or not cap.configured then
+    if not found or not cap.configured or coalesce(cap.seat_limit, 0) <= 0 then   -- R172: 0 nunca é "sem limite"
       raise exception 'founder_capacity_not_configured' using errcode = 'P0001';
     end if;
     select coalesce(bool_or(is_founder), false) into already from public.entitlements where user_id = pay.user_id;
-    if not already and coalesce(cap.seat_limit, 0) > 0 and public.fraiha_founder_taken(pay.user_id) >= cap.seat_limit then
+    if not already and public.fraiha_founder_taken(pay.user_id) >= cap.seat_limit then
       update public.payments set status = 'sold_out', paid_at = now() where payment_id = pay.payment_id;
       return jsonb_build_object('payment_id', pay.payment_id, 'user_id', pay.user_id, 'product_id', pay.product_id,
         'status', 'sold_out', 'amount_cents', pay.amount_cents);
@@ -140,9 +149,9 @@ begin
             where status = 'paid' and granted_at is null for update skip locked loop
     if r.product_id in ('founder', 'founder_legend') then
       select * into cap from public.founder_capacity where id = 1 for update;
-      if not found or not cap.configured then continue; end if;   -- R171b: sem limite configurado, Fundador espera
+      if not found or not cap.configured or coalesce(cap.seat_limit, 0) <= 0 then continue; end if;   -- R171b/R172: sem limite positivo, Fundador espera
       select coalesce(bool_or(is_founder), false) into already from public.entitlements where user_id = r.user_id;
-      if not already and coalesce(cap.seat_limit, 0) > 0 and public.fraiha_founder_taken(r.user_id) >= cap.seat_limit then
+      if not already and public.fraiha_founder_taken(r.user_id) >= cap.seat_limit then
         update public.payments set status = 'sold_out' where payment_id = r.payment_id;
         s := s + 1;
         continue;

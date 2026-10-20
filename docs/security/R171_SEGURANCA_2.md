@@ -450,3 +450,27 @@ Testes:
 2. **Logo em seguida**, `PUBLICAR-SERVIDOR-R172.cmd`. Entre a 0023 e o servidor novo subir, a entrega de Fundador fica em espera, sem perda.
 3. Conferir no log do Render: `founder_ready: limite de vagas confirmado no banco = <limite>`.
 4. Cloudflare: o jogo não mudou desde a R171b (pasta `FRAIHA_R171B_CLOUDFLARE`).
+
+---
+
+## 13. R172 (ajuste final antes do staging): Fundador FAIL-CLOSED pela configuração
+
+Ressalva do Orca: na `42002a2`, `FRAIHA_FOUNDER_LIMIT` ausente, vazio ou 0 ainda queria dizer "sem limite". **Não existe mais "Fundador ilimitado".**
+
+| `FRAIHA_FOUNDER_LIMIT` | Resultado |
+|---|---|
+| ausente, vazio, `0`, negativo, texto (`dez`, `null`), decimal (`1.5`), só espaços | **founder_ready = false**: loja mostra indisponível; criar pedido → `founder_unavailable`; webhook, JÁ PAGUEI e reconciliação não entregam; o servidor **nem grava** limite no banco |
+| inteiro positivo (`1`, `100`, …) | fechado até o banco confirmar **exatamente** esse valor; depois abre e respeita o limite |
+| banco devolve outro valor, 0 ou nulo | continua fechado |
+
+**No banco (0023):** `fraiha_founder_set_limit` só configura com inteiro positivo. 0, nulo ou negativo deixam `configured = false`. Reserva, entrega e reconciliação exigem `configured` **e** `seat_limit > 0`; a reserva com limite ≤ 0 devolve `closed`.
+
+**Club e o resto do jogo:** iguais em todos os casos (testado).
+
+**Testes:** `founder_limite_env_r172_test.cjs`, com 11 testes cobrindo ausente, vazia, 0, negativa, texto, decimal, espaços, "null", 1, 100 e banco divergente. Postgres real com 0, nulo e -3 → fechado; 5 → configura. Os testes que assumiam "sem limite" passaram a exigir **fechado**:
+- `founder_boot_r171`;
+- `founder_seats` (upgrade);
+- `ofertas_r103`, que agora usa limite 1000;
+- `tests/run_payment_client.sh`, que agora usa 100.
+
+**Para staging e produção:** `FRAIHA_FOUNDER_LIMIT` **precisa** ser um inteiro positivo no Render. Se faltar, o Fundador fica fechado e o resto do jogo funciona.

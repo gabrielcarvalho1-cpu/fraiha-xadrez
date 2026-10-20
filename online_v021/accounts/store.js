@@ -186,12 +186,18 @@ class MemoryStore {
       && p.seat_hold_until && Date.parse(p.seat_hold_until) > now && p.user_id !== exceptUser && !this._isFounder(p.user_id)) holders.add(p.user_id);
     return n + holders.size;
   }
-  async founderSetLimit(limit) { this.founderLimit = Math.max(0, Number(limit) || 0); this.founderConfigured = true; return this.founderLimit; }
+  async founderSetLimit(limit) {   // R172: como a 0023 — só inteiro positivo configura; 0/nulo/negativo = fechado
+    const n = Number(limit);
+    if (!Number.isInteger(n) || n <= 0) { this.founderLimit = 0; this.founderConfigured = false; return 0; }
+    this.founderLimit = n; this.founderConfigured = true; return n;
+  }
   async founderTaken() { return this.founderTakenSync(null); }
   async founderReserve({ user_id, product_id, method, provider, provider_ref, amount_cents, limit, hold_s }) {
-    this.founderLimit = Math.max(0, Number(limit) || 0); this.founderConfigured = true;
+    const n = Number(limit);
+    if (!Number.isInteger(n) || n <= 0) return { ok: false, reason: 'closed' };   // R172: sem limite positivo = fechado
+    this.founderLimit = n; this.founderConfigured = true;
     const already = this._isFounder(user_id);
-    if (!already && this.founderLimit > 0 && this.founderTakenSync(user_id) >= this.founderLimit) return { ok: false, reason: 'sold_out' };
+    if (!already && this.founderTakenSync(user_id) >= this.founderLimit) return { ok: false, reason: 'sold_out' };
     this.payments = this.payments || [];
     this.payments.push({ payment_id: require('crypto').randomUUID(), created_at: new Date().toISOString(), paid_at: null, user_id, product_id, method, provider, provider_ref,
       amount_cents, status: 'pending', seat_hold_until: already ? null : new Date(Date.now() + Math.max(60, Number(hold_s) || 1800) * 1000).toISOString() });
@@ -203,9 +209,9 @@ class MemoryStore {
     if (!p) return null;
     if (this.failGrant) throw new Error('falha simulada na entrega');   // testes
     // R171b · como a 0023: limite ainda não configurado → Fundador não é entregue (erro; o pedido segue pendente)
-    if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this.founderConfigured) { const e = new Error('founder_capacity_not_configured'); e.code = 'P0001'; throw e; }
+    if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && (!this.founderConfigured || !(this.founderLimit > 0))) { const e = new Error('founder_capacity_not_configured'); e.code = 'P0001'; throw e; }
     if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this._isFounder(p.user_id)
-      && (this.founderLimit || 0) > 0 && this.founderTakenSync(p.user_id) >= this.founderLimit) {
+      && this.founderTakenSync(p.user_id) >= this.founderLimit) {
       p.status = 'sold_out'; p.paid_at = new Date().toISOString();   // R171 · SEC-009: pago sem vaga → reembolso
       return { ...p };
     }
@@ -217,9 +223,9 @@ class MemoryStore {
   async grantPaidMissing() {
     let n = 0, s = 0;
     for (const p of (this.payments || [])) if (p.status === 'paid' && !p.granted_at) {
-      if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this.founderConfigured) continue;   // R171b
+      if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && (!this.founderConfigured || !(this.founderLimit > 0))) continue;   // R171b/R172
       if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this._isFounder(p.user_id)
-        && (this.founderLimit || 0) > 0 && this.founderTakenSync(p.user_id) >= this.founderLimit) { p.status = 'sold_out'; s++; continue; }
+        && this.founderTakenSync(p.user_id) >= this.founderLimit) { p.status = 'sold_out'; s++; continue; }
       await this.grantEntitlement(p.user_id, p.product_id, p.provider); p.granted_at = new Date().toISOString(); n++;
     }
     return { granted: n, sold_out: s };
