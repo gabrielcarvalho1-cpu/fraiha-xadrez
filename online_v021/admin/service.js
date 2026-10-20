@@ -355,7 +355,7 @@ class AdminService {
     const names = new Map();
     try { for (const p of await Q.withTimeout(st.getProfilesByIds([...new Set(rows.map(r => r.user_id))]))) names.set(p.user_id, p.nickname); } catch {}
     const month = new Date(this.now()); month.setUTCDate(1); month.setUTCHours(3, 0, 0, 0);
-    const sum = { paid_month_cents: 0, paid_month: 0, paid_total_cents: 0, paid_total: 0, refunded: 0, pending: 0, by_product: {} };
+    const sum = { paid_month_cents: 0, paid_month: 0, paid_total_cents: 0, paid_total: 0, refunded: 0, pending: 0, sold_out: 0, by_product: {} };
     for (const r of rows) {
       if (r.status === 'paid') {
         sum.paid_total++; sum.paid_total_cents += Number(r.amount_cents) || 0;
@@ -363,6 +363,7 @@ class AdminService {
         sum.by_product[r.product_id] = (sum.by_product[r.product_id] || 0) + 1;
       } else if (r.status === 'refunded') sum.refunded++;
       else if (r.status === 'pending') sum.pending++;
+      else if (r.status === 'sold_out') sum.sold_out++;   // R171 · SEC-009: pago sem vaga de Fundador → reembolsar
     }
     return { available: true, summary: sum, items: rows.map(r => ({ ...r, nickname: names.get(r.user_id) || null, title: (P.PRODUCTS[r.product_id] || {}).title || r.product_id })) };
   }

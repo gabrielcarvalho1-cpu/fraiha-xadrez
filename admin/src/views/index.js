@@ -384,7 +384,7 @@ export const founder = ctx => entitlementView(ctx, 'founder');
 
 // ---------------------------------------------------------------- R103 · VENDAS
 const BRL = c => (Number(c || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const PAY_ST = { paid: ['PAGO', 'on'], pending: ['PENDENTE', 'partial'], refunded: ['REEMBOLSADO', 'off'], cancelled: ['CANCELADO', 'off'], failed: ['FALHOU', 'off'] };
+const PAY_ST = { paid: ['PAGO', 'on'], pending: ['PENDENTE', 'partial'], refunded: ['REEMBOLSADO', 'off'], cancelled: ['CANCELADO', 'off'], failed: ['FALHOU', 'off'], sold_out: ['PAGO SEM VAGA · REEMBOLSAR', 'warn'] };
 export function sales(ctx) {
   const f = frame(ctx, 'Vendas', 'Pagamentos do Mercado Pago (PIX e cartão). Reembolso: faça no painel do Mercado Pago — o jogo retira a vantagem sozinho quando o aviso chega.');
   let filter = '';
@@ -396,14 +396,15 @@ export function sales(ctx) {
       if (!d.available) return f.show(stateBox('error', 'Pagamentos indisponíveis neste servidor (sem banco ou sem a tabela payments).'));
       const s = d.summary, can = ctx.session && ctx.session.admin && (ctx.session.admin.perms || []).includes('payments.write');
       const prod = Object.entries(s.by_product).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—';
-      const chips = [['', 'Todos'], ['paid', 'Pagos'], ['pending', 'Pendentes'], ['refunded', 'Reembolsados']].map(([k, t]) =>
+      const chips = [['', 'Todos'], ['paid', 'Pagos'], ['pending', 'Pendentes'], ['refunded', 'Reembolsados'], ['sold_out', 'Sem vaga (reembolsar)']].map(([k, t]) =>
         h('button', { class: 'btn' + (filter === k ? ' primary' : ''), onclick: () => { filter = k; ctx.refresh(); } }, t));
       f.show(
         h('div', { class: 'cards' },
           card('Vendido no mês', { value: s.paid_month_cents, status: 'real', note: `${fmtInt(s.paid_month)} pagamento(s) desde o dia 1º` }, { fmt: BRL, hero: true }),
           card('Vendido no total', { value: s.paid_total_cents, status: 'real', note: `${fmtInt(s.paid_total)} pagamento(s) · ${prod}` }, { fmt: BRL }),
           card('Pendentes', { value: fmtInt(s.pending), status: 'real', note: 'PIX gerado e ainda não pago' }),
-          card('Reembolsados', { value: fmtInt(s.refunded), status: 'real', note: 'vantagem retirada automaticamente' })),
+          card('Reembolsados', { value: fmtInt(s.refunded), status: 'real', note: 'vantagem retirada automaticamente' }),
+          card('Sem vaga · reembolsar', { value: fmtInt(s.sold_out || 0), status: 'real', note: s.sold_out ? '⚠ Fundador pago depois das vagas acabarem: nada foi entregue, devolva o valor no Mercado Pago' : 'Fundador pago depois das vagas acabarem (nada foi entregue)' })),
         h('div', { class: 'panel' },
           h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px' }, ...chips,
             can ? h('button', { class: 'btn', style: 'margin-left:auto', onclick: async () => {

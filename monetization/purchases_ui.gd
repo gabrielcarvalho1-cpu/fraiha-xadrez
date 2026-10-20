@@ -10,6 +10,7 @@ const STATUS := {
 	"refunded": ["REEMBOLSADO", "info"],
 	"pending": ["AGUARDANDO PAGAMENTO", "new"],
 	"cancelled": ["CANCELADO", "soon"],
+	"sold_out": ["VAGAS ESGOTADAS · REEMBOLSO", "info"],   # R171 · pago depois de as vagas do Fundador acabarem
 }
 const NAMES := {"founder": "Pacote Fundador", "founder_legend": "Fundador Lendário", "club_monthly": "Club FRAIHA · 30 dias", "club_yearly": "Club FRAIHA · 1 ano"}
 const METHOD := {"pix": "PIX", "card": "Cartão"}
@@ -30,7 +31,7 @@ static func visible_items(items: Array) -> Array:
 	for it in items:
 		if not (it is Dictionary): continue
 		var st := String(it.get("status", ""))
-		if st in ["paid", "refunded"] or (st == "pending" and _age_s(String(it.get("created_at", ""))) < 1800):
+		if st in ["paid", "refunded", "sold_out"] or (st == "pending" and _age_s(String(it.get("created_at", ""))) < 1800):
 			out.append(it)
 	return out
 

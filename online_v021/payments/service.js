@@ -75,6 +75,14 @@ class Payments {
     this.now = () => Date.now();
     this.founderGroup = String(env.FRAIHA_FOUNDER_WHATSAPP_URL || '').trim();
     this.lastPoll = new Map();
+    // R171 · SEC-009: devolver automaticamente quem pagou depois de as vagas acabarem (só com FRAIHA_FOUNDER_AUTO_REFUND=1)
+    this.autoRefund = /^(1|true|sim)$/i.test(String(env.FRAIHA_FOUNDER_AUTO_REFUND || '').trim());
+    // o banco passa a conhecer o limite (a entrega confere vaga lá dentro, sob lock)
+    if (this.founderLimit > 0 && backend && backend.store && backend.store.founderSetLimit) {
+      Promise.resolve().then(() => backend.store.founderSetLimit(this.founderLimit)).then(r => {
+        if (r && r.missing) console.error('[pagamentos] FRAIHA_FOUNDER_LIMIT configurado, mas a migração 0023 não foi aplicada: o limite não é atômico');
+      }).catch(e => console.error('[pagamentos] founderSetLimit', e && e.message));
+    }
     if (this.provider.name !== 'none' && this.provider.ready && !this.provider.ready()) console.warn('[pagamentos] provedor ' + this.provider.name + ' sem configuração completa: ' + (this.provider.missing ? this.provider.missing().join(', ') : ''));
   }
   get store() { return this.backend.store; }
@@ -82,7 +90,11 @@ class Payments {
   ready() { return this.provider.name !== 'none' && (!this.provider.ready || this.provider.ready()); }
 
   async foundersCount() {
-    try { return this.store.countFounders ? await this.store.countFounders() : 0; } catch (e) { console.error('countFounders', e && e.message); return 0; }
+    // R171 · SEC-009: vagas ocupadas = Fundadores + reservas vivas (0023); sem a 0023, só Fundadores
+    try {
+      if (this.store.founderTaken) { const n = await this.store.founderTaken(); if (n !== null && n !== undefined) return n; }
+      return this.store.countFounders ? await this.store.countFounders() : 0;
+    } catch (e) { console.error('countFounders', e && e.message); return 0; }
   }
   // R103 · Fundador à venda? (prazo e, se configurado, vagas)
   async founderOpen() {
@@ -133,14 +145,25 @@ class Payments {
         if (ent && ent.founder_tier === 'legend') return this.fail(ws, 'Você já é Fundador Lendário. Obrigado!', 'already_founder');
         if (ent && ent.is_founder && productId === 'founder') return this.fail(ws, 'Você já é Fundador do Reino. Obrigado!', 'already_founder');
         const fo = await this.founderOpen();
-        if (!fo.open) return this.fail(ws, fo.message, fo.reason === 'sold_out' ? 'founder_sold_out' : 'founder_closed');
+        // R171 · quem já é Fundador e vira Lendário não ocupa vaga nova: "esgotado" não bloqueia o upgrade
+        const upgrade = !!(ent && ent.is_founder) && productId === 'founder_legend';
+        if (!fo.open && !(upgrade && fo.reason === 'sold_out')) return this.fail(ws, fo.message, fo.reason === 'sold_out' ? 'founder_sold_out' : 'founder_closed');
         // dois PIX de Fundador abertos ao mesmo tempo poderiam ser pagos os dois
         const open = this.store.findOpenPayment ? await this.store.findOpenPayment(ws.user.id, ['founder', 'founder_legend'], OPEN_ORDER_MS).catch(() => null) : null;
         if (open) return this.fail(ws, 'Você já tem um pagamento de Fundador em aberto. Conclua esse pagamento ou aguarde 30 minutos para começar outro.', 'order_open');
       }
       const ref = crypto.randomUUID(), amount = priceOf(product, method);
       try {
-        if (this.store.createPayment) await this.store.createPayment({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref, amount_cents: amount, status: 'pending' });
+        // R171 · SEC-009: pedido de Fundador só nasce com vaga reservada, conferida dentro do banco (lock)
+        let reserved = false;
+        if (product.founder && this.founderLimit > 0 && this.store.founderReserve) {
+          const r = await this.store.founderReserve({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref,
+            amount_cents: amount, limit: this.founderLimit, hold_s: Math.round(OPEN_ORDER_MS / 1000) });
+          if (r && r.ok === false) return this.fail(ws, 'As vagas do Pacote Fundador se esgotaram.', 'founder_sold_out');
+          if (r && r.missing) console.error('[pagamentos] migração 0023 ausente: reserva de vaga do Fundador NÃO é atômica');
+          else reserved = true;
+        }
+        if (!reserved && this.store.createPayment) await this.store.createPayment({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref, amount_cents: amount, status: 'pending' });
         const charge = await this.provider.createCharge({ ref, userId: ws.user.id, productId, method, amountCents: amount, title: product.title, email: ws.user.email });
         return this.send(ws, { type: 'payment_charge', charge: { ...charge, id: ref, product_id: productId, amount_cents: amount } });
       } catch (e) {
@@ -206,6 +229,7 @@ class Payments {
       await this.apply(ev);
       const after = await this.store.getPayment(this.provider.name, ref);
       if (after && after.status === 'paid') return reply('approved');
+      if (after && after.status === 'sold_out') return reply('sold_out', { message: 'As vagas do Pacote Fundador acabaram no exato momento do seu pagamento. Você NÃO recebeu o pacote e o valor será devolvido integralmente.' });   // R171 · SEC-009
       return reply('error', { message: 'Pagamento aprovado, mas a confirmação ainda não chegou. Aguarde alguns segundos: a vantagem aparece sozinha.' });
     }
     if (ev.status === 'pending') return reply('pending', { message: 'Pagamento em análise pelo Mercado Pago. Assim que for aprovado, a vantagem aparece sozinha.' });
@@ -231,6 +255,7 @@ class Payments {
         return { ok: false, reason: 'amount_mismatch' };
       }
       changed = await this.payAndGrant(ref);
+      if (changed && changed.status === 'sold_out') return this.soldOut(changed, ref, ev);   // R171 · SEC-009
       if (changed && this.backend.referrals) this.backend.referrals.onPurchase(changed.user_id);   // R105 · +30 dias para quem convidou
       if (changed && this.backend.creators) this.backend.creators.onPurchase({ ref, user_id: changed.user_id, product_id: row.product_id, amount_cents: amount });   // R121
     } else if (ev.status === 'cancelled') {
@@ -238,7 +263,8 @@ class Payments {
     } else if (ev.status === 'refunded') {
       changed = this.store.markRefund ? await this.store.markRefund(this.provider.name, ref) : null;
       if (changed && this.backend.creators) this.backend.creators.onRefund(ref);   // R121 · comissão não paga é cancelada
-      if (changed && this.store.revokeEntitlement) {
+      if (changed && changed.was === 'sold_out') console.log('[pagamentos] reembolso concluído de pagamento sem vaga (sold_out)', ref);
+      else if (changed && this.store.revokeEntitlement) {
         try { await this.store.revokeEntitlement(changed.user_id, changed.product_id); }
         catch (e) { console.error('[pagamentos] REEMBOLSO SEM RETIRAR DIREITO (aplique a migração 0010)', ref, e && e.message); }
       }
@@ -252,6 +278,27 @@ class Payments {
     return { ok: true, changed: !!changed };
   }
 
+  // R171 · SEC-009: pagamento aprovado quando as vagas já tinham acabado. NADA silencioso:
+  //   • o pagamento fica 'sold_out' (pago, sem vantagem) — aparece no Admin → Pagamentos e no MINHAS COMPRAS;
+  //   • o jogador recebe na hora o aviso de que as vagas acabaram e que o valor será devolvido integralmente;
+  //   • log de ERRO no servidor com a referência;
+  //   • com FRAIHA_FOUNDER_AUTO_REFUND=1 o servidor já pede o estorno ao provedor; quando o provedor confirmar,
+  //     o pagamento vira 'refunded'. Sem a variável, o reembolso é feito pelo dono (painel do Mercado Pago).
+  async soldOut(row, ref, ev) {
+    console.error('[pagamentos] VAGAS DO FUNDADOR ESGOTADAS no momento do pagamento — pago SEM vantagem, reembolso necessário', ref, row.user_id);
+    let refund = 'manual';
+    if (this.autoRefund && this.provider.refund && ev && ev.providerPaymentId) {
+      try { await this.provider.refund(ev.providerPaymentId); refund = 'requested'; }
+      catch (e) { refund = 'failed'; console.error('[pagamentos] estorno automático falhou — fazer manualmente', ref, e && e.message); }
+    }
+    const msg = 'As vagas do Pacote Fundador acabaram no exato momento do seu pagamento. Você NÃO recebeu o pacote e o valor será devolvido integralmente' +
+      (refund === 'requested' ? ' (estorno já solicitado ao Mercado Pago).' : ' (o FRAIHA vai estornar pelo Mercado Pago; se tiver dúvida, fale com o suporte).');
+    for (const ws of this.backend.socketsOf(row.user_id)) {
+      this.send(ws, { type: 'payment_update', charge: { id: ref, status: 'sold_out', product_id: row.product_id }, message: msg, refund });
+      this.send(ws, { type: 'payment_error', code: 'founder_sold_out_paid', message: msg });
+    }
+    return { ok: true, changed: true, sold_out: true, refund };
+  }
   // R103 · marca pago E entrega a vantagem juntos. Se a entrega falhar, o pedido continua pendente e a próxima
   // notificação (ou o JÁ PAGUEI) tenta de novo — nunca fica "pago sem vantagem".
   async payAndGrant(ref) {
@@ -274,7 +321,12 @@ class Payments {
   // R103 · entrega o que ficou pago sem vantagem (pedidos antigos). Chamado ao iniciar e de hora em hora.
   async reconcile() {
     if (!this.store.grantPaidMissing) return null;
-    try { const r = await this.store.grantPaidMissing(); if (r && r.granted) console.log('[pagamentos] entregues ' + r.granted + ' pagamento(s) que estavam sem vantagem'); return r; }
+    try {
+      const r = await this.store.grantPaidMissing();
+      if (r && r.granted) console.log('[pagamentos] entregues ' + r.granted + ' pagamento(s) que estavam sem vantagem');
+      if (r && r.sold_out) console.error('[pagamentos] ' + r.sold_out + ' pagamento(s) de Fundador sem vaga na reconciliação (sold_out) — reembolso necessário');
+      return r;
+    }
     catch (e) { console.error('[pagamentos] reconciliação', e && e.message); return null; }
   }
 

@@ -12,6 +12,8 @@ RUN npm ci --omit=dev --no-audit --no-fund
 COPY online_v021 ./online_v021
 COPY admin ./admin
 COPY bot/bot_ladder.json ./bot/bot_ladder.json
+# R171 · SEC-008: o MESMO Stockfish do jogo (GPLv3, licença junto) para o servidor conferir vitórias contra os bots fortes
+COPY web/engines/stockfish-19-lite-single.js web/engines/stockfish-19-lite-single.wasm web/engines/COPYING-GPLv3.txt ./web/engines/
 ENV PORT=10000
 EXPOSE 10000
 USER node

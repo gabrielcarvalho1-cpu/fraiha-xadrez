@@ -6,9 +6,14 @@
 //     legais, a partir da posição inicial, terminando em XEQUE-MATE do lado do bot;
 //   • grava a 1ª vitória uma única vez por (conta, bot) — repetir não gera nova recompensa;
 //   • limita a frequência de pedidos por conexão.
-// Limite conhecido (documentado no handoff): o servidor não roda o Stockfish, então não prova
-// que os lances do lado do bot foram mesmo do bot. Fecha o atalho trivial, não é anti-cheat completo.
+// R171 · SEC-008: nos níveis fortes (platina em diante + challenger) o servidor roda o MESMO Stockfish do jogo
+// (bots/verify.js) e confere se os lances do lado do bot são de bot daquele nível — lances inventados ou ruins
+// enviados pelo cliente são recusados. A cor do bot sai da partida (quem levou o mate), não do que o cliente diz.
+// A mesma partida (lances idênticos) não vale para duas contas. Revanche (bot já derrotado) não gasta motor.
+// Limite conhecido: nos níveis baixos o bot erra de propósito, então lá só valem as regras e o mate.
+const crypto = require('crypto');
 const { Position } = require('../chess_rules');
+const { BotVerifier } = require('./verify');
 const { operation } = require('../accounts/operation');
 const LADDER = require('../../bot/bot_ladder.json');
 const IDS = LADDER.bots.map(b => b.id);
@@ -36,11 +41,15 @@ function validateVictory(m) {
   if (!pos) return { error: 'Partida inválida: lance ilegal.', code: 'bot_game_invalid' };
   const botColor = color === 'w' ? 'b' : 'w';
   if (pos.outcome() !== 'checkmate' || pos.turn !== botColor) return { error: 'A partida não terminou com vitória sua.', code: 'bot_game_invalid' };
-  return { ok: true, id };
+  return { ok: true, id, botColor: pos.turn };   // cor do bot = quem levou o mate (não a palavra do cliente)
 }
 
 class BotService {
-  constructor({ store, send, backend }) { this.store = store; this.send = send; this.backend = backend; }
+  constructor({ store, send, backend, verifier = null, env = process.env }) {
+    this.store = store; this.send = send; this.backend = backend;
+    this.verifier = verifier || new BotVerifier({ env });
+    this.games = new Map();   // hash dos lances -> conta (níveis conferidos): a mesma partida não vale para outra conta
+  }
   // Para o acct_state: progresso salvo na conta (ou indisponível sem a migração 0006).
   async summary(uid) {
     try { const rows = await this.store.getBotProgress(uid); return { available: true, defeated: rows.map(r => r.bot_id).filter(id => IDS.includes(id)) }; }
@@ -62,11 +71,36 @@ class BotService {
     if (!progress.available) return this.send(ws, { type: 'bot_error', code: 'not_configured', message: 'Progresso dos bots ainda não configurado no servidor (migração 0006 pendente).', bot_id: v.id });
     const idx = IDS.indexOf(v.id);
     if (idx > 0 && !progress.defeated.includes(IDS[idx - 1])) return this.send(ws, { type: 'bot_error', code: 'bot_locked', message: 'Derrote o bot anterior primeiro.', bot_id: v.id });
+    if (!progress.defeated.includes(v.id) && this.verifier.needs(v.id)) {
+      const err = await this.verify(op, v, m.moves);
+      if (err) return this.send(ws, { type: 'bot_error', ...err, bot_id: v.id });
+    }
     const fresh = await op.wait(() => this.store.recordBotVictory(op.uid, v.id, { plies: m.moves.length, human_color: m.human_color }));
     const after = await op.wait(() => this.summary(op.uid));
     return this.send(ws, { type: 'bot_progress', ...after, new_bot: fresh ? v.id : null });
   }
 }
+// R171 · SEC-008: confere os lances do bot (só 1ª vitória em nível forte). Devolve null (ok) ou { code, message }.
+BotService.prototype.verify = async function (op, v, moves) {
+  const hash = crypto.createHash('sha256').update(v.id + '|' + moves.join(' ')).digest('hex');
+  const owner = this.games.get(hash);
+  if (owner && owner !== op.uid) {
+    console.log('[bot-verify]', JSON.stringify({ bot: v.id, ok: false, reason: 'reused', uid: op.uid }));
+    return { code: 'bot_game_reused', message: 'Esta partida já foi registrada por outra conta.' };
+  }
+  const r = await this.verifier.check(v.id, moves, v.botColor);
+  op.assert();
+  if (r.ok) {
+    if (this.games.size > 50000) this.games.clear();
+    this.games.set(hash, op.uid);
+    return null;
+  }
+  if (r.code === 'bot_game_rejected') {
+    console.log('[bot-verify] RECUSADA', JSON.stringify({ uid: op.uid, bot: v.id, ...r.stats }));
+    return { code: 'bot_game_rejected', message: 'Não foi possível confirmar esta vitória: os lances do bot não conferem com o nível escolhido.' };
+  }
+  return { code: r.code, message: r.code === 'verify_busy' ? 'O servidor está conferindo outras partidas agora. Tente de novo em instantes.' : 'Não foi possível conferir a partida agora. Tente de novo em alguns minutos.' };
+};
 function notConfigured(e) { return e && /42P01|PGRST205|does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message)); }
 
 module.exports = { BotService, validateVictory, replay, IDS };

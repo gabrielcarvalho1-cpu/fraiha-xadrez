@@ -18,6 +18,29 @@ export const IMMUTABLE_RE = /^index-[eps][0-9a-f]{16}\.(?:js|wasm|pck|png|audio\
 export const CC_IMMUTABLE = "public, max-age=31536000, immutable";
 export const CC_REVALIDATE = "no-cache";
 export const EXTRA_HEADERS = {};
+// R171 · SEC-011: CSP em modo RELATÓRIO (report-only) — o navegador NÃO bloqueia nada, só avisa o que bloquearia
+// (POST em /csp-report do servidor). Depois de 1–2 semanas sem avisos legítimos, troca-se o nome do cabeçalho para
+// "content-security-policy" (bloqueio). Vai só no index.html (a página do jogo). Ver docs/security/CSP_R171.md.
+// 'unsafe-inline' e 'unsafe-eval' são necessários HOJE: o shell do Godot tem <script> inline (head_include) e o
+// JavaScriptBridge.eval do jogo usa eval(). 'wasm-unsafe-eval' = Godot e Stockfish (WebAssembly).
+export const CSP_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/agora-rtc-sdk-ng@4.24.8/ https://sdk.mercadopago.com https://*.mercadopago.com https://*.mercadolibre.com https://*.mlstatic.com https://static.cloudflareinsights.com",
+  "worker-src 'self' blob:",
+  "connect-src 'self' wss://fraiha-xadrez.onrender.com https://fraiha-xadrez.onrender.com wss://fraiha-xadrez-staging.onrender.com https://fraiha-xadrez-staging.onrender.com https://xbdkrrbppbhpufplnsbw.supabase.co wss://xbdkrrbppbhpufplnsbw.supabase.co https://*.agora.io wss://*.agora.io https://*.sd-rtn.com wss://*.sd-rtn.com https://*.mercadopago.com https://*.mercadolibre.com https://*.mlstatic.com https://cloudflareinsights.com",
+  "img-src 'self' data: blob: https://xbdkrrbppbhpufplnsbw.supabase.co https://*.mercadopago.com https://*.mlstatic.com",
+  "media-src 'self' data: blob: mediastream:",
+  "font-src 'self' data: https://*.mlstatic.com",
+  "style-src 'self' 'unsafe-inline' https://*.mercadopago.com https://*.mlstatic.com",
+  "frame-src https://*.mercadopago.com https://*.mercadopago.com.br https://*.mercadolibre.com https://*.mercadolivre.com https://*.mercadolivre.com.br",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self' https://*.mercadopago.com",
+  "frame-ancestors 'self'",
+  "report-uri https://fraiha-xadrez.onrender.com/csp-report",
+].join("; ");
+export const CSP_HEADER = "content-security-policy-report-only";
+export const HTML_HEADERS = { [CSP_HEADER]: CSP_POLICY };
 // Nome da ligação (binding) R2 do Worker para o bucket fraiha-xadrez-web. Ajuste se o Worker atual usar outro.
 export const BUCKET_BINDING = "BUCKET";
 
@@ -56,6 +79,7 @@ function baseHeaders(key) {
   h.set("cache-control", cachePolicy(key));
   h.set("accept-ranges", "bytes");
   h.set("x-content-type-options", "nosniff");
+  if (key.endsWith(".html")) for (const [k, v] of Object.entries(HTML_HEADERS)) h.set(k, v);   // R171 · SEC-011
   return h;
 }
 

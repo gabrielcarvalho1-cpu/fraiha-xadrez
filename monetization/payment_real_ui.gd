@@ -339,6 +339,13 @@ func _on_card_result(msg: Dictionary):
             card_form.resolve_ok()
             card_form.close()
             _paid()
+        "sold_out":   # R171 · SEC-009: cartão aprovado no instante em que a última vaga acabou → reembolso
+            card_form.resolve_ok()
+            card_form.close()
+            poll.stop()
+            error_code = "founder_sold_out_paid"
+            error_text = text if not text.is_empty() else "As vagas do Pacote Fundador acabaram no momento do seu pagamento. O valor será devolvido integralmente."
+            _show("error")
         "pending":
             card_form.resolve_ok()
             card_form.close()
@@ -479,6 +486,12 @@ func _on_server(msg: Dictionary):
                 "cancelled":
                     poll.stop()
                     _show("expired")
+                "sold_out":   # R171 · SEC-009: pagou no instante em que a última vaga acabou → nada entregue, reembolso
+                    poll.stop()
+                    if card_form != null: card_form.close()
+                    error_code = "founder_sold_out_paid"
+                    error_text = String(msg.get("message", "As vagas do Pacote Fundador acabaram no momento do seu pagamento. O valor será devolvido integralmente."))
+                    _show("error")
                 _:
                     if status_label != null: status_label.text = "Aguardando a confirmação do pagamento…"
 

@@ -176,20 +176,50 @@ class MemoryStore {
     this.entitlements.set(userId, e);
     return this.getEntitlements(userId);
   }
+  // R171 · SEC-009: mesmas regras da migração 0023 (vagas = Fundadores + reservas vivas de outros), sem await entre
+  // conferir e gravar (o Node não intercala código síncrono: é o equivalente ao lock do banco).
+  _isFounder(uid) { const e = (this.entitlements || new Map()).get(uid); return !!(e && e.is_founder); }
+  founderTakenSync(exceptUser) {
+    let n = 0; for (const e of (this.entitlements || new Map()).values()) if (e.is_founder) n++;
+    const holders = new Set(), now = Date.now();
+    for (const p of (this.payments || [])) if (p.status === 'pending' && (p.product_id === 'founder' || p.product_id === 'founder_legend')
+      && p.seat_hold_until && Date.parse(p.seat_hold_until) > now && p.user_id !== exceptUser && !this._isFounder(p.user_id)) holders.add(p.user_id);
+    return n + holders.size;
+  }
+  async founderSetLimit(limit) { this.founderLimit = Math.max(0, Number(limit) || 0); return this.founderLimit; }
+  async founderTaken() { return this.founderTakenSync(null); }
+  async founderReserve({ user_id, product_id, method, provider, provider_ref, amount_cents, limit, hold_s }) {
+    this.founderLimit = Math.max(0, Number(limit) || 0);
+    const already = this._isFounder(user_id);
+    if (!already && this.founderLimit > 0 && this.founderTakenSync(user_id) >= this.founderLimit) return { ok: false, reason: 'sold_out' };
+    this.payments = this.payments || [];
+    this.payments.push({ payment_id: require('crypto').randomUUID(), created_at: new Date().toISOString(), paid_at: null, user_id, product_id, method, provider, provider_ref,
+      amount_cents, status: 'pending', seat_hold_until: already ? null : new Date(Date.now() + Math.max(60, Number(hold_s) || 1800) * 1000).toISOString() });
+    return { ok: true, already_founder: already };
+  }
   // R103 · paga E entrega na mesma operação (como fraiha_pay_and_grant): repetir não entrega duas vezes
   async payAndGrant(provider, ref, source) {
     const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === 'pending');
     if (!p) return null;
     if (this.failGrant) throw new Error('falha simulada na entrega');   // testes
-    p.status = 'paid'; p.paid_at = new Date().toISOString();
+    if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this._isFounder(p.user_id)
+      && (this.founderLimit || 0) > 0 && this.founderTakenSync(p.user_id) >= this.founderLimit) {
+      p.status = 'sold_out'; p.paid_at = new Date().toISOString();   // R171 · SEC-009: pago sem vaga → reembolso
+      return { ...p };
+    }
+    p.status = 'paid'; p.paid_at = new Date().toISOString(); p.seat_hold_until = null;
     await this.grantEntitlement(p.user_id, p.product_id, source);
     p.granted_at = new Date().toISOString();
     return { ...p };
   }
   async grantPaidMissing() {
-    let n = 0;
-    for (const p of (this.payments || [])) if (p.status === 'paid' && !p.granted_at) { await this.grantEntitlement(p.user_id, p.product_id, p.provider); p.granted_at = new Date().toISOString(); n++; }
-    return { granted: n };
+    let n = 0, s = 0;
+    for (const p of (this.payments || [])) if (p.status === 'paid' && !p.granted_at) {
+      if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this._isFounder(p.user_id)
+        && (this.founderLimit || 0) > 0 && this.founderTakenSync(p.user_id) >= this.founderLimit) { p.status = 'sold_out'; s++; continue; }
+      await this.grantEntitlement(p.user_id, p.product_id, p.provider); p.granted_at = new Date().toISOString(); n++;
+    }
+    return { granted: n, sold_out: s };
   }
   async findOpenPayment(userId, productIds, sinceMs) {
     const since = Date.now() - sinceMs;
@@ -216,12 +246,13 @@ class MemoryStore {
     p.status = status; if (status === 'paid') p.paid_at = new Date().toISOString();
     return { ...p };
   }
-  // R39: reembolso/contestação — só paid → refunded (uma vez).
+  // R39: reembolso/contestação — só paid → refunded (uma vez). R171: também sold_out → refunded (sem direito a retirar).
   async markRefund(provider, ref) {
-    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === 'paid');
+    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && (x.status === 'paid' || x.status === 'sold_out'));
     if (!p) return null;
+    const was = p.status;
     p.status = 'refunded';
-    return { ...p };
+    return { ...p, was };
   }
   // R39: retira o que o pagamento reembolsado liberou (mesma regra da função 0010).
   async revokeEntitlement(userId, productId) {
@@ -730,7 +761,11 @@ class SupabaseStore {
   async markRefund(provider, ref) {
     const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.paid&select=payment_id,user_id,product_id,status',
       { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'refunded' }) });
-    return rows[0] || null;
+    if (rows[0]) return { ...rows[0], was: 'paid' };
+    // R171 · SEC-009: reembolso de quem pagou sem vaga (sold_out) — não havia direito para retirar
+    const so = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.sold_out&select=payment_id,user_id,product_id,status',
+      { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'refunded' }) }).catch(() => []);
+    return so[0] ? { ...so[0], was: 'sold_out' } : null;
   }
   // R39: retira o direito de um pagamento reembolsado (função fraiha_revoke_entitlement, migração 0010).
   async revokeEntitlement(userId, productId) {
@@ -741,6 +776,21 @@ class SupabaseStore {
   async countFounders() {
     try { const rows = await this.req('/entitlements?is_founder=eq.true&select=user_id'); return Array.isArray(rows) ? rows.length : 0; }
     catch (e) { if (/42P01|PGRST205|does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message))) return 0; throw e; }
+  }
+  // R171 · SEC-009: reserva de vaga e limite atômicos no banco (migração 0023). Sem a 0023 → { missing: true }.
+  async founderSetLimit(limit) {
+    try { return await this.req('/rpc/fraiha_founder_set_limit', { method: 'POST', body: JSON.stringify({ p_limit: Math.max(0, Number(limit) || 0) }) }); }
+    catch (e) { if (SCHEMA_MISSING(e) || /PGRST202/.test(String(e.code))) return { missing: true }; throw e; }
+  }
+  async founderTaken() {
+    try { return Number(await this.req('/rpc/fraiha_founder_taken', { method: 'POST', body: JSON.stringify({ p_except_user: null }) })) || 0; }
+    catch (e) { if (SCHEMA_MISSING(e) || /PGRST202/.test(String(e.code))) return null; throw e; }
+  }
+  async founderReserve({ user_id, product_id, method, provider, provider_ref, amount_cents, limit, hold_s }) {
+    try {
+      return await this.req('/rpc/fraiha_founder_reserve', { method: 'POST', body: JSON.stringify({ p_user: user_id, p_product: product_id, p_method: method,
+        p_provider: provider, p_ref: provider_ref, p_amount: amount_cents, p_limit: Math.max(0, Number(limit) || 0), p_hold_s: Math.max(60, Number(hold_s) || 1800) }) });
+    } catch (e) { if (SCHEMA_MISSING(e) || /PGRST202/.test(String(e.code))) return { missing: true }; throw e; }
   }
   // R103 · paga e entrega numa transação só (fraiha_pay_and_grant, migração 0012). Sem a 0012 → { missing: true }.
   async payAndGrant(provider, ref, source) {

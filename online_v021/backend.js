@@ -128,7 +128,7 @@ class Backend {
       if (family === 'casual') this.broadcastCasualModes();   // idem na tela JOGAR ONLINE (contas e convidados)
     });
     this.modeControls.onLeaguesChange(() => this.broadcastLeaguesPreview());   // R128 · ligas liberadas: o jogo aplica na hora
-    this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o), backend: this }) : null;
+    this.bots = this.store ? new BotService({ store: this.store, send: (ws, o) => this.send(ws, o), backend: this, env: opts.env || process.env }) : null;
     this.sweeper = setInterval(() => this.sweepGuests(), 600e3); this.sweeper.unref && this.sweeper.unref();
     // R170 · SEC-002: login (acct_auth) limitado por conexão, por IP e no total; no máximo N consultas simultâneas ao Auth
     const env = opts.env || process.env;
@@ -652,7 +652,9 @@ class Backend {
         if (existing) this.invites.onAuthenticated(ws);
         if (existing && !renewed) this.party.onAuthenticated(ws);
         if (existing) await this.checked(ws, revision, this.presence.snapshot(ws));
-        if (existing && !renewed) this.crowns.onLogin(user.id);   // R112 · entrada do dia (uma vez por dia)
+        // R171 · a entrada do dia roda DENTRO da operação de login (antes era solta): os avisos só saem se a sessão
+        // continuar a mesma (troca de conta / logout no meio descarta) e chegam antes de o login terminar.
+        if (existing && !renewed) await this.crowns.onLogin(user.id);   // R112 · entrada do dia (uma vez por dia)
         return;
       }
       if (!ws.user) return this.fail(ws, 'Entre na sua conta primeiro.', { code: 'auth_required' });
@@ -668,7 +670,7 @@ class Backend {
         if (m.ref) await this.referrals.onProfileCreated(accountId, m.ref);   // R105 · conta nova pelo link de convite
         if (m.creator) await this.creators.onProfileCreated(accountId, m.creator);   // R121 · conta nova pelo link de um criador
         if (!(await this.checked(ws, revision, this.state(ws)))) return;
-        this.crowns.onLogin(accountId);   // R112 · primeira entrada do dia
+        await this.crowns.onLogin(accountId);   // R112 · primeira entrada do dia (R171: dentro da operação)
         return this.presence.snapshot(ws);
       }
       if (a === 'acct_refresh') return await this.state(ws);

@@ -84,7 +84,9 @@ const get = (port, p) => new Promise((ok, ko) => http.get({ host: '127.0.0.1', p
   r = await bia.next('payment_card_result', 5000);
   check(r.status === 'error', 'pedido PIX não pode ser pago com token de cartão');
   // ---------- limite de tentativas ----------
-  bia.send({ type: 'payment_create', product_id: 'founder', method: 'card' });
+  // R171: era 'founder' — mas desde a R103 a conta só pode ter 1 pedido de Fundador aberto (order_open) e a Bia acabou
+  // de abrir um (PIX acima). O que se testa aqui é o limite de tentativas de cartão, então usa outro produto.
+  bia.send({ type: 'payment_create', product_id: 'club_yearly', method: 'card' });
   const ch2 = (await bia.next('payment_charge', 5000)).charge;
   let last;
   // (com pausa entre tentativas: o servidor derruba conexões com mais de 20 mensagens/s)

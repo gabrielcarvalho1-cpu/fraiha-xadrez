@@ -10,6 +10,8 @@ const HISTORY = 80;          // por canal
 // R168 · CANAIS (abas): GERAL, PROCURANDO PARCEIROS (achar gente para jogar) e DÚVIDAS E AJUDA.
 const CHANNELS = ['geral', 'parceiros', 'ajuda'];
 const MIN_GAP_MS = 2500;        // no global, no máximo 1 mensagem a cada 2,5 s por conta
+// R171 · SEC-010: denúncia igual (mesma pessoa + mesma mensagem) vale 1 vez por 24 h; teto 10 por pessoa e 30 por IP a cada 10 min
+const REPORT_DUP_MS = 24 * 3600e3, REPORT_WINDOW_MS = 10 * 60e3, REPORT_MAX = 10, REPORT_MAX_PER_IP = 30;
 const MAX_MEMBERS_PUSH = 5000;  // proteção: não percorre mais que isso por mensagem
 
 class GlobalChat {
@@ -19,6 +21,9 @@ class GlobalChat {
     this.messages = [];
     this.seq = 0;
     this.lastAt = new Map();    // uid -> última mensagem aceita
+    // R171 · SEC-010: denúncia repetida (mesma pessoa + mesma mensagem) não gera novo registro; teto por pessoa e por IP
+    this.reportSeen = new Map();   // `${reporter}|${msgId}|global_chat` -> quando
+    this.reportRate = new Map();   // reporter ou ip -> [instantes]
   }
   alive(ws) { return !ws.dead && (ws.readyState === undefined || ws.readyState === 1); }
   canSend(ws) { return !!(ws.user && ws.profile); }
@@ -66,6 +71,21 @@ class GlobalChat {
       const id = Number(m.id) || 0, e = this.messages.find(x => x.id === id);
       if (!e) return fail('Mensagem não encontrada.', 'not_found');
       const who = ws.user ? ws.user.id : (ws.identity && ws.identity.id) || '?';
+      // R171 · SEC-010: deduplica ANTES de registrar (inclusive convidado) e limita o volume por pessoa e por IP
+      const now = this.now(), key = who + '|' + e.id + '|global_chat';
+      if (this.reportSeen.size > 20000) for (const [k, t] of this.reportSeen) if (now - t > REPORT_DUP_MS) this.reportSeen.delete(k);
+      const seen = this.reportSeen.get(key);
+      if (seen && now - seen < REPORT_DUP_MS) return this.send(ws, { type: 'gchat_reported', id, duplicate: true });
+      const limited = [who, 'ip:' + (ws.ip || 'local')].some(k => {
+        const max = k.startsWith('ip:') ? REPORT_MAX_PER_IP : REPORT_MAX;
+        const list = (this.reportRate.get(k) || []).filter(t => now - t < REPORT_WINDOW_MS);
+        this.reportRate.set(k, list);
+        return list.length >= max;
+      });
+      if (limited) return fail('Você fez muitas denúncias seguidas. Aguarde alguns minutos.', 'rate_limited');
+      for (const k of [who, 'ip:' + (ws.ip || 'local')]) this.reportRate.get(k).push(now);
+      if (this.reportRate.size > 20000) this.reportRate.clear();
+      this.reportSeen.set(key, now);
       this.log('[gchat-report]', JSON.stringify({ by: who, msg_id: e.id, user_id: e.user_id, nickname: e.nickname, text: e.text, ts: e.ts }));
       // R104 · contas: também vai para a fila de denúncias do Admin (convidado não tem id fixo para denunciar)
       const R = this.backend && this.backend.reports;

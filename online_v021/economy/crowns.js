@@ -137,10 +137,12 @@ class Crowns {
   }
 
   async notify(uid, gained, lines, streak) {
-    const socks = this.backend.socketsOf ? this.backend.socketsOf(uid) : [];
-    if (!socks.length) return;
+    if (!(this.backend.socketsOf ? this.backend.socketsOf(uid) : []).length) return;
     let state = null;
     try { state = await this.snapshot(uid); } catch { /* o aviso vai sem o estado */ }
+    // R171 · as conexões são lidas DEPOIS da espera: quem saiu da conta (ou trocou de conta no mesmo aparelho)
+    // nesse meio-tempo não recebe o saldo/sequência desta conta.
+    const socks = (this.backend.socketsOf ? this.backend.socketsOf(uid) : []).filter(ws => !ws.user || ws.user.id === uid);
     for (const ws of socks) {
       this.send(ws, { type: 'crowns_reward', gained, lines, streak: streak || undefined, balance: state ? state.balance : undefined });
       if (state) this.send(ws, state);

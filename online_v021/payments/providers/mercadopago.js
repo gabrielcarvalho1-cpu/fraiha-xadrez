@@ -187,6 +187,12 @@ class MercadoPago {
     return this.lookup(dataId);
   }
 
+  // R171 · SEC-009: estorno integral (pagamento de Fundador aprovado sem vaga). Idempotente pela chave.
+  async refund(paymentId) {
+    if (!/^[0-9]{1,30}$/.test(String(paymentId || ''))) throw new Error('payment id inválido para estorno');
+    return this.call('POST', '/v1/payments/' + encodeURIComponent(paymentId) + '/refunds', {}, 'fraiha-refund-' + paymentId);
+  }
+
   // Consulta oficial do pagamento (a fonte da verdade).
   async lookup(paymentId) {
     const p = await this.call('GET', '/v1/payments/' + encodeURIComponent(paymentId));

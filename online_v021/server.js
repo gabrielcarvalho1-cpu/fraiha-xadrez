@@ -1,6 +1,7 @@
 const http=require('http'),crypto=require('crypto'),{WebSocketServer}=require('ws');
 // R170 · HARDENING (auditoria Orca R168): IP confiável, limites de conexão/webhook e tratamento de erro de socket.
 const {clientIp,Window}=require('./net_guard');
+const {CspReports}=require('./csp_report');   // R171 · SEC-011
 const WS_VERSION=(()=>{try{return require('ws/package.json').version}catch{return '?'}})();
 console.log('FRAIHA ws '+WS_VERSION);
 const MAX_CONN=Number(process.env.FRAIHA_MAX_CONN||4000),MAX_CONN_PER_IP=Number(process.env.FRAIHA_MAX_CONN_PER_IP||40);
@@ -47,11 +48,14 @@ function bigAllowed(m,len){const lim=m&&typeof m.type==='string'&&Object.prototy
 // e há um teto GLOBAL por minuto, que não se contorna trocando o IP informado.
 const hookPerIp=new Window({windowMs:60000,max:120,maxKeys:5000}),hookGlobal=new Window({windowMs:60000,max:Number(process.env.FRAIHA_WEBHOOK_MAX_PER_MIN||300)});
 function webhookLimited(req){const okIp=hookPerIp.hit(clientIp(req));const okAll=hookGlobal.hit('all');return !(okIp&&okAll)}
+const cspReports=new CspReports();
 const server=http.createServer((req,res)=>{
   if(admin.owns(req))return void admin.handle(req,res);
   if(adminStatic.owns(req))return void adminStatic.handle(req,res);
   // R161 · NOVIDADES (público, CORS): o jogo lê o outdoor da Home e as abas de novidades
   if(req.method==='GET'&&(req.url==='/news'||String(req.url).startsWith('/news?'))){backend.news.http(req,res).catch(e=>{console.error('news',e&&e.message);if(!res.headersSent){res.writeHead(500);res.end('error')}});return}
+  // R171 · SEC-011: avisos do CSP report-only do site do jogo (só diretiva + host bloqueado no log; com limites)
+  if(cspReports.owns(req))return void cspReports.handle(req,res);
   // Webhook do provedor de pagamento (V2). Corpo bruto é necessário para verificar a assinatura.
   if(req.method==='POST'&&(req.url==='/webhooks/payments'||String(req.url).startsWith('/webhooks/payments?'))){if(webhookLimited(req)){res.writeHead(429);return void res.end('slow down')}let raw='';req.on('data',d=>{raw+=d;if(raw.length>1e6)req.destroy()});req.on('end',async()=>{try{const r=await backend.payments.webhook(req,raw);res.writeHead(r.status,{'content-type':'text/plain'});res.end(r.body)}catch(e){console.error('webhook',e&&e.message);res.writeHead(500);res.end('error')}});return}
   res.writeHead(200,{'content-type':'text/plain'});res.end('FRAIHA multiplayer server\n')});

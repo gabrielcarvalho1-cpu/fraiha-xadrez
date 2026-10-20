@@ -38,6 +38,7 @@ class Reports {
     if (this.recent.has(key)) return { ok: true, duplicate: true, persisted: true };
     const times = (this.rate.get(reporter) || []).filter(t => now - t < RATE_MS);
     if (times.length >= RATE_N) return { error: 'Você fez muitas denúncias seguidas. Aguarde alguns minutos.', code: 'rate_limited' };
+    if (this.rate.size > 20000) for (const [k, v] of this.rate) if (!v.length || now - v[v.length - 1] > RATE_MS) this.rate.delete(k);   // R171 · SEC-010: mapa com teto
     times.push(now); this.rate.set(reporter, times); this.recent.set(key, now);
     const row = { reporter_id: reporter, reported_id: reported, kind, ref: String(ref || '').slice(0, 80), reason: String(reason || '').slice(0, 200), context: cleanContext(context) };
     this.log('[denuncia] ' + JSON.stringify({ kind, reporter, reported, ref: row.ref, at: new Date(now).toISOString() }));
