@@ -27,7 +27,7 @@ async function fixture(t) {
 
 test('catálogo: 10 títulos e 6 molduras com preço, ids únicos, igual ao do cliente', () => {
   assert.equal(ITEMS.filter(i => i.kind === 'title').length, 10);
-  assert.equal(ITEMS.filter(i => i.kind === 'frame').length, 10);   // R166 · pacote novo de molduras
+  assert.equal(ITEMS.filter(i => i.kind === 'frame').length, 2);   // R167 · só 2 molduras na Loja
   assert.equal(new Set(ITEMS.map(i => i.id)).size, ITEMS.length);
   for (const i of ITEMS) { assert.ok(i.price > 0 && i.price <= 100000); assert.match(i.id, /^[a-z0-9_]{1,40}$/); }
   const gd = fs.readFileSync(path.join(__dirname, '../../economy/crown_store_catalog.gd'), 'utf8');
@@ -76,15 +76,15 @@ test('título comprado pode ser usado; sem comprar, não; outros veem; Lendário
   assert.equal(Cosmetics.look({ title: 'imperador' }).title, 'imperador', 'outros jogadores veem o título');
   assert.equal(Cosmetics.validate({ title: 'lendario' }, { is_founder: true, founder_tier: 'founder' }, null, []).code, 'cosmetic_locked');
   // moldura da loja: mesma regra
-  await h.st.crownAward(A, 2000, 'game', 'teste2');
-  await h.backend.handle(a, { type: 'store_buy', item: 'm_safira_real' }); await flush();
-  assert.equal(h.of(a, 'store_bought').pop().item, 'm_safira_real');
+  await h.st.crownAward(A, 10000, 'game', 'teste2');
+  await h.backend.handle(a, { type: 'store_buy', item: 'm_chama_eterna' }); await flush();
+  assert.equal(h.of(a, 'store_bought').pop().item, 'm_chama_eterna');
   await new Promise(r => setTimeout(r, 850));   // limite de 800 ms entre trocas de visual
-  await h.backend.handle(a, { type: 'acct_set_cosmetics', frame: 'm_safira_real' }); await flush();
-  assert.equal(h.of(a, 'acct_cosmetics_saved').pop().frame, 'm_safira_real');
-  await h.backend.handle(b, { type: 'acct_set_cosmetics', frame: 'm_safira_real' }); await flush();
+  await h.backend.handle(a, { type: 'acct_set_cosmetics', frame: 'm_chama_eterna' }); await flush();
+  assert.equal(h.of(a, 'acct_cosmetics_saved').pop().frame, 'm_chama_eterna');
+  await h.backend.handle(b, { type: 'acct_set_cosmetics', frame: 'm_chama_eterna' }); await flush();
   assert.equal(h.of(b, 'acct_cosmetics_error').pop().code, 'cosmetic_locked');
-  assert.equal(Cosmetics.look({ frame: 'm_safira_real' }).frame, 'm_safira_real');
+  assert.equal(Cosmetics.look({ frame: 'm_chama_eterna' }).frame, 'm_chama_eterna');
 });
 
 test('sem a 0017: loja indisponível, sem derrubar nada', async t => {

@@ -34,7 +34,7 @@ test('temporada e níveis', () => {
   assert.equal(P.levelOf(0), 0); assert.equal(P.levelOf(149), 0); assert.equal(P.levelOf(150), 1); assert.equal(P.levelOf(1e9), 30);
   const r = P.rewards('2026-10');
   assert.equal(r.length, 30);
-  assert.ok(r[9].club.item && r[19].club.item && r[29].club.item, 'itens nos níveis 10, 20 e 30 da faixa Club');
+  assert.ok(r[9].club.item && r[19].club.item && r[29].club.crowns === 500, 'itens nos níveis 10 e 20 e 500 Coroas no 30 da faixa Club (R167)');
   assert.notDeepEqual(P.seasonItems('2026-10'), P.seasonItems('2026-11'), 'itens mudam com a temporada');
 });
 

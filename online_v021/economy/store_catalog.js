@@ -14,16 +14,8 @@ const ITEMS = [
   { id: 'senhor_marcha', kind: 'title', name: 'Senhor da Marcha', price: 1200 },
   { id: 'imperador', kind: 'title', name: 'Imperador do Tabuleiro', price: 1500 },
   // R166 · molduras do retrato: pacote de arte do dono (as antigas desenhadas saíram)
-  { id: 'm_safira_real', kind: 'frame', name: 'Moldura Safira Real', price: 1000 },
-  { id: 'm_ametista_real', kind: 'frame', name: 'Moldura Ametista Real', price: 1000 },
-  { id: 'm_esmeralda_real', kind: 'frame', name: 'Moldura Esmeralda Real', price: 1000 },
-  { id: 'm_rubi_real', kind: 'frame', name: 'Moldura Rubi Real', price: 1000 },
-  { id: 'm_brasa', kind: 'frame', name: 'Moldura Brasa de Lava', price: 1500 },
-  { id: 'm_diamante_prata', kind: 'frame', name: 'Moldura Diamante de Prata', price: 1500 },
-  { id: 'm_marmore_esmeralda', kind: 'frame', name: 'Moldura Mármore Esmeralda', price: 1500 },
-  { id: 'm_diamante_dourado', kind: 'frame', name: 'Moldura Diamante Dourado', price: 2000 },
-  { id: 'm_noite_estrelada', kind: 'frame', name: 'Moldura Noite Estrelada', price: 2000 },
-  { id: 'm_chama_eterna', kind: 'frame', name: 'Moldura Chama Eterna', price: 2500 },
+  { id: 'm_noite_estrelada', kind: 'frame', name: 'Moldura Noite Estrelada', price: 10000 },
+  { id: 'm_chama_eterna', kind: 'frame', name: 'Moldura Chama Eterna', price: 10000 },
   // R163 · AVATARES da Loja (o jogo tem a arte; ganha-se para sempre)
   { id: 'av_cavalo_dourado', kind: 'avatar', name: 'Cavalo Dourado', price: 1000 },
   { id: 'av_rainha_marmore', kind: 'avatar', name: 'Rainha de Mármore', price: 1000 },

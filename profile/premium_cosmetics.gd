@@ -38,7 +38,9 @@ static var shop_owned: Array = []
 const ELO_FRAMES := ["elo_madeira", "elo_ferro", "elo_bronze", "elo_prata", "elo_ouro", "elo_platina", "elo_esmeralda", "elo_diamante", "elo_mestre", "elo_grande_mestre", "elo_challenger"]
 const LEAGUE_NAMES := ["Madeira", "Ferro", "Bronze", "Prata", "Ouro", "Platina", "Esmeralda", "Diamante", "Mestre", "Grande Mestre", "Challenger"]
 const FRAMES := ["liga", "club", "fundador", "elo_madeira", "elo_ferro", "elo_bronze", "elo_prata", "elo_ouro", "elo_platina", "elo_esmeralda", "elo_diamante", "elo_mestre", "elo_grande_mestre", "elo_challenger",
-	"m_safira_real", "m_ametista_real", "m_esmeralda_real", "m_rubi_real", "m_brasa", "m_diamante_prata", "m_marmore_esmeralda", "m_diamante_dourado", "m_noite_estrelada", "m_chama_eterna"]
+	"m_noite_estrelada", "m_chama_eterna"]
+## R167 · só 2 molduras na Loja (as mais bonitas, 10.000 Coroas: prêmio de quem joga muito). As outras 8 artes
+## continuam no jogo (monetization/frames) guardadas para Passe/torneio/evento, mas não podem ser usadas por ninguém.
 const FRAME_NAMES := {"liga": "Moldura da Liga", "club": "Moldura Club", "fundador": "Moldura Fundador",
 	"elo_madeira": "Elo Madeira", "elo_ferro": "Elo Ferro", "elo_bronze": "Elo Bronze", "elo_prata": "Elo Prata", "elo_ouro": "Elo Ouro", "elo_platina": "Elo Platina",
 	"elo_esmeralda": "Elo Esmeralda", "elo_diamante": "Elo Diamante", "elo_mestre": "Elo Mestre", "elo_grande_mestre": "Elo Grande Mestre", "elo_challenger": "Elo Challenger",

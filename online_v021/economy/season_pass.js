@@ -24,7 +24,8 @@ const levelOf = xp => Math.min(LEVELS, Math.floor(Math.max(0, xp) / XP_PER_LEVEL
 function seasonItems(s) {
   const idx = Number(s.slice(0, 4)) * 12 + Number(s.slice(5, 7));
   const pick = kind => { const l = Shop.ofKind(kind); return l[idx % l.length]; };
-  return { 10: pick('emote'), 20: pick('title'), 30: pick('frame') };
+  // R167 · as molduras da Loja agora são raras (10.000 Coroas): o nível 30 da faixa Club dá Coroas, não moldura
+  return { 10: pick('emote'), 20: pick('title') };
 }
 // recompensas de cada nível: { free: {crowns}|null, club: {crowns}|{item} }
 // R163 · AVATAR do Passe no nível 25 (exclusivo, não está na loja): um da faixa grátis e um da faixa Club, em rodízio
@@ -41,7 +42,7 @@ function rewards(s) {
   for (let l = 1; l <= LEVELS; l++) {
     let free = l === 15 ? { crowns: 100 } : l === LEVELS ? { crowns: 200 } : l % 3 === 0 ? { crowns: 30 } : null;
     if (l === AVATAR_LEVEL) free = { item: av.free.id, name: av.free.name, kind: 'avatar' };
-    let club = items[l] ? { item: items[l], name: Shop.BY_ID[items[l]].name, kind: Shop.BY_ID[items[l]].kind } : { crowns: l % 5 === 0 ? 60 : 20 };
+    let club = items[l] ? { item: items[l], name: Shop.BY_ID[items[l]].name, kind: Shop.BY_ID[items[l]].kind } : { crowns: l === LEVELS ? 500 : l % 5 === 0 ? 60 : 20 };
     if (l === AVATAR_LEVEL) club = { item: av.club.id, name: av.club.name, kind: 'avatar' };
     out.push({ level: l, free, club });
   }
