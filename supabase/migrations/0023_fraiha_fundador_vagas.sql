@@ -1,6 +1,7 @@
 -- FRAIHA Xadrez — 0023 (R171 · SEC-009): LIMITE DE VAGAS DO FUNDADOR ATÔMICO.
--- ADITIVA. Aplicar no SQL Editor ANTES de publicar o servidor R171 (o servidor R170 continua funcionando com ela:
--- só passa a existir o resultado 'sold_out', que o R170 não gera pedidos para receber, porque nunca grava limite aqui).
+-- ADITIVA. Aplicar no SQL Editor IMEDIATAMENTE ANTES de publicar o servidor R171b. Com ela e o servidor antigo (R170)
+-- ainda no ar, Club/compras normais seguem iguais, mas a ENTREGA de Fundador fica em espera (fechada, sem perda: o
+-- pagamento continua pendente e é entregue quando o servidor novo configurar o limite) — ver "NASCE FECHADA" abaixo.
 --
 -- Problema (auditoria): o limite FRAIHA_FOUNDER_LIMIT só era contado ao CRIAR o pedido; a entrega (fraiha_pay_and_grant)
 -- não conferia vagas. Dois pedidos abertos com 1 vaga restante, pagos juntos, viravam 2 Fundadores.
@@ -18,6 +19,12 @@
 --   upgrade            quem já é Fundador (ex.: Fundador → Lendário) não ocupa vaga nova.
 --   reconciliação      fraiha_grant_paid_missing aplica a mesma regra.
 -- Garantia: Fundadores (is_founder) entregues por pagamento <= founder_capacity.seat_limit, em qualquer ordem/concorrência.
+-- R171b · NASCE FECHADA (reteste Orca): a capacidade começa "não configurada" (configured=false). Enquanto o servidor
+-- não gravar o limite (fraiha_founder_set_limit, chamado ao iniciar), NENHUMA entrega/reserva de Fundador acontece:
+-- fraiha_pay_and_grant levanta erro (o pagamento continua 'pending' e o aviso é repetido depois) e a reconciliação
+-- pula os Fundadores. Assim não existe janela de boot em que o limite valha 0 (= sem limite) por engano.
+-- Consequência prática: aplique a 0023 junto com a publicação do servidor R171b (o servidor antigo nunca configura;
+-- entregas de Fundador ficam em espera — sem perda — até o servidor novo subir).
 -- (Concessão manual pelo Admin continua sendo decisão do dono e não passa por aqui.)
 --
 -- Reverter:
@@ -39,8 +46,10 @@ create index if not exists payments_founder_hold_idx on public.payments (seat_ho
 create table if not exists public.founder_capacity (
   id          smallint primary key default 1 check (id = 1),
   seat_limit  integer not null default 0 check (seat_limit >= 0),
+  configured  boolean not null default false,   -- R171b: false = servidor ainda não gravou o limite → Fundador FECHADO
   updated_at  timestamptz not null default now()
 );
+alter table public.founder_capacity add column if not exists configured boolean not null default false;
 insert into public.founder_capacity (id) values (1) on conflict (id) do nothing;
 alter table public.founder_capacity enable row level security;
 revoke all on public.founder_capacity from anon, authenticated;
@@ -60,7 +69,7 @@ $$;
 create or replace function public.fraiha_founder_set_limit(p_limit integer)
 returns integer language plpgsql security definer set search_path = public as $$
 begin
-  update public.founder_capacity set seat_limit = greatest(0, coalesce(p_limit, 0)), updated_at = now() where id = 1;
+  update public.founder_capacity set seat_limit = greatest(0, coalesce(p_limit, 0)), configured = true, updated_at = now() where id = 1;
   return greatest(0, coalesce(p_limit, 0));
 end $$;
 
@@ -74,7 +83,7 @@ declare
   taken integer;
 begin
   if p_product not in ('founder', 'founder_legend') then raise exception 'product_invalid:%', p_product; end if;
-  update public.founder_capacity set seat_limit = greatest(0, coalesce(p_limit, 0)), updated_at = now() where id = 1;
+  update public.founder_capacity set seat_limit = greatest(0, coalesce(p_limit, 0)), configured = true, updated_at = now() where id = 1;
   select * into cap from public.founder_capacity where id = 1 for update;   -- uma reserva/entrega de cada vez
   select coalesce(bool_or(is_founder), false) into already from public.entitlements where user_id = p_user;
   if not already and cap.seat_limit > 0 then
@@ -102,6 +111,10 @@ begin
   if not found or pay.status <> 'pending' then return null; end if;
   if pay.product_id in ('founder', 'founder_legend') then
     select * into cap from public.founder_capacity where id = 1 for update;   -- serializa TODAS as entregas de Fundador
+    -- R171b: limite ainda não configurado pelo servidor → não entrega (erro = transação desfeita, pedido segue pendente)
+    if not found or not cap.configured then
+      raise exception 'founder_capacity_not_configured' using errcode = 'P0001';
+    end if;
     select coalesce(bool_or(is_founder), false) into already from public.entitlements where user_id = pay.user_id;
     if not already and coalesce(cap.seat_limit, 0) > 0 and public.fraiha_founder_taken(pay.user_id) >= cap.seat_limit then
       update public.payments set status = 'sold_out', paid_at = now() where payment_id = pay.payment_id;
@@ -127,6 +140,7 @@ begin
             where status = 'paid' and granted_at is null for update skip locked loop
     if r.product_id in ('founder', 'founder_legend') then
       select * into cap from public.founder_capacity where id = 1 for update;
+      if not found or not cap.configured then continue; end if;   -- R171b: sem limite configurado, Fundador espera
       select coalesce(bool_or(is_founder), false) into already from public.entitlements where user_id = r.user_id;
       if not already and coalesce(cap.seat_limit, 0) > 0 and public.fraiha_founder_taken(r.user_id) >= cap.seat_limit then
         update public.payments set status = 'sold_out' where payment_id = r.payment_id;

@@ -77,15 +77,55 @@ class Payments {
     this.lastPoll = new Map();
     // R171 · SEC-009: devolver automaticamente quem pagou depois de as vagas acabarem (só com FRAIHA_FOUNDER_AUTO_REFUND=1)
     this.autoRefund = /^(1|true|sim)$/i.test(String(env.FRAIHA_FOUNDER_AUTO_REFUND || '').trim());
-    // o banco passa a conhecer o limite (a entrega confere vaga lá dentro, sob lock)
-    if (this.founderLimit > 0 && backend && backend.store && backend.store.founderSetLimit) {
-      Promise.resolve().then(() => backend.store.founderSetLimit(this.founderLimit)).then(r => {
-        if (r && r.missing) console.error('[pagamentos] FRAIHA_FOUNDER_LIMIT configurado, mas a migração 0023 não foi aplicada: o limite não é atômico');
-      }).catch(e => console.error('[pagamentos] founderSetLimit', e && e.message));
-    }
+    // o banco passa a conhecer o limite (a entrega confere vaga lá dentro, sob lock).
+    // R171b/R172 · SEC-009 (reteste Orca): até o limite estar CONFIRMADO no banco, o Fundador fica FECHADO (fail-closed):
+    // nada de reserva, entrega por webhook/JÁ PAGUEI/cartão nem reconciliação. Ver capacityReady().
+    this.capacity = { state: 'pending', promise: null, retryAt: 0 };
+    this.capacityWaitMs = Math.max(50, Number(env.FRAIHA_FOUNDER_CAPACITY_WAIT_MS) || 3000);
+    if (backend && backend.store) void this.capacityReady();
     if (this.provider.name !== 'none' && this.provider.ready && !this.provider.ready()) console.warn('[pagamentos] provedor ' + this.provider.name + ' sem configuração completa: ' + (this.provider.missing ? this.provider.missing().join(', ') : ''));
   }
   get store() { return this.backend.store; }
+  // R172 · SEC-009 (reteste Orca): founder_ready começa FALSE. Só vira true quando (1) o banco tem a capacidade
+  // (migração 0023), (2) o servidor gravou o limite e (3) o banco devolveu EXATAMENTE o FRAIHA_FOUNDER_LIMIT.
+  // Qualquer outra coisa — sem 0023, erro de SQL, resposta vazia ou valor diferente — deixa o Fundador FECHADO
+  // (nunca "sem limite"); o resto do jogo segue normal. Erro: tenta de novo na próxima operação (no máximo a cada 5 s).
+  get founderReady() { return this.capacity.state === 'ready'; }
+  async capacityReady() {
+    const c = this.capacity;
+    if (c.state === 'ready') return true;
+    if (c.promise) return this.within(c.promise);
+    if (c.state === 'error' && Date.now() < c.retryAt) return false;
+    const st = this.backend && this.backend.store;
+    if (!st || !st.founderSetLimit) { c.state = 'error'; c.retryAt = Date.now() + 60e3; return false; }
+    c.promise = (async () => {
+      try {
+        const r = await st.founderSetLimit(this.founderLimit);
+        if (r && r.missing) {
+          console.error('[pagamentos] migração 0023 não aplicada: Pacote Fundador FECHADO até aplicar');
+          c.state = 'error'; c.retryAt = Date.now() + 60e3; return false;
+        }
+        const got = Array.isArray(r) ? Number(r[0]) : Number(r);
+        if (r === null || r === undefined || !Number.isFinite(got) || got !== this.founderLimit) {
+          console.error('[pagamentos] limite do Fundador não confirmado (banco devolveu ' + JSON.stringify(r) + ', esperado ' + this.founderLimit + '): Fundador FECHADO');
+          c.state = 'error'; c.retryAt = Date.now() + 5e3; return false;
+        }
+        c.state = 'ready';
+        console.log('[pagamentos] founder_ready: limite de vagas confirmado no banco = ' + (this.founderLimit || 'sem limite (FRAIHA_FOUNDER_LIMIT vazio)'));
+        return true;
+      } catch (e) {
+        console.error('[pagamentos] founderSetLimit falhou — Fundador fechado até confirmar o limite', e && e.message);
+        c.state = 'error'; c.retryAt = Date.now() + 5e3; return false;
+      } finally { c.promise = null; }
+    })();
+    return this.within(c.promise);
+  }
+  // espera a confirmação no máximo alguns segundos; passou disso, responde "ainda não" (fechado) e segue tentando
+  within(p) {
+    let t; const wait = new Promise(r => { t = setTimeout(() => r(false), this.capacityWaitMs || 3000); });
+    return Promise.race([p, wait]).finally(() => clearTimeout(t));
+  }
+  capacityError() { const e = new Error('founder_capacity_not_ready'); e.code = 'founder_capacity_not_ready'; return e; }
   fail(ws, message, code) { this.send(ws, { type: 'payment_error', message, code }); }
   ready() { return this.provider.name !== 'none' && (!this.provider.ready || this.provider.ready()); }
 
@@ -141,6 +181,7 @@ class Payments {
       if (!this.ready()) return this.fail(ws, 'Pagamento real ainda não configurado neste servidor.', 'provider_not_configured');
       if (!ws.user.email) return this.fail(ws, 'Sua conta precisa de um e-mail para o recibo do pagamento.', 'email_required');
       if (product.founder) {
+        if (!(await this.capacityReady())) return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');
         const ent = await this.store.getEntitlements(ws.user.id).catch(() => ({}));
         if (ent && ent.founder_tier === 'legend') return this.fail(ws, 'Você já é Fundador Lendário. Obrigado!', 'already_founder');
         if (ent && ent.is_founder && productId === 'founder') return this.fail(ws, 'Você já é Fundador do Reino. Obrigado!', 'already_founder');
@@ -160,8 +201,12 @@ class Payments {
           const r = await this.store.founderReserve({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref,
             amount_cents: amount, limit: this.founderLimit, hold_s: Math.round(OPEN_ORDER_MS / 1000) });
           if (r && r.ok === false) return this.fail(ws, 'As vagas do Pacote Fundador se esgotaram.', 'founder_sold_out');
-          if (r && r.missing) console.error('[pagamentos] migração 0023 ausente: reserva de vaga do Fundador NÃO é atômica');
-          else reserved = true;
+          if (r && r.missing) {   // R171b: sem a 0023 não vende Fundador limitado (nunca o caminho antigo sem lock)
+            console.error('[pagamentos] migração 0023 ausente: venda de Fundador limitada FECHADA');
+            this.capacity.state = 'error'; this.capacity.retryAt = Date.now() + 60e3;
+            return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');
+          }
+          reserved = true;
         }
         if (!reserved && this.store.createPayment) await this.store.createPayment({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref, amount_cents: amount, status: 'pending' });
         const charge = await this.provider.createCharge({ ref, userId: ws.user.id, productId, method, amountCents: amount, title: product.title, email: ws.user.email });
@@ -226,7 +271,8 @@ class Payments {
       return reply('error', { message: 'O Mercado Pago não respondeu agora. Nada foi cobrado. Tente de novo em instantes.' });
     }
     if (ev.status === 'paid') {
-      await this.apply(ev);
+      try { await this.apply(ev); }
+      catch (e) { console.error('payment_card_pay apply', e && e.message); return reply('error', { message: 'Pagamento aprovado, mas a confirmação ainda não chegou. Aguarde alguns segundos: a vantagem aparece sozinha.' }); }
       const after = await this.store.getPayment(this.provider.name, ref);
       if (after && after.status === 'paid') return reply('approved');
       if (after && after.status === 'sold_out') return reply('sold_out', { message: 'As vagas do Pacote Fundador acabaram no exato momento do seu pagamento. Você NÃO recebeu o pacote e o valor será devolvido integralmente.' });   // R171 · SEC-009
@@ -254,7 +300,7 @@ class Payments {
         console.error('[pagamentos] valor/moeda não confere — direito NÃO liberado', ref, ev.amountCents, ev.currency, amount);
         return { ok: false, reason: 'amount_mismatch' };
       }
-      changed = await this.payAndGrant(ref);
+      changed = await this.payAndGrant(ref, row.product_id);
       if (changed && changed.status === 'sold_out') return this.soldOut(changed, ref, ev);   // R171 · SEC-009
       if (changed && this.backend.referrals) this.backend.referrals.onPurchase(changed.user_id);   // R105 · +30 dias para quem convidou
       if (changed && this.backend.creators) this.backend.creators.onPurchase({ ref, user_id: changed.user_id, product_id: row.product_id, amount_cents: amount });   // R121
@@ -301,8 +347,12 @@ class Payments {
   }
   // R103 · marca pago E entrega a vantagem juntos. Se a entrega falhar, o pedido continua pendente e a próxima
   // notificação (ou o JÁ PAGUEI) tenta de novo — nunca fica "pago sem vantagem".
-  async payAndGrant(ref) {
+  async payAndGrant(ref, productId) {
     const prov = this.provider.name;
+    // R171b · SEC-009: Fundador só é entregue com o limite confirmado no banco; senão erro (webhook → 500 e o provedor
+    // repete; JÁ PAGUEI/cartão → "aguarde"), e o pagamento continua pendente — nada é perdido, nada passa do limite.
+    if (productId === undefined && this.store.getPayment) { const row = await this.store.getPayment(prov, ref).catch(() => null); productId = row ? row.product_id : 'founder'; }
+    if (PRODUCTS[productId] && PRODUCTS[productId].founder && !(await this.capacityReady())) throw this.capacityError();
     if (this.store.payAndGrant) {
       const r = await this.store.payAndGrant(prov, ref, prov);
       if (!r || !r.missing) return r || null;
@@ -321,6 +371,8 @@ class Payments {
   // R103 · entrega o que ficou pago sem vantagem (pedidos antigos). Chamado ao iniciar e de hora em hora.
   async reconcile() {
     if (!this.store.grantPaidMissing) return null;
+    // R171b · SEC-009: sem limite confirmado, a reconciliação espera (no banco ela também pula Fundador sem configuração)
+    if (!(await this.capacityReady())) { console.error('[pagamentos] reconciliação adiada: limite do Fundador ainda não confirmado'); return null; }
     try {
       const r = await this.store.grantPaidMissing();
       if (r && r.granted) console.log('[pagamentos] entregues ' + r.granted + ' pagamento(s) que estavam sem vantagem');

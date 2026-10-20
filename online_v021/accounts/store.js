@@ -186,10 +186,10 @@ class MemoryStore {
       && p.seat_hold_until && Date.parse(p.seat_hold_until) > now && p.user_id !== exceptUser && !this._isFounder(p.user_id)) holders.add(p.user_id);
     return n + holders.size;
   }
-  async founderSetLimit(limit) { this.founderLimit = Math.max(0, Number(limit) || 0); return this.founderLimit; }
+  async founderSetLimit(limit) { this.founderLimit = Math.max(0, Number(limit) || 0); this.founderConfigured = true; return this.founderLimit; }
   async founderTaken() { return this.founderTakenSync(null); }
   async founderReserve({ user_id, product_id, method, provider, provider_ref, amount_cents, limit, hold_s }) {
-    this.founderLimit = Math.max(0, Number(limit) || 0);
+    this.founderLimit = Math.max(0, Number(limit) || 0); this.founderConfigured = true;
     const already = this._isFounder(user_id);
     if (!already && this.founderLimit > 0 && this.founderTakenSync(user_id) >= this.founderLimit) return { ok: false, reason: 'sold_out' };
     this.payments = this.payments || [];
@@ -202,6 +202,8 @@ class MemoryStore {
     const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === 'pending');
     if (!p) return null;
     if (this.failGrant) throw new Error('falha simulada na entrega');   // testes
+    // R171b · como a 0023: limite ainda não configurado → Fundador não é entregue (erro; o pedido segue pendente)
+    if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this.founderConfigured) { const e = new Error('founder_capacity_not_configured'); e.code = 'P0001'; throw e; }
     if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this._isFounder(p.user_id)
       && (this.founderLimit || 0) > 0 && this.founderTakenSync(p.user_id) >= this.founderLimit) {
       p.status = 'sold_out'; p.paid_at = new Date().toISOString();   // R171 · SEC-009: pago sem vaga → reembolso
@@ -215,6 +217,7 @@ class MemoryStore {
   async grantPaidMissing() {
     let n = 0, s = 0;
     for (const p of (this.payments || [])) if (p.status === 'paid' && !p.granted_at) {
+      if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this.founderConfigured) continue;   // R171b
       if ((p.product_id === 'founder' || p.product_id === 'founder_legend') && !this._isFounder(p.user_id)
         && (this.founderLimit || 0) > 0 && this.founderTakenSync(p.user_id) >= this.founderLimit) { p.status = 'sold_out'; s++; continue; }
       await this.grantEntitlement(p.user_id, p.product_id, p.provider); p.granted_at = new Date().toISOString(); n++;
@@ -325,12 +328,17 @@ class MemoryStore {
   }
   async recordBotVictory(userId, botId, info) {
     this.bots = this.bots || new Map();
+    this.botGames = this.botGames || new Map();   // R171b · game_hash único (como o índice da 0024)
     if (!this.bots.has(userId)) this.bots.set(userId, new Map());
     const m = this.bots.get(userId);
     if (m.has(botId)) return false;
-    m.set(botId, { bot_id: botId, defeated_at: new Date().toISOString(), plies: info.plies, human_color: info.human_color });
+    const h = info.game_hash || null;
+    if (h && this.botGames.has(h) && this.botGames.get(h) !== userId) { const e = new Error('partida já registrada'); e.code = 'bot_game_reused'; throw e; }
+    m.set(botId, { bot_id: botId, defeated_at: new Date().toISOString(), plies: info.plies, human_color: info.human_color, game_hash: h });
+    if (h) this.botGames.set(h, userId);
     return true;
   }
+  async botGameOwner(hash) { return (this.botGames && this.botGames.get(hash)) || null; }
   async saveAnalysis(userId, sum) {
     this.analyses = this.analyses || [];
     this.analyses.push({ user_id: userId, ...sum });
@@ -854,9 +862,32 @@ class SupabaseStore {
     return await this.req('/bot_progress?user_id=eq.' + encodeURIComponent(userId) + '&select=bot_id,defeated_at&order=defeated_at.asc');
   }
   async recordBotVictory(userId, botId, info) {
-    const rows = await this.req('/bot_progress?on_conflict=user_id,bot_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
-      body: JSON.stringify({ user_id: userId, bot_id: botId, plies: Number(info.plies) || 0, human_color: info.human_color === 'b' ? 'b' : 'w' }) });
-    return Array.isArray(rows) && rows.length > 0;
+    const body = { user_id: userId, bot_id: botId, plies: Number(info.plies) || 0, human_color: info.human_color === 'b' ? 'b' : 'w' };
+    // R171b · SEC-008: a partida fica gravada (game_hash, índice único da 0024): a mesma partida não vale para outra conta
+    if (info.game_hash && !this.botHashMissing) body.game_hash = String(info.game_hash);
+    try {
+      const rows = await this.req('/bot_progress?on_conflict=user_id,bot_id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify(body) });
+      return Array.isArray(rows) && rows.length > 0;
+    } catch (e) {
+      const t = String(e.code) + ' ' + String(e.message);
+      if (/23505|duplicate key|bot_progress_game_hash/.test(t)) { const r = new Error('partida já registrada'); r.code = 'bot_game_reused'; throw r; }
+      if (body.game_hash && /PGRST204|42703|game_hash/.test(t)) {   // banco sem a 0024: grava sem a partida (proteção só em memória) e avisa
+        this.botHashMissing = true;
+        console.error('[bots] migração 0024 ausente: replay de partida protegido só em memória (aplique a 0024)');
+        return this.recordBotVictory(userId, botId, { ...info, game_hash: null });
+      }
+      throw e;
+    }
+  }
+  async botGameOwner(hash) {
+    if (this.botHashMissing) return null;
+    try {
+      const rows = await this.req('/bot_progress?game_hash=eq.' + encodeURIComponent(String(hash)) + '&select=user_id&limit=1');
+      return Array.isArray(rows) && rows[0] ? rows[0].user_id : null;
+    } catch (e) {
+      if (/PGRST204|42703|game_hash|column/.test(String(e.code) + ' ' + String(e.message))) { this.botHashMissing = true; console.error('[bots] migração 0024 ausente: replay protegido só em memória'); return null; }
+      throw e;
+    }
   }
   async saveAnalysis(userId, sum) {
     const row = { user_id: userId, match_id: UUID_RE.test(String(sum.match_id || '')) ? sum.match_id : null, mode: String(sum.mode || ''),

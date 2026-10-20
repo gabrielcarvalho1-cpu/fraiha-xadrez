@@ -44,7 +44,16 @@ class Reports {
     this.log('[denuncia] ' + JSON.stringify({ kind, reporter, reported, ref: row.ref, at: new Date(now).toISOString() }));
     if (this.store && this.store.createReport) {
       try { await this.store.createReport(row); return { ok: true, persisted: true }; }
-      catch (e) { if (!missingTable(e)) console.error('[denuncia] erro ao gravar', e && e.message); }
+      catch (e) {
+        if (!missingTable(e)) {
+          // R171b · SEC-010 (reteste Orca): falha de gravação NÃO conta como denúncia feita — desfaz a marca de
+          // repetida e o uso do limite, e responde erro para a pessoa tentar de novo.
+          console.error('[denuncia] erro ao gravar', e && e.message);
+          this.recent.delete(key);
+          const list = this.rate.get(reporter) || []; const i = list.lastIndexOf(now); if (i >= 0) list.splice(i, 1);
+          return { error: 'Não foi possível registrar a denúncia agora. Tente de novo em instantes.', code: 'report_failed' };
+        }
+      }
     }
     this.log('[denuncia-sem-tabela] ' + JSON.stringify(row));   // sem a 0013: fica no log do Render
     return { ok: true, persisted: false };

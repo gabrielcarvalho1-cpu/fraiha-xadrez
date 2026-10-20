@@ -189,7 +189,8 @@ class MercadoPago {
       try { ev = await this.lookup(dataId); }
       catch (e) { this.inflight.delete(dataId); throw e; }   // falha transitória: nada marcado, retry consulta de novo
       finally { this.unsignedActive--; }
-      if (!ev || ev.ignore) { this.webhookSettled(dataId, true); return ev; }   // consulta OK, nada a aplicar
+      if (!ev) { this.inflight.delete(dataId); throw new Error('consulta ao Mercado Pago sem resposta'); }   // R172: vazio = falha (retry), nunca "processado"
+      if (ev.ignore) { this.webhookSettled(dataId, true); return ev; }   // consulta OK, nada a aplicar
       return { ...ev, unsignedId: dataId };
     }
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(dataId)) return null;

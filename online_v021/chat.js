@@ -106,8 +106,10 @@ class ChatHub {
         this.log('chat_report ' + JSON.stringify({ match_id: match.id, kind: service.kind, reporter: uid, reported: row.reported, reported_nickname: row.context.reported_nickname, messages: msgs, at: new Date(this.now()).toISOString() }));
         return this.send(ws, { type: 'chat_report_ok', match_id: match.id });
       }
-      return this.reports.file(row).then(() => this.send(ws, { type: 'chat_report_ok', match_id: match.id }))
-        .catch(e => { console.error('chat_report', e && e.message); this.send(ws, { type: 'chat_report_ok', match_id: match.id }); });
+      // R171b · SEC-010: gravação falhou → não fica marcada como denunciada, responde erro e permite tentar de novo
+      const undo = () => { match.reports.delete(uid); return fail('Não foi possível registrar a denúncia agora. Tente de novo em instantes.', 'report_failed'); };
+      return this.reports.file(row).then(r => (r && r.error) ? undo() : this.send(ws, { type: 'chat_report_ok', match_id: match.id }))
+        .catch(e => { console.error('chat_report', e && e.message); return undo(); });
     }
     return fail('Ação de chat desconhecida.', 'invalid');
   }

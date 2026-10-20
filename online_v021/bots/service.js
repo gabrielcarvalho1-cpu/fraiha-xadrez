@@ -71,30 +71,43 @@ class BotService {
     if (!progress.available) return this.send(ws, { type: 'bot_error', code: 'not_configured', message: 'Progresso dos bots ainda não configurado no servidor (migração 0006 pendente).', bot_id: v.id });
     const idx = IDS.indexOf(v.id);
     if (idx > 0 && !progress.defeated.includes(IDS[idx - 1])) return this.send(ws, { type: 'bot_error', code: 'bot_locked', message: 'Derrote o bot anterior primeiro.', bot_id: v.id });
-    if (!progress.defeated.includes(v.id) && this.verifier.needs(v.id)) {
-      const err = await this.verify(op, v, m.moves);
-      if (err) return this.send(ws, { type: 'bot_error', ...err, bot_id: v.id });
+    let hash = null;
+    if (!progress.defeated.includes(v.id)) {
+      // R171b · SEC-008 (reteste Orca): a mesma partida (lances idênticos) só vale para UMA conta — conferido no BANCO
+      // (bot_progress.game_hash, migração 0024), então reiniciar o servidor ou ter outra instância não libera o replay
+      hash = gameHash(v.id, m.moves);
+      if (await this.reusedBy(op, hash)) return this.send(ws, { type: 'bot_error', code: 'bot_game_reused', message: REUSED_MSG, bot_id: v.id });
+      if (this.verifier.needs(v.id)) {
+        const err = await this.verify(op, v, m.moves);
+        if (err) return this.send(ws, { type: 'bot_error', ...err, bot_id: v.id });
+      }
     }
-    const fresh = await op.wait(() => this.store.recordBotVictory(op.uid, v.id, { plies: m.moves.length, human_color: m.human_color }));
+    let fresh;
+    try { fresh = await op.wait(() => this.store.recordBotVictory(op.uid, v.id, { plies: m.moves.length, human_color: m.human_color, game_hash: hash })); }
+    catch (e) {
+      if (e && e.code === 'bot_game_reused') return this.send(ws, { type: 'bot_error', code: 'bot_game_reused', message: REUSED_MSG, bot_id: v.id });
+      throw e;
+    }
+    if (fresh && hash) { if (this.games.size > 50000) this.games.clear(); this.games.set(hash, op.uid); }
     const after = await op.wait(() => this.summary(op.uid));
     return this.send(ws, { type: 'bot_progress', ...after, new_bot: fresh ? v.id : null });
   }
 }
+const REUSED_MSG = 'Esta partida já foi registrada por outra conta.';
+const gameHash = (botId, moves) => crypto.createHash('sha256').update(botId + '|' + moves.join(' ')).digest('hex');
+// Dono atual da partida (banco; o mapa em memória só cobre banco sem a 0024). true = é de OUTRA conta.
+BotService.prototype.reusedBy = async function (op, hash) {
+  let owner = null;
+  if (this.store.botGameOwner) owner = await op.wait(() => this.store.botGameOwner(hash));
+  if (!owner) owner = this.games.get(hash) || null;
+  if (owner && owner !== op.uid) { console.log('[bot-verify]', JSON.stringify({ ok: false, reason: 'reused', uid: op.uid })); return true; }
+  return false;
+};
 // R171 · SEC-008: confere os lances do bot (só 1ª vitória em nível forte). Devolve null (ok) ou { code, message }.
 BotService.prototype.verify = async function (op, v, moves) {
-  const hash = crypto.createHash('sha256').update(v.id + '|' + moves.join(' ')).digest('hex');
-  const owner = this.games.get(hash);
-  if (owner && owner !== op.uid) {
-    console.log('[bot-verify]', JSON.stringify({ bot: v.id, ok: false, reason: 'reused', uid: op.uid }));
-    return { code: 'bot_game_reused', message: 'Esta partida já foi registrada por outra conta.' };
-  }
   const r = await this.verifier.check(v.id, moves, v.botColor);
   op.assert();
-  if (r.ok) {
-    if (this.games.size > 50000) this.games.clear();
-    this.games.set(hash, op.uid);
-    return null;
-  }
+  if (r.ok) return null;
   if (r.code === 'bot_game_rejected') {
     console.log('[bot-verify] RECUSADA', JSON.stringify({ uid: op.uid, bot: v.id, ...r.stats }));
     return { code: 'bot_game_rejected', message: 'Não foi possível confirmar esta vitória: os lances do bot não conferem com o nível escolhido.' };
@@ -103,4 +116,4 @@ BotService.prototype.verify = async function (op, v, moves) {
 };
 function notConfigured(e) { return e && /42P01|PGRST205|does not exist|Could not find the table/.test(String(e.code) + ' ' + String(e.message)); }
 
-module.exports = { BotService, validateVictory, replay, IDS };
+module.exports = { BotService, validateVictory, replay, IDS, gameHash };

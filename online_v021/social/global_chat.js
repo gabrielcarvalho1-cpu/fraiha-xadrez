@@ -24,6 +24,7 @@ class GlobalChat {
     // R171 · SEC-010: denúncia repetida (mesma pessoa + mesma mensagem) não gera novo registro; teto por pessoa e por IP
     this.reportSeen = new Map();   // `${reporter}|${msgId}|global_chat` -> quando
     this.reportRate = new Map();   // reporter ou ip -> [instantes]
+    this.reportPending = new Map(); // R171b: denúncia sendo gravada agora -> Promise<ok>
   }
   alive(ws) { return !ws.dead && (ws.readyState === undefined || ws.readyState === 1); }
   canSend(ws) { return !!(ws.user && ws.profile); }
@@ -76,6 +77,9 @@ class GlobalChat {
       if (this.reportSeen.size > 20000) for (const [k, t] of this.reportSeen) if (now - t > REPORT_DUP_MS) this.reportSeen.delete(k);
       const seen = this.reportSeen.get(key);
       if (seen && now - seen < REPORT_DUP_MS) return this.send(ws, { type: 'gchat_reported', id, duplicate: true });
+      // R171b · SEC-010 (reteste Orca): a mesma denúncia ainda sendo gravada → espera o resultado dela
+      const inflight = this.reportPending.get(key);
+      if (inflight) return inflight.then(ok => ok ? this.send(ws, { type: 'gchat_reported', id, duplicate: true }) : fail('Não foi possível registrar a denúncia agora. Tente de novo em instantes.', 'report_failed'));
       const limited = [who, 'ip:' + (ws.ip || 'local')].some(k => {
         const max = k.startsWith('ip:') ? REPORT_MAX_PER_IP : REPORT_MAX;
         const list = (this.reportRate.get(k) || []).filter(t => now - t < REPORT_WINDOW_MS);
@@ -83,19 +87,32 @@ class GlobalChat {
         return list.length >= max;
       });
       if (limited) return fail('Você fez muitas denúncias seguidas. Aguarde alguns minutos.', 'rate_limited');
-      for (const k of [who, 'ip:' + (ws.ip || 'local')]) this.reportRate.get(k).push(now);
+      const rateKeys = [who, 'ip:' + (ws.ip || 'local')];
+      for (const k of rateKeys) this.reportRate.get(k).push(now);
       if (this.reportRate.size > 20000) this.reportRate.clear();
-      this.reportSeen.set(key, now);
-      this.log('[gchat-report]', JSON.stringify({ by: who, msg_id: e.id, user_id: e.user_id, nickname: e.nickname, text: e.text, ts: e.ts }));
-      // R104 · contas: também vai para a fila de denúncias do Admin (convidado não tem id fixo para denunciar)
-      const R = this.backend && this.backend.reports;
-      if (R && ws.user && e.user_id && !String(e.user_id).startsWith('guest')) {
-        const mine = this.messages.filter(x => x.user_id === e.user_id).slice(-10).map(x => x.text);
-        return R.file({ reporter: ws.user.id, reported: e.user_id, kind: 'global_chat', ref: String(e.id),
-          context: { reported_nickname: e.nickname, reporter_nickname: ws.profile && ws.profile.nickname, messages: mine } })
-          .then(() => this.send(ws, { type: 'gchat_reported', id })).catch(() => this.send(ws, { type: 'gchat_reported', id }));
-      }
-      return this.send(ws, { type: 'gchat_reported', id });
+      // a marca de "já denunciada" só fica DEPOIS que a denúncia foi gravada; falha → erro, nada marcado, pode tentar de novo
+      const persist = async () => {
+        const R = this.backend && this.backend.reports;
+        if (R && ws.user && e.user_id && !String(e.user_id).startsWith('guest')) {   // R104 · fila de denúncias do Admin
+          const mine = this.messages.filter(x => x.user_id === e.user_id).slice(-10).map(x => x.text);
+          const r = await R.file({ reporter: ws.user.id, reported: e.user_id, kind: 'global_chat', ref: String(e.id),
+            context: { reported_nickname: e.nickname, reporter_nickname: ws.profile && ws.profile.nickname, messages: mine } });
+          if (r && r.error) return false;   // erro de gravação (Reports.file) → não marca
+        }
+        this.log('[gchat-report]', JSON.stringify({ by: who, msg_id: e.id, user_id: e.user_id, nickname: e.nickname, text: e.text, ts: e.ts }));
+        return true;
+      };
+      const job = persist().catch(err => { console.error('[gchat-report] falha ao gravar', err && err.message); return false; });
+      this.reportPending.set(key, job);
+      return job.then(ok => {
+        this.reportPending.delete(key);
+        if (!ok) {
+          for (const k of rateKeys) { const l = this.reportRate.get(k) || []; const i = l.lastIndexOf(now); if (i >= 0) l.splice(i, 1); }
+          return fail('Não foi possível registrar a denúncia agora. Tente de novo em instantes.', 'report_failed');
+        }
+        this.reportSeen.set(key, now);
+        return this.send(ws, { type: 'gchat_reported', id });
+      });
     }
     return fail('Ação inválida.', 'invalid');
   }

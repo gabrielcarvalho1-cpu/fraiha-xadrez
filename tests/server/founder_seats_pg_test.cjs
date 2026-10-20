@@ -19,7 +19,7 @@ const uuid = () => crypto.randomUUID();
 
 function reset(limit) {
   q(`truncate public.payments, public.entitlements cascade; delete from public.profiles where nickname like 'fx_%';
-     update public.founder_capacity set seat_limit = ${limit}`);
+     update public.founder_capacity set seat_limit = ${limit}, configured = true`);
 }
 function users(n) {
   const ids = [];
@@ -88,4 +88,50 @@ test('SEC-009 (Postgres real): corrida de pagamentos nunca passa do limite', { s
     const res = await Promise.all(refs.map(pay));
     assert.equal(res.filter(r => r === 'paid').length, 6);
   });
+});
+
+// R171b · bloqueador do reteste Orca: janela de INICIALIZAÇÃO. A 0023 nasce FECHADA (configured=false).
+test('SEC-009 (Postgres real): banco recém-migrado nasce fechado; corrida no boot nunca passa do limite', { skip: !ON && 'FRAIHA_PG_TEST=1 para rodar' }, async t => {
+  await t.test('migração nova: capacidade não configurada → nenhuma entrega de Fundador, reconciliação pula, pedidos seguem pendentes', async () => {
+    q(`truncate public.payments, public.entitlements cascade; delete from public.profiles where nickname like 'fx_%';
+       update public.founder_capacity set seat_limit = 0, configured = false`);
+    const refs = users(5).map(u => order(u));
+    const res = await Promise.allSettled(refs.map(pay));
+    assert.equal(res.filter(r => r.status === 'rejected' && /founder_capacity_not_configured/.test(String(r.reason))).length, 5, 'todas recusadas com erro (o aviso é repetido depois)');
+    assert.equal(founders(), 0);
+    assert.equal(statusCount('pending'), 5, 'nada se perde: continuam pendentes');
+    q(`update public.payments set status = 'paid' where provider_ref = '${refs[0]}'`);
+    const g = JSON.parse(q('select public.fraiha_grant_paid_missing()'));
+    assert.equal(g.granted, 0, 'reconciliação não entrega Fundador sem limite configurado');
+    assert.equal(founders(), 0);
+  });
+  for (const [limit, buyers] of [[1, 2], [1, 10], [2, 10]]) {
+    await t.test(`boot: pagamentos chegando ANTES, DURANTE e DEPOIS de o servidor gravar o limite ${limit} (${buyers} compradores)`, async () => {
+      q(`truncate public.payments, public.entitlements cascade; delete from public.profiles where nickname like 'fx_%';
+         update public.founder_capacity set seat_limit = 0, configured = false`);
+      const refs = users(buyers).map(u => order(u));
+      const first = await Promise.allSettled(refs.map(pay));   // antes: tudo recusado
+      assert.equal(founders(), 0);
+      // durante: o servidor grava o limite AO MESMO TEMPO que os avisos são repetidos
+      const during = await Promise.allSettled([qAsync(`select public.fraiha_founder_set_limit(${limit})`), ...refs.map(pay), ...refs.map(pay)]);
+      assert.ok(founders() <= limit, `durante: ${founders()} <= ${limit}`);
+      const after = await Promise.allSettled([...refs.map(pay), qAsync('select public.fraiha_grant_paid_missing()')]);
+      assert.equal(founders(), limit, `Fundadores = ${limit}`);
+      assert.equal(statusCount('sold_out'), buyers - limit);
+      assert.equal(statusCount('pending'), 0);
+      void first; void during; void after;
+    });
+  }
+});
+
+test('SEC-008 (Postgres real, migração 0024): a mesma partida contra bot só fica gravada para UMA conta', { skip: !ON && 'FRAIHA_PG_TEST=1 para rodar' }, async () => {
+  q("delete from public.profiles where nickname like 'fx_%'");
+  const [a, b, c] = users(3);
+  const h = 'ab'.repeat(32);
+  const ins = (u, bot) => qAsync(`insert into public.bot_progress(user_id, bot_id, game_hash) values ('${u}', '${bot}', '${h}')`);
+  const res = await Promise.allSettled([ins(a, 'platina'), ins(b, 'platina'), ins(c, 'platina')]);
+  assert.equal(res.filter(r => r.status === 'fulfilled').length, 1, 'só uma conta grava a partida');
+  assert.ok(res.filter(r => r.status === 'rejected').every(r => /bot_progress_game_hash_uq|duplicate key/.test(String(r.reason))));
+  assert.equal(q(`select count(*) from public.bot_progress where game_hash = '${h}'`), '1');
+  q(`insert into public.bot_progress(user_id, bot_id) values ('${a}', 'madeira'), ('${b}', 'madeira')`);   // linhas sem partida (antigas) continuam livres
 });

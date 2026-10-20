@@ -353,3 +353,100 @@ O que isso mostra:
 ### Teste ajustado
 
 `hardening_r170_test` (SEC-004): o `analysis_request` agora informa a partida (`match_id: ''`, `mode: 'bot'`), porque a liberação ficou mais restrita. As assertions são as mesmas.
+
+---
+
+## 12. R172: os 3 achados que o Orca ainda reproduziu na R171b (`c6d946d`)
+
+Relatórios do Orca: `security-r171-retest-20261020` e `security-r171b-retest-20261020`. Rodei os scripts dele (`independent_*.cjs`) na R171b e na R172:
+
+| Script do Orca | R171b `c6d946d` | R172 |
+|---|---|---|
+| `independent_founder_boot_race` (limite 1, gravação do limite atrasada, 2 pagamentos) | 2 × `paid` → **2 Fundadores / limite 1** | 2 × `founder_capacity_not_ready` → **0 Fundadores**; pedidos seguem pendentes |
+| `independent_reports` (1ª gravação falha) | 1ª "denunciada", retry `duplicate` → **denúncia perdida** | 1ª **erro**, retry **gravado**, outra pessoa gravada → nada perdido |
+| `independent_bot_restart` (mesma partida, outra conta, serviço novo) | depois do reinício: **B ganha Platina** | depois do reinício: **`bot_game_reused`** |
+| `independent_webhook_retries` (ressalva: consulta que volta vazia) | `ignore` (1 consulta) | consulta de novo (2 consultas) |
+
+No script do Fundador só adicionei captura de erro (`.catch`) e `entitlements || new Map()`, porque na R172 os pagamentos são recusados e não sobra nenhum direito para contar. A lógica do ensaio não mudou.
+
+### 1. Fundador no boot (bloqueador)
+
+**Servidor: `founder_ready` começa falso.** Vira verdadeiro só quando:
+
+- a capacidade existe no banco (migração 0023);
+- o servidor gravou o limite;
+- o banco devolveu **exatamente** o `FRAIHA_FOUNDER_LIMIT`.
+
+Sem a 0023, erro de SQL, resposta vazia ou valor diferente: o Fundador fica **fechado**, nunca "sem limite". Enquanto `founder_ready` for falso:
+
+- criar pedido de Fundador → `founder_unavailable`;
+- webhook → erro 500 (o Mercado Pago repete);
+- JÁ PAGUEI e cartão → "aguarde";
+- reconciliação → adiada.
+
+Nada disso entrega Fundador, e os pagamentos continuam pendentes, sem perda. Club e o resto do jogo seguem normais. A confirmação espera no máximo 3 s por operação e tenta de novo a cada 5 s.
+
+**Banco: a 0023 nasce fechada** (`configured = false`).
+
+- `fraiha_pay_and_grant` de Fundador sem limite configurado → `raise founder_capacity_not_configured` (a transação inteira é desfeita).
+- `fraiha_grant_paid_missing` pula Fundador.
+- Só `fraiha_founder_set_limit` ou `fraiha_founder_reserve`, chamados pelo servidor, configuram.
+- Na 0023 da R171b, o banco recém-migrado com 2 pedidos entregava **2 Fundadores** antes de o limite 1 ser gravado (reproduzido no Postgres 16). Na R172 recusa.
+
+**Reinício:** o servidor novo começa fechado de novo e só reabre depois de reconfirmar o limite, inclusive quando o limite mudou (testado 2 → 1).
+
+**Explícito:** `FRAIHA_FOUNDER_LIMIT` vazio continua significando "sem limite", mas só depois de o servidor gravar 0 de propósito e o banco confirmar. Ausência de linha, valor nulo ou falha **nunca** viram "sem limite".
+
+**Testes** (`founder_boot_r171_test`, 11 testes):
+
+- os passos do Orca;
+- 1/2, 1/10, 2/10 e 3/25 com webhook, webhook repetido, JÁ PAGUEI, cartão e reconciliação ao mesmo tempo, antes e depois de `founder_ready`;
+- venda fechada e Club aberto;
+- sem 0023;
+- banco devolvendo 0, nulo, vazio, 5, erro de SQL ou "migração ausente";
+- reinício com limite mudado;
+- sem limite.
+
+A invariante `Fundadores <= FRAIHA_FOUNDER_LIMIT` foi conferida em todos.
+
+**Postgres 16 real** (`founder_seats_pg_test`, 15/15): banco recém-migrado fechado; 1/2, 1/10 e 2/10 com avisos chegando antes, durante e depois de `fraiha_founder_set_limit`; reconciliação.
+
+### 2. Denúncia após falha de gravação
+
+A marca de "já denunciada" (`reportSeen`) só é gravada **depois** que a denúncia foi salva.
+
+- Falha → resposta `report_failed` ("tente de novo"), nada marcado e o limite por pessoa/IP não é gasto.
+- Tentativas iguais enquanto a primeira ainda grava esperam o resultado dela: se falhar, todas recebem erro.
+- Depois do sucesso, mesma pessoa + mesma mensagem + mesmo tipo fica bloqueado normalmente.
+- `Reports.file` (perfil, DM, chat da partida) desfaz a marca e o limite quando o banco falha e devolve erro, em vez de "ok" calado.
+- O chat da **partida** tinha o mesmo problema (`match.reports` marcado antes de gravar) e foi corrigido igual.
+
+Testes: falha → retry grava → 3ª repetida; outro jogador grava; reinício (a mensagem antiga do chat efêmero deixa de existir, a nova é denunciável, nada perdido nem duplicado); concorrência; limite não gasto; chat da partida; `Reports.file`.
+
+### 3. Replay de Bot após restart
+
+**Migração nova `0024_fraiha_bot_partida_unica.sql`:** coluna `bot_progress.game_hash` = sha256(bot + lances), com índice **único**.
+
+- **Identificador:** só o que não dá para trocar sem invalidar o replay, ou seja o bot e os lances. Horário, ordem dos campos e campos extras não mudam o identificador. A cor vem da própria partida (cor declarada errada = partida inválida).
+- **Antes de gravar a 1ª vitória** de qualquer nível, o servidor procura o dono no **banco**. Se a partida for de outra conta → `bot_game_reused`. Duas contas ao mesmo tempo: o índice único deixa só uma gravar; a outra recebe 23505 e é recusada.
+- **Sem a 0024:** o servidor grava o progresso sem o identificador, a proteção volta a ser só em memória, e o log mostra ERRO. **Aplicar a 0024 junto com a R172.**
+
+Testes:
+
+- passos do Orca (serviço novo, mesmo banco);
+- duas instâncias ao mesmo tempo;
+- nível baixo;
+- mesma conta: revanche, sem recompensa nova;
+- payload idêntico, ordem dos campos, timestamp e campos extras;
+- partida diferente aceita;
+- SupabaseStore com respostas reais do PostgREST (409/23505 e coluna ausente);
+- Postgres 16 com 3 contas ao mesmo tempo → 1 gravada.
+
+**Fora do escopo** (como pedido): outro motor jogando pelo usuário.
+
+### Ordem de publicação da R172
+
+1. Supabase → SQL Editor: `0023_fraiha_fundador_vagas.sql`, depois `0024_fraiha_bot_partida_unica.sql`.
+2. **Logo em seguida**, `PUBLICAR-SERVIDOR-R172.cmd`. Entre a 0023 e o servidor novo subir, a entrega de Fundador fica em espera, sem perda.
+3. Conferir no log do Render: `founder_ready: limite de vagas confirmado no banco = <limite>`.
+4. Cloudflare: o jogo não mudou desde a R171b (pasta `FRAIHA_R171B_CLOUDFLARE`).
