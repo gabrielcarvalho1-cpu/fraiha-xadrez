@@ -10,6 +10,7 @@ const STATUS := {
 	"refunded": ["REEMBOLSADO", "info"],
 	"pending": ["AGUARDANDO PAGAMENTO", "new"],
 	"cancelled": ["CANCELADO", "soon"],
+	"expired": ["EXPIRADO", "soon"],   # R175
 	"sold_out": ["VAGAS ESGOTADAS · REEMBOLSO", "info"],   # R171 · pago depois de as vagas do Fundador acabarem
 }
 const NAMES := {"founder": "Pacote Fundador", "founder_legend": "Fundador Lendário", "club_monthly": "Club FRAIHA · 30 dias", "club_yearly": "Club FRAIHA · 1 ano"}
@@ -25,15 +26,28 @@ static func _age_s(iso: String) -> int:
 	if iso.length() < 19: return 0
 	return int(Time.get_unix_time_from_system()) - int(Time.get_unix_time_from_datetime_string(iso.substr(0, 19)))
 
-## Pedidos que aparecem: pagos e reembolsados sempre; PIX pendente só nos primeiros 30 min; cancelados não.
+## R175 · estado do pedido (o servidor manda "state"; servidor antigo: deriva do status e da idade).
+static func state_of(it: Dictionary) -> String:
+	var s := String(it.get("state", ""))
+	if not s.is_empty(): return s
+	var st := String(it.get("status", ""))
+	if st == "pending": return "pending" if _age_s(String(it.get("created_at", ""))) < 1800 else "expired"
+	if st == "cancelled": return "expired"
+	return st
+
+## R175 · todos os pedidos aparecem com o seu estado (aguardando, expirado, cancelado, pago, reembolsado, sem vaga);
+## só a tentativa que nem chegou ao Mercado Pago (failed) fica de fora.
 static func visible_items(items: Array) -> Array:
 	var out := []
 	for it in items:
 		if not (it is Dictionary): continue
-		var st := String(it.get("status", ""))
-		if st in ["paid", "refunded", "sold_out"] or (st == "pending" and _age_s(String(it.get("created_at", ""))) < 1800):
-			out.append(it)
+		if String(it.get("status", "")) == "failed": continue
+		out.append(it)
 	return out
+
+## pode CONTINUAR / CANCELAR? (servidor antigo, sem os campos: não oferece)
+static func actionable(it: Dictionary) -> bool:
+	return state_of(it) == "pending" and bool(it.get("can_continue", false)) and not String(it.get("id", "")).is_empty()
 
 static func build(hub, parent: VBoxContainer):
 	var head := Art.Frame.new("founder", int(26 * hub.k))
@@ -68,6 +82,9 @@ static func build(hub, parent: VBoxContainer):
 	var lv := VBoxContainer.new()
 	lv.add_theme_constant_override("separation", int(10 * hub.k))
 	list.add_child(lv)
+	if not String(hub.get("purchases_note") if hub.get("purchases_note") != null else "").is_empty():
+		var note := Art.label(lv, String(hub.purchases_note), hub.fs(17), Color("ffe6a0"), Art.FONT_SEMI)
+		note.name = "PurchasesNote"
 	if not hub.purchases_loaded:
 		Art.label(lv, "Carregando as suas compras…", hub.fs(18), Art.MUTED)
 	else:
@@ -96,8 +113,41 @@ static func _row(hub, it: Dictionary) -> Control:
 	var when := _date(String(it.get("paid_at", "") if it.get("paid_at") != null else "")) if String(it.get("status", "")) == "paid" else ""
 	if when.is_empty(): when = _date(String(it.get("created_at", "")))
 	Art.label(col, "%s  ·  %s  ·  %s" % [when, METHOD.get(String(it.get("method", "")), "—"), Catalog.brl(int(it.get("amount_cents", 0)))], hub.fs(16), Art.MUTED)
-	var st: Array = STATUS.get(String(it.get("status", "")), [String(it.get("status", "")).to_upper(), "soon"])
+	var state := state_of(it)
+	var st: Array = STATUS.get(state, [state.to_upper(), "soon"])
+	if state == "pending" and not String(it.get("expires_at", "")).is_empty():
+		var exp := _date(String(it.expires_at))
+		if exp.length() >= 16: Art.label(col, "Vale até %s (horário de Brasília)" % exp.substr(11, 5), hub.fs(15), Color("ffe6a0"))
+	if bool(it.get("paid_after_cancel", false)):
+		Art.label(col, "Pago depois do cancelamento: o pagamento foi confirmado e tratado normalmente.", hub.fs(15), Art.MUTED)
+	var side := VBoxContainer.new()
+	side.add_theme_constant_override("separation", 6)
+	side.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if hub.narrow: side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(side)
 	var stamp := Art.Stamp.new(st[0], st[1], 13)
-	stamp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(stamp)
+	stamp.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	side.add_child(stamp)
+	if actionable(it) and hub.has_method("resume_payment"):
+		var id := String(it.get("id", ""))
+		var busy: bool = hub.get("purchases_busy") is Dictionary and hub.purchases_busy.has(id)
+		if busy:
+			Art.label(side, "Cancelando…", hub.fs(15), Color("ffe6a0"))
+		else:
+			var btns := HBoxContainer.new()
+			btns.add_theme_constant_override("separation", 8)
+			side.add_child(btns)
+			btns.size_flags_horizontal = Control.SIZE_EXPAND_FILL if hub.narrow else Control.SIZE_SHRINK_END
+			var go := Art.Cta.new("CONTINUAR", "gold", 46, 15)
+			go.name = "PurchaseContinue"
+			go.custom_minimum_size.x = 150
+			go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			go.pressed.connect(func(): hub.resume_payment(it))
+			btns.add_child(go)
+			var stop := Art.Cta.new("CANCELAR", "dark", 46, 15)
+			stop.name = "PurchaseCancel"
+			stop.custom_minimum_size.x = 140
+			stop.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			stop.pressed.connect(func(): hub.cancel_order(it))
+			btns.add_child(stop)
 	return row

@@ -46,7 +46,10 @@ func run():
 	var list = pr.root.find_child("PurchasesList", true, false)
 	var rows := 0
 	for c in list.find_children("Purchase_*", "", true, false): rows += 1
-	check(rows == 4, "mostra 4 pedidos (PIX vencido some) — %d" % rows)
+	check(rows >= 4, "lista os pedidos — %d" % rows)
+	# R175 · o PIX vencido não some mais: aparece como EXPIRADO (histórico com estados)
+	var P = load("res://monetization/purchases_ui.gd")
+	check(P.visible_items(pr.purchases).size() == 5 and P.state_of(pr.purchases[3]) == "expired", "R175 · 5 pedidos; o PIX vencido aparece como EXPIRADO")
 	check(pr.root.find_child("PurchasesRefundHelp", true, false) != null, "ajuda de reembolso com o e-mail")
 	await shot("01_compras")
 	acc.server_message.emit({"type": "payment_history", "items": []})

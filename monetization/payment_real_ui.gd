@@ -13,7 +13,13 @@ const POLL_SECONDS := 5.0
 
 var hub
 var product_id := ""
-var step := "choose"         # choose | creating | pix | card | done | error | expired
+var step := "choose"         # choose | creating | pix | card | done | error | expired | cancelling
+## R175 · pedido aberto que o servidor apontou (order_open) ou o que está sendo cancelado
+var open_order := {}          # {charge_id, product_id, method}
+var cancel_id := ""
+var after_cancel := ""        # o que fazer quando o cancelamento terminar: "choose" (outra forma) | "close"
+var closed_by_user := false   # o pedido desta janela foi cancelado (aqui ou em outra aba)
+var resume_id := ""           # pedido sendo retomado (a resposta pode ser "já pago")
 var method := ""
 var charge := {}
 var error_text := ""
@@ -97,6 +103,7 @@ func _show(id: String):
         "card": _card(v)
         "error": _error(v)
         "expired": _expired(v)
+        "cancelling": _cancelling(v)
         _: _choose(v)
     _fit_height.call_deferred(scroll, f)
 
@@ -167,6 +174,44 @@ func start(m: String):
         _show("error")
         return
     _show("creating")
+
+## R175 · CONTINUAR um pedido que ficou aguardando: o servidor devolve o MESMO pedido (PIX: o mesmo QR / Copia e
+## Cola; cartão: o formulário de novo — cada envio gera um token novo, o pedido é o mesmo e não cobra duas vezes).
+func resume(charge_id: String, m: String):
+    method = m
+    charge = {}
+    open_order = {}
+    resume_id = charge_id
+    var acc = _account()
+    if acc == null or not acc.has_profile() or not acc.send_server({"type": "payment_resume", "charge_id": charge_id}):
+        error_code = "offline"
+        error_text = "Sem conexão com o servidor. Verifique a internet e tente de novo."
+        _show("error")
+        return
+    _show("creating")
+
+## R175 · CANCELAR o pedido (o servidor confere no Mercado Pago antes; se já foi pago, entrega em vez de cancelar).
+func cancel_order(charge_id: String, then: String):
+    var acc = _account()
+    if charge_id.is_empty(): return
+    poll.stop()
+    if card_form != null: card_form.close()
+    cancel_id = charge_id
+    after_cancel = then
+    if acc == null or not acc.send_server({"type": "payment_cancel", "charge_id": charge_id}):
+        error_code = "offline"
+        error_text = "Sem conexão com o servidor. O pedido NÃO foi cancelado. Verifique a internet e tente de novo."
+        _show("error")
+        return
+    _show("cancelling")
+
+func _cancelling(v: VBoxContainer):
+    Art.label(v, "CANCELANDO O PEDIDO…", hub.fs(28), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
+    Art.label(v, "Conferindo com o Mercado Pago antes de cancelar. Se o pagamento já tiver sido feito, a vantagem é entregue.", hub.fs(18), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
+    var spin := Spinner.new()
+    spin.custom_minimum_size = Vector2(64, 64)
+    spin.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    v.add_child(spin)
 
 func _creating(v: VBoxContainer):
     Art.label(v, "PREPARANDO O PAGAMENTO…", hub.fs(28), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
@@ -383,10 +428,8 @@ func _waiting_block(v: VBoxContainer):
     var other := Art.Cta.new("OUTRA FORMA DE PAGAMENTO", "dark", 52, 16)
     other.name = "PaymentBack"
     other.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    other.pressed.connect(func():
-        poll.stop()
-        if card_form != null: card_form.close()
-        _show("choose"))
+    # R175 · trocar a forma de pagamento CANCELA este pedido antes (senão ele ficava aberto e travava o próximo)
+    other.pressed.connect(func(): cancel_order(String(charge.get("id", "")), "choose"))
     btns.add_child(other)
     var close := Art.Cta.new("FECHAR", "dark", 52, 16)
     close.name = "PaymentCancel"
@@ -418,7 +461,36 @@ func _error(v: VBoxContainer):
     var row: BoxContainer = VBoxContainer.new() if hub.narrow else HBoxContainer.new()
     row.add_theme_constant_override("separation", 12)
     v.add_child(row)
-    if error_code in ["server_error", "offline"]:
+    if error_code == "order_open" and not String(open_order.get("charge_id", "")).is_empty():
+        # R175 · pedido de Fundador já aberto: CONTINUAR o mesmo pedido ou CANCELAR para começar outro
+        var oid := String(open_order.charge_id)
+        var cont := Art.Cta.new("CONTINUAR PEDIDO", "gold", 52, 17)
+        cont.name = "PaymentResumeOpen"
+        cont.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        cont.pressed.connect(func():
+            product_id = String(open_order.get("product_id", product_id)) if not String(open_order.get("product_id", "")).is_empty() else product_id
+            resume(oid, String(open_order.get("method", "pix"))))
+        row.add_child(cont)
+        var stop := Art.Cta.new("CANCELAR PEDIDO", "dark", 52, 17)
+        stop.name = "PaymentCancelOpen"
+        stop.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        stop.pressed.connect(func(): cancel_order(oid, "choose"))
+        row.add_child(stop)
+    elif error_code in ["order_expired", "order_closed"]:
+        var fresh := Art.Cta.new("COMEÇAR NOVO PEDIDO", "gold", 52, 17)
+        fresh.name = "PaymentNewOrder"
+        fresh.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        fresh.pressed.connect(func(): _show("choose"))
+        row.add_child(fresh)
+    elif error_code == "cancel_failed" and not cancel_id.is_empty():
+        var again_c := Art.Cta.new("TENTAR CANCELAR DE NOVO", "gold", 52, 17)
+        again_c.name = "PaymentCancelRetry"
+        again_c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        var cid := cancel_id
+        var then := after_cancel
+        again_c.pressed.connect(func(): cancel_order(cid, then))
+        row.add_child(again_c)
+    elif error_code in ["server_error", "offline"]:
         var again := Art.Cta.new("TENTAR DE NOVO", "gold", 52, 17)
         again.name = "PaymentRetry"
         again.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -431,11 +503,12 @@ func _error(v: VBoxContainer):
     row.add_child(close)
 
 func _expired(v: VBoxContainer):
-    Art.label(v, "O PIX EXPIROU", hub.fs(28), Color("ffb08a"), Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
-    Art.label(v, "Nada foi cobrado. Gere um novo código para continuar.", hub.fs(19), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
-    var again := Art.Cta.new("GERAR NOVO PIX", "gold", 56, 18)
+    var t := "PEDIDO CANCELADO" if closed_by_user else ("O PIX EXPIROU" if method == "pix" else "PEDIDO ENCERRADO")
+    Art.label(v, t, hub.fs(28), Color("ffb08a"), Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
+    Art.label(v, "Este pedido foi cancelado (nesta ou em outra janela). Nada foi cobrado." if closed_by_user else "Nada foi cobrado. Gere um novo pedido para continuar.", hub.fs(19), Art.CREAM, null, HORIZONTAL_ALIGNMENT_CENTER)
+    var again := Art.Cta.new("GERAR NOVO PIX" if method == "pix" and not closed_by_user else "COMEÇAR NOVO PEDIDO", "gold", 56, 18)
     again.name = "PaymentRetry"
-    again.pressed.connect(func(): start("pix"))
+    again.pressed.connect(func(): start("pix") if method == "pix" and not closed_by_user else _show("choose"))
     v.add_child(again)
     var close := Art.Cta.new("FECHAR", "dark", 52, 17)
     close.name = "PaymentCancel"
@@ -453,7 +526,10 @@ const ERRORS := {
     "already_founder": "Você já é Fundador do Reino. Obrigado por apoiar o FRAIHA desde o começo!",
     "founder_sold_out": "As vagas do Pacote Fundador se esgotaram. Obrigado pelo interesse!",
     "founder_closed": "A oferta do Pacote Fundador foi encerrada. Obrigado pelo interesse! O Club FRAIHA continua disponível.",
-    "order_open": "Você já tem um pedido de Fundador aguardando pagamento. Conclua o PIX aberto ou espere 30 minutos para gerar outro.",
+    "order_open": "Você já tem um pedido de Fundador aguardando pagamento. Continue esse pedido ou cancele para começar outro.",
+    "order_expired": "Este pedido expirou. Nada foi cobrado. Comece um novo pedido.",
+    "order_closed": "Este pedido não está mais aberto. Nada foi cobrado por ele. Comece um novo pedido.",
+    "order_not_found": "Pedido não encontrado. Comece um novo pedido.",
     "provider_not_configured": "Os pagamentos ainda não foram ligados neste servidor. Tente novamente mais tarde.",
     "email_required": "Sua conta precisa de um e-mail para receber o recibo do pagamento.",
     "server_error": "O Mercado Pago não respondeu agora. Nada foi cobrado. Tente novamente em instantes.",
@@ -464,8 +540,11 @@ func _on_server(msg: Dictionary):
     match String(msg.get("type", "")):
         "payment_charge":
             if step != "creating": return
-            charge = msg.get("charge", {}) if msg.get("charge") is Dictionary else {}
-            if String(charge.get("product_id", product_id)) != product_id: return
+            var c0: Dictionary = msg.get("charge", {}) if msg.get("charge") is Dictionary else {}
+            if String(c0.get("product_id", product_id)) != product_id: return
+            charge = c0
+            closed_by_user = false
+            if not String(charge.get("method", "")).is_empty(): method = String(charge.method)
             card_form_failed = false
             _show("pix" if String(charge.get("method", method)) == "pix" else "card")
             poll.start()
@@ -474,17 +553,27 @@ func _on_server(msg: Dictionary):
             if step not in ["creating", "pix", "card"]: return
             poll.stop()
             error_code = String(msg.get("code", ""))
+            open_order = {"charge_id": String(msg.get("charge_id", "")), "product_id": String(msg.get("product_id", "")), "method": String(msg.get("method", ""))} if error_code == "order_open" else {}
             error_text = String(ERRORS.get(error_code, String(msg.get("message", "Não foi possível iniciar o pagamento."))))
             _show("error")
         "payment_card_result":
             _on_card_result(msg)
+        "payment_cancel_result":
+            _on_cancel_result(msg)
         "payment_update":
             var c = msg.get("charge", {})
-            if not (c is Dictionary) or String(c.get("id", "")) != String(charge.get("id", "-")): return
+            if not (c is Dictionary): return
+            var cid := String(c.get("id", ""))
+            var resumed_here := step == "creating" and not resume_id.is_empty() and cid == resume_id
+            if cid != String(charge.get("id", "-")) and not resumed_here: return
+            if resumed_here and not String(c.get("product_id", "")).is_empty(): product_id = String(c.product_id)
             match String(c.get("status", "")):
                 "paid": _paid()
                 "cancelled":
+                    if step == "cancelling": return   # o resultado do CANCELAR desta janela chega em payment_cancel_result
                     poll.stop()
+                    if card_form != null: card_form.close()
+                    closed_by_user = String(msg.get("reason", "")) == "user"
                     _show("expired")
                 "sold_out":   # R171 · SEC-009: pagou no instante em que a última vaga acabou → nada entregue, reembolso
                     poll.stop()
@@ -494,6 +583,29 @@ func _on_server(msg: Dictionary):
                     _show("error")
                 _:
                     if status_label != null: status_label.text = "Aguardando a confirmação do pagamento…"
+
+## R175 · resposta do CANCELAR
+func _on_cancel_result(msg: Dictionary):
+    if step != "cancelling" or String(msg.get("charge_id", "")) != cancel_id: return
+    var st := String(msg.get("status", ""))
+    match st:
+        "cancelled":
+            charge = {}
+            open_order = {}
+            if after_cancel == "close": hub.close_modal()
+            else: _show("choose")
+        "paid":
+            if not String(msg.get("product_id", "")).is_empty(): product_id = String(msg.product_id)
+            _paid()
+        "sold_out":
+            poll.stop()
+            error_code = "founder_sold_out_paid"
+            error_text = String(msg.get("message", "As vagas do Pacote Fundador acabaram no momento do seu pagamento. O valor será devolvido integralmente."))
+            _show("error")
+        _:
+            error_code = "cancel_failed" if st == "error" else "order_closed"
+            error_text = String(msg.get("message", "Não foi possível cancelar agora. Nada foi alterado."))
+            _show("error")
 
 func _paid():
     if step == "done": return

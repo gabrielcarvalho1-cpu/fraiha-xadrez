@@ -103,7 +103,8 @@ class MercadoPago {
   }
 
   // ref = id interno do FRAIHA (external_reference): liga a notificação ao pedido sem confiar no cliente.
-  async createCharge({ ref, userId, productId, method, amountCents, title, email }) {
+  // idemSuffix (R175): CONTINUAR um pedido de cartão gera outra preferência para o MESMO pedido (mesmo external_reference)
+  async createCharge({ ref, userId, productId, method, amountCents, title, email, idemSuffix = '' }) {
     if (!this.ready()) { const e = new Error('Mercado Pago sem configuração: ' + this.missing().join(', ')); e.code = 'provider_not_configured'; throw e; }
     const notification_url = this.publicUrl + '/webhooks/payments';
     const amount = Math.round(amountCents) / 100;
@@ -124,7 +125,7 @@ class MercadoPago {
     }
     if (method === 'card') {
       const expires = Date.now() + 24 * 3600 * 1000;
-      const pref = await withOptional((b, k) => this.call('POST', '/checkout/preferences', b, ref + k), {
+      const pref = await withOptional((b, k) => this.call('POST', '/checkout/preferences', b, ref + idemSuffix + k), {
         items: [{ ...itemInfo(productId, title, amount), currency_id: 'BRL' }],
         payer: { email }, external_reference: ref, notification_url,
         back_urls: { success: this.gameUrl, pending: this.gameUrl, failure: this.gameUrl }, auto_return: 'approved',
@@ -220,10 +221,39 @@ class MercadoPago {
 
   // Busca pelo id interno (quando o jogador pergunta "já pagou?" e o webhook ainda não chegou).
   async findByRef(ref) {
+    const pick = await this.findRawByRef(ref);
+    return pick ? this.event(pick) : null;
+  }
+  // R175 · o pagamento do Mercado Pago mais importante deste pedido: aprovado > reembolsado > o mais recente.
+  async findRawByRef(ref) {
     const r = await this.call('GET', '/v1/payments/search?sort=date_created&criteria=desc&external_reference=' + encodeURIComponent(ref));
     const list = Array.isArray(r.results) ? r.results : [];
-    const pick = list.find(p => p.status === 'approved') || list.find(p => p.status === 'refunded' || p.status === 'charged_back') || list[0];
-    return pick ? this.event(pick) : null;
+    return list.find(p => p.status === 'approved') || list.find(p => p.status === 'refunded' || p.status === 'charged_back') || list[0] || null;
+  }
+
+  // R175 · CONTINUAR um PIX: devolve o MESMO pagamento (mesmo QR / Copia e Cola), nunca cria outro.
+  //   → { event }                         pagamento já não está aberto (pago, cancelado, expirado…)
+  //   → { charge }                        ainda aberto: QR + Copia e Cola + validade reais do Mercado Pago
+  //   → null                              nenhum PIX deste pedido no Mercado Pago
+  async resumePix(ref) {
+    const found = await this.findRawByRef(ref);
+    if (!found) return null;
+    const p = found.id ? await this.call('GET', '/v1/payments/' + encodeURIComponent(found.id)) : found;
+    const ev = this.event(p);
+    const exp = p.date_of_expiration ? Date.parse(p.date_of_expiration) : NaN;
+    if (ev.status !== 'pending' || (Number.isFinite(exp) && exp <= Date.now())) return { event: { ...ev, expired: Number.isFinite(exp) && exp <= Date.now() } };
+    const td = (p.point_of_interaction && p.point_of_interaction.transaction_data) || {};
+    if (!td.qr_code) return { event: ev, no_qr: true };
+    return { event: ev, charge: { id: ref, provider_payment_id: String(p.id || ''), method: 'pix', status: 'pending',
+      copy_paste: String(td.qr_code), qr_code_base64: String(td.qr_code_base64 || ''), ticket_url: String(td.ticket_url || ''),
+      expires_at: Number.isFinite(exp) ? new Date(exp).toISOString() : '' } };
+  }
+
+  // R175 · CANCELAR no Mercado Pago um pagamento ainda aberto (PIX pendente). Devolve o estado real depois do pedido.
+  async cancel(paymentId) {
+    if (!/^[0-9]{1,30}$/.test(String(paymentId || ''))) throw new Error('payment id inválido para cancelar');
+    const p = await this.call('PUT', '/v1/payments/' + encodeURIComponent(paymentId), { status: 'cancelled' });
+    return this.event(p);
   }
 
   // R40 · Cartão no jogo: cria o pagamento com o token do Card Payment Brick.

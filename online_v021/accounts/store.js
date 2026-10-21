@@ -21,6 +21,25 @@ const extendClub = (expiresAt, days, now = Date.now()) => {
   return new Date(base + days * 86400e3).toISOString();
 };
 const SCHEMA_MISSING = e => /42P01|42703|PGRST200|PGRST204|PGRST205|does not exist|Could not find/.test(String(e && e.code) + ' ' + String(e && e.message));
+// R175 · histórico do pedido no raw (jsonb): cancelamento e aprovação tardia ficam registrados, nada é apagado.
+const PAY_HISTORY_MAX = 20;
+function payRawCancel(raw, note) {
+  const r = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? { ...raw } : {};
+  const at = new Date().toISOString();
+  const cancel = { reason: String(note.reason || 'provider'), at };
+  for (const k of ['by', 'provider_status', 'provider_payment_id']) if (note[k]) cancel[k] = String(note[k]);
+  r.cancel = cancel;
+  r.history = [...(Array.isArray(r.history) ? r.history : []), { at, event: 'cancelled', ...cancel }].slice(-PAY_HISTORY_MAX);
+  return r;
+}
+function payRawReopen(raw, note) {
+  const r = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? { ...raw } : {};
+  const at = new Date().toISOString();
+  const ev = { at, event: String(note.event || 'provider_approved_after_cancel'), previous_status: String(note.previous_status || ''), provider_payment_id: String(note.provider_payment_id || '') };
+  r.reopened = [...(Array.isArray(r.reopened) ? r.reopened : []), ev].slice(-PAY_HISTORY_MAX);
+  r.history = [...(Array.isArray(r.history) ? r.history : []), ev].slice(-PAY_HISTORY_MAX);
+  return r;
+}
 // Remove espaços, caracteres invisíveis, de controle e bidi; normaliza (NFKC) antes de validar.
 const INVISIBLE_RE = /[\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFF]/g;
 function cleanNickname(value) {
@@ -253,6 +272,21 @@ class MemoryStore {
     const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === 'pending');
     if (!p) return null;
     p.status = status; if (status === 'paid') p.paid_at = new Date().toISOString();
+    return { ...p };
+  }
+  // R175 · pending → cancelled (compare-and-set), libera a reserva do Fundador e grava o motivo no raw
+  async cancelPayment(provider, ref, note = {}) {
+    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === 'pending');
+    if (!p) return null;
+    p.status = 'cancelled'; p.seat_hold_until = null; p.raw = payRawCancel(p.raw, note);
+    return { ...p };
+  }
+  // R175 · aprovado depois de cancelado/falho: (cancelled|failed) → pending, com o cancelamento preservado no raw
+  async reopenPayment(provider, ref, note = {}) {
+    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && (x.status === 'cancelled' || x.status === 'failed'));
+    if (!p) return null;
+    p.raw = payRawReopen(p.raw, { previous_status: p.status, ...note });
+    p.status = 'pending'; p.seat_hold_until = null;
     return { ...p };
   }
   // R39: reembolso/contestação — só paid → refunded (uma vez). R171: também sold_out → refunded (sem direito a retirar).
@@ -769,7 +803,7 @@ class SupabaseStore {
     return rows[0];
   }
   async getPayment(provider, ref) {
-    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&select=payment_id,user_id,product_id,method,status,paid_at,amount_cents&limit=1');
+    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&select=payment_id,user_id,product_id,method,provider_ref,status,created_at,paid_at,amount_cents,raw&limit=1');
     return rows[0] || null;
   }
   // R39: reembolso/contestação — só paid → refunded (uma vez).
@@ -818,11 +852,11 @@ class SupabaseStore {
   }
   async findOpenPayment(userId, productIds, sinceMs) {
     const since = new Date(Date.now() - sinceMs).toISOString();
-    const rows = await this.req('/payments?user_id=eq.' + encodeURIComponent(userId) + '&status=eq.pending&product_id=in.(' + productIds.join(',') + ')&created_at=gt.' + encodeURIComponent(since) + '&select=payment_id,provider_ref,product_id&limit=1');
+    const rows = await this.req('/payments?user_id=eq.' + encodeURIComponent(userId) + '&status=eq.pending&product_id=in.(' + productIds.join(',') + ')&created_at=gt.' + encodeURIComponent(since) + '&select=payment_id,provider_ref,product_id,method&limit=1');
     return rows[0] || null;
   }
   async listPayments(userId, limit = 20) {
-    const q = (userId ? 'user_id=eq.' + encodeURIComponent(userId) + '&' : '') + 'select=payment_id,user_id,product_id,method,provider_ref,amount_cents,status,created_at,paid_at&order=created_at.desc&limit=' + (limit | 0);
+    const q = (userId ? 'user_id=eq.' + encodeURIComponent(userId) + '&' : '') + 'select=payment_id,user_id,product_id,method,provider_ref,amount_cents,status,created_at,paid_at,raw&order=created_at.desc&limit=' + (limit | 0);
     return this.req('/payments?' + q);
   }
   // banco sem a 0012: a entrega falhou depois de marcar pago → volta para pendente (a próxima notificação tenta de novo)
@@ -834,6 +868,31 @@ class SupabaseStore {
     const patch = { status }; if (status === 'paid') patch.paid_at = new Date().toISOString();
     const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.pending&select=payment_id,user_id,product_id,status',
       { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) });
+    return rows[0] || null;
+  }
+  // R175 · pending → cancelled. Compare-and-set no banco (status=eq.pending): webhook, CANCELAR e entrega ao mesmo
+  // tempo → só uma transição vale. Libera a reserva do Fundador (seat_hold_until) e grava o motivo no raw.
+  async cancelPayment(provider, ref, note = {}) {
+    const cur = await this.getPayment(provider, ref);
+    if (!cur || cur.status !== 'pending') return null;
+    const path = '/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.pending&select=payment_id,user_id,product_id,status,provider_ref';
+    const body = { status: 'cancelled', seat_hold_until: null, raw: payRawCancel(cur.raw, note) };
+    let rows;
+    try { rows = await this.req(path, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) }); }
+    catch (e) {
+      if (!SCHEMA_MISSING(e)) throw e;   // banco sem a 0023 (sem seat_hold_until): cancela sem mexer na reserva
+      delete body.seat_hold_until;
+      rows = await this.req(path, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
+    }
+    return rows[0] || null;
+  }
+  // R175 · pagamento aprovado DEPOIS de cancelado/falho: volta para pending (compare-and-set no status anterior), com o
+  // cancelamento preservado no raw (reopened/history), para a entrega passar pela fraiha_pay_and_grant (0023).
+  async reopenPayment(provider, ref, note = {}) {
+    const cur = await this.getPayment(provider, ref);
+    if (!cur || (cur.status !== 'cancelled' && cur.status !== 'failed')) return null;
+    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.' + cur.status + '&select=payment_id,user_id,product_id,status,provider_ref',
+      { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'pending', raw: payRawReopen(cur.raw, { previous_status: cur.status, ...note }) }) });
     return rows[0] || null;
   }
   // ---------- R31: identidade cosmética. Sem a 0007 (colunas profile_badge/profile_title) só o avatar é salvo. ----------

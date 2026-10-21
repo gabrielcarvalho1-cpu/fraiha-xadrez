@@ -182,57 +182,12 @@ class Payments {
     if (a === 'payment_founders') return this.send(ws, { type: 'payment_founders', founders: await this.founders(), open: (await this.founderOpen()).open });
     if (!ws.user || !ws.profile) return this.fail(ws, 'Entre na sua conta para assinar ou comprar.', 'auth_required');
     if (a === 'payment_offer') return this.send(ws, await this.offer(ws));
-    if (a === 'payment_create') {
-      const productId = String(m.product_id || ''), method = String(m.method || '');
-      const product = PRODUCTS[productId];
-      if (!product || !METHODS.includes(method)) return this.fail(ws, 'Produto ou forma de pagamento inválidos.', 'bad_request');
-      if (!this.ready()) return this.fail(ws, 'Pagamento real ainda não configurado neste servidor.', 'provider_not_configured');
-      if (!ws.user.email) return this.fail(ws, 'Sua conta precisa de um e-mail para o recibo do pagamento.', 'email_required');
-      if (product.founder) {
-        if (!(await this.capacityReady())) return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');
-        const ent = await this.store.getEntitlements(ws.user.id).catch(() => ({}));
-        if (ent && ent.founder_tier === 'legend') return this.fail(ws, 'Você já é Fundador Lendário. Obrigado!', 'already_founder');
-        if (ent && ent.is_founder && productId === 'founder') return this.fail(ws, 'Você já é Fundador do Reino. Obrigado!', 'already_founder');
-        const fo = await this.founderOpen();
-        // R171 · quem já é Fundador e vira Lendário não ocupa vaga nova: "esgotado" não bloqueia o upgrade
-        const upgrade = !!(ent && ent.is_founder) && productId === 'founder_legend';
-        if (!fo.open && !(upgrade && fo.reason === 'sold_out')) return this.fail(ws, fo.message, fo.reason === 'sold_out' ? 'founder_sold_out' : 'founder_closed');
-        // dois PIX de Fundador abertos ao mesmo tempo poderiam ser pagos os dois
-        const open = this.store.findOpenPayment ? await this.store.findOpenPayment(ws.user.id, ['founder', 'founder_legend'], OPEN_ORDER_MS).catch(() => null) : null;
-        if (open) return this.fail(ws, 'Você já tem um pagamento de Fundador em aberto. Conclua esse pagamento ou aguarde 30 minutos para começar outro.', 'order_open');
-      }
-      const ref = crypto.randomUUID(), amount = priceOf(product, method);
-      try {
-        // R171 · SEC-009: pedido de Fundador só nasce com vaga reservada, conferida dentro do banco (lock)
-        let reserved = false;
-        if (product.founder && this.founderLimit > 0 && this.store.founderReserve) {
-          const r = await this.store.founderReserve({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref,
-            amount_cents: amount, limit: this.founderLimit, hold_s: Math.round(OPEN_ORDER_MS / 1000) });
-          if (r && r.ok === false && r.reason === 'closed') return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');   // R172
-          if (r && r.ok === false) return this.fail(ws, 'As vagas do Pacote Fundador se esgotaram.', 'founder_sold_out');
-          if (r && r.missing) {   // R171b: sem a 0023 não vende Fundador limitado (nunca o caminho antigo sem lock)
-            console.error('[pagamentos] migração 0023 ausente: venda de Fundador limitada FECHADA');
-            this.capacity.state = 'error'; this.capacity.retryAt = Date.now() + 60e3;
-            return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');
-          }
-          reserved = true;
-        }
-        if (!reserved && this.store.createPayment) await this.store.createPayment({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref, amount_cents: amount, status: 'pending' });
-        const charge = await this.provider.createCharge({ ref, userId: ws.user.id, productId, method, amountCents: amount, title: product.title, email: ws.user.email });
-        return this.send(ws, { type: 'payment_charge', charge: { ...charge, id: ref, product_id: productId, amount_cents: amount } });
-      } catch (e) {
-        if (this.store.markPayment) await this.store.markPayment(this.provider.name, ref, 'failed').catch(() => {});
-        if (e.code === 'provider_not_configured') return this.fail(ws, 'Pagamento real ainda não configurado neste servidor.', 'provider_not_configured');
-        console.error('payment_create', e && e.message);
-        return this.fail(ws, 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes.', 'server_error');
-      }
-    }
-    if (a === 'payment_card_pay') return this.cardPay(ws, m);
-    if (a === 'payment_history') {   // R103 · minhas compras (perfil)
-      const rows = this.store.listPayments ? await this.store.listPayments(ws.user.id, 30).catch(() => []) : [];
-      return this.send(ws, { type: 'payment_history', items: rows.filter(r => r.status !== 'failed').map(r => ({ product_id: r.product_id, title: (PRODUCTS[r.product_id] || {}).title || r.product_id,
-        method: r.method, amount_cents: r.amount_cents, status: r.status, created_at: r.created_at, paid_at: r.paid_at || null })) });
-    }
+    // R175 · ações que mexem em pedido da conta: uma de cada vez por conta (duas abas / dois aparelhos esperam a vez)
+    if (a === 'payment_create') return this.lock('user:' + ws.user.id, () => this.createOrder(ws, m));
+    if (a === 'payment_card_pay') return this.lock('user:' + ws.user.id, () => this.cardPay(ws, m));
+    if (a === 'payment_history') return this.lock('user:' + ws.user.id, () => this.history(ws));
+    if (a === 'payment_resume') return this.lock('user:' + ws.user.id, () => this.resumeOrder(ws, String(m.charge_id || '')));
+    if (a === 'payment_cancel') return this.lock('user:' + ws.user.id, () => this.cancelOrder(ws, String(m.charge_id || '')));
     if (a === 'payment_status') {
       const ref = String(m.charge_id || '');
       let row = this.store.getPayment ? await this.store.getPayment(this.provider.name, ref) : null;
@@ -249,6 +204,231 @@ class Payments {
     return this.fail(ws, 'Ação de pagamento desconhecida.', 'bad_request');
   }
 
+  // R175 · fila por chave (conta ou pedido) dentro do processo: a próxima ação só começa quando a anterior terminar.
+  async lock(key, fn) {
+    this.locks = this.locks || new Map();
+    const prev = this.locks.get(key) || Promise.resolve();
+    let release; const mine = new Promise(r => { release = r; });
+    const tail = prev.then(() => mine);
+    this.locks.set(key, tail);
+    await prev;
+    try { return await fn(); }
+    finally { release(); if (this.locks.get(key) === tail) this.locks.delete(key); }
+  }
+
+  async createOrder(ws, m) {
+    const productId = String(m.product_id || ''), method = String(m.method || '');
+    const product = PRODUCTS[productId];
+    if (!product || !METHODS.includes(method)) return this.fail(ws, 'Produto ou forma de pagamento inválidos.', 'bad_request');
+    if (!this.ready()) return this.fail(ws, 'Pagamento real ainda não configurado neste servidor.', 'provider_not_configured');
+    if (!ws.user.email) return this.fail(ws, 'Sua conta precisa de um e-mail para o recibo do pagamento.', 'email_required');
+    if (product.founder) {
+      if (!(await this.capacityReady())) return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');
+      const ent = await this.store.getEntitlements(ws.user.id).catch(() => ({}));
+      if (ent && ent.founder_tier === 'legend') return this.fail(ws, 'Você já é Fundador Lendário. Obrigado!', 'already_founder');
+      if (ent && ent.is_founder && productId === 'founder') return this.fail(ws, 'Você já é Fundador do Reino. Obrigado!', 'already_founder');
+      const fo = await this.founderOpen();
+      // R171 · quem já é Fundador e vira Lendário não ocupa vaga nova: "esgotado" não bloqueia o upgrade
+      const upgrade = !!(ent && ent.is_founder) && productId === 'founder_legend';
+      if (!fo.open && !(upgrade && fo.reason === 'sold_out')) return this.fail(ws, fo.message, fo.reason === 'sold_out' ? 'founder_sold_out' : 'founder_closed');
+      // dois PIX de Fundador abertos ao mesmo tempo poderiam ser pagos os dois
+      const open = this.store.findOpenPayment ? await this.store.findOpenPayment(ws.user.id, ['founder', 'founder_legend'], OPEN_ORDER_MS).catch(() => null) : null;
+      // R175 · o aviso leva o pedido aberto: o jogo oferece CONTINUAR (o mesmo pedido) ou CANCELAR
+      if (open) return this.send(ws, { type: 'payment_error', code: 'order_open',
+        message: 'Você já tem um pedido de Fundador aguardando pagamento. Continue esse pedido ou cancele para começar outro.',
+        charge_id: open.provider_ref || '', product_id: open.product_id || '', method: open.method || '' });
+    }
+    const ref = crypto.randomUUID(), amount = priceOf(product, method);
+    try {
+      // R171 · SEC-009: pedido de Fundador só nasce com vaga reservada, conferida dentro do banco (lock)
+      let reserved = false;
+      if (product.founder && this.founderLimit > 0 && this.store.founderReserve) {
+        const r = await this.store.founderReserve({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref,
+          amount_cents: amount, limit: this.founderLimit, hold_s: Math.round(OPEN_ORDER_MS / 1000) });
+        if (r && r.ok === false && r.reason === 'closed') return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');   // R172
+        if (r && r.ok === false) return this.fail(ws, 'As vagas do Pacote Fundador se esgotaram.', 'founder_sold_out');
+        if (r && r.missing) {   // R171b: sem a 0023 não vende Fundador limitado (nunca o caminho antigo sem lock)
+          console.error('[pagamentos] migração 0023 ausente: venda de Fundador limitada FECHADA');
+          this.capacity.state = 'error'; this.capacity.retryAt = Date.now() + 60e3;
+          return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');
+        }
+        reserved = true;
+      }
+      if (!reserved && this.store.createPayment) await this.store.createPayment({ user_id: ws.user.id, product_id: productId, method, provider: this.provider.name, provider_ref: ref, amount_cents: amount, status: 'pending' });
+      const charge = await this.provider.createCharge({ ref, userId: ws.user.id, productId, method, amountCents: amount, title: product.title, email: ws.user.email });
+      return this.send(ws, { type: 'payment_charge', charge: { ...charge, id: ref, product_id: productId, amount_cents: amount } });
+    } catch (e) {
+      if (this.store.markPayment) await this.store.markPayment(this.provider.name, ref, 'failed').catch(() => {});
+      if (e.code === 'provider_not_configured') return this.fail(ws, 'Pagamento real ainda não configurado neste servidor.', 'provider_not_configured');
+      console.error('payment_create', e && e.message);
+      return this.fail(ws, 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes.', 'server_error');
+    }
+  }
+
+  // ---------------------------------------------------------------- R175 · pedidos pendentes
+  // Um pedido vale OPEN_ORDER_MS (30 min = validade do PIX e da reserva de vaga do Fundador) a partir da criação.
+  expiresAt(row) { const t = Date.parse(row && row.created_at); return Number.isFinite(t) ? t + OPEN_ORDER_MS : 0; }
+  expired(row) { const e = this.expiresAt(row); return !!e && this.now() >= e; }
+  // estado para o jogo: aguardando | expirado | cancelado | pago | reembolsado | sem vaga (sold_out)
+  stateOf(row) {
+    const st = String(row.status || '');
+    if (st === 'pending') return this.expired(row) ? 'expired' : 'pending';
+    if (st === 'cancelled') {   // pedidos antigos (sem motivo gravado) eram PIX vencidos
+      const reason = row.raw && row.raw.cancel && row.raw.cancel.reason;
+      return !reason || reason === 'expired' ? 'expired' : 'cancelled';
+    }
+    return st;
+  }
+  item(r) {
+    const state = this.stateOf(r), exp = this.expiresAt(r);
+    const raw = r.raw || {};
+    return { id: r.provider_ref || '', product_id: r.product_id, title: (PRODUCTS[r.product_id] || {}).title || r.product_id,
+      method: r.method, amount_cents: r.amount_cents, status: r.status, state, created_at: r.created_at, paid_at: r.paid_at || null,
+      expires_at: state === 'pending' && exp ? new Date(exp).toISOString() : null,
+      can_continue: state === 'pending', can_cancel: state === 'pending',
+      paid_after_cancel: !!(raw.reopened && raw.reopened.length) };
+  }
+  notify(userId, ref, status, productId, extra = {}) {
+    for (const ws of this.backend.socketsOf(userId)) this.send(ws, { type: 'payment_update', charge: { id: ref, status, product_id: productId }, ...extra });
+  }
+
+  // MINHAS COMPRAS: pedidos com estado; os vencidos (até 3 por consulta) são conferidos no provedor e fechados.
+  async history(ws) {
+    const list = () => this.store.listPayments ? this.store.listPayments(ws.user.id, 30).catch(() => []) : Promise.resolve([]);
+    let rows = await list();
+    let closed = 0;
+    for (const r of rows) {
+      if (closed >= 3) break;
+      if (r.status === 'pending' && this.expired(r) && r.provider_ref) { closed++; await this.expireOrder(r).catch(e => console.error('[pagamentos] expirar pedido', r.provider_ref, e && e.message)); }
+    }
+    if (closed) rows = await list();
+    return this.send(ws, { type: 'payment_history', items: rows.filter(r => r.status !== 'failed').map(r => this.item(r)) });
+  }
+
+  // Pergunta ao provedor ANTES de fechar: aprovado → entrega; PIX ainda aberto → cancela lá; depois fecha aqui.
+  // → 'paid' | 'closed' | 'open' (não foi possível confirmar: o pedido fica como está)
+  async expireOrder(row) { return this.closeOrder(row, 'expired', null); }
+  async closeOrder(row, reason, byUser) {
+    const ref = row.provider_ref, prov = this.provider.name;
+    let ev = null;
+    if (this.provider.findByRef) {
+      try { ev = await this.provider.findByRef(ref); }
+      catch (e) { console.warn('[pagamentos] não deu para conferir o pedido no provedor antes de fechar', ref, e && e.message); return { result: 'unverified' }; }
+      if (ev && ev.providerRef && ev.providerRef !== ref) ev = null;
+    }
+    if (ev && ev.status === 'paid') { await this.apply(ev); return { result: 'paid' }; }
+    if (ev && ev.status === 'refunded') { console.error('[pagamentos] pedido pendente com pagamento estornado no provedor — conferir', ref); return { result: 'unverified' }; }
+    if (ev && ev.status === 'pending') {
+      if (row.method === 'pix' && this.provider.cancel && ev.providerPaymentId) {
+        let after = null;
+        try { after = await this.provider.cancel(ev.providerPaymentId); }
+        catch (e) {
+          // pode ter sido pago no meio do caminho: confere de novo
+          let again = null;
+          try { again = await this.provider.findByRef(ref); } catch (e2) { return { result: 'unverified' }; }
+          if (again && again.status === 'paid') { await this.apply(again); return { result: 'paid' }; }
+          if (!again || again.status === 'pending') return { result: 'unverified' };
+          after = again;
+        }
+        if (after && after.status === 'paid') { await this.apply({ ...after, providerRef: ref }); return { result: 'paid' }; }
+        if (after && after.status === 'pending') return { result: 'unverified' };
+      } else if (row.method === 'card') {
+        return { result: 'in_review' };   // cartão em análise no Mercado Pago: não dá para cancelar daqui
+      } else return { result: 'unverified' };
+    }
+    const note = { reason, provider_status: ev ? ev.status : 'none', provider_payment_id: ev ? String(ev.providerPaymentId || '') : '' };
+    if (byUser) note.by = byUser;
+    const done = await this.lock('ref:' + ref, () => this.store.cancelPayment ? this.store.cancelPayment(prov, ref, note) : this.store.markPayment(prov, ref, 'cancelled'));
+    if (!done) {
+      const now = await this.store.getPayment(prov, ref);
+      return { result: now && now.status === 'cancelled' ? 'closed' : (now && now.status === 'paid' ? 'paid' : 'changed'), row: now };
+    }
+    this.lastPoll.delete(ref);
+    return { result: 'closed', row: done };
+  }
+
+  // CONTINUAR: o MESMO pedido (mesma reserva, mesmo id). PIX → o mesmo QR/Copia e Cola; cartão → o formulário de novo
+  // (cada envio gera um token novo; o pedido no servidor é o mesmo e não cobra duas vezes).
+  async resumeOrder(ws, ref) {
+    const prov = this.provider.name;
+    const row = this.store.getPayment ? await this.store.getPayment(prov, ref) : null;
+    if (!row || row.user_id !== ws.user.id) return this.fail(ws, 'Pedido não encontrado.', 'order_not_found');
+    const closed = (code, message) => this.send(ws, { type: 'payment_error', code, message, charge_id: ref, product_id: row.product_id });
+    if (row.status === 'paid') return this.send(ws, { type: 'payment_update', charge: { id: ref, status: 'paid', product_id: row.product_id } });
+    if (row.status !== 'pending') return closed('order_closed', 'Este pedido não está mais aberto. Nada foi cobrado por ele. Comece um novo pedido.');
+    if (!this.ready()) return this.fail(ws, 'Pagamento real ainda não configurado neste servidor.', 'provider_not_configured');
+    if (this.expired(row)) {
+      const r = await this.expireOrder(row);
+      if (r.result === 'paid') { const now = await this.store.getPayment(prov, ref); return this.send(ws, { type: 'payment_update', charge: { id: ref, status: now ? now.status : 'paid', product_id: row.product_id } }); }
+      return closed('order_expired', 'Este pedido expirou. Nada foi cobrado. Comece um novo pedido.');
+    }
+    const product = PRODUCTS[row.product_id];
+    if (!product) return this.fail(ws, 'Produto inválido.', 'bad_request');
+    const amount = Number(row.amount_cents) || priceOf(product, row.method);
+    const sendCharge = (charge) => this.send(ws, { type: 'payment_charge', charge: { ...charge, id: ref, product_id: row.product_id, amount_cents: amount, resumed: true,
+      order_expires_at: new Date(this.expiresAt(row)).toISOString() } });
+    try {
+      if (row.method === 'pix') {
+        if (!this.provider.resumePix) return this.fail(ws, 'Não foi possível recuperar este PIX agora. Tente de novo em instantes.', 'server_error');
+        const r = await this.provider.resumePix(ref);
+        if (!r) return this.fail(ws, 'Não foi possível recuperar este PIX agora. Tente de novo em instantes ou cancele o pedido.', 'server_error');
+        if (r.charge) return sendCharge(r.charge);
+        const ev = { ...r.event, providerRef: ref };
+        if (ev.status === 'paid' || ev.status === 'refunded') {
+          await this.apply(ev);
+          const now = await this.store.getPayment(prov, ref);
+          return this.send(ws, { type: 'payment_update', charge: { id: ref, status: now ? now.status : ev.status, product_id: row.product_id } });
+        }
+        if (ev.status === 'cancelled' || r.event.expired) {
+          if (ev.status === 'cancelled') await this.apply({ ...ev, detail: ev.detail || 'expired' });
+          else await this.expireOrder(row);
+          return closed('order_expired', 'Este PIX expirou. Nada foi cobrado. Comece um novo pedido.');
+        }
+        return this.fail(ws, 'Não foi possível recuperar este PIX agora. Tente de novo em instantes ou cancele o pedido.', 'server_error');
+      }
+      // cartão: antes de abrir o formulário de novo, confere se este pedido já foi aprovado
+      if (this.provider.findByRef) {
+        const ev = await this.provider.findByRef(ref).catch(() => null);
+        if (ev && ev.providerRef === ref && ev.status === 'paid') {
+          await this.apply(ev);
+          const now = await this.store.getPayment(prov, ref);
+          return this.send(ws, { type: 'payment_update', charge: { id: ref, status: now ? now.status : 'paid', product_id: row.product_id } });
+        }
+      }
+      const charge = await this.provider.createCharge({ ref, userId: ws.user.id, productId: row.product_id, method: 'card', amountCents: amount,
+        title: product.title, email: ws.user.email, idemSuffix: ':continuar:' + this.now() });
+      return sendCharge(charge);
+    } catch (e) {
+      console.error('payment_resume', ref, e && e.message);
+      return this.fail(ws, 'O Mercado Pago não respondeu agora. Nada foi cobrado. Tente de novo em instantes.', 'server_error');
+    }
+  }
+
+  // CANCELAR: idempotente. Confere no provedor antes; se já foi pago, entrega em vez de cancelar.
+  async cancelOrder(ws, ref) {
+    const prov = this.provider.name;
+    const reply = (status, extra = {}) => this.send(ws, { type: 'payment_cancel_result', charge_id: ref, status, ...extra });
+    const row = this.store.getPayment ? await this.store.getPayment(prov, ref) : null;
+    if (!row || row.user_id !== ws.user.id) return reply('not_found', { message: 'Pedido não encontrado.' });
+    if (row.status === 'cancelled') return reply('cancelled', { already: true, product_id: row.product_id });
+    if (row.status !== 'pending') return reply(row.status, { product_id: row.product_id,
+      message: row.status === 'paid' ? 'Este pedido já foi pago e a vantagem já está na sua conta.' : 'Este pedido não está mais aberto.' });
+    const r = await this.closeOrder(row, 'user', ws.user.id);
+    if (r.result === 'closed') {
+      reply('cancelled', { product_id: row.product_id });
+      this.notify(row.user_id, ref, 'cancelled', row.product_id, { reason: 'user' });
+      return;
+    }
+    if (r.result === 'paid' || r.result === 'changed') {
+      const now = await this.store.getPayment(prov, ref);
+      const st = now ? now.status : 'pending';
+      return reply(st, { product_id: row.product_id, message: st === 'paid' ? 'Este pedido já tinha sido pago: a vantagem foi entregue na sua conta.' :
+        st === 'sold_out' ? 'Este pedido já tinha sido pago, mas as vagas do Fundador acabaram: o valor será devolvido integralmente.' : 'Este pedido mudou enquanto cancelava. Confira em MINHAS COMPRAS.' });
+    }
+    if (r.result === 'in_review') return reply('error', { code: 'in_review', message: 'O pagamento com cartão deste pedido está em análise no Mercado Pago e não pode ser cancelado agora. Aguarde a resposta.' });
+    return reply('error', { code: 'unverified', message: 'Não foi possível confirmar com o Mercado Pago agora. Nada foi alterado. Tente cancelar de novo em instantes.' });
+  }
+
   // R40 · Cartão no jogo: o navegador manda o TOKEN do formulário seguro do Mercado Pago; o servidor
   // cria o pagamento com o preço do servidor, no pedido (ref) que pertence a este jogador.
   async cardPay(ws, m) {
@@ -257,10 +437,25 @@ class Payments {
     const row = this.store.getPayment ? await this.store.getPayment(this.provider.name, ref) : null;
     if (!row || row.user_id !== ws.user.id || (row.method && row.method !== 'card')) return reply('error', { message: 'Pedido de pagamento não encontrado. Feche e comece de novo.' });
     if (row.status === 'paid') return reply('approved');
+    if (row.status === 'cancelled') return reply('error', { code: 'order_closed', message: 'Este pedido foi cancelado. Nada foi cobrado. Feche e comece um novo pedido.' });
     if (row.status !== 'pending') return reply('error', { message: 'Este pedido não está mais aberto. Feche e comece de novo.' });
+    if (this.expired(row)) return reply('error', { code: 'order_expired', message: 'Este pedido expirou. Nada foi cobrado. Feche e comece um novo pedido.' });
     if (!this.provider.payCard) return reply('error', { message: 'Pagamento com cartão no jogo indisponível. Use a página do Mercado Pago.' });
     const token = String(m.token || ''), pm = String(m.payment_method_id || '');
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(token) || !/^[a-z0-9_]{2,40}$/.test(pm)) return reply('rejected', { message: 'Dados do cartão incompletos. Confira e tente de novo.' });
+    // R175 · pedido retomado / segunda tentativa: se ESTE pedido já foi aprovado no Mercado Pago (confirmação que não
+    // chegou), entrega o que já foi pago e NÃO cobra de novo com o token novo. A idempotência é do pedido, não do token.
+    if (this.provider.findByRef) {
+      let prior = null;
+      try { prior = await this.provider.findByRef(ref); } catch (e) { console.warn('payment_card_pay: consulta prévia falhou', e && e.message); }
+      if (prior && prior.providerRef === ref && prior.status === 'paid') {
+        try { await this.apply(prior); } catch (e) { console.error('payment_card_pay apply prévio', e && e.message); }
+        const after = await this.store.getPayment(this.provider.name, ref);
+        if (after && after.status === 'paid') return reply('approved');
+        if (after && after.status === 'sold_out') return reply('sold_out', { message: 'As vagas do Pacote Fundador acabaram no exato momento do seu pagamento. Você NÃO recebeu o pacote e o valor será devolvido integralmente.' });
+        return reply('error', { message: 'Este pedido já foi pago no Mercado Pago e a confirmação está chegando. Nada novo foi cobrado. Aguarde alguns segundos.' });
+      }
+    }
     this.cardAttempts = this.cardAttempts || new Map();
     const n = (this.cardAttempts.get(ref) || 0) + 1;
     if (n > CARD_ATTEMPTS) return reply('rejected', { message: 'Muitas tentativas neste pedido. Feche e comece de novo, ou pague com PIX.' });
@@ -299,7 +494,11 @@ class Payments {
   async apply(ev) {
     const ref = String(ev.providerRef || '');
     if (!ref || !this.store.getPayment) return { ok: false, reason: 'no_ref' };
-    const row = await this.store.getPayment(this.provider.name, ref);
+    // R175 · uma aplicação por pedido de cada vez (webhook duplicado, JÁ PAGUEI, cartão e CANCELAR na mesma hora)
+    return this.lock('ref:' + ref, () => this.applyLocked(ev, ref));
+  }
+  async applyLocked(ev, ref) {
+    let row = await this.store.getPayment(this.provider.name, ref);
     if (!row) { console.warn('[pagamentos] notificação sem pedido conhecido', ref); return { ok: false, reason: 'unknown_ref' }; }
     let changed = null;
     if (ev.status === 'paid') {
@@ -309,12 +508,25 @@ class Payments {
         console.error('[pagamentos] valor/moeda não confere — direito NÃO liberado', ref, ev.amountCents, ev.currency, amount);
         return { ok: false, reason: 'amount_mismatch' };
       }
+      // R175 · aprovado DEPOIS de cancelado/expirado (ou de um pedido marcado como falho): o pagamento confirmado
+      // nunca se perde. O MESMO pedido volta a "aguardando" com o histórico preservado no raw (cancelamento +
+      // aprovação tardia) e passa pela rotina única de entrega (fraiha_pay_and_grant, 0023): com vaga entrega 1 vez;
+      // sem vaga vira sold_out + reembolso. Nunca entrega fora dela.
+      if ((row.status === 'cancelled' || row.status === 'failed') && this.store.reopenPayment) {
+        console.error('[pagamentos] pagamento APROVADO depois de ' + row.status + ' — pedido reaberto para a entrega normal', ref, row.user_id);
+        const reopened = await this.store.reopenPayment(this.provider.name, ref, { event: 'provider_approved_after_' + row.status,
+          provider_payment_id: String(ev.providerPaymentId || ''), previous_status: row.status });
+        if (!reopened) row = await this.store.getPayment(this.provider.name, ref) || row;
+      }
       changed = await this.payAndGrant(ref, row.product_id);
       if (changed && changed.status === 'sold_out') return this.soldOut(changed, ref, ev);   // R171 · SEC-009
       if (changed && this.backend.referrals) this.backend.referrals.onPurchase(changed.user_id);   // R105 · +30 dias para quem convidou
       if (changed && this.backend.creators) this.backend.creators.onPurchase({ ref, user_id: changed.user_id, product_id: row.product_id, amount_cents: amount });   // R121
     } else if (ev.status === 'cancelled') {
-      changed = await this.store.markPayment(this.provider.name, ref, 'cancelled');
+      // R175 · cancelado/expirado no Mercado Pago: registra o motivo e libera a reserva do Fundador
+      changed = this.store.cancelPayment
+        ? await this.store.cancelPayment(this.provider.name, ref, { reason: ev.detail === 'expired' ? 'expired' : 'provider', provider_payment_id: String(ev.providerPaymentId || '') })
+        : await this.store.markPayment(this.provider.name, ref, 'cancelled');
     } else if (ev.status === 'refunded') {
       changed = this.store.markRefund ? await this.store.markRefund(this.provider.name, ref) : null;
       if (changed && this.backend.creators) this.backend.creators.onRefund(ref);   // R121 · comissão não paga é cancelada

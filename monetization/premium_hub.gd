@@ -44,6 +44,8 @@ var compact := false     # pouca altura (celular paisagem)
 var k := 1.0             # escala de fonte
 var purchases: Array = []     # R107 · MINHAS COMPRAS (payment_history)
 var purchases_loaded := false
+var purchases_busy := {}      # R175 · pedidos sendo cancelados agora (id → true)
+var purchases_note := ""      # R175 · aviso do último CANCELAR (aparece no topo de MINHAS COMPRAS)
 var founders: Array = []      # R109 · SALÃO DOS FUNDADORES (payment_founders)
 var founders_loaded := false
 var offer := {}          # R39 · resposta do servidor (payment_offer): vagas de Fundador, provedor pronto
@@ -95,6 +97,18 @@ func _on_server(msg: Dictionary):
         purchases_loaded = true
         if visible and modal == null and page == "purchases": _rebuild()
         return
+    # R175 · CANCELAR pedido pelo MINHAS COMPRAS / pedido mudou (pago, cancelado em outra aba): recarrega a lista
+    if String(msg.get("type", "")) == "payment_cancel_result":
+        var cid := String(msg.get("charge_id", ""))
+        if purchases_busy.has(cid):
+            purchases_busy.erase(cid)
+            var st := String(msg.get("status", ""))
+            purchases_note = "Pedido cancelado. Nada foi cobrado." if st == "cancelled" else String(msg.get("message", ""))
+            if visible and page == "purchases": _request_purchases_keep()
+        return
+    if String(msg.get("type", "")) == "payment_update":
+        if visible and page == "purchases": _request_purchases_keep()
+        return
     if String(msg.get("type", "")) != "payment_offer": return
     offer = msg
     if visible and modal == null and page in ["hub", "founder", "club"]: _rebuild()
@@ -108,6 +122,37 @@ func _request_founders():
     _request_offer()
     if acc.has_method("send_server") and not acc.send_server({"type": "payment_founders"}):
         founders_loaded = true
+
+## R175 · recarrega o histórico sem apagar a lista da tela (evita piscar "Carregando…")
+func _request_purchases_keep():
+    var acc = _account()
+    if acc == null or not acc.has_method("has_profile") or not acc.has_profile(): return
+    acc.send_server({"type": "payment_history"})
+
+## R175 · CONTINUAR um pedido aguardando pagamento (o mesmo pedido: mesmo PIX ou o formulário do cartão de novo)
+func resume_payment(item: Dictionary):
+    if Catalog.is_mock(): return
+    purchases_note = ""
+    var host := _modal_host()
+    var ui = PaymentRealUI.new()
+    host.add_child(ui)
+    ui.setup(self, String(item.get("product_id", "")))
+    ui.resume(String(item.get("id", "")), String(item.get("method", "pix")))
+
+## R175 · CANCELAR um pedido aguardando pagamento (com confirmação). O servidor confere no Mercado Pago antes.
+func cancel_order(item: Dictionary):
+    var id := String(item.get("id", ""))
+    if id.is_empty(): return
+    var title := String(PurchasesUI.NAMES.get(String(item.get("product_id", "")), item.get("title", "")))
+    open_confirm("CANCELAR ESTE PEDIDO?", "%s · %s\n\nSe você já pagou, o pagamento é conferido no Mercado Pago e a vantagem é entregue em vez de cancelar." % [title, Catalog.brl(int(item.get("amount_cents", 0)))],
+        "VOLTAR", "CANCELAR PEDIDO", func():
+            var acc = _account()
+            if acc == null or not acc.send_server({"type": "payment_cancel", "charge_id": id}):
+                purchases_note = "Sem conexão com o servidor. O pedido NÃO foi cancelado."
+            else:
+                purchases_busy[id] = true
+                purchases_note = ""
+            _rebuild())
 
 ## R107 · pede ao servidor o histórico de compras da conta.
 func _request_purchases():
