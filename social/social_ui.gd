@@ -1001,7 +1001,17 @@ func _build_profile(narrow: bool):
     nick.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     nick.clip_text = true
     nick.custom_minimum_size.x = 120
-    _seal(nick_row, profile, 40)
+    var nick_seal = _seal(nick_row, profile, 40)
+    # R173 · o nome usa a largura que a linha realmente tem (antes ficava preso em 120 px e cortava
+    # "SextoSent…" com espaço sobrando); "…" só quando o nome não cabe mesmo. O selo continua colado ao nome.
+    var fit_nick := func():
+        if not is_instance_valid(nick) or not is_instance_valid(nick_row): return
+        var tw: float = nick.get_theme_font("font").get_string_size(nick.text, HORIZONTAL_ALIGNMENT_LEFT, -1, nick.get_theme_font_size("font_size")).x + 8.0
+        var room: float = nick_row.size.x - ((nick_seal.custom_minimum_size.x + 8.0) if nick_seal != null else 0.0)
+        var want: float = clampf(tw, 60.0, maxf(60.0, room)) if room > 1.0 else minf(tw, 120.0)
+        if absf(nick.custom_minimum_size.x - want) > 0.5: nick.custom_minimum_size.x = want
+    nick_row.resized.connect(fit_nick)
+    fit_nick.call()
     var ttl := Cosmetics.title_text(String(profile.get("title", "")))
     if not ttl.is_empty(): _label(head, ttl.to_upper(), 14, GOLD, true).name = "ProfileTitle"
     var pres = String(profile.get("presence", ""))

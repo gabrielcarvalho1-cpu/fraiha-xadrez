@@ -30,12 +30,23 @@ func _draw():
         draw_colored_polygon(PackedVector2Array([c + Vector2(0, -3.5), c + Vector2(3.5, 0), c + Vector2(0, 3.5), c + Vector2(-3.5, 0)]), accent if active else dim)
 
 func _draw_voice():
-    if speaking and portrait_rect.size.x > 0:
-        var pr := portrait_rect.grow(4)
-        for i in 3: draw_rect(pr.grow(i * 1.5), Color(0.5, 0.95, 0.5, 0.55 - i * 0.17), false, 2.0)
-    if voice_state != "" and portrait_rect.size.x > 0:
+    if portrait_rect.size.x <= 0: return
+    # R173 · tudo da voz fica DENTRO da placa (sem cobrir a borda dupla, o relógio nem o vizinho) e colado no
+    # retrato. O retrato é retangular (avatar quadrado ou medalhão redondo; no celular a placa não tem moldura
+    # premium), então o brilho segue o retângulo do retrato, justo.
+    var inner := Rect2(Vector2.ZERO, size).grow(-6.0)
+    if speaking:
+        for i in 2:
+            var g := portrait_rect.grow(1.5 + i * 1.5).intersection(inner)
+            if g.size.x > 0 and g.size.y > 0: draw_rect(g, Color(0.5, 0.95, 0.5, 0.85 - i * 0.4), false, 2.0)
+    if voice_state != "":
         var side := clampf(portrait_rect.size.x * 0.36, 14.0, 26.0)
-        var b := Rect2(portrait_rect.position + Vector2(-side * 0.25, portrait_rect.size.y - side * 0.75), Vector2(side, side))
-        draw_circle(b.get_center(), side * 0.55, Color("10141e"))
-        draw_arc(b.get_center(), side * 0.55, 0, TAU, 16, Color(accent, 0.8), 1.5)
+        var rad := side * 0.55
+        # fone no canto de baixo à esquerda do retrato, por dentro da placa
+        var c := portrait_rect.position + Vector2(side * 0.38, portrait_rect.size.y - side * 0.38)
+        c.x = clampf(c.x, inner.position.x + rad, inner.end.x - rad)
+        c.y = clampf(c.y, inner.position.y + rad, inner.end.y - rad)
+        var b := Rect2(c - Vector2(side, side) / 2.0, Vector2(side, side))
+        draw_circle(c, rad, Color("10141e"))
+        draw_arc(c, rad, 0, TAU, 16, Color(accent, 0.8), 1.5)
         VoiceGlyph.draw_headphones(self, b.grow(-side * 0.12), voice_state == "deaf", Color("8fe28a") if voice_state == "speaking" else Color("f4ce7f"))

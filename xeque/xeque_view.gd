@@ -590,13 +590,23 @@ func _draw_mesa_pede():
     draw_rect(Rect2(cc - isz / 2.0, isz).grow(1), Color("ffd257"), false, 2.0)
     card_face(g.target, cc, isz.x, 0.0)
     var x := ipos.x + isz.x + (14 if compact else 18)
-    var big := fit(name.to_upper(), "ui", 66 if compact else 78, r.end.x - x - 12)
-    text(name.to_upper(), Vector2(x, r.position.y + (101 if compact else 107)), "ui", big, Color("f6ecd2"), -1, HORIZONTAL_ALIGNMENT_LEFT, 5, Color("120a06"))
+    # R173 · celular deitado: o nome fica um pouco menor e sobe, para a frase de baixo caber GRANDE (legível no aparelho)
+    var big := fit(name.to_upper(), "ui", 66 if compact else 54, r.end.x - x - 12)
+    text(name.to_upper(), Vector2(x, r.position.y + (101 if compact else 86)), "ui", big, Color("f6ecd2"), -1, HORIZONTAL_ALIGNMENT_LEFT, 5, Color("120a06"))
     if compact:
         text("Diga que são %s" % plural.to_lower(), Vector2(x, r.position.y + 131), "ui_sp", fit("Diga que são %s" % plural.to_lower(), "ui_sp", 21, r.end.x - x - 8), Color("e8dcc0"))
     else:
-        text("Diga que suas cartas", Vector2(x, r.position.y + 137), "ui_sp", 21, Color("e8dcc0"))
-        text("são %s" % plural.to_lower(), Vector2(x, r.position.y + 164), "ui_sp", fit("são %s" % plural.to_lower(), "ui_sp", 21, r.end.x - x - 8), Color("e8dcc0"))
+        # R173 · celular deitado: no aparelho a frase pequena (Oswald 24 / pixel 21) virava borrão. Agora é a MESMA
+        # fonte de pixel do resto do painel, GRANDE (até 34), em duas linhas curtas e com contorno; o nome da peça
+        # vem em dourado (destaque). Só diminui se a palavra não couber na moldura. Em pé e PC: sem mudança.
+        var l1 := "Diga que são"
+        var l2 := plural.to_lower()
+        var room := r.end.x - x - 14.0
+        var fs := mini(fit(l1, "ui_sp", 34, room), fit(l2, "ui_sp", 34, room))
+        var y2 := r.end.y - 16.0
+        var y1 := y2 - fs * 1.05
+        text(l1, Vector2(x, y1), "ui_sp", fs, Color("ece7dc"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3, Color("0b1020"))
+        text(l2, Vector2(x, y2), "ui_sp", fs, Color("ffd257"), -1, HORIZONTAL_ALIGNMENT_LEFT, 3, Color("0b1020"))
 
 func _draw_como_jogar(r: Rect2):
     if desk(): return _desk_como_jogar(r)
