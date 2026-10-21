@@ -8,6 +8,7 @@ const { Matchmaker } = require('./matchmaker');
 const { RankedMatch } = require('./match');
 const { persistRanked } = require('./persist');
 const { ChallengerLadder } = require('./challenger');
+const { RankedTestBot } = require('./test_bot');
 const RESULT_KEEP_MS = Number(process.env.FRAIHA_RESULT_KEEP_MS || 10 * 60 * 1000);
 
 class Ranked {
@@ -20,6 +21,7 @@ class Ranked {
     this.pendingQueues = new Map(); // uid -> revisão vigente e leituras ainda em andamento
     this.timer = setInterval(() => this.tick(), cfg.tickMs); this.timer.unref && this.timer.unref();
     this.challenger = this.rated ? new ChallengerLadder(this) : null;   // R143 · vagas do Challenger
+    this.testBot = this.rated ? new RankedTestBot(this) : null;   // R174 · bot de teste do dono (desligado sem as variáveis)
   }
   // R143 · PL/liga + Força oculta (lidos do servidor, nunca do cliente)
   statsFull(uid) { return this.backend.store.getRankedStats(uid, { forca: true }); }
@@ -52,9 +54,10 @@ class Ranked {
   queueEligible(uid) {
     return this.sessionLive(this.sockets.get(uid), uid) && !this.activeMatchOf(uid) && !this.persistPending(uid) && !this.busyElsewhere(uid);
   }
-  canStartMatch(a, b) {
+  canStartMatch(a, b, botUid = '') {
     if (a.userId === b.userId) return false;
     return [a, b].every(e => {
+      if (botUid && e.userId === botUid) return !this.activeMatchOf(e.userId) && !this.persistPending(e.userId);   // R174 · bot de teste: sem socket
       const uid = e.userId;
       if (!this.sessionReady(this.sockets.get(uid), uid) || this.activeMatchOf(uid) || this.persistPending(uid) || this.mm.has(uid)) return false;
       // Convites já reservam os dois usuários antes de chamar startMatch. A reserva
@@ -272,8 +275,8 @@ class Ranked {
     }
   }
   // Cria a partida entre duas entradas {userId,nickname,avatar,stats}. Usado pela fila e pelos convites.
-  startMatch(mode, a, b, now = this.now(), aIsWhite = false) {
-    if (!this.canStartMatch(a, b)) {
+  startMatch(mode, a, b, now = this.now(), aIsWhite = false, { botUid = '' } = {}) {
+    if (!this.canStartMatch(a, b, botUid)) {
       const error = new Error('Jogador indisponível para iniciar partida.'); error.code = 'player_unavailable'; throw error;
     }
     // Servidor sorteia as cores. FRAIHA_TEST_FIXED_COLORS=1 (só testes): quem entrou primeiro joga de Brancas.
@@ -284,8 +287,10 @@ class Ranked {
     this.matches.set(match.id, match); this.byUser.set(w.userId, match.id); this.byUser.set(bl.userId, match.id);
     { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('started', this.kind, mode); }
     this.invalidateQueue(w.userId); this.invalidateQueue(bl.userId);
+    if (botUid) match.testBot = match.colorOf(botUid);   // R174 · o servidor joga por esta cor
     for (const c of ['w', 'b']) {
       const me = match.players[c], opp = match.publicPlayer(c === 'w' ? 'b' : 'w');
+      if (botUid && me.userId === botUid) { this.presence(me.userId); continue; }   // bot: sempre "conectado"
       const ws = this.sockets.get(me.userId);
       if (ws) this.send(ws, { type: this.p + 'found', match_id: match.id, mode, mode_name: ALL_MODES[mode].name, you: c, opponent: opp });
       if (!ws || ws.readyState !== 1) { me.connected = false; me.leftAt = now; }
@@ -309,6 +314,7 @@ class Ranked {
       return true;
     };
     const open = !(this.backend && this.backend.modeOpen) || this.backend.modeOpen(this.kind);   // Admin: modo desativado = sem novos pareamentos
+    if (this.testBot) this.testBot.tick(now, open);   // R174 · bot de teste (só o dono, só depois de esperar alguém de verdade)
     for (const { mode, a, b } of open ? this.mm.tick(now, eligible) : []) {
       if (this.backend && this.backend.modeOpen && !this.backend.modeOpen(this.kind, mode)) { for (const e of [a, b]) if (this.queueEligible(e.userId)) this.mm.enqueue(mode, e); continue; }   // ritmo fechado: sem pareamento
       try { this.startMatch(mode, a, b, now); const am = this.backend && this.backend.adminMetrics; if (am) am.onPaired(this.kind, mode, [now - a.since, now - b.since]); }
