@@ -20,6 +20,14 @@ async function pair(port, mode, n1, n2) {
 const state = (c, pred = () => true, ms) => c.next(m => m.type === 'ranked_state' && pred(m), ms);
 const latest = async c => { await sleep(200); const all = c.inbox.filter(m => m.type === 'ranked_state'); c.inbox.splice(0, c.inbox.length, ...c.inbox.filter(m => m.type !== 'ranked_state')); return all[all.length - 1]; };
 const mv = (c, id, f, t, promotion) => c.send({ type: 'ranked_move', match_id: id, from: sq(f), to: sq(t), promotion });
+// R173 · 5 lances de peão de cada lado (sem repetir posição) antes da desistência
+async function play10(g) {
+  for (let i = 0; i < 10; i++) {
+    const c = 'abcde'[i >> 1], [f, t] = i % 2 === 0 ? [c + '2', c + '3'] : [c + '7', c + '6'];
+    mv(i % 2 === 0 ? g.white : g.black, g.id, f, t);
+    await state(g.white, m => m.position && m.position.ply === i + 1);
+  }
+}
 
 (async () => {
   const base = { FRAIHA_DEV_AUTH: '1', FRAIHA_RANKED_START_DELAY_MS: '300', FRAIHA_RANKED_RECONNECT_MS: '1500', FRAIHA_MM_EXPAND_MS: '60000' };
@@ -31,6 +39,7 @@ const mv = (c, id, f, t, promotion) => c.send({ type: 'ranked_move', match_id: i
     const st = await state(g.white, m => m.status === 'playing');
     const minutes = { ranked_3min: 3, ranked_5min: 5, ranked_10min: 10, ranked_20min: 20 }[mode];
     check(st.clock.b_ms === minutes * 60000 && st.clock.w_ms <= minutes * 60000 && st.clock.active === 'w', `${mode}: relógios ${minutes}:00 e Brancas começam`);
+    await play10(g);   // R173 · desistência só vale PL depois de 10 meios-lances
     g.a.send({ type: 'ranked_resign', match_id: g.id });
     const ra = await g.a.next('ranked_result'), rb = await g.b.next('ranked_result');
     check(ra.outcome === 'loss' && rb.outcome === 'win' && ra.reason === 'resign', `${mode}: desistência = derrota`);
@@ -40,6 +49,17 @@ const mv = (c, id, f, t, promotion) => c.send({ type: 'ranked_move', match_id: i
     check(acc.ranked[mode].losses === 1 && acc.ranked[mode].matches === 1 && others.every(([, v]) => v.matches === 0), `${mode}: estatística só na modalidade correta`);
     g.a.close(); g.b.close();
   }
+  // 1b. R173 · desistência LOGO no começo (0 lances) = resultado precoce: vencedor recebe só o PL que saiu do outro
+  //     (conta nova na Madeira com 0 PL não perde nada → vencedor +0) e NÃO entra no placar (0025)
+  { const g = await pair(s.port, 'ranked_3min', 'curtaA', 'curtaB');
+    await state(g.white, m => m.status === 'playing');
+    g.a.send({ type: 'ranked_resign', match_id: g.id });
+    const ra = await g.a.next('ranked_result'), rb = await g.b.next('ranked_result');
+    check(rb.outcome === 'win' && rb.pl_change === 0 && rb.early === true && ra.pl_change === 0 && ra.saved && rb.saved, 'R173: desistência com 0 lances → precoce: perdedor no piso perdeu 0, vencedor +0');
+    g.a.send({ type: 'acct_refresh' }); const acc = await g.a.next('acct_state');
+    g.b.send({ type: 'acct_refresh' }); const accb = await g.b.next('acct_state');
+    check(acc.ranked.ranked_3min.matches === 0 && accb.ranked.ranked_3min.matches === 0 && accb.ranked.ranked_3min.wins === 0 && accb.ranked.ranked_3min.pl === 0, 'R173: precoce fora do placar e sem PL criado');
+    g.a.close(); g.b.close(); }
   // 2. Modalidades diferentes não se encontram
   const x = await login(s.port, 'cruzA'), y = await login(s.port, 'cruzB');
   x.send({ type: 'ranked_queue', mode: 'ranked_3min' }); await x.next('ranked_queued');

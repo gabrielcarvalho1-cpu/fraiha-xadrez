@@ -355,7 +355,8 @@ class MemoryStore {
     if (w.pl !== r.white_pl_before || w.league !== r.white_league_before || b.pl !== r.black_pl_before || b.league !== r.black_league_before) throw new Error('estado Ranked mudou durante a partida');
     const apply = (s, side) => {
       const out = r.result === 'draw' ? 'draws' : (r.result === side ? 'wins' : 'losses');
-      s.league = r[side + '_league_after']; s.pl = r[side + '_pl_after']; s.matches++; s[out]++;
+      s.league = r[side + '_league_after']; s.pl = r[side + '_pl_after'];
+      if (r.count_stats !== false) { s.matches++; s[out]++; }   // R173 · igual à 0025
       s.highest_league = Math.max(s.highest_league, s.league);
       if (r[side + '_forca_after'] != null) { s.forca = r[side + '_forca_after']; s.forca_rd = r[side + '_forca_rd_after']; }
       s.updated_at = r.finished_at || new Date().toISOString();

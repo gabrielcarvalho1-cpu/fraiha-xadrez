@@ -162,6 +162,9 @@ func _render():
 	var r: Dictionary = st.get("rules", {}) if st.get("rules") is Dictionary else {}
 	var prizes: Array = r.get("prizes", [500, 300, 200, 100]) if r.get("prizes") is Array else [500, 300, 200, 100]
 	prizes_label.text = "PRÊMIOS: 1º %d · 2º %d · 3º %d · 4º ao 10º %d COROAS" % [int(prizes[0]), int(prizes[1]), int(prizes[2]), int(prizes[3])]
+	# R173 · prêmio proporcional à participação: avisa quanto vale AGORA (integral a partir de 10 participantes)
+	if st.has("prize_pct") and int(st.get("prize_pct", 100)) < 100:
+		prizes_label.text += "\nCom %d participante(s) o prêmio está em %d%% (integral a partir de %d)" % [int(st.get("players", 0)), int(st.get("prize_pct", 100)), int(r.get("full_at", 10))]
 	if st.is_empty():
 		info_label.text = "Carregando o placar…"
 		me_label.text = ""

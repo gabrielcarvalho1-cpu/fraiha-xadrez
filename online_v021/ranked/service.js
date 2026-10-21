@@ -221,6 +221,7 @@ class Ranked {
     match.persisting = true;
     { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('finished', this.kind, match.mode, match.result && match.result.reason); }
     let saved = false;
+    if (this.rated && match.result && match.result.early) console.log('ranked precoce', match.id, match.result.reason, 'ply', (match.pos && match.pos.ply) || 0);
     if (this.rated) {
       // H03: novas tentativas seguras; nunca aplica PL duas vezes (ver ranked/persist.js)
       const r = await persistRanked(this.backend.store, match.record());

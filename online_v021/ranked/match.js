@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const { Position } = require('../chess_rules');
 const { ChessClock } = require('./clock');
 const { ALL_MODES, CONFIG } = require('./config');
-const { applyResult } = require('./progression');
+const { applyResult, rating, GM } = require('./progression');
 
 const REASONS = { checkmate: 'Xeque-mate', timeout: 'Tempo esgotado', timeout_draw: 'Tempo esgotado sem material para mate',
   resign: 'Desistência', abandon: 'Abandono', stalemate: 'Afogamento', insufficient_material: 'Material insuficiente',
@@ -11,9 +11,35 @@ const REASONS = { checkmate: 'Xeque-mate', timeout: 'Tempo esgotado', timeout_dr
 // R98 · oferta de empate: no Ranked só depois de 10 lances de cada lado (evita "combinar" empates para farmar PL);
 // quem ofereceu só oferece de novo depois de fazer mais um lance. Lance do adversário = oferta recusada.
 const DRAW_MIN_PLY = { rated: 20, casual: 2 };
+// R173 · Ranked: desistência/abandono antes de 10 meios-lances (5 de cada lado) = RESULTADO PRECOCE (auditoria Orca:
+// "desiste na hora" dava +36 PL ao adversário). Quem desistiu/abandonou sofre a perda normal (piso e rebaixamento
+// inclusos); o vencedor recebe EXATAMENTE o que saiu do outro, limitado ao ganho normal dele — nunca cria PL líquido.
+// A Força (Glicko) dos dois não muda (não houve jogo para medir). Coroas/missões/indicação já exigem 10 meios-lances
+// (service.persist). Xeque-mate, tempo e empates seguem como antes.
+const MIN_RATED_PLY = 10;
+const SHORT_REASONS = ['resign', 'abandon'];
 
 // R143 · a Força é oculta: nunca sai para o cliente.
 const publicStats = s => { const { forca, forca_rd, updated_at, ...rest } = s || {}; return rest; };
+// R173 · resultado precoce: { w, b } no mesmo formato de applyResult. Ver comentário de MIN_RATED_PLY.
+function earlyResult(players, winner) {
+  const lc = winner === 'w' ? 'b' : 'w';
+  const W = players[winner].stats, L = players[lc].stats;
+  const loss = applyResult(L, W, 'loss'), win = applyResult(W, L, 'win');
+  const lost = Math.min(Math.max(0, rating(L) - rating(loss.stats)), Math.max(0, -loss.change));   // o que saiu de fato
+  const gain = Math.min(lost, Math.max(0, win.change));                                           // nunca acima do ganho normal
+  const s = { ...W };
+  let pl = s.pl + gain, league = s.league;
+  while (pl >= 100 && league < GM) { pl -= 100; league++; }
+  if (league >= GM) pl = Math.min(pl, 100);
+  s.league = league; s.pl = pl; s.highest_league = Math.max(s.highest_league, league);   // não conta no placar (0025)
+  // Força intacta e placar intacto (partidas/V/D/E): só liga/PL mudam
+  const keepForca = (st, orig) => { for (const k of ['forca', 'forca_rd', 'matches', 'wins', 'losses', 'draws']) st[k] = orig[k]; return st; };
+  return {
+    [winner]: { stats: keepForca(s, W), change: gain, applied: rating(s) - rating(W), promoted: league > W.league, demoted: false, challenger_candidate: league === GM && pl >= 100 },
+    [lc]: { ...loss, stats: keepForca({ ...loss.stats }, L) },   // perda normal (piso/rebaixamento como sempre)
+  };
+}
 // Partida autoritativa (Ranked e Casual). rated=false: sem PL, sem liga, sem gravação.
 class RankedMatch {
   constructor({ mode, white, black, now, cfg = CONFIG, rated = true, prefix = 'ranked' }) {
@@ -81,6 +107,10 @@ class RankedMatch {
     if (this.status === 'finished') return;
     this.clock.stop(now); this.status = 'finished'; this.revision++; this.drawOffer = null;
     if (!this.rated) { this.result = { winner, reason, finishedAt: now }; return; }
+    if (SHORT_REASONS.includes(reason) && ((this.pos && this.pos.ply) || 0) < MIN_RATED_PLY) {
+      this.result = { winner, reason, finishedAt: now, early: true, ...earlyResult(this.players, winner) };
+      return;
+    }
     const outcome = c => (winner === 'draw' ? 'draw' : winner === c ? 'win' : 'loss');
     const w = applyResult(this.players.w.stats, this.players.b.stats, outcome('w'));
     const b = applyResult(this.players.b.stats, this.players.w.stats, outcome('b'));
@@ -96,8 +126,10 @@ class RankedMatch {
       white_league_before: W.stats.league, black_league_before: B.stats.league,
       white_league_after: r.w.stats.league, black_league_after: r.b.stats.league, moves: this.pos.history.join(' '),
       // R143 · Força oculta depois da partida (a função do banco grava com a 0020; sem ela, o banco ignora)
-      white_forca_after: r.w.stats.forca, white_forca_rd_after: r.w.stats.forca_rd,
-      black_forca_after: r.b.stats.forca, black_forca_rd_after: r.b.stats.forca_rd };
+      // R173 · resultado precoce: null = o banco mantém a Força atual (coalesce na 0020)
+      count_stats: !r.early,   // R173 · 0025: precoce não soma partida/vitória/derrota
+      white_forca_after: r.early ? null : r.w.stats.forca, white_forca_rd_after: r.early ? null : r.w.stats.forca_rd,
+      black_forca_after: r.early ? null : r.b.stats.forca, black_forca_rd_after: r.early ? null : r.b.stats.forca_rd };
   }
   publicPlayer(c) {
     const p = this.players[c], out = { user_id: /^[0-9a-f-]{36}$/i.test(String(p.userId || '')) ? p.userId : '', nickname: p.nickname, avatar_id: p.avatar, avatar_url: p.avatar_url || null, badge: p.badge || '', title: p.title || '', frame: p.frame || 'liga', founder: !!p.founder, club: !!p.club, connected: p.connected };
@@ -123,9 +155,10 @@ class RankedMatch {
     const mine = r[c], before = this.players[c].stats;
     return { type: 'ranked_result', match_id: this.id, mode: this.mode, mode_name: ALL_MODES[this.mode].name, you: c,
       outcome: r.winner === 'draw' ? 'draw' : r.winner === c ? 'win' : 'loss', reason: r.reason, reason_text: REASONS[r.reason] || r.reason,
+      early: !!r.early, early_text: r.early ? 'Partida encerrada antes de 5 lances de cada lado: PL reduzido (o vencedor só recebe o que o outro perdeu), sem Coroas e fora do placar.' : undefined,
       pl_change: mine.applied, league_before: before.league, pl_before: before.pl, league_after: mine.stats.league, pl_after: mine.stats.pl,
       promoted: mine.promoted, demoted: !!mine.demoted, stats: publicStats(mine.stats), saved,
       challenger_candidate: !!mine.challenger_candidate, challenger_slots: this.challengerSlots || 0 };
   }
 }
-module.exports = { RankedMatch, REASONS, publicStats };
+module.exports = { MIN_RATED_PLY, RankedMatch, REASONS, publicStats };

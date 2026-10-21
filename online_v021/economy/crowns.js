@@ -104,7 +104,21 @@ class Crowns {
   }
 
   // Partida online terminada. `kind`: casual | ranked | xeque | marcha; `result`: win | loss | draw.
-  async onGame(uid, { kind, ref, result }) {
+  // R173 · teto diário ATÔMICO: as partidas da MESMA conta são contadas uma de cada vez (fila por conta). Antes,
+  // duas partidas terminando juntas liam match_crowns=145 e as duas pagavam 5 (155). Com a fila, a segunda já lê
+  // 150 e paga 0. O servidor do jogo é um processo só (Render, 1 instância); a dedupe por partida (extrato) segue.
+  onGame(uid, info) {
+    this.gameChains = this.gameChains || new Map();
+    const key = String(uid || '');
+    const prev = this.gameChains.get(key) || Promise.resolve();
+    const job = prev.then(() => this._onGame(uid, info));
+    const tail = job.then(() => {}, () => {});
+    this.gameChains.set(key, tail);
+    tail.then(() => { if (this.gameChains.get(key) === tail) this.gameChains.delete(key); });
+    return job;
+  }
+
+  async _onGame(uid, { kind, ref, result }) {
     if (!this.ok() || !UUID.test(String(uid || '')) || !ref) return null;
     try {
       const day = dayOf(this.now());

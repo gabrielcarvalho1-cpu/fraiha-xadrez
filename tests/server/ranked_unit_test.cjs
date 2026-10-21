@@ -92,7 +92,7 @@ check(m.move('w', { from: [6,1], to: [6,0], promotion: 'N' }, 10).ok && m.pos.pi
 check(m.pos.history[0] === 'g7g8n' && m.clock.active === 'b', 'lance registrado e relógio trocado após promoção');
 // R143 · a Força é oculta: não sai no resultado para o cliente
 { const mm4 = new RankedMatch({ mode: 'ranked_3min', white: P('w', 3, 40), black: P('b', 3, 40), now: 0, cfg: { ...cfg, baseMs: () => 60000 } });
-  mm4.tick(0); mm4.resign('b', 10);
+  mm4.tick(0); mm4.pos.ply = 10; mm4.resign('b', 10);   // R173 · desistência com 10+ meios-lances (antes disso não grava nada)
   const res = mm4.resultFor('w', true), rec = mm4.record();
   check(res.stats && !('forca' in res.stats) && !('forca_rd' in res.stats) && !JSON.stringify(mm4.state('w', 20)).includes('forca'), 'Força não vai para o cliente (resultado e estado)');
   check(Number.isFinite(rec.white_forca_after) && Number.isFinite(rec.black_forca_rd_after), 'Força vai para a gravação no banco'); }

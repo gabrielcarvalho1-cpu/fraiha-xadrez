@@ -92,6 +92,14 @@ async function playAndResign(port, n1, n2) {
   b.send({ type: 'ranked_queue', mode: 'ranked_3min' }); await b.next('ranked_queued');
   const fa = await a.next('ranked_found', 4000); await b.next('ranked_found', 4000);
   await a.next(m => m.type === 'ranked_state' && m.status === 'playing', 4000);
+  // R173 · desistência só vale PL depois de 10 meios-lances: joga 5 lances de cada lado antes de desistir
+  const white = fa.you === 'w' ? a : b, black = fa.you === 'w' ? b : a;
+  const sq = s => ['abcdefgh'.indexOf(s[0]), 8 - Number(s[1])];
+  for (let i = 0; i < 10; i++) {
+    const c = 'abcde'[i >> 1], [f, t] = i % 2 === 0 ? [c + '2', c + '3'] : [c + '7', c + '6'];
+    (i % 2 === 0 ? white : black).send({ type: 'ranked_move', match_id: fa.match_id, from: sq(f), to: sq(t) });
+    await a.next(m => m.type === 'ranked_state' && m.position && m.position.ply === i + 1, 4000);
+  }
   a.send({ type: 'ranked_resign', match_id: fa.match_id });
   return { a, b, id: fa.match_id };
 }

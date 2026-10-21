@@ -27,6 +27,8 @@ const DESK_ART := {"resign": "res://ranked/art/desk_resign_modal.png", "found": 
 	"resign_btn": "res://ranked/art/desk_resign_btn.png"}
 var _desk_tex := {}
 func desk_tex(key: String) -> Texture2D:
+    # R173 · celular: só a arte do resultado da vez, sem guardar em cache (a memória volta quando a tela fecha)
+    if Mobile.active(get_viewport()): return load(DESK_ART[key])
     if not _desk_tex.has(key): _desk_tex[key] = load(DESK_ART[key])
     return _desk_tex[key]
 const LEAGUE_ACCENT := [Color("b07a44"), Color("a9b1b6"), Color("c98a4a"), Color("d3dbe0"), Color("f4ce7f"), Color("86dccf"), Color("68d48a"), Color("94c9ff"), Color("c99bff"), Color("ff9b8f"), Color("ffd76a")]
@@ -584,7 +586,8 @@ func _show(which: String):
 ## (ranked/desk_art_modal.gd). Mesmo padrão em bot, Casual e Ranqueada; Casual não mostra PL.
 ## R124 · empate também usa a arte (EMPATE); partida encerrada sem resultado e subida de liga continuam nas telas próprias.
 func _desk_art(which: String) -> bool:
-    if desk_art == null or Mobile.active(get_viewport()): return false
+    # R173 · celular: a tela de RESULTADO usa a mesma arte do PC (padrão em todas as filas de xadrez); as outras seguem as do celular
+    if desk_art == null or (Mobile.active(get_viewport()) and which != "result"): return false
     var d = desk_art
     match which:
         "confirm_resign":
@@ -619,6 +622,8 @@ func _desk_art(which: String) -> bool:
             if rated() and bool(r.get("promoted", false)): return false
             var win := outcome == "win"
             d.begin(desk_tex("%s_%s" % [{"win": "win", "loss": "loss", "draw": "draw"}[outcome], "ranked" if rated() else "casual"]), Vector2(1122, 1402), "result_" + outcome)   # R124 · arte EMPATE (geometria da derrota)
+            var mob := Mobile.active(get_viewport())   # R173 · celular: textos menores ficam maiores (a arte encolhe)
+            d.frac = 0.97 if mob else 0.9
             var sub_y := 540.0 if win else 532.0
             d.label("%s · %s" % [String(r.get("mode_name", "")).to_upper(), String(r.get("reason_text", ""))], Rect2(230, sub_y, 662, 56), 46, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskResultSub"
             if rated():
@@ -629,7 +634,12 @@ func _desk_art(which: String) -> bool:
                 var league_txt: String = LEAGUES[after_league].to_upper()
                 if bool(r.get("demoted", false)): league_txt = "REBAIXADO · " + league_txt
                 d.label(league_txt, Rect2(300, 702, 522, 58), 46, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskResultLeague"
-                d.label(progress_line(r, true), Rect2(170, 784 if win else 780, 782, 48), 34, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskResultCount"   # R143
+                if bool(r.get("early", false)) and String(r.get("early_text", "")) != "":
+                    # R173 · resultado precoce: explica por que o PL veio reduzido (no lugar da linha de progresso)
+                    # versão curta do early_text, igual no PC e no celular (cabe entre o enfeite e a barra)
+                    d.label("Partida curta: PL reduzido · sem Coroas · fora do placar", Rect2(150, 776 if win else 772, 822, 56), 40, DeskArt.GOLD, DeskArt.FONT_MED).name = "DeskResultEarly"
+                else:
+                    d.label(progress_line(r, true), Rect2(150, 778 if win else 774, 822, 56) if mob else Rect2(170, 784 if win else 780, 782, 48), 42 if mob else 34, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskResultCount"   # R143
                 var start_value := 100.0 if bool(r.get("demoted", false)) else float(r.get("pl_before", after_pl))
                 d.bar(Rect2(234, 840, 652, 37) if win else Rect2(234, 845, 654, 36), start_value, after_pl)
                 if account.ranked is Dictionary and r.has("stats"): account.ranked[String(r.mode)] = r.stats
@@ -818,6 +828,8 @@ func _result(r: Dictionary):
         return
     var change = int(r.get("pl_change", 0))
     _label(("%+d PL" % change) if change != 0 else "0 PL", 26, color, true)
+    if bool(r.get("early", false)) and String(r.get("early_text", "")) != "":
+        _label(String(r.get("early_text", "")), 14, GOLD, true).name = "ResultEarly"   # R173 · resultado precoce
     var after_league = int(r.get("league_after", 0))
     var after_pl = int(r.get("pl_after", 0))
     if bool(r.get("promoted", false)):

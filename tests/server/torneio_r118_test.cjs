@@ -64,10 +64,12 @@ test('tourn_get mostra o placar e a minha posição; prêmio pago uma vez na vir
   assert.equal(((await h.st.crownWallet(B)) || { balance: 0 }).balance, before);
   h.setNow(Date.parse('2026-10-19T04:00:00Z'));   // segunda de manhã
   await h.T.payDue(); await h.T.payDue(); await flush();
-  assert.equal((await h.st.crownWallet(B)).balance, before + PRIZES[0]);
-  assert.equal((await h.st.crownWallet(A)).balance, PRIZES[1]);
-  assert.equal((await h.st.crownWallet(C)).balance, PRIZES[2]);
-  assert.match(h.of(b, 'crowns_reward').pop().lines[0], /1º lugar \+500/);
+  // R173 · prêmio proporcional: 3 participantes = 30% (500→150, 300→90, 200→60)
+  assert.equal(s.players, 3); assert.equal(s.prize_pct, 30); assert.equal(s.me.prize, 150); assert.equal(s.top[2].prize, 60);
+  assert.equal((await h.st.crownWallet(B)).balance, before + Math.floor(PRIZES[0] * 3 / 10));
+  assert.equal((await h.st.crownWallet(A)).balance, Math.floor(PRIZES[1] * 3 / 10));
+  assert.equal((await h.st.crownWallet(C)).balance, Math.floor(PRIZES[2] * 3 / 10));
+  assert.match(h.of(b, 'crowns_reward').pop().lines[0], /1º lugar \+150/);
 });
 
 test('sem a 0018: indisponível, sem derrubar nada', async t => {
