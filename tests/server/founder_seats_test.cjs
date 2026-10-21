@@ -133,6 +133,7 @@ test('SEC-009: cartão aprovado no instante em que a última vaga acabou → res
     await t.store.founderSetLimit(1);
     const ref = oldOrder(t, 'caio'); t.store.payments.find(p => p.provider_ref === ref).method = 'card';
     await paid(t, oldOrder(t, 'dono'));   // outro pedido levou a última vaga
+    t.pay.provider.findByRef = async () => null;   // R175b · o provedor confirma: nenhuma aprovação anterior → pode cobrar
     t.pay.provider.payCard = async () => ({ providerRef: ref, status: 'paid', amountCents: 4490, currency: 'BRL', providerPaymentId: '77' });
     await t.pay.handle(t.ws('caio'), { type: 'payment_card_pay', charge_id: ref, token: 'tok-approve-123', payment_method_id: 'master' });
     const r = t.sent.filter(o => o.type === 'payment_card_result').at(-1);

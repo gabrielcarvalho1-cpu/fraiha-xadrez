@@ -224,11 +224,18 @@ class MercadoPago {
     const pick = await this.findRawByRef(ref);
     return pick ? this.event(pick) : null;
   }
-  // R175 · o pagamento do Mercado Pago mais importante deste pedido: aprovado > reembolsado > o mais recente.
+  // R175 · o pagamento do Mercado Pago mais importante deste pedido: aprovado > reembolsado > em análise > o mais recente.
+  // R175b · resposta sem a lista "results" é INVÁLIDA (erro, nunca "nenhum pagamento"); itens de outro pedido ou sem
+  // id também invalidam a consulta inteira — o serviço trata como inconclusivo e não cobra/cancela.
   async findRawByRef(ref) {
     const r = await this.call('GET', '/v1/payments/search?sort=date_created&criteria=desc&external_reference=' + encodeURIComponent(ref));
-    const list = Array.isArray(r.results) ? r.results : [];
-    return list.find(p => p.status === 'approved') || list.find(p => p.status === 'refunded' || p.status === 'charged_back') || list[0] || null;
+    if (!r || !Array.isArray(r.results)) { const e = new Error('mercadopago: busca sem lista de resultados'); e.code = 'provider_invalid'; throw e; }
+    const list = r.results;
+    for (const p of list) {
+      if (!p || String(p.external_reference || '') !== String(ref) || !p.id) { const e = new Error('mercadopago: busca devolveu pagamento de outro pedido ou incompleto'); e.code = 'provider_invalid'; throw e; }
+    }
+    return list.find(p => p.status === 'approved') || list.find(p => p.status === 'refunded' || p.status === 'charged_back')
+      || list.find(p => ['pending', 'in_process', 'authorized', 'in_mediation'].includes(p.status)) || list[0] || null;
   }
 
   // R175 · CONTINUAR um PIX: devolve o MESMO pagamento (mesmo QR / Copia e Cola), nunca cria outro.
@@ -253,6 +260,8 @@ class MercadoPago {
   async cancel(paymentId) {
     if (!/^[0-9]{1,30}$/.test(String(paymentId || ''))) throw new Error('payment id inválido para cancelar');
     const p = await this.call('PUT', '/v1/payments/' + encodeURIComponent(paymentId), { status: 'cancelled' });
+    // R175b · a resposta tem de ser do MESMO pagamento (o serviço confere também o external_reference do pedido)
+    if (!p || String(p.id || '') !== String(paymentId)) { const e = new Error('mercadopago: resposta do cancelamento é de outro pagamento'); e.code = 'provider_mismatch'; throw e; }
     return this.event(p);
   }
 
