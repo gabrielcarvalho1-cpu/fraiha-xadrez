@@ -196,7 +196,8 @@ test('DUAS INSTÂNCIAS ao mesmo tempo, mesmo pedido, tokens diferentes → exata
   assert.equal(t.mp.approvals(ref), 1);
   const res = t.sent.filter(o => o.type === 'payment_card_result');
   assert.equal(res.filter(r => r.status === 'approved').length >= 1, true);
-  assert.ok(res.filter(r => r.code === 'attempt_busy' || r.status === 'approved').length === 4, res.map(r => r.status + ':' + (r.code || '')).join(' '));
+  // R175e · os perdedores são recusados pela guarda da conta (0028): pagamento em andamento / tentativa não confirmada
+  assert.ok(res.filter(r => ['attempt_busy', 'payment_in_progress', 'previous_attempt_unconfirmed'].includes(r.code) || r.status === 'approved').length === 4, res.map(r => r.status + ':' + (r.code || '')).join(' '));
 }));
 
 test('DOIS APARELHOS (instâncias diferentes) com a 1ª incerta → o 2º não cobra', () => world(async t => {

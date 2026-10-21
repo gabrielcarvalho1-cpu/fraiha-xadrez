@@ -281,6 +281,33 @@ class MemoryStore {
     return { ...p };
   }
   // R175 · pending → cancelled (compare-and-set), libera a reserva do Fundador e grava o motivo no raw
+  // R175e · mesmas regras da 0028 (fraiha_card_guard_generation / fraiha_card_attempt_begin), sem await entre conferir e
+  // gravar (o Node não intercala código síncrono: equivale ao lock da linha-guarda da conta).
+  async cardGuardGeneration(userId) { return (this.cardGuard && this.cardGuard.get(userId)) || 0; }
+  async cardAttemptBegin({ userId, provider, ref, attemptId, seenGeneration, receivedAt }) {
+    this.cardGuard = this.cardGuard || new Map();
+    const rcv = Date.parse(receivedAt || '');
+    if (!userId || !ref || !provider) return { ok: false, reason: 'bad_request' };
+    if (!/^[0-9a-fA-F-]{36}$/.test(String(attemptId || ''))) return { ok: false, reason: 'bad_attempt' };
+    const gen = this.cardGuard.get(userId) || 0;
+    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref);
+    if (!p || p.user_id !== userId) return { ok: false, reason: 'order_not_found' };
+    if (p.method !== 'card') return { ok: false, reason: 'order_not_card' };
+    if (p.status !== 'pending') return { ok: false, reason: 'order_closed', status: p.status };
+    const busy = (this.payments || []).find(x => x.user_id === userId && x.raw && x.raw.card_attempt && typeof x.raw.card_attempt === 'object' && ['pending', 'cancelled', 'failed'].includes(x.status));
+    if (busy) return { ok: false, reason: 'previous_attempt_unconfirmed', ref: busy.provider_ref };
+    if (!Number.isFinite(rcv)) return { ok: false, reason: 'payment_in_progress', detail: 'received_at' };
+    // Em memória (desenvolvimento/testes, um processo só) a geração é lida sem I/O no recebimento, então ela sozinha já
+    // separa requisição antiga de ação nova. A regra extra de horário (p_received_at − 2 s) da 0028 cobre a leitura
+    // ASSÍNCRONA da geração no banco real e é testada no Postgres (pagamento_uma_tentativa_pg_r175e_test).
+    if (seenGeneration === null || seenGeneration === undefined || Number(seenGeneration) !== gen) return { ok: false, reason: 'payment_in_progress', generation: gen };
+    const cur = (p.raw && typeof p.raw === 'object' && !Array.isArray(p.raw)) ? p.raw : {};
+    const at = new Date().toISOString();
+    p.raw = { ...cur, card_attempt: { id: attemptId, state: 'inflight', at, by: userId, generation: gen + 1 }, rev: payRawRev(cur) + 1,
+      history: [...(Array.isArray(cur.history) ? cur.history : []), { at, event: 'card_attempt_started', attempt: attemptId }] };
+    this.cardGuard.set(userId, gen + 1);
+    return { ok: true, generation: gen + 1, attempt: attemptId, rev: p.raw.rev };
+  }
   // R175d · pedidos da conta com tentativa de cartão gravada (qualquer idade; pago/sem vaga/estornado não contam)
   async listPaymentsWithAttempt(userId) {
     return (this.payments || []).filter(x => x.user_id === userId && x.raw && x.raw.card_attempt && ['pending', 'cancelled', 'failed'].includes(x.status)).map(x => ({ ...x }));
@@ -289,6 +316,11 @@ class MemoryStore {
   async casPaymentRaw(provider, ref, expectStatus, expectRev, raw) {
     const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === expectStatus);
     if (!p || payRawRev(p.raw) !== (Number(expectRev) || 0)) return null;
+    // R175e · mesmo invariante do índice da 0028: no máximo uma linha com tentativa ativa por conta
+    if (raw && raw.card_attempt && typeof raw.card_attempt === 'object' && ['pending', 'cancelled', 'failed'].includes(p.status)
+      && (this.payments || []).some(x => x !== p && x.user_id === p.user_id && x.raw && x.raw.card_attempt && typeof x.raw.card_attempt === 'object' && ['pending', 'cancelled', 'failed'].includes(x.status))) {
+      const e = new Error('duplicate key value violates unique constraint "payments_one_card_attempt_per_user"'); e.code = '23505'; throw e;
+    }
     p.raw = raw;
     return { ...p };
   }
@@ -912,6 +944,22 @@ class SupabaseStore {
     const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.' + cur.status + payRevFilter(payRawRev(cur.raw)) + '&select=payment_id,user_id,product_id,status,provider_ref',
       { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'pending', raw: payRawReopen(cur.raw, { previous_status: cur.status, ...note }) }) });
     return rows[0] || null;
+  }
+  // R175e · 0028: geração da guarda de cartão da conta (lida no RECEBIMENTO do pedido de pagamento). Sem a 0028 → { missing }.
+  async cardGuardGeneration(userId) {
+    try { const r = await this.req('/rpc/fraiha_card_guard_generation', { method: 'POST', body: JSON.stringify({ p_user: userId }) }); return Number(r); }
+    catch (e) { if (SCHEMA_MISSING(e) || /PGRST202/.test(String(e.code))) return { missing: true }; throw e; }
+  }
+  // R175e · 0028: porta única e transacional para iniciar uma tentativa de cartão (uma por conta). Sem a 0028 → { missing }.
+  async cardAttemptBegin({ userId, provider, ref, attemptId, seenGeneration, receivedAt }) {
+    try {
+      return await this.req('/rpc/fraiha_card_attempt_begin', { method: 'POST', body: JSON.stringify({ p_user: userId, p_provider: provider, p_ref: ref, p_attempt: attemptId,
+        p_seen_generation: seenGeneration, p_received_at: receivedAt }) });
+    } catch (e) {
+      if (SCHEMA_MISSING(e) || /PGRST202/.test(String(e.code))) return { missing: true };
+      if (String(e.code) === '23505') return { ok: false, reason: 'previous_attempt_unconfirmed' };   // índice da 0028: outra tentativa ativa
+      throw e;
+    }
   }
   // R175d · pedidos da conta com tentativa de cartão gravada, de QUALQUER idade (o vencimento não apaga a incerteza)
   async listPaymentsWithAttempt(userId) {

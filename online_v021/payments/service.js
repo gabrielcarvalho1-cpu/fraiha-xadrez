@@ -198,7 +198,15 @@ class Payments {
     if (a === 'payment_offer') return this.send(ws, await this.offer(ws));
     // R175 · ações que mexem em pedido da conta: uma de cada vez por conta (duas abas / dois aparelhos esperam a vez)
     if (a === 'payment_create') return this.lock('user:' + ws.user.id, () => this.createOrder(ws, m));
-    if (a === 'payment_card_pay') return this.lock('user:' + ws.user.id, () => this.cardPay(ws, m));
+    if (a === 'payment_card_pay') {
+      const receivedAt = new Date(this.now()).toISOString();   // R175e · horário de RECEBIMENTO (síncrono, antes de qualquer await)
+      // R175e · a geração da guarda de cartão da conta é lida NO RECEBIMENTO (antes de qualquer espera). Se outra tentativa
+      // começar depois disso, esta requisição é antiga e o banco a recusa (fraiha_card_attempt_begin) — nunca "acorda" e cobra.
+      let seen;
+      try { seen = this.store.cardGuardGeneration ? await this.store.cardGuardGeneration(ws.user.id) : { missing: true }; }
+      catch (e) { console.error('[pagamentos] guarda de cartão indisponível', e && e.message); seen = { error: true }; }
+      return this.lock('user:' + ws.user.id, () => this.cardPay(ws, m, seen, receivedAt));
+    }
     if (a === 'payment_history') return this.lock('user:' + ws.user.id, () => this.history(ws));
     if (a === 'payment_resume') return this.lock('user:' + ws.user.id, () => this.resumeOrder(ws, String(m.charge_id || '')));
     if (a === 'payment_cancel') return this.lock('user:' + ws.user.id, () => this.cancelOrder(ws, String(m.charge_id || '')));
@@ -595,7 +603,7 @@ class Payments {
 
   // R40 · Cartão no jogo: o navegador manda o TOKEN do formulário seguro do Mercado Pago; o servidor
   // cria o pagamento com o preço do servidor, no pedido (ref) que pertence a este jogador.
-  async cardPay(ws, m) {
+  async cardPay(ws, m, seenGeneration, receivedAt) {
     const ref = String(m.charge_id || '');
     const reply = (status, extra = {}) => this.send(ws, { type: 'payment_card_result', charge_id: ref, status, ...extra });
     const row = this.store.getPayment ? await this.store.getPayment(this.provider.name, ref) : null;
@@ -635,12 +643,27 @@ class Payments {
     if (n > CARD_ATTEMPTS) return reply('rejected', { message: 'Muitas tentativas neste pedido. Feche e comece de novo, ou pague com PIX.' });
     const product = PRODUCTS[row.product_id];
     if (!product) return reply('error', { message: 'Produto inválido.' });
-    // R175c · grava a tentativa ANTES de enviar (write-ahead). Compare-and-set: só uma instância/aba consegue.
-    // Se o processo cair depois daqui, a marca fica no banco e bloqueia novas cobranças até a reconciliação.
+    // R175c/e · grava a tentativa ANTES de enviar (write-ahead), pela porta ÚNICA do banco (0028, fraiha_card_attempt_begin):
+    // trava a conta, confere o pedido, nenhuma tentativa ativa na conta e que a requisição não é antiga (geração vista no
+    // recebimento). Só o vencedor envia o POST; sem a 0028 o cartão FALHA FECHADO (nada é cobrado).
     const attemptId = crypto.randomUUID();
-    const claimed = await this.casRaw(res.row, { card_attempt: { id: attemptId, state: 'inflight', at: new Date(this.now()).toISOString(), by: ws.user.id } },
-      { event: 'card_attempt_started', attempt: attemptId });
-    if (!claimed) return reply('error', { code: 'attempt_busy', message: this.attemptBlock('attempt_busy').message });
+    if (typeof seenGeneration !== 'number' || !Number.isFinite(seenGeneration) || !this.store.cardAttemptBegin)
+      return reply('error', { code: 'card_unavailable', message: 'O pagamento com cartão está temporariamente indisponível. Nada foi cobrado. Tente de novo em instantes ou pague com PIX.' });
+    let begin;
+    try { begin = await this.store.cardAttemptBegin({ userId: ws.user.id, provider: this.provider.name, ref, attemptId, seenGeneration, receivedAt: receivedAt || new Date(this.now()).toISOString() }); }
+    catch (e) { console.error('[pagamentos] fraiha_card_attempt_begin falhou', ref, e && e.message); begin = { ok: false, reason: 'error' }; }
+    if (!begin || begin.missing) {
+      console.error('[pagamentos] migração 0028 ausente: cartão FECHADO');
+      return reply('error', { code: 'card_unavailable', message: 'O pagamento com cartão está temporariamente indisponível. Nada foi cobrado. Tente de novo em instantes ou pague com PIX.' });
+    }
+    if (!begin.ok) {
+      const why = String(begin.reason || '');
+      console.warn('payment_card_pay: tentativa RECUSADA pela guarda da conta', ref, why);
+      if (why === 'previous_attempt_unconfirmed') return reply('error', { code: why, message: this.accountBlock(why).message });
+      if (why === 'payment_in_progress') return reply('error', { code: why, message: 'Outra tentativa de pagamento desta conta foi iniciada enquanto esta aguardava. Nada foi cobrado por esta. Se ainda quiser comprar, confira MINHAS COMPRAS e tente de novo.' });
+      if (why === 'order_closed') return reply('error', { code: 'order_closed', message: 'Este pedido não está mais aberto. Nada foi cobrado. Feche e comece de novo.' });
+      return reply('error', { code: 'card_unavailable', message: 'Não foi possível iniciar o pagamento com cartão agora. Nada foi cobrado. Tente de novo em instantes.' });
+    }
     this.cardAttempts.set(ref, n);
     const amountCents = Number(row.amount_cents) || product.amount_cents;
     const uncertain = async (why) => {

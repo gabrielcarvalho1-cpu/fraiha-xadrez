@@ -237,6 +237,7 @@ test('PG · R175d: rejeição antiga confirmada libera pedido B (compare-and-set
   assert.ok(charges.length >= 1, 'liberado depois da confirmação da recusa');
   assert.equal((await row(a)).raw.card_attempt, null);
   const b = charges[0].charge.id;
+  await tick(2100);   // R175e · a guarda da conta (0028) só aceita ação nova recebida > 2 s depois do início da anterior
   await pay.handle(ws(ana), { type: 'payment_card_pay', charge_id: b, token: 'tokenB_7654321', payment_method_id: 'visa' });
   assert.equal(t.last('payment_card_result').status, 'approved');
   assert.equal(t.mp.approvals(a), 0); assert.equal(t.mp.approvals(b), 1);
