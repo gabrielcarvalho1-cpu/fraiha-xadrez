@@ -40,16 +40,24 @@ function fakeMP() {
       if (mp.findMode === 'lag') return null;                                                             // busca ainda não mostra
       const p = latest(ref); return p ? ev(p) : null;
     },
+    async findAttempt(ref, attemptId) {   // R175c · pagamento de UMA tentativa (metadata.fraiha_attempt)
+      mp.calls.push({ op: 'findAttempt', ref, attemptId });
+      if (mp.findMode === '500') { const e = new Error('500'); e.status = 500; throw e; }
+      if (mp.findMode === 'lag') return null;
+      const l = [...mp.pays.values()].filter(p => p.ref === ref && p.attempt === attemptId);
+      const p = l.find(x => x.status === 'approved') || l[0];
+      return p ? ev(p) : null;
+    },
     async resumePix(ref) { const p = latest(ref); return p ? (p.status === 'pending' ? { event: ev(p), charge: { id: ref, provider_payment_id: String(p.id), copy_paste: 'QR' + p.id } } : { event: ev(p) }) : null; },
     async cancel(id) {
       mp.calls.push({ op: 'cancel', id });
       if (mp.cancelHack) return mp.cancelHack(id);
       const p = mp.pays.get(Number(id)); p.status = 'cancelled'; return ev(p);
     },
-    async payCard({ ref, token, amountCents }) {
-      mp.calls.push({ op: 'payCard', ref, token });
+    async payCard({ ref, token, amountCents, attemptId }) {
+      mp.calls.push({ op: 'payCard', ref, token, attemptId });
       const id = mp.nextId++;
-      const p = { id, ref, status: mp.cardStatus, amount: amountCents, method: 'card', token };
+      const p = { id, ref, status: mp.cardStatus, amount: amountCents, method: 'card', token, attempt: attemptId };
       mp.pays.set(id, p);
       if (mp.payCardMode === 'timeout') { const e = new Error('The operation was aborted'); e.name = 'AbortError'; throw e; }   // passou no MP, resposta se perdeu
       return ev(p);

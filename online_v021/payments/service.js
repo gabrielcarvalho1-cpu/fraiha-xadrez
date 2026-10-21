@@ -28,7 +28,19 @@ const OPEN_ORDER_MS = 30 * 60 * 1000;   // PIX vale 30 min: um Fundador em abert
 const METHODS = ['pix', 'card'];
 const STATUS_POLL_MS = 8000;     // consulta ao provedor quando o jogador pergunta (no máximo 1x a cada 8 s por pedido)
 const CARD_ATTEMPTS = 6;
-const CARD_UNKNOWN_MS = 3 * 60 * 1000;   // R175b · cobrança de resultado desconhecido: sem nova tentativa por 3 min
+// R175d · erros da API de pagamentos que provam que a cobrança NÃO foi criada (validação antes de criar o pagamento).
+// Qualquer outro erro HTTP (inclusive outros 4xx ou 400 sem causa reconhecida) = resultado INCERTO (fail closed).
+//   401              credencial do servidor recusada: a requisição nem foi processada
+//   400 + cause.code 2006 card token não encontrado · 2062 card token inválido · 3003 card_token_id inválido
+//                    3034 validação do número do cartão · 2067 documento do pagador inválido
+//                    3000 falta o nome do titular · 3001 falta o emissor · 4037 transaction_amount inválido
+const DEFINITIVE_400_CAUSES = new Set(['2006', '2062', '3003', '3034', '2067', '3000', '3001', '4037']);
+function definitiveNoCharge(e) {
+  if (!e || !Number.isInteger(e.status)) return false;
+  if (e.status === 401) return true;
+  const causes = Array.isArray(e.causes) ? e.causes : [];
+  return e.status === 400 && causes.length > 0 && causes.every(c => DEFINITIVE_400_CAUSES.has(String(c)));
+}
 const PROVIDER_STATES = ['paid', 'refunded', 'pending', 'failed', 'cancelled'];   // R175b · estados que o provedor pode devolver         // tentativas de cartão no jogo por pedido (cartão recusado → pode tentar outro)
 // R40 · Motivos de recusa do cartão (status_detail do Mercado Pago) em português, para o jogador.
 const CARD_REJECT = {
@@ -224,6 +236,10 @@ class Payments {
     if (!product || !METHODS.includes(method)) return this.fail(ws, 'Produto ou forma de pagamento inválidos.', 'bad_request');
     if (!this.ready()) return this.fail(ws, 'Pagamento real ainda não configurado neste servidor.', 'provider_not_configured');
     if (!ws.user.email) return this.fail(ws, 'Sua conta precisa de um e-mail para o recibo do pagamento.', 'email_required');
+    {   // R175d · cobrança de cartão incerta em outro pedido da conta (mesmo vencido) → nenhum pedido novo
+      const g = await this.accountGate(ws.user.id, null);
+      if (g) return this.send(ws, { type: 'payment_error', code: g.code, message: g.message, charge_id: g.charge_id });
+    }
     if (product.founder) {
       if (!(await this.capacityReady())) return this.fail(ws, 'As vendas do Pacote Fundador estão temporariamente indisponíveis. Tente de novo em instantes.', 'founder_unavailable');
       const ent = await this.store.getEntitlements(ws.user.id).catch(() => ({}));
@@ -337,6 +353,13 @@ class Payments {
     if (chk.state === 'unknown') { console.warn('[pagamentos] não deu para conferir o pedido no provedor antes de fechar', ref, chk.why); return { result: 'unverified' }; }
     let ev = chk.ev || null;
     if (ev && ev.status === 'paid') { await this.apply(ev); return { result: 'paid' }; }
+    // R175c · tentativa de cartão incerta/em andamento: não fecha o pedido sem a confirmação dela
+    if (this.attemptOf(row)) {
+      const res = await this.resolveAttempt(row);
+      if (res.paid) { await this.apply(res.paid); return { result: 'paid' }; }
+      if (res.block) return { result: 'in_review' };
+      row = res.row;
+    }
     if (ev && ev.status === 'refunded') { console.error('[pagamentos] pedido pendente com pagamento estornado no provedor — conferir', ref); return { result: 'unverified' }; }
     if (ev && ev.status === 'pending') {
       if (row.method === 'pix' && this.provider.cancel) {
@@ -389,6 +412,10 @@ class Payments {
     }
     const product = PRODUCTS[row.product_id];
     if (!product) return this.fail(ws, 'Produto inválido.', 'bad_request');
+    {   // R175d · não reabre pagamento (PIX ou cartão) com cobrança incerta em outro pedido da conta
+      const g = await this.accountGate(ws.user.id, ref);
+      if (g) return this.send(ws, { type: 'payment_error', code: g.code, message: g.message, charge_id: g.charge_id });
+    }
     const amount = Number(row.amount_cents) || priceOf(product, row.method);
     const sendCharge = (charge) => this.send(ws, { type: 'payment_charge', charge: { ...charge, id: ref, product_id: row.product_id, amount_cents: amount, resumed: true,
       order_expires_at: new Date(this.expiresAt(row)).toISOString() } });
@@ -425,6 +452,13 @@ class Payments {
       }
       const block = this.cardBlock(ref, chk);
       if (block) return this.fail(ws, block.message, block.code);
+      const res = await this.resolveAttempt(row);   // R175c · tentativa incerta gravada no pedido
+      if (res.paid) {
+        await this.apply(res.paid);
+        const now = await this.store.getPayment(prov, ref);
+        return this.send(ws, { type: 'payment_update', charge: { id: ref, status: now ? now.status : 'paid', product_id: row.product_id } });
+      }
+      if (res.block) return this.fail(ws, res.message, res.code);
       const charge = await this.provider.createCharge({ ref, userId: ws.user.id, productId: row.product_id, method: 'card', amountCents: amount,
         title: product.title, email: ws.user.email, idemSuffix: ':continuar:' + this.now() });
       return sendCharge(charge);
@@ -461,16 +495,102 @@ class Payments {
   }
 
   // R175b · pode cobrar de novo neste pedido? Só com confirmação: nenhum pagamento ('none') ou só tentativas recusadas/
-  // canceladas. Em análise, estornado ou inconclusivo → bloqueia. Tentativa anterior de resultado desconhecido → bloqueia
-  // até CARD_UNKNOWN_MS (a busca do provedor pode ainda não mostrar a cobrança que passou).
+  // canceladas. Em análise, estornado ou inconclusivo → bloqueia. (R175c: tentativa incerta → ver resolveAttempt.)
   cardBlock(ref, chk) {
     if (chk.state === 'unknown') return { code: 'provider_unverified', message: 'Não foi possível confirmar com o Mercado Pago se este pedido já foi pago. Nada foi cobrado agora. Tente de novo em alguns instantes.' };
     if (chk.state === 'pending') return { code: 'payment_in_review', message: 'Já existe um pagamento deste pedido em análise no Mercado Pago. Nada novo foi cobrado. Aguarde a resposta.' };
     if (chk.state === 'refunded') return { code: 'provider_unverified', message: 'Este pedido tem um pagamento estornado no Mercado Pago. Nada foi cobrado agora. Comece um novo pedido ou fale com o suporte.' };
     if (!['none', 'failed', 'cancelled'].includes(chk.state)) return { code: 'provider_unverified', message: 'Não foi possível confirmar o estado deste pedido. Nada foi cobrado agora. Tente de novo em alguns instantes.' };
-    const t = this.cardUnknown && this.cardUnknown.get(ref);
-    if (t && this.now() - t < CARD_UNKNOWN_MS) return { code: 'payment_unconfirmed', message: 'A tentativa anterior ainda não foi confirmada pelo Mercado Pago. Nada novo foi cobrado. Aguarde alguns minutos e confira em MINHAS COMPRAS.' };
     return null;
+  }
+
+  // ---------------------------------------------------------------- R175c · tentativa de cartão PERSISTENTE
+  // Antes de mandar QUALQUER cobrança de cartão, o servidor grava no pedido (payments.raw.card_attempt) a tentativa
+  // { id, state: 'inflight' } com compare-and-set (status pending + versão do raw). Só depois envia ao Mercado Pago,
+  // com metadata.fraiha_attempt = id. Enquanto existir card_attempt, NENHUMA nova cobrança sai — em qualquer instância,
+  // aba ou aparelho, e depois de qualquer reinício. Ela só é liberada quando o provedor CONFIRMA o resultado DESSA
+  // tentativa (recusada/cancelada → libera; aprovada → entrega; em análise, vazio, erro ou dúvida → continua bloqueado).
+  attemptOf(row) { const a = row && row.raw && row.raw.card_attempt; return a && typeof a === 'object' && a.id ? a : null; }
+  rawWith(row, change, histEvent) {
+    const cur = (row.raw && typeof row.raw === 'object' && !Array.isArray(row.raw)) ? row.raw : {};
+    const rev = Number.isInteger(Number(cur.rev)) && Number(cur.rev) > 0 ? Number(cur.rev) : 0;
+    const next = { ...cur, ...change, rev: rev + 1 };
+    if (histEvent) next.history = [...(Array.isArray(cur.history) ? cur.history : []), { at: new Date(this.now()).toISOString(), ...histEvent }].slice(-20);
+    return { rev, next };
+  }
+  async casRaw(row, change, histEvent) {
+    if (!this.store.casPaymentRaw) return null;
+    const { rev, next } = this.rawWith(row, change, histEvent);
+    return this.store.casPaymentRaw(this.provider.name, row.provider_ref, row.status, rev, next);
+  }
+  // muda a tentativa gravada SÓ se ela ainda for a mesma (relê e tenta de novo se outra escrita mudou a versão)
+  async updateAttempt(ref, attemptId, change, histEvent) {
+    for (let i = 0; i < 4; i++) {
+      const row = await this.store.getPayment(this.provider.name, ref);
+      const a = this.attemptOf(row);
+      if (!row || !a || a.id !== attemptId) return null;
+      const done = await this.casRaw(row, { card_attempt: change === null ? null : { ...a, ...change } }, histEvent);
+      if (done) return done;
+    }
+    return null;
+  }
+  attemptBlock(code) {
+    const M = {
+      payment_unconfirmed: 'A tentativa anterior com cartão ainda não foi confirmada pelo Mercado Pago. Nada novo foi cobrado. Aguarde e confira em MINHAS COMPRAS: assim que o Mercado Pago confirmar, o pedido é atualizado.',
+      payment_in_review: 'Já existe um pagamento deste pedido em análise no Mercado Pago. Nada novo foi cobrado. Aguarde a resposta.',
+      attempt_busy: 'Outra tentativa de pagamento deste pedido está em andamento (outra aba ou aparelho). Nada novo foi cobrado. Aguarde alguns segundos.',
+      provider_unverified: 'Não foi possível confirmar com o Mercado Pago o resultado da tentativa anterior. Nada novo foi cobrado. Tente de novo em alguns instantes.',
+    };
+    return { block: true, code, message: M[code] || M.provider_unverified };
+  }
+  // → { free: true, row } | { paid: ev } | { block, code, message }
+  async resolveAttempt(row) {
+    const a = this.attemptOf(row);
+    if (!a) return { free: true, row };
+    const ref = row.provider_ref;
+    if (!this.provider.findAttempt) return this.attemptBlock('provider_unverified');
+    let ev;
+    try { ev = await this.provider.findAttempt(ref, a.id); }
+    catch (e) { console.warn('[pagamentos] tentativa de cartão sem confirmação (consulta falhou)', ref, a.id, e && e.message); return this.attemptBlock('provider_unverified'); }
+    if (ev === null || ev === undefined) return this.attemptBlock('payment_unconfirmed');   // busca vazia/defasada: NUNCA libera
+    if (!this.validEvent(ev, ref)) return this.attemptBlock('provider_unverified');
+    if (ev.status === 'paid') return { paid: ev };
+    if (ev.status === 'pending') return this.attemptBlock('payment_in_review');
+    if (ev.status !== 'failed' && ev.status !== 'cancelled') return this.attemptBlock('provider_unverified');
+    // provedor CONFIRMOU que esta tentativa foi recusada/cancelada → libera (compare-and-set)
+    const done = await this.updateAttempt(ref, a.id, null, { event: 'card_attempt_resolved', attempt: a.id, provider_status: ev.status, provider_payment_id: String(ev.providerPaymentId) });
+    if (!done) return this.attemptBlock('attempt_busy');
+    return { free: true, row: done };
+  }
+
+  // R175d · INCERTEZA DA CONTA: uma tentativa de cartão incerta/em andamento em QUALQUER pedido da conta (mesmo vencido,
+  // expirado ou cancelado) bloqueia nova cobrança e novo pedido até o provedor confirmar o resultado dela.
+  //   aprovada → entrega o pedido antigo e NÃO deixa cobrar de novo · recusada/cancelada confirmada → libera
+  //   em análise, vazio, erro, timeout, resposta inválida → continua bloqueado. Tempo sozinho nunca libera.
+  async accountGate(userId, exceptRef) {
+    if (!this.store.listPaymentsWithAttempt) return null;
+    let rows;
+    try { rows = await this.store.listPaymentsWithAttempt(userId); }
+    catch (e) { console.error('[pagamentos] não deu para conferir tentativas de cartão da conta', userId, e && e.message); return this.accountBlock('previous_attempt_unconfirmed'); }
+    for (const row of rows || []) {
+      if (!row || row.provider_ref === exceptRef || !this.attemptOf(row)) continue;
+      const res = await this.resolveAttempt(row);
+      if (res.free) continue;
+      if (res.paid) {
+        try { await this.apply(res.paid); } catch (e) { console.error('[pagamentos] entrega do pedido anterior', row.provider_ref, e && e.message); }
+        return this.accountBlock('previous_payment_confirmed', row);
+      }
+      console.warn('[pagamentos] conta com tentativa de cartão NÃO reconciliada — nova cobrança bloqueada', userId, row.provider_ref, res.code);
+      return this.accountBlock('previous_attempt_unconfirmed', row);
+    }
+    return null;
+  }
+  accountBlock(code, row) {
+    const M = {
+      previous_payment_confirmed: 'Um pagamento anterior com cartão foi confirmado agora pelo Mercado Pago e entregue na sua conta. Nada novo foi cobrado. Confira em MINHAS COMPRAS antes de comprar de novo.',
+      previous_attempt_unconfirmed: 'Um pagamento anterior com cartão ainda não foi confirmado pelo Mercado Pago. Para não cobrar duas vezes, novas compras ficam bloqueadas até essa confirmação. Nada novo foi cobrado. Confira em MINHAS COMPRAS em alguns minutos.',
+    };
+    return { block: true, code, message: M[code], charge_id: row ? row.provider_ref : '' };
   }
 
   // R40 · Cartão no jogo: o navegador manda o TOKEN do formulário seguro do Mercado Pago; o servidor
@@ -491,48 +611,63 @@ class Payments {
     // chegou), entrega o que já foi pago e NÃO cobra de novo com o token novo. A idempotência é do pedido, não do token.
     // R175b · FAIL CLOSED: só cobra se o provedor CONFIRMAR que não há aprovação anterior. Consulta com erro, timeout,
     // resposta inválida/incompleta ou de outro pedido → não cobra, não usa o token, pede para tentar depois.
-    {
-      const chk = await this.providerCheck(ref);
-      if (chk.state === 'paid') {
-        const prior = chk.ev;
-        try { await this.apply(prior); } catch (e) { console.error('payment_card_pay apply prévio', e && e.message); }
-        const after = await this.store.getPayment(this.provider.name, ref);
-        if (after && after.status === 'paid') return reply('approved');
-        if (after && after.status === 'sold_out') return reply('sold_out', { message: 'As vagas do Pacote Fundador acabaram no exato momento do seu pagamento. Você NÃO recebeu o pacote e o valor será devolvido integralmente.' });
-        return reply('error', { message: 'Este pedido já foi pago no Mercado Pago e a confirmação está chegando. Nada novo foi cobrado. Aguarde alguns segundos.' });
-      }
-      const block = this.cardBlock(ref, chk);
-      if (block) { console.warn('payment_card_pay: nova cobrança BLOQUEADA', ref, block.code, chk.why || ''); return reply('error', { code: block.code, message: block.message }); }
+    const deliver = async (prior) => {
+      try { await this.apply(prior); } catch (e) { console.error('payment_card_pay apply prévio', e && e.message); }
+      const after = await this.store.getPayment(this.provider.name, ref);
+      if (after && after.status === 'paid') return reply('approved');
+      if (after && after.status === 'sold_out') return reply('sold_out', { message: 'As vagas do Pacote Fundador acabaram no exato momento do seu pagamento. Você NÃO recebeu o pacote e o valor será devolvido integralmente.' });
+      return reply('error', { message: 'Este pedido já foi pago no Mercado Pago e a confirmação está chegando. Nada novo foi cobrado. Aguarde alguns segundos.' });
+    };
+    const chk = await this.providerCheck(ref);
+    if (chk.state === 'paid') return deliver(chk.ev);
+    {   // R175d · tentativa incerta em OUTRO pedido da conta (mesmo vencido) → não cobra este
+      const g = await this.accountGate(ws.user.id, ref);
+      if (g) return reply('error', { code: g.code, message: g.message });
     }
+    const block = this.cardBlock(ref, chk);
+    if (block) { console.warn('payment_card_pay: nova cobrança BLOQUEADA', ref, block.code, chk.why || ''); return reply('error', { code: block.code, message: block.message }); }
+    // R175c · tentativa anterior gravada no pedido (incerta / em andamento): só segue com confirmação DELA no provedor
+    const res = await this.resolveAttempt(row);
+    if (res.paid) return deliver(res.paid);
+    if (res.block) { console.warn('payment_card_pay: tentativa anterior não confirmada — nova cobrança BLOQUEADA', ref, res.code); return reply('error', { code: res.code, message: res.message }); }
     this.cardAttempts = this.cardAttempts || new Map();
     const n = (this.cardAttempts.get(ref) || 0) + 1;
     if (n > CARD_ATTEMPTS) return reply('rejected', { message: 'Muitas tentativas neste pedido. Feche e comece de novo, ou pague com PIX.' });
-    this.cardAttempts.set(ref, n);
     const product = PRODUCTS[row.product_id];
     if (!product) return reply('error', { message: 'Produto inválido.' });
+    // R175c · grava a tentativa ANTES de enviar (write-ahead). Compare-and-set: só uma instância/aba consegue.
+    // Se o processo cair depois daqui, a marca fica no banco e bloqueia novas cobranças até a reconciliação.
+    const attemptId = crypto.randomUUID();
+    const claimed = await this.casRaw(res.row, { card_attempt: { id: attemptId, state: 'inflight', at: new Date(this.now()).toISOString(), by: ws.user.id } },
+      { event: 'card_attempt_started', attempt: attemptId });
+    if (!claimed) return reply('error', { code: 'attempt_busy', message: this.attemptBlock('attempt_busy').message });
+    this.cardAttempts.set(ref, n);
     const amountCents = Number(row.amount_cents) || product.amount_cents;
+    const uncertain = async (why) => {
+      console.error('[pagamentos] cobrança de cartão com resultado INCERTO — pedido bloqueado até o provedor confirmar', ref, attemptId, why);
+      await this.updateAttempt(ref, attemptId, { state: 'uncertain', uncertain_at: new Date(this.now()).toISOString(), why: String(why || '').slice(0, 120) },
+        { event: 'card_attempt_uncertain', attempt: attemptId }).catch(() => null);   // mesmo se falhar, a marca 'inflight' continua bloqueando
+      return reply('error', { code: 'payment_unconfirmed', message: 'O Mercado Pago não confirmou o resultado do pagamento. NÃO tente de novo agora: assim que o Mercado Pago confirmar, o pedido é atualizado (confira em MINHAS COMPRAS).' });
+    };
     let ev;
     try {
       ev = await this.provider.payCard({ ref, token, paymentMethodId: pm, issuerId: String(m.issuer_id || '').replace(/[^0-9]/g, '').slice(0, 12),
         amountCents, title: product.title, email: ws.user.email, idType: String(m.id_type || '').replace(/[^A-Za-z]/g, '').slice(0, 8),
         idNumber: String(m.id_number || '').replace(/[^0-9]/g, '').slice(0, 20), deviceId: String(m.device_id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 120),
-        userId: ws.user.id, productId: row.product_id });
+        userId: ws.user.id, productId: row.product_id, attemptId });
     } catch (e) {
-      if (e.status && e.status >= 400 && e.status < 500) { console.warn('payment_card_pay recusado pela API', e.message); return reply('rejected', { message: CARD_REJECT_DEFAULT }); }
-      // R175b · resultado DESCONHECIDO (timeout/5xx): a cobrança pode ter passado. Nenhuma nova tentativa neste pedido
-      // até o provedor mostrar o resultado desta (a busca do Mercado Pago pode demorar a refletir).
-      this.cardUnknown = this.cardUnknown || new Map();
-      this.cardUnknown.set(ref, this.now());
-      console.error('payment_card_pay', e && e.message);
-      return reply('error', { message: 'O Mercado Pago não respondeu agora. Nada foi cobrado. Tente de novo em instantes.' });
+      // R175d · só libera quando o erro PROVA que a cobrança não foi criada (definitiveNoCharge: 401 ou 400 com causa de
+      // validação conhecida). Qualquer outro erro (outros 4xx, 400 sem causa reconhecida, 5xx, timeout, rede) = INCERTO.
+      if (definitiveNoCharge(e)) {
+        console.warn('payment_card_pay recusado pela API antes de criar o pagamento', e.status, (e.causes || []).join(','), e.message);
+        await this.updateAttempt(ref, attemptId, null, { event: 'card_attempt_refused', attempt: attemptId, http_status: e.status, causes: (e.causes || []).join(',') }).catch(() => null);
+        return reply('rejected', { message: CARD_REJECT_DEFAULT });
+      }
+      return uncertain(e && e.message);
     }
-    if (!this.validEvent(ev, ref)) {   // R175b · resposta da cobrança que não é deste pedido / incompleta: trata como desconhecida
-      this.cardUnknown = this.cardUnknown || new Map();
-      this.cardUnknown.set(ref, this.now());
-      console.error('payment_card_pay: resposta da cobrança não confere com o pedido', ref);
-      return reply('error', { code: 'provider_unverified', message: 'Não foi possível confirmar o resultado do pagamento com o Mercado Pago. Não tente de novo agora: confira em MINHAS COMPRAS em alguns minutos.' });
-    }
+    if (!this.validEvent(ev, ref)) return uncertain('resposta da cobrança não confere com o pedido');
     if (ev.status === 'paid') {
+      await this.updateAttempt(ref, attemptId, { state: 'approved', provider_payment_id: String(ev.providerPaymentId) }, { event: 'card_attempt_approved', attempt: attemptId, provider_payment_id: String(ev.providerPaymentId) }).catch(() => null);
       try { await this.apply(ev); }
       catch (e) { console.error('payment_card_pay apply', e && e.message); return reply('error', { message: 'Pagamento aprovado, mas a confirmação ainda não chegou. Aguarde alguns segundos: a vantagem aparece sozinha.' }); }
       const after = await this.store.getPayment(this.provider.name, ref);
@@ -540,8 +675,17 @@ class Payments {
       if (after && after.status === 'sold_out') return reply('sold_out', { message: 'As vagas do Pacote Fundador acabaram no exato momento do seu pagamento. Você NÃO recebeu o pacote e o valor será devolvido integralmente.' });   // R171 · SEC-009
       return reply('error', { message: 'Pagamento aprovado, mas a confirmação ainda não chegou. Aguarde alguns segundos: a vantagem aparece sozinha.' });
     }
-    if (ev.status === 'pending') return reply('pending', { message: 'Pagamento em análise pelo Mercado Pago. Assim que for aprovado, a vantagem aparece sozinha.' });
-    return reply('rejected', { detail: ev.detail || '', message: CARD_REJECT[ev.detail] || CARD_REJECT_DEFAULT });
+    if (ev.status === 'pending') {
+      await this.updateAttempt(ref, attemptId, { state: 'pending', provider_payment_id: String(ev.providerPaymentId) }, { event: 'card_attempt_in_review', attempt: attemptId }).catch(() => null);
+      return reply('pending', { message: 'Pagamento em análise pelo Mercado Pago. Assim que for aprovado, a vantagem aparece sozinha.' });
+    }
+    if (ev.status === 'failed' || ev.status === 'cancelled') {
+      // recusa CONFIRMADA na própria resposta desta tentativa → libera para outro cartão
+      const freed = await this.updateAttempt(ref, attemptId, null, { event: 'card_attempt_rejected', attempt: attemptId, provider_payment_id: String(ev.providerPaymentId), detail: String(ev.detail || '') }).catch(() => null);
+      if (!freed) console.warn('[pagamentos] recusa confirmada mas a tentativa não foi liberada agora (será resolvida na próxima)', ref, attemptId);
+      return reply('rejected', { detail: ev.detail || '', message: CARD_REJECT[ev.detail] || CARD_REJECT_DEFAULT });
+    }
+    return uncertain('estado inesperado: ' + ev.status);
   }
 
   // Aplica um evento do provedor (webhook ou consulta). Idempotente: cada transição acontece uma vez.
@@ -593,6 +737,13 @@ class Payments {
         try { await this.store.revokeEntitlement(changed.user_id, changed.product_id); }
         catch (e) { console.error('[pagamentos] REEMBOLSO SEM RETIRAR DIREITO (aplique a migração 0010)', ref, e && e.message); }
       }
+    }
+    // R175d · aviso/consulta do provedor sobre o pagamento de uma tentativa gravada: recusa/cancelamento CONFIRMADO
+    // dessa tentativa libera a marca (a aprovação já foi tratada acima: pedido pago).
+    if ((ev.status === 'failed' || ev.status === 'cancelled') && ev.attempt && this.validEvent(ev, ref)) {
+      const cur = await this.store.getPayment(this.provider.name, ref);
+      const a = this.attemptOf(cur);
+      if (a && a.id === ev.attempt) await this.updateAttempt(ref, a.id, null, { event: 'card_attempt_resolved', attempt: a.id, provider_status: ev.status, provider_payment_id: String(ev.providerPaymentId) }).catch(() => null);
     }
     if (changed) {
       for (const ws of this.backend.socketsOf(changed.user_id)) {

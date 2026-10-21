@@ -43,12 +43,16 @@ async function postgrest(path, opts = {}) {
       if (k === 'order') { const [c, d] = v.split('.'); if (!IDENT.test(c)) throw new Error('order'); order = ` order by ${c} ${d === 'desc' ? 'desc' : 'asc'}`; continue; }
       if (k === 'limit') { limit = ' limit ' + (Number(v) | 0); continue; }
       if (k === 'on_conflict') continue;
-      if (!IDENT.test(k)) throw new Error('filtro');
+      // coluna ou caminho JSON (col->chave / col->>chave), como o PostgREST (R175c: versão do raw)
+      const jm = k.match(/^([a-z_][a-z0-9_]*)(->>?)([a-z_][a-z0-9_]*)$/);
+      if (!IDENT.test(k) && !jm) throw new Error('filtro');
+      const col = jm ? `${jm[1]}${jm[2]}'${jm[3]}'` : k;
       const i = v.indexOf('.'); const op = v.slice(0, i), val = v.slice(i + 1);
-      if (op === 'eq') { args.push(val); where.push(`${k}::text = $${args.length}`); }
-      else if (op === 'gt') { args.push(val); where.push(`${k} > $${args.length}`); }
-      else if (op === 'in') { args.push(val.replace(/^\(|\)$/g, '').split(',')); where.push(`${k}::text = any($${args.length}::text[])`); }
-      else if (op === 'is' && val === 'null') where.push(`${k} is null`);
+      if (op === 'eq') { args.push(val); where.push(`(${col})::text = $${args.length}`); }
+      else if (op === 'gt') { args.push(val); where.push(`${col} > $${args.length}`); }
+      else if (op === 'in') { args.push(val.replace(/^\(|\)$/g, '').split(',')); where.push(`(${col})::text = any($${args.length}::text[])`); }
+      else if (op === 'is' && val === 'null') where.push(`${col} is null`);
+      else if (op === 'not' && val === 'is.null') where.push(`${col} is not null`);
       else throw new Error('op ' + op);
     }
     const w = where.length ? ' where ' + where.join(' and ') : '';

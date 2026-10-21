@@ -30,6 +30,7 @@ function payRawCancel(raw, note) {
   for (const k of ['by', 'provider_status', 'provider_payment_id']) if (note[k]) cancel[k] = String(note[k]);
   r.cancel = cancel;
   r.history = [...(Array.isArray(r.history) ? r.history : []), { at, event: 'cancelled', ...cancel }].slice(-PAY_HISTORY_MAX);
+  r.rev = payRawRev(raw) + 1;
   return r;
 }
 function payRawReopen(raw, note) {
@@ -38,8 +39,13 @@ function payRawReopen(raw, note) {
   const ev = { at, event: String(note.event || 'provider_approved_after_cancel'), previous_status: String(note.previous_status || ''), provider_payment_id: String(note.provider_payment_id || '') };
   r.reopened = [...(Array.isArray(r.reopened) ? r.reopened : []), ev].slice(-PAY_HISTORY_MAX);
   r.history = [...(Array.isArray(r.history) ? r.history : []), ev].slice(-PAY_HISTORY_MAX);
+  r.rev = payRawRev(raw) + 1;
   return r;
 }
+// R175c · versão do raw (compare-and-set otimista): toda escrita no raw do pedido confere a versão lida e grava +1.
+// Duas escritas concorrentes (duas instâncias, duas abas) com a mesma versão → só UMA vale.
+function payRawRev(raw) { const n = raw && typeof raw === 'object' ? Number(raw.rev) : 0; return Number.isInteger(n) && n > 0 ? n : 0; }
+const payRevFilter = rev => rev > 0 ? '&raw->>rev=eq.' + rev : '&raw->rev=is.null';
 // Remove espaços, caracteres invisíveis, de controle e bidi; normaliza (NFKC) antes de validar.
 const INVISIBLE_RE = /[\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFFF]/g;
 function cleanNickname(value) {
@@ -275,6 +281,17 @@ class MemoryStore {
     return { ...p };
   }
   // R175 · pending → cancelled (compare-and-set), libera a reserva do Fundador e grava o motivo no raw
+  // R175d · pedidos da conta com tentativa de cartão gravada (qualquer idade; pago/sem vaga/estornado não contam)
+  async listPaymentsWithAttempt(userId) {
+    return (this.payments || []).filter(x => x.user_id === userId && x.raw && x.raw.card_attempt && ['pending', 'cancelled', 'failed'].includes(x.status)).map(x => ({ ...x }));
+  }
+  // R175c · grava um raw novo SÓ se o pedido ainda estiver no status esperado E com a versão do raw esperada
+  async casPaymentRaw(provider, ref, expectStatus, expectRev, raw) {
+    const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === expectStatus);
+    if (!p || payRawRev(p.raw) !== (Number(expectRev) || 0)) return null;
+    p.raw = raw;
+    return { ...p };
+  }
   async cancelPayment(provider, ref, note = {}) {
     const p = (this.payments || []).find(x => x.provider === provider && x.provider_ref === ref && x.status === 'pending');
     if (!p) return null;
@@ -875,7 +892,8 @@ class SupabaseStore {
   async cancelPayment(provider, ref, note = {}) {
     const cur = await this.getPayment(provider, ref);
     if (!cur || cur.status !== 'pending') return null;
-    const path = '/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.pending&select=payment_id,user_id,product_id,status,provider_ref';
+    // R175c · também confere a versão do raw: uma tentativa de cartão gravada no meio do caminho não é apagada
+    const path = '/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.pending' + payRevFilter(payRawRev(cur.raw)) + '&select=payment_id,user_id,product_id,status,provider_ref';
     const body = { status: 'cancelled', seat_hold_until: null, raw: payRawCancel(cur.raw, note) };
     let rows;
     try { rows = await this.req(path, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) }); }
@@ -891,8 +909,20 @@ class SupabaseStore {
   async reopenPayment(provider, ref, note = {}) {
     const cur = await this.getPayment(provider, ref);
     if (!cur || (cur.status !== 'cancelled' && cur.status !== 'failed')) return null;
-    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.' + cur.status + '&select=payment_id,user_id,product_id,status,provider_ref',
+    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.' + cur.status + payRevFilter(payRawRev(cur.raw)) + '&select=payment_id,user_id,product_id,status,provider_ref',
       { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status: 'pending', raw: payRawReopen(cur.raw, { previous_status: cur.status, ...note }) }) });
+    return rows[0] || null;
+  }
+  // R175d · pedidos da conta com tentativa de cartão gravada, de QUALQUER idade (o vencimento não apaga a incerteza)
+  async listPaymentsWithAttempt(userId) {
+    return this.req('/payments?user_id=eq.' + encodeURIComponent(userId) + '&raw->card_attempt=not.is.null&status=in.(pending,cancelled,failed)'
+      + '&select=payment_id,user_id,product_id,method,provider,provider_ref,status,created_at,paid_at,amount_cents,raw&order=created_at.desc&limit=50');
+  }
+  // R175c · compare-and-set do raw do pedido (status + versão do raw) num único UPDATE condicional no banco.
+  async casPaymentRaw(provider, ref, expectStatus, expectRev, raw) {
+    const rows = await this.req('/payments?provider=eq.' + encodeURIComponent(provider) + '&provider_ref=eq.' + encodeURIComponent(ref) + '&status=eq.' + encodeURIComponent(expectStatus)
+      + payRevFilter(Number(expectRev) || 0) + '&select=payment_id,user_id,product_id,method,provider_ref,status,created_at,paid_at,amount_cents,raw',
+      { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ raw }) });
     return rows[0] || null;
   }
   // ---------- R31: identidade cosmética. Sem a 0007 (colunas profile_badge/profile_title) só o avatar é salvo. ----------

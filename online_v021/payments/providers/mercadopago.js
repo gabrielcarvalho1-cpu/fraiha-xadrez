@@ -96,7 +96,10 @@ class MercadoPago {
       let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = null; }
       if (!res.ok) {
         const e = new Error('mercadopago ' + method + ' ' + path.split('?')[0] + ' → ' + res.status + ' ' + (data && (data.message || data.error) || ''));
-        e.status = res.status; e.code = 'provider_error'; throw e;
+        e.status = res.status; e.code = 'provider_error';
+        // R175d · códigos de causa do Mercado Pago (cause[].code) para classificar o erro com segurança
+        e.causes = (data && Array.isArray(data.cause) ? data.cause : []).map(c => String(c && c.code !== undefined ? c.code : '')).filter(Boolean);
+        throw e;
       }
       return data || {};
     } finally { clearTimeout(timer); }
@@ -227,13 +230,24 @@ class MercadoPago {
   // R175 · o pagamento do Mercado Pago mais importante deste pedido: aprovado > reembolsado > em análise > o mais recente.
   // R175b · resposta sem a lista "results" é INVÁLIDA (erro, nunca "nenhum pagamento"); itens de outro pedido ou sem
   // id também invalidam a consulta inteira — o serviço trata como inconclusivo e não cobra/cancela.
-  async findRawByRef(ref) {
+  async searchByRef(ref) {
     const r = await this.call('GET', '/v1/payments/search?sort=date_created&criteria=desc&external_reference=' + encodeURIComponent(ref));
     if (!r || !Array.isArray(r.results)) { const e = new Error('mercadopago: busca sem lista de resultados'); e.code = 'provider_invalid'; throw e; }
     const list = r.results;
     for (const p of list) {
       if (!p || String(p.external_reference || '') !== String(ref) || !p.id) { const e = new Error('mercadopago: busca devolveu pagamento de outro pedido ou incompleto'); e.code = 'provider_invalid'; throw e; }
     }
+    return list;
+  }
+  // R175c · o pagamento de UMA tentativa de cartão (metadata.fraiha_attempt gravado na cobrança). null = a busca não
+  // mostra essa tentativa (ainda) — para o serviço isso é inconclusivo, nunca "pode cobrar".
+  async findAttempt(ref, attemptId) {
+    const list = (await this.searchByRef(ref)).filter(p => p.metadata && String(p.metadata.fraiha_attempt || '') === String(attemptId));
+    const pick = list.find(p => p.status === 'approved') || list.find(p => ['pending', 'in_process', 'authorized', 'in_mediation'].includes(p.status)) || list[0];
+    return pick ? this.event(pick) : null;
+  }
+  async findRawByRef(ref) {
+    const list = await this.searchByRef(ref);
     return list.find(p => p.status === 'approved') || list.find(p => p.status === 'refunded' || p.status === 'charged_back')
       || list.find(p => ['pending', 'in_process', 'authorized', 'in_mediation'].includes(p.status)) || list[0] || null;
   }
@@ -268,13 +282,13 @@ class MercadoPago {
   // R40 · Cartão no jogo: cria o pagamento com o token do Card Payment Brick.
   // amountCents vem do SERVIDOR (preço do produto); nada do valor enviado pelo navegador é usado.
   // binary_mode: aprova ou recusa na hora (sem "em análise"), então o jogador sabe o resultado no ato.
-  async payCard({ ref, token, paymentMethodId, issuerId, amountCents, title, email, idType, idNumber, deviceId, userId, productId }) {
+  async payCard({ ref, token, paymentMethodId, issuerId, amountCents, title, email, idType, idNumber, deviceId, userId, productId, attemptId = '' }) {
     if (!this.ready()) { const e = new Error('Mercado Pago sem configuração: ' + this.missing().join(', ')); e.code = 'provider_not_configured'; throw e; }
     const body = {
       transaction_amount: Math.round(amountCents) / 100, token, description: title, installments: 1,
       payment_method_id: paymentMethodId, payer: { email }, external_reference: ref,
       notification_url: this.publicUrl + '/webhooks/payments', statement_descriptor: 'FRAIHA XADREZ', binary_mode: true,
-      metadata: { fraiha_ref: ref, user_id: userId, product_id: productId },
+      metadata: { fraiha_ref: ref, user_id: userId, product_id: productId, fraiha_attempt: attemptId },   // R175c · liga a cobrança à tentativa gravada no pedido
       additional_info: { items: [itemInfo(productId, title, Math.round(amountCents) / 100)] },
     };
     if (issuerId) body.issuer_id = issuerId;
@@ -294,6 +308,7 @@ class MercadoPago {
       currency: String(p.currency_id || ''),
       providerPaymentId: String(p.id || ''),
       detail: String(p.status_detail || ''),
+      attempt: String((p.metadata && p.metadata.fraiha_attempt) || ''),   // R175c/d · tentativa de cartão que gerou este pagamento
     };
   }
 }
