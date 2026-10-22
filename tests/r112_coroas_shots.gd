@@ -64,8 +64,7 @@ func run():
 	await shot("01_home")
 	hub.crowns_client().open_panel()
 	await frames(8)
-	check(find_named(root, "CrownsMissions").size() == 1, "painel com as missões do dia")
-	check(find_named(root, "Mission_play3").size() == 1, "missão feita aparece")
+	check(find_named(root, "CrownsMissions").is_empty() and find_named(root, "CrownsOpenMissions").size() == 1, "R176.8b: COROAS sem as missões, com o botão MISSÕES DO DIA")
 	var box: Rect2 = hub.crowns_client().panel._body_rect.grow(1.0)
 	var fora := []
 	for n in find_named(root, "Crowns") + find_named(root, "Mission_"):
@@ -73,6 +72,21 @@ func run():
 		if r.size.x > 0 and (r.position.x < box.position.x or r.end.x > box.end.x): fora.append(String(n.name))
 	check(fora.is_empty(), "painel dentro da moldura (fora: %s)" % ", ".join(fora))
 	await shot("02_painel")
+	find_named(root, "CrownsOpenMissions")[0].pressed.emit()
+	await frames(8)
+	var mp = hub.crowns_client().missions_panel
+	check(mp != null and mp.is_open() and not hub.crowns_client().panel.is_open(), "MISSÕES DO DIA abre em tela própria")
+	check(find_named(root, "CrownsMissions").size() == 1 and find_named(root, "Mission_play3").size() == 1, "missões com progresso")
+	var box2: Rect2 = mp._body_rect.grow(1.0)
+	var fora2 := []
+	for n in find_named(root, "Mission_") + find_named(root, "Missions"):
+		var r2: Rect2 = n.get_global_rect()
+		if r2.size.x > 0 and (r2.position.x < box2.position.x or r2.end.x > box2.end.x): fora2.append(String(n.name))
+	check(fora2.is_empty(), "missões dentro da moldura (fora: %s)" % ", ".join(fora2))
+	await shot("02b_missoes")
+	mp.go_back()
+	await frames(6)
+	check(hub.crowns_client().panel.is_open(), "VOLTAR das missões volta para COROAS")
 	hub.crowns_client().panel.close()
 	await frames(4)
 	acc.server_message.emit({"type": "crowns_reward", "gained": 30, "lines": ["Vitória +10", "Missão: Jogue 3 partidas online +20"], "balance": 1315})

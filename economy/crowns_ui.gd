@@ -47,13 +47,11 @@ func _rebuild():
 		var left := _col(cols, 1.15)
 		var right := _col(cols, 1.0)
 		_balance(left, st, logged)
-		if logged and client.available(): _missions(left, st)
 		_how(right, st)
 		if logged and client.available(): _recent(right, st)
 		_soon(left)
 	else:
 		_balance(content, st, logged)
-		if logged and client.available(): _missions(content, st)
 		_how(content, st)
 		if logged and client.available(): _recent(content, st)
 		_soon(content)
@@ -262,6 +260,18 @@ func _when(iso: String) -> String:
 	return "%02d/%02d %02d:%02d" % [d.day, d.month, d.hour, d.minute]
 
 func _soon(parent: Control):
+	# R176.8b · MISSÕES DO DIA em tela própria (com a explicação); aqui só o botão com o resumo
+	var done := 0
+	var total := 0
+	for m in client.state.get("missions", []):
+		if m is Dictionary:
+			total += 1
+			if bool(m.get("done", false)): done += 1
+	var mb := button("MISSÕES DO DIA" + ("  ·  %d/%d" % [done, total] if total > 0 else ""), 15, true)
+	mb.name = "CrownsOpenMissions"
+	mb.custom_minimum_size = Vector2(0, ts(44))
+	mb.pressed.connect(func(): client.open_missions())
+	parent.add_child(mb)
 	# R116 · a LOJA DE COROAS abriu: títulos já à venda; molduras, avatares e emotes chegam em seguida
 	var b := button("ABRIR A LOJA DE COROAS", 15, true)
 	b.name = "CrownsOpenStore"

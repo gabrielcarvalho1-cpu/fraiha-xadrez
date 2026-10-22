@@ -110,6 +110,19 @@ func open_pass():
 	pass_panel.back_to = open_panel if from_panel else Callable()   # R168 · VOLTAR volta para COROAS
 	pass_panel.show_pass()
 
+var missions_panel = null
+## R176.8b · MISSÕES DO DIA (tela própria, separada do painel COROAS)
+func open_missions():
+	if not is_instance_valid(missions_panel):
+		missions_panel = load("res://economy/missions_ui.gd").new()
+		hub.add_child(missions_panel)
+		missions_panel.setup(hub, account, self)
+	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
+	if from_panel: panel.close()
+	missions_panel.back_to = open_panel if from_panel else Callable()
+	missions_panel.show_missions()
+	request()
+
 var tourn_panel = null
 ## R118 · TORNEIO DA SEMANA (XEQUE / MARCHA REAL)
 func open_tournament(g := "chess"):
