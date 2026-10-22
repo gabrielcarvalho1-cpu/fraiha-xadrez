@@ -19,7 +19,8 @@ var focus_id := ""
 
 static func options() -> Array:
 	var out := ["auto"]
-	for f in Cosmetics.FRAMES: out.append(f)
+	# R176.8 · "Da liga" saiu da galeria: para quem está na Madeira era igual ao Elo Madeira (a Automática já usa a da liga)
+	for f in Cosmetics.FRAMES: if f != "liga": out.append(f)
 	return out
 
 func setup(p_hub, p_columns: int, p_card: Vector2):
@@ -67,7 +68,9 @@ func unlocked(id: String) -> bool:
 ## "selected" (é a preferência atual) | "unlocked" | "locked"
 func state_of(id: String) -> String:
 	if not unlocked(id): return "locked"
-	return "selected" if hub != null and String(hub.cosmetic_pref("frame")) == id else "unlocked"
+	var pref := String(hub.cosmetic_pref("frame")) if hub != null else ""
+	if pref == "liga": pref = "auto"
+	return "selected" if hub != null and pref == id else "unlocked"
 
 func hint(id: String) -> String:
 	return Cosmetics.lock_hint("frame", id)

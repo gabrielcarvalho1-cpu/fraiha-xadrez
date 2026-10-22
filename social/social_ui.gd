@@ -525,7 +525,7 @@ func _set_avatar(t: TextureRect, who):
     if hub != null and hub.has_method("avatar_texture_for"):
         t.texture = hub.avatar_texture_for(info)
         var url := String(info.get("avatar_url", "")) if info.get("avatar_url") is String else ""
-        if not url.is_empty() and t.texture is ImageTexture: t.texture = _round_photo(t.texture, url)
+        if not url.is_empty() and t.texture is ImageTexture and not t.has_meta("square"): t.texture = _round_photo(t.texture, url)
         var uid := String(info.get("user_id", ""))
         if not uid.is_empty():
             t.set_meta("peer_uid", uid)
@@ -588,6 +588,17 @@ func _frame(av: Control, p: Dictionary) -> void:
     var f = preload("res://monetization/club_frame.gd").new()
     f.style = fr
     f.compact = av.custom_minimum_size.x < 60.0
+    av.add_child(f)
+
+## R176.8 · moldura quadrada das linhas de amigos: a do jogador (Club, Fundador, Loja, Elo) ou, no padrão, a da liga dele
+func _frame_square(av: Control, p: Dictionary) -> void:
+    var fr := Cosmetics.public_frame(p)
+    if fr == "liga":
+        var lg := String(p.get("league", p.get("current_league", "madeira")))
+        fr = "elo_" + lg if preload("res://monetization/club_frame.gd").is_art("elo_" + lg) else "elo_madeira"
+    var f = preload("res://monetization/club_frame.gd").new()
+    f.style = fr
+    f.compact = true
     av.add_child(f)
 
 ## R31 · DESTAQUE SOCIAL: selo (Fundador / Club) que o servidor já filtrou pelos direitos ativos.
@@ -677,20 +688,25 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
         btn_row = HBoxContainer.new()
         btn_row.add_theme_constant_override("separation", 6)
         outer.add_child(btn_row)
-    var av := _avatar(row, p, 50 if wide else 46)
-    if wide:
-        # anel dourado da referência em volta do retrato
-        var ring := TextureRect.new()
-        ring.texture = Kit.tex("fr_anel")
-        ring.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        ring.stretch_mode = TextureRect.STRETCH_SCALE
-        ring.size = Vector2(66, 66)
-        ring.position = Vector2(-8, -8)
-        ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        ring.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-        av.add_child(ring)
-        av.custom_minimum_size.x = 60
-    _frame(av, p)
+    # R176.8 · retrato QUADRADO com a moldura quadrada do jogador (sem o anel redondo antigo), bem centrado no vão
+    var slot := Control.new()
+    slot.name = "AvatarSlot"
+    var side := 66.0 if wide else 58.0
+    slot.custom_minimum_size = Vector2(side, side)
+    slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    row.add_child(slot)
+    var pic_side := 44.0 if wide else 40.0
+    var av := TextureRect.new()
+    av.set_meta("square", true)
+    av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    av.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    av.size = Vector2(pic_side, pic_side)
+    av.position = Vector2((side - pic_side) / 2.0, (side - pic_side) / 2.0 + 2.0)
+    _set_avatar(av, p)
+    slot.add_child(av)
+    _frame_square(av, p)
     if status_color == PRESENCE["online"][1]:
         # bolinha verde de online no canto do retrato (como na referência)
         var dot = Panel.new()
@@ -699,7 +715,7 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
         ds.border_color = Color("121825"); ds.set_border_width_all(1)
         dot.add_theme_stylebox_override("panel", ds)
         dot.size = Vector2(12, 12)
-        dot.position = Vector2(34, 34)
+        dot.position = av.size - Vector2(10, 10)
         dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
         av.add_child(dot)
     _seal(row, p, 28)

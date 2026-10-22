@@ -48,7 +48,7 @@ func _friends():
     var s = stage.social_ui
     s.data = {"friends": [
         {"user_id": "u1", "nickname": "SextoSentro", "avatar_id": "warrior", "presence": "offline"},
-        {"user_id": "u2", "nickname": "Gabriel", "avatar_id": "warrior", "presence": "offline"}],
+        {"user_id": "u2", "nickname": "Gabriel", "avatar_id": "warrior", "presence": "offline", "frame": "m_rubi_real", "badge": "club"}],
         "received": [], "sent": [], "blocked": []}
     s.has_list = true
     s._show("list")
@@ -60,6 +60,7 @@ func _friends():
         print("CHECK centro amigos sobra_esq=", snappedf(r.position.x, 0.1), " dir=", snappedf(vs.x - r.end.x, 0.1), " topo=", snappedf(r.position.y, 0.1), " baixo=", snappedf(vs.y - r.end.y, 0.1))
     # um amigo online: aparece CONVIDAR
     s.data.friends[0].presence = "online"
+    s.data.friends[1].presence = "online"
     s._show("list")
     await _shot("amigos_online.png")
     # perfil de um amigo e conversa (outras telas do mesmo painel)
