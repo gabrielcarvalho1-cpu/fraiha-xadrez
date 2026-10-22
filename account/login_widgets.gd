@@ -47,6 +47,8 @@ class OrnateButton extends Button:
             for x in [notch * 0.55 + 8.0, size.x - notch * 0.55 - 8.0]:
                 Art.diamond(self, Vector2(x, size.y / 2.0), 4.0, Art.GOLD_MID)
         var f: Font = Art.FONT_BOLD if primary else Art.FONT_SEMI
+        var exit_style := has_meta("back_style")   # R176.8b · botão de saída: escrita igual às placas vinho
+        if exit_style: f = preload("res://account/fonts/Cinzel-Bold.woff")
         var icon_w := size.y * 0.62 if not icon_kind.is_empty() else 0.0
         var gap := 14.0 if icon_w > 0.0 else 0.0
         # Ajusta a fonte para caber entre as pontas (telas estreitas).
@@ -65,6 +67,10 @@ class OrnateButton extends Button:
         var base := Vector2(x0 + icon_w + gap, size.y / 2.0 + f.get_ascent(fs) * 0.36)
         var col := Art.CREAM if primary else Color("eef0ea")
         if disabled: col = Color("8b8f86")
+        if exit_style and not disabled:
+            draw_string_outline(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, maxi(4, int(fs * 0.18)), Color("2a1206"))
+            draw_string(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("f8dc8e"))
+            return
         draw_string_outline(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0, 0, 0, 0.55))
         draw_string(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Art.GOLD if (primary and lit) else col)
 

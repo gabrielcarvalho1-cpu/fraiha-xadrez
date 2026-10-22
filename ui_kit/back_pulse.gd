@@ -216,6 +216,15 @@ func _setup():
 				gm.set_shader_parameter("phase", ph)
 				gl.material = gm
 				add_child(gl)
+				# R176.8b · escrita e porta no padrão do VOLTAR de COROAS (iguais em todos os botões de saída)
+				if pair.size() >= 4:
+					var lb := BackLabel.new()
+					lb.name = "BackLabel"
+					lb.text = label_for(b)
+					lb.inner_frac = Rect2(pair[2].position / pair[3], pair[2].size / pair[3])
+					lb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+					add_child(lb)
+					_hide_child_labels(b)
 		_mode = "patch" if _patch != null else "none"
 		queue_redraw()
 		return
@@ -235,6 +244,8 @@ func _setup():
 			if ch is CanvasItem and not (ch is Label) and not (ch is RichTextLabel) and ch != self and (ch as CanvasItem).material == null:
 				(ch as CanvasItem).use_parent_material = true
 		_mode = "material"
+		_style_text(b)   # R176.8b · mesma escrita (Cinzel dourada) dos botões de placa
+		get_tree().create_timer(0.3).timeout.connect(func(): if is_instance_valid(b): _style_text(b))   # quem cria o botão às vezes pinta o texto depois
 	else:
 		_mode = "none"
 
@@ -475,6 +486,8 @@ static func _clean_plate(sub: Image, m: PackedByteArray, w: int, h: int) -> Arra
 		if acc.a > 0.5: col = Color(acc.r / acc.a, acc.g / acc.a, acc.b / acc.a)
 		var thin: bool = (mx.y - mn.y + 1) <= maxi(3, int(h * 0.04)) and (mx.x - mn.x + 1) > 5 * (mx.y - mn.y + 1)   # risco da textura/moldura
 		comps.append({"area": area, "mn": mn, "mx": mx, "col": col, "keep": area >= min_area and not thin and not (near_frame and area < h * h * 0.01)})
+	# R176.8b · padrão único: TODA a escrita/ícone pintado sai (o jogo escreve por cima no mesmo estilo em todos)
+	for cp in comps: cp.keep = false
 	# 2) borda macia das letras: pixel de tinta fraca herda o componente vizinho (até 2 px); pingos somem
 	var a_out := PackedFloat32Array()
 	a_out.resize(n)
@@ -552,7 +565,14 @@ static func _clean_plate(sub: Image, m: PackedByteArray, w: int, h: int) -> Arra
 			var o := bg.lerp(c_out[i], a) if a > 0.0 else bg
 			o.a = 1.0
 			out.set_pixel(x, y, o)
-	return [ImageTexture.create_from_image(out), ImageTexture.create_from_image(gold)]
+	var mn := Vector2i(w, h)
+	var mx := Vector2i(-1, -1)
+	for i in n:
+		if m[i] == 1:
+			mn = Vector2i(mini(mn.x, i % w), mini(mn.y, i / w))
+			mx = Vector2i(maxi(mx.x, i % w), maxi(mx.y, i / w))
+	var inner := Rect2(Vector2(mn), Vector2(mx - mn + Vector2i.ONE)) if mx.x >= 0 else Rect2(0, 0, w, h)
+	return [ImageTexture.create_from_image(out), ImageTexture.create_from_image(gold), inner, Vector2(w, h)]
 
 ## Máscara da placa numa textura de botão: tudo o que fica DENTRO da moldura externa (o fundo que vem junto na
 ## textura é o que se alcança a partir das bordas sem atravessar o dourado). Moldura aberta: sem máscara.
@@ -629,6 +649,79 @@ static func _chevron_rect(sub: Image, seen: PackedByteArray, w: int, h: int) -> 
 			if ok and r.get_center().x > best.get_center().x: best = r
 	return best
 
+## texto do botão no padrão único: INÍCIO / SAIR / DESISTIR / VOLTAR
+static func label_for(b: Control) -> String:
+	if b.has_meta("back_label"): return String(b.get_meta("back_label"))
+	var nm := String(b.name)
+	if nm in ["HomeButton", "home"]: return "INÍCIO"
+	if nm.ends_with("Resign"): return "DESISTIR"
+	var texts: Array = []
+	if b is Button: texts.append(String((b as Button).text))
+	for c in b.find_children("*", "Label", true, false): texts.append(String((c as Label).text))
+	for raw in texts:
+		var t := String(raw).strip_edges().to_lower()
+		if t.begins_with("sair"): return "SAIR"
+		if t.begins_with("início") or t.begins_with("inicio"): return "INÍCIO"
+		if t.begins_with("desistir"): return "DESISTIR"
+	if nm.ends_with("Leave") or nm.ends_with("Exit"): return "SAIR"
+	return "VOLTAR"
+
+## botões desenhados (com texto próprio): a escrita vira a mesma das placas — Cinzel dourada com contorno escuro
+static func _style_text(b: Control) -> void:
+	b.set_meta("back_style", true)   # botões que desenham o próprio texto (OrnateButton…) leem isso
+	b.queue_redraw()
+	var targets: Array = []
+	if b is Button and not (b as Button).text.is_empty(): targets.append(b)
+	for c in b.find_children("*", "Label", true, false): targets.append(c)
+	for t in targets:
+		var c := t as Control
+		c.add_theme_font_override("font", LABEL_FONT)
+		for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: c.add_theme_color_override(k, Color("f8dc8e"))
+		c.add_theme_color_override("font_outline_color", Color("2a1206"))
+		c.add_theme_constant_override("outline_size", maxi(4, int(c.get_theme_font_size("font_size") * 0.16)))
+
+## os textos que o próprio botão já mostra somem (a escrita nova fica por cima, no lugar)
+static func _hide_child_labels(b: Control) -> void:
+	for c in b.find_children("*", "Label", true, false):
+		if c.get_parent() != null and c.get_parent().name == "BackPulse": continue
+		(c as CanvasItem).self_modulate.a = 0.0
+	if b is Button and not (b as Button).text.is_empty():
+		for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: (b as Button).add_theme_color_override(k, Color(0, 0, 0, 0))
+		(b as Button).add_theme_constant_override("outline_size", 0)
+
+const DOOR := preload("res://ui_kit/art/back_door.png")
+const LABEL_FONT := preload("res://account/fonts/Cinzel-Bold.woff")
+class BackLabel extends Control:
+	var text := "VOLTAR"
+	var inner_frac := Rect2(0, 0, 1, 1)
+	func _ready():
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		resized.connect(queue_redraw)
+	func _draw():
+		var par := get_parent().get_parent() as BaseButton
+		if par != null and par.disabled: return
+		var ir := Rect2(inner_frac.position * size, inner_frac.size * size)
+		var h := ir.size.y
+		# porta à esquerda
+		var dh := h * 0.66
+		var ds := Vector2(dh * DOOR.get_width() / float(DOOR.get_height()), dh)
+		var dp := Vector2(ir.position.x + maxf(h * 0.32, ir.size.x * 0.06), ir.position.y + (h - dh) / 2.0)
+		draw_texture_rect(DOOR, Rect2(dp + Vector2(1, 2), ds), false, Color(0, 0, 0, 0.45))
+		draw_texture_rect(DOOR, Rect2(dp, ds), false)
+		# texto: Cinzel dourado com contorno escuro, centrado no espaço depois da porta
+		var x0 := dp.x + ds.x + h * 0.2
+		var x1 := ir.end.x - h * 0.3
+		var fs := int(h * 0.5)
+		while fs > 8 and LABEL_FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > x1 - x0: fs -= 1
+		var tw := LABEL_FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var cx := (ir.position.x + ir.end.x) / 2.0 + ds.x * 0.5
+		var tx := clampf(cx - tw / 2.0, x0, x1 - tw)
+		var ty := ir.position.y + h / 2.0 + fs * 0.36
+		var ol := maxi(2, int(fs * 0.16))
+		draw_string_outline(LABEL_FONT, Vector2(tx + 1, ty + 2), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ol, Color(0, 0, 0, 0.35))
+		draw_string_outline(LABEL_FONT, Vector2(tx, ty), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ol, Color("2a1206"))
+		draw_string(LABEL_FONT, Vector2(tx, ty), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("f8dc8e"))
+
 ## a arte embaixo mudou (pele do tabuleiro ligou/desligou): refaz o destaque
 func refresh():
 	var b := get_parent() as Control
@@ -639,10 +732,11 @@ func refresh():
 	_mode = ""
 	_patch = null
 	material = null
-	var gl = get_node_or_null("Glint")
-	if gl != null:
-		remove_child(gl)
-		gl.queue_free()
+	for nn in ["Glint", "BackLabel"]:
+		var gl = get_node_or_null(nn)
+		if gl != null:
+			remove_child(gl)
+			gl.queue_free()
 	_setup()
 	queue_redraw()
 
