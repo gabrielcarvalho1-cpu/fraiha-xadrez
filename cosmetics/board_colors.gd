@@ -38,12 +38,10 @@ const BOARDS := [
 ]
 
 ## id, nome, cor das brancas, cor das pretas, liberação
+## R176.8 · o dono tirou Branco e preto / Creme e marrom / Branco e azul / Branco e vermelho (arte "suja");
+## quem tinha uma delas escolhida volta para Marfim e ardósia (piece_set cai no primeiro).
 const PIECES := [
 	["original", "Marfim e ardósia", "", "", ""],
-	["branco_preto", "Branco e preto", "#f2f2ee", "#2e2e30", ""],
-	["creme_marrom", "Creme e marrom", "#efe0c4", "#5a3a24", ""],
-	["branco_azul", "Branco e azul", "#f2f2ee", "#2c4a7a", ""],
-	["branco_vermelho", "Branco e vermelho", "#f2f2ee", "#7a2a2a", ""],
 	["classicas", "Peças clássicas", "", "", ""],
 	["fundador", "Fundador", "#f6e7b8", "#1d1a17", "founder"],
 	["club", "Club", "#f2efe2", "#123a2c", "club"],

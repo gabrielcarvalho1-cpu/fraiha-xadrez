@@ -15,9 +15,9 @@ dest_files=["res://.godot/imported/forest_wide.png-1fcbaaf17d61a316b8ab1fdb655da
 
 [params]
 
-compress/mode=0
+compress/mode=1
 compress/high_quality=false
-compress/lossy_quality=0.7
+compress/lossy_quality=0.75
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
