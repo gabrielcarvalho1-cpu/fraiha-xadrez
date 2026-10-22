@@ -32,7 +32,7 @@ func run():
 		hub.set_profile_tab("frames")
 		await shot("perfil_molduras")
 		hub.set_profile_tab("emotes")
-		check(hub.emote_gallery != null and hub.emote_gallery.cards.size() == 12, "aba EMOTES com os 12 emotes")
+		check(hub.emote_gallery != null and hub.emote_gallery.cards.size() == 25, "aba EMOTES com os 25 emotes")
 		await shot("perfil_emotes")
 		hub.emote_gallery.cards["emote_uau"].pressed.emit()
 		await shot("perfil_emote_bloqueado")

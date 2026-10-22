@@ -25,8 +25,18 @@ function seasonItems(s) {
   const idx = Number(s.slice(0, 4)) * 12 + Number(s.slice(5, 7));
   const pick = kind => { const l = Shop.ofKind(kind); return l[idx % l.length]; };
   // R167 · as molduras da Loja agora são raras (10.000 Coroas): o nível 30 da faixa Club dá Coroas, não moldura
-  return { 10: pick('emote'), 20: pick('title') };
+  // R176.8 · nível 10 da faixa Club: emote EXCLUSIVO do Passe (não está na loja), em rodízio
+  const ce = Shop.PASS_EMOTES.filter(e => e.track === 'club');
+  return { 10: ce[idx % ce.length].id, 20: pick('title') };
 }
+// R176.8 · nível 10 da faixa GRÁTIS: emote exclusivo do Passe (rodízio por temporada)
+function seasonFreeEmote(s) {
+  const idx = Number(s.slice(0, 4)) * 12 + Number(s.slice(5, 7));
+  const l = Shop.PASS_EMOTES.filter(e => e.track === 'free');
+  return l[idx % l.length];
+}
+const passName = id => { const e = Shop.PASS_EMOTES.find(x => x.id === id); return e ? e.text : (Shop.BY_ID[id] ? Shop.BY_ID[id].name : id); };
+const passKind = id => (Shop.PASS_EMOTES.some(x => x.id === id) ? 'emote' : (Shop.BY_ID[id] ? Shop.BY_ID[id].kind : 'item'));
 // recompensas de cada nível: { free: {crowns}|null, club: {crowns}|{item} }
 // R163 · AVATAR do Passe no nível 25 (exclusivo, não está na loja): um da faixa grátis e um da faixa Club, em rodízio
 function seasonAvatars(s) {
@@ -42,7 +52,8 @@ function rewards(s) {
   for (let l = 1; l <= LEVELS; l++) {
     let free = l === 15 ? { crowns: 100 } : l === LEVELS ? { crowns: 200 } : l % 3 === 0 ? { crowns: 30 } : null;
     if (l === AVATAR_LEVEL) free = { item: av.free.id, name: av.free.name, kind: 'avatar' };
-    let club = items[l] ? { item: items[l], name: Shop.BY_ID[items[l]].name, kind: Shop.BY_ID[items[l]].kind } : { crowns: l === LEVELS ? 500 : l % 5 === 0 ? 60 : 20 };
+    if (l === 10) { const fe = seasonFreeEmote(s); free = { item: fe.id, name: fe.text, kind: 'emote' }; }
+    let club = items[l] ? { item: items[l], name: passName(items[l]), kind: passKind(items[l]) } : { crowns: l === LEVELS ? 500 : l % 5 === 0 ? 60 : 20 };
     if (l === AVATAR_LEVEL) club = { item: av.club.id, name: av.club.name, kind: 'avatar' };
     out.push({ level: l, free, club });
   }
@@ -96,7 +107,7 @@ class SeasonPass {
       if (r.free && r.free.item) {   // R163 · avatar da faixa grátis
         if (await this.store.crownAward(uid, 0, 'pass', `${s}:${l}:f`) !== null) {
           const got = this.store.crownBuy ? await this.store.crownBuy(uid, r.free.item, 0).catch(() => 'erro') : 'erro';
-          if (got === 'ok') lines.push(`Passe nível ${l}: avatar ${r.free.name} (seu para sempre)`);
+          if (got === 'ok') lines.push(`Passe nível ${l}: ${r.free.kind === 'emote' ? 'emote' : 'avatar'} ${r.free.name} (seu para sempre)`);
           else if (await this.store.crownAward(uid, 300, 'pass', `${s}:${l}:f+`) !== null) { gained += 300; lines.push(`Passe nível ${l}: você já tinha ${r.free.name} · +300`); }
         }
       } else if (r.free && await this.store.crownAward(uid, r.free.crowns, 'pass', `${s}:${l}:f`) !== null) { gained += r.free.crowns; lines.push(`Passe nível ${l} +${r.free.crowns}`); }
@@ -137,4 +148,4 @@ class SeasonPass {
   }
 }
 
-module.exports = { SeasonPass, seasonOf, seasonName, seasonEnd, levelOf, rewards, seasonItems, seasonAvatars, AVATAR_LEVEL, LEVELS, XP_PER_LEVEL, XP, GAME_XP_CAP };
+module.exports = { SeasonPass, seasonOf, seasonName, seasonEnd, levelOf, rewards, seasonItems, seasonAvatars, seasonFreeEmote, AVATAR_LEVEL, LEVELS, XP_PER_LEVEL, XP, GAME_XP_CAP };

@@ -594,13 +594,18 @@ func _profile(content: VBoxContainer, width := 0.0):
     emotes.setup(hub, cols, Vector2(cw, cw + 48.0))
     var edetail = _text(content, "%d de %d emotes liberados · use no chat da partida" % [emotes.count_unlocked(), emotes.cards.size()], 14)
     edetail.name = "EmoteDetailMobile"
-    var shop_em = _button(content, "VER NA LOJA DE COROAS", func(): hub.crowns_client().open_store("emote"))
+    var em_sel := {"id": ""}
+    var shop_em = _button(content, "VER NA LOJA DE COROAS", func():
+        if emotes.state_of(String(em_sel.id)) == "pass": hub.crowns_client().open_pass()
+        else: hub.crowns_client().open_store("emote"))
     shop_em.name = "EmoteShopMobile"
     shop_em.visible = false
     emotes.inspected.connect(func(id):
+        em_sel.id = id
         var st: String = emotes.state_of(id)
-        edetail.text = emotes.text_of(id).to_upper() + " · " + ("GRÁTIS" if st == "free" else ("LIBERADO" if st == "owned" else "NA LOJA · %d coroas" % emotes.price_of(id)))
-        shop_em.visible = st == "locked")
+        edetail.text = emotes.text_of(id).to_upper() + " · " + ("GRÁTIS" if st == "free" else ("LIBERADO" if st == "owned" else ("PASSE DA TEMPORADA · nível 10" if st == "pass" else "NA LOJA · %d coroas" % emotes.price_of(id))))
+        shop_em.visible = st in ["locked", "pass"]
+        _set_btn(shop_em, "VER O PASSE DA TEMPORADA" if st == "pass" else "VER NA LOJA DE COROAS"))
     # Foto própria (escolher → enquadrar → salvar) e remover.
     var photo_row = HBoxContainer.new()
     photo_row.add_theme_constant_override("separation", 8)

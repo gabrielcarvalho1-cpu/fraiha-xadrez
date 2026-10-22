@@ -1561,6 +1561,7 @@ func set_profile_tab(tab: String):
 func request_apply_inspected():
     if profile_tab == "emotes":   # R176.8 · emote não se aplica: bloqueado abre a Loja de Coroas
         if emote_gallery != null and emote_gallery.state_of(inspected_emote) == "locked": crowns_client().open_store("emote")
+        elif emote_gallery != null and emote_gallery.state_of(inspected_emote) == "pass": crowns_client().open_pass()
         return
     var what := "o avatar"
     var id := inspected_avatar if not inspected_avatar.is_empty() else avatar_id
@@ -1745,15 +1746,21 @@ func _refresh_emote_detail():
         fx.position = (avatar_detail.pic.size - fx.size) / 2.0
         avatar_detail.pic.add_child(fx)
         old = fx
-    old.modulate = Color(0.5, 0.5, 0.5, 0.9) if st == "locked" else Color.WHITE
+    var lk: bool = st in ["locked", "pass"]
+    old.modulate = Color(0.5, 0.5, 0.5, 0.9) if lk else Color.WHITE
     avatar_detail.title.text = EG.text_of(id).to_upper()
-    avatar_detail.origin.text = "Grátis para todos" if st == "free" else ("Comprado na Loja de Coroas" if st == "owned" else "Na Loja de Coroas · %d coroas" % EG.price_of(id))
-    avatar_detail.status.text = "BLOQUEADO" if st == "locked" else "LIBERADO"
-    avatar_detail.status.add_theme_color_override("font_color", Color("e89a7a") if st == "locked" else Color("49d17a"))
+    var tr := EG.pass_track(id)
+    var origin := "Grátis para todos"
+    if st == "owned": origin = "Seu para sempre"
+    elif st == "locked": origin = "Na Loja de Coroas · %d coroas" % EG.price_of(id)
+    elif st == "pass": origin = "Passe da Temporada · nível 10" + (" (faixa Club)" if tr == "club" else " (faixa grátis)")
+    avatar_detail.origin.text = origin
+    avatar_detail.status.text = "BLOQUEADO" if lk else "LIBERADO"
+    avatar_detail.status.add_theme_color_override("font_color", Color("e89a7a") if lk else Color("49d17a"))
     avatar_detail.brief.text = "Use no chat da partida (botão EMOTES)."
     var b: Button = avatar_detail.apply
-    b.text = "VER NA LOJA" if st == "locked" else "LIBERADO"
-    b.disabled = st != "locked"
+    b.text = "VER NA LOJA" if st == "locked" else ("VER O PASSE" if st == "pass" else "LIBERADO")
+    b.disabled = not lk
 
 ## R168 · detalhe da aba MOLDURAS
 func _refresh_frame_detail():

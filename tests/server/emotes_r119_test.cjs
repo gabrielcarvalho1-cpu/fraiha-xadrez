@@ -16,7 +16,8 @@ async function pair(a, b, kind, mode) {
 
 (async () => {
   // catálogo
-  check(Shop.FREE_EMOTES.length === 4 && Shop.ofKind('emote').length === 8, 'catálogo: 4 emotes de graça + 8 na loja');
+  check(Shop.FREE_EMOTES.length === 7 && Shop.ofKind('emote').length === 13 && Shop.PASS_EMOTES.length === 5, 'catálogo: 7 emotes de graça + 13 na loja + 5 do passe');
+  check(Shop.emoteText('emote_quase') === 'QUASE!' && !Shop.isFreeEmote('emote_quase'), 'emote do passe: texto do servidor, não é de graça');
   check(Shop.emoteText('emote_ola') === 'Olá!' && Shop.emoteText('emote_lenda') === 'Lenda!' && Shop.emoteText('xyz') === null, 'texto de cada emote vem do servidor');
   const gd = require('fs').readFileSync(require('path').join(__dirname, '../../economy/crown_store_catalog.gd'), 'utf8');
   check(Shop.FREE_EMOTES.every(e => gd.includes(`"id": "${e.id}", "text": "${e.text}"`)), 'emotes de graça iguais no cliente');

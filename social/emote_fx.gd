@@ -18,6 +18,20 @@ const FX := {
 	"emote_lenda": ["glyph:trophy", "bounce"],
 	"emote_rei_chegou": ["glyph:crown", "spin"],
 	"emote_respeito": ["rei_branco", "bow"],
+	# R176.8 · novos
+	"emote_boa_sorte": ["glyph:star", "spin"],
+	"emote_parabens": ["glyph:crown", "bounce"],
+	"emote_revanche": ["glyph:sword", "shake"],
+	"emote_quase": ["glyph:target", "pulse"],
+	"emote_ops": ["peao_branco", "shake"],
+	"emote_merecido": ["glyph:seal", "pulse"],
+	"emote_que_jogada": ["dama_branca", "jump"],
+	"emote_eu_vi": ["glyph:magnifier", "shake"],
+	"emote_vamos": ["torre_branca", "bounce"],
+	"emote_xeque": ["rei_branco", "shake"],
+	"emote_interessante": ["bispo_branco", "bow"],
+	"emote_doeu": ["glyph:hammer", "shake"],
+	"emote_de_novo": ["glyph:heart", "bounce"],
 }
 
 var emote_id := ""

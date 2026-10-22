@@ -48,6 +48,12 @@ const ITEMS := [
 	{"id": "emote_lenda", "kind": "emote", "name": "Lenda!", "price": 500},
 	{"id": "emote_rei_chegou", "kind": "emote", "name": "O rei chegou!", "price": 600},
 	{"id": "emote_respeito", "kind": "emote", "name": "Respeito, mestre.", "price": 600},
+	# R176.8 · emotes novos da Loja
+	{"id": "emote_vamos", "kind": "emote", "name": "VAMOS!", "price": 300},
+	{"id": "emote_xeque", "kind": "emote", "name": "XEQUE!", "price": 400},
+	{"id": "emote_interessante", "kind": "emote", "name": "INTERESSANTE...", "price": 400},
+	{"id": "emote_doeu", "kind": "emote", "name": "ESSA DOEU!", "price": 500},
+	{"id": "emote_de_novo", "kind": "emote", "name": "JOGAMOS DE NOVO!", "price": 500},
 ]
 
 ## R163 · avatares que só o PASSE entrega (não estão à venda): faixa grátis e faixa Club, nível 25, em rodízio
@@ -59,6 +65,18 @@ const FREE_EMOTES := [
 	{"id": "emote_boa_jogada", "text": "Boa jogada!"},
 	{"id": "emote_obrigado", "text": "Obrigado!"},
 	{"id": "emote_boa_partida", "text": "Boa partida!"},
+	{"id": "emote_boa_sorte", "text": "BOA SORTE!"},
+	{"id": "emote_parabens", "text": "PARABÉNS!"},
+	{"id": "emote_revanche", "text": "REVANCHE?"},
+]
+
+## R176.8 · emotes que só o PASSE DA TEMPORADA entrega (nível 10; faixa grátis e faixa Club, em rodízio)
+const PASS_EMOTES := [
+	{"id": "emote_quase", "track": "free", "text": "QUASE!"},
+	{"id": "emote_ops", "track": "free", "text": "OPS!"},
+	{"id": "emote_merecido", "track": "free", "text": "MERECIDO!"},
+	{"id": "emote_que_jogada", "track": "club", "text": "QUE JOGADA!"},
+	{"id": "emote_eu_vi", "track": "club", "text": "EU VI ESSA!"},
 ]
 
 ## emotes que ESTE jogador pode mandar agora: os de graça + os comprados (owned = store_state.owned)
@@ -66,6 +84,8 @@ static func my_emotes(owned: Array) -> Array:
 	var out := FREE_EMOTES.duplicate()
 	for it in of_kind("emote"):
 		if String(it.id) in owned: out.append({"id": it.id, "text": it.name})
+	for e in PASS_EMOTES:
+		if String(e.id) in owned: out.append({"id": e.id, "text": e.text})
 	return out
 
 static func of_kind(kind: String) -> Array:

@@ -21,11 +21,17 @@ var focus_id := ""
 static func all_ids() -> Array:
 	var out := []
 	for e in Shop.FREE_EMOTES: out.append(String(e.id))
+	for e in Shop.PASS_EMOTES: out.append(String(e.id))
 	for it in Shop.of_kind("emote"): out.append(String(it.id))
 	return out
 
+static func pass_track(id: String) -> String:
+	for e in Shop.PASS_EMOTES:
+		if String(e.id) == id: return String(e.track)
+	return ""
+
 static func text_of(id: String) -> String:
-	for e in Shop.FREE_EMOTES:
+	for e in Shop.FREE_EMOTES + Shop.PASS_EMOTES:
 		if String(e.id) == id: return String(e.text)
 	return String(Shop.item(id).get("name", id))
 
@@ -40,10 +46,11 @@ static func is_free(id: String) -> bool:
 func owned(id: String) -> bool:
 	return is_free(id) or id in Cosmetics.shop_owned
 
-## "free" | "owned" | "locked"
+## "free" | "owned" | "locked" (Loja) | "pass" (só pelo Passe, ainda não ganhou)
 func state_of(id: String) -> String:
 	if is_free(id): return "free"
-	return "owned" if owned(id) else "locked"
+	if owned(id): return "owned"
+	return "pass" if not pass_track(id).is_empty() else "locked"
 
 func count_unlocked() -> int:
 	var n := 0
@@ -105,7 +112,7 @@ class EmoteCard extends Button:
 		if gallery == null: return
 		var st: String = gallery.state_of(emote_id)
 		if fx != null:
-			fx.modulate = Color(0.45, 0.45, 0.45, 0.9) if st == "locked" else Color.WHITE
+			fx.modulate = Color(0.45, 0.45, 0.45, 0.9) if st in ["locked", "pass"] else Color.WHITE
 			fx.playing = gallery.focus_id == emote_id or is_hovered()
 		queue_redraw()
 	func _process(_d):
@@ -116,15 +123,16 @@ class EmoteCard extends Button:
 		var focused: bool = gallery.focus_id == emote_id
 		var r := Rect2(Vector2.ZERO, size)
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color("161f32") if st != "locked" else Color("11151e")
+		var lk: bool = st in ["locked", "pass"]
+		sb.bg_color = Color("161f32") if not lk else Color("11151e")
 		sb.set_corner_radius_all(6)
 		sb.set_border_width_all(3 if focused else 2)
-		sb.border_color = Color("fff0b8") if focused else (GOLD if st != "locked" else Color("3a4038"))
+		sb.border_color = Color("fff0b8") if focused else (GOLD if not lk else Color("3a4038"))
 		if is_hovered() or focused:
 			sb.shadow_color = Color(1.0, 0.85, 0.45, 0.30)
 			sb.shadow_size = 6
 		draw_style_box(sb, r)
-		if st == "locked":
+		if lk:
 			var lc := Vector2(size.x - 22, 22)
 			draw_circle(lc, 13, Color(0, 0, 0, 0.7))
 			draw_arc(lc + Vector2(0, -3), 5.0, PI, TAU, 12, Color("e6d6a8"), 2.0)
@@ -134,7 +142,7 @@ class EmoteCard extends Button:
 		var fs := 14
 		while fs > 9 and font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > size.x - 10: fs -= 1
 		var y := size.y - 34
-		draw_string(font, Vector2(5, y), title, HORIZONTAL_ALIGNMENT_CENTER, size.x - 10, fs, GOLD if st != "locked" else MUTED)
-		var sub: String = {"free": "Grátis", "owned": "Liberado", "locked": "%d coroas" % gallery.price_of(emote_id)}[st]
-		draw_string(font, Vector2(5, y + 17), sub, HORIZONTAL_ALIGNMENT_CENTER, size.x - 10, 12, Color("e89a7a") if st == "locked" else (EMERALD if st == "owned" else MUTED))
-		tooltip_text = title + ("  ·  Na Loja de Coroas" if st == "locked" else "")
+		draw_string(font, Vector2(5, y), title, HORIZONTAL_ALIGNMENT_CENTER, size.x - 10, fs, GOLD if not lk else MUTED)
+		var sub: String = {"free": "Grátis", "owned": "Liberado", "locked": "%d coroas" % gallery.price_of(emote_id), "pass": "Passe" + (" Club" if gallery.pass_track(emote_id) == "club" else "")}[st]
+		draw_string(font, Vector2(5, y + 17), sub, HORIZONTAL_ALIGNMENT_CENTER, size.x - 10, 12, Color("e89a7a") if st == "locked" else (Color("9fc4ff") if st == "pass" else (EMERALD if st == "owned" else MUTED)))
+		tooltip_text = title + ("  ·  Na Loja de Coroas" if st == "locked" else ("  ·  Passe da Temporada" if st == "pass" else ""))

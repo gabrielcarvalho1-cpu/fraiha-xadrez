@@ -50,11 +50,25 @@ const ITEMS = [
   { id: 'emote_lenda', kind: 'emote', name: 'Lenda!', price: 500 },
   { id: 'emote_rei_chegou', kind: 'emote', name: 'O rei chegou!', price: 600 },
   { id: 'emote_respeito', kind: 'emote', name: 'Respeito, mestre.', price: 600 },
+  // R176.8 · emotes novos da Loja (sugestão do dono)
+  { id: 'emote_vamos', kind: 'emote', name: 'VAMOS!', price: 300 },
+  { id: 'emote_xeque', kind: 'emote', name: 'XEQUE!', price: 400 },
+  { id: 'emote_interessante', kind: 'emote', name: 'INTERESSANTE...', price: 400 },
+  { id: 'emote_doeu', kind: 'emote', name: 'ESSA DOEU!', price: 500 },
+  { id: 'emote_de_novo', kind: 'emote', name: 'JOGAMOS DE NOVO!', price: 500 },
 ];
 const BY_ID = Object.fromEntries(ITEMS.map(i => [i.id, i]));
 // R163 · avatares que só o PASSE entrega (não estão à venda; ficam na conta como item da loja, preço 0)
 const PASS_AVATARS = [{ id: 'av_rei_onix', track: 'free', name: 'Rei de Ônix' }, { id: 'av_rainha_onix', track: 'free', name: 'Rainha de Ônix' }, { id: 'av_torre_onix', track: 'free', name: 'Torre de Ônix' }, { id: 'av_cavalo_onix', track: 'free', name: 'Cavalo de Ônix' }, { id: 'av_principe_sombras', track: 'club', name: 'Príncipe das Sombras' }, { id: 'av_principe_esmeralda', track: 'club', name: 'Príncipe Esmeralda' }, { id: 'av_aristocrata', track: 'club', name: 'Aristocrata do Relógio' }, { id: 'av_tab_ametista_pixel', track: 'free', name: 'Ametista Pixel' }, { id: 'av_tab_gelo_pixel', track: 'free', name: 'Fortaleza de Gelo' }, { id: 'av_tab_atlantida_pixel', track: 'free', name: 'Atlântida Pixel' }, { id: 'av_tab_ruinas_pixel', track: 'free', name: 'Ruínas da Floresta' }, { id: 'av_tab_lava_pixel', track: 'free', name: 'Fortaleza de Lava' }, { id: 'av_principe_deserto', track: 'club', name: 'Príncipe do Deserto' }, { id: 'av_principe_astral', track: 'club', name: 'Príncipe Astral' }, { id: 'av_cavaleiro_prata', track: 'club', name: 'Cavaleiro de Prata' }, { id: 'av_dama_dos_bosques', track: 'free', name: 'Dama dos Bosques' }, { id: 'av_principe_estelar', track: 'club', name: 'Príncipe Estelar' }];
 const PASS_BY_ID = Object.fromEntries(PASS_AVATARS.map(a => [a.id, a]));
+// R176.8 · emotes que só o PASSE entrega (nível 10: um da faixa grátis e um da faixa Club, em rodízio por temporada)
+const PASS_EMOTES = [
+  { id: 'emote_quase', track: 'free', text: 'QUASE!' },
+  { id: 'emote_ops', track: 'free', text: 'OPS!' },
+  { id: 'emote_merecido', track: 'free', text: 'MERECIDO!' },
+  { id: 'emote_que_jogada', track: 'club', text: 'QUE JOGADA!' },
+  { id: 'emote_eu_vi', track: 'club', text: 'EU VI ESSA!' },
+];
 const ofKind = kind => ITEMS.filter(i => i.kind === kind).map(i => i.id);
 // R119 · emotes de graça (todo jogador com conta ou convidado)
 const FREE_EMOTES = [
@@ -62,7 +76,11 @@ const FREE_EMOTES = [
   { id: 'emote_boa_jogada', text: 'Boa jogada!' },
   { id: 'emote_obrigado', text: 'Obrigado!' },
   { id: 'emote_boa_partida', text: 'Boa partida!' },
+  // R176.8 · novos de graça
+  { id: 'emote_boa_sorte', text: 'BOA SORTE!' },
+  { id: 'emote_parabens', text: 'PARABÉNS!' },
+  { id: 'emote_revanche', text: 'REVANCHE?' },
 ];
-const emoteText = id => { const f = FREE_EMOTES.find(e => e.id === id); if (f) return f.text; const i = BY_ID[id]; return i && i.kind === 'emote' ? i.name : null; };
+const emoteText = id => { const f = FREE_EMOTES.find(e => e.id === id) || PASS_EMOTES.find(e => e.id === id); if (f) return f.text; const i = BY_ID[id]; return i && i.kind === 'emote' ? i.name : null; };
 const isFreeEmote = id => FREE_EMOTES.some(e => e.id === id);
-module.exports = { ITEMS, BY_ID, ofKind, FREE_EMOTES, emoteText, isFreeEmote, PASS_AVATARS, PASS_BY_ID };
+module.exports = { ITEMS, BY_ID, ofKind, FREE_EMOTES, emoteText, isFreeEmote, PASS_AVATARS, PASS_BY_ID, PASS_EMOTES };
