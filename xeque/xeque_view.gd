@@ -46,7 +46,7 @@ const LAYOUTS := {
         "mesa": Rect2(40, 404, 384, 206), "como": null,
         "plates": {0: ["h", Rect2(40, 718, 384, 152)], 1: ["v", Vector2(562, 380), 232], 2: ["hc", Rect2(822, 2, 306, 112)], 3: ["v", Vector2(1388, 380), 232]},
         "turn": Rect2(40, 624, 384, 80), "meter": Rect2(1500, 84, 432, 160),
-        "xeque": [Vector2(1716, 614), 0.95], "play": Rect2(1500, 736, 432, 136),
+        "xeque": [Vector2(1716, 622), 1.25], "play": Rect2(1500, 736, 432, 136),
         "hint": [Vector2(1716, 300), 26], "help": Rect2(1798, 4, 64, 64), "menu": Rect2(1868, 4, 64, 64),
         "music": Rect2(1658, 4, 64, 64), "fx": Rect2(1728, 4, 64, 64), "full": Rect2(1588, 4, 64, 64), "voice": Rect2(1518, 4, 64, 64), "voice_ear": Rect2(1448, 4, 64, 64),
         "hand": [Vector2(975, 754), 0.245], "pile": [Vector2(975, 369), 0.122], "clock": [Vector2(975, 248), 0.185],
@@ -1121,6 +1121,11 @@ func _draw_hint():
     var lines: Array = ui.help_text()
     if String(lines[0]).is_empty(): return
     var fs: int = h[1]
+    if ui.layout == "landscape":
+        # R176.6 · fundo escuro: em cima do cenário dourado o texto sumia
+        var w := maxf(tw(String(lines[0]).replace("*", ""), "ui_sp", fs), tw(String(lines[1]).replace("*", ""), "ui_sp", fs)) + 44.0
+        var br := Rect2(h[0].x - w / 2.0, h[0].y - fs * 1.15, w, fs * 2.9)
+        panel(br, Color(0.91, 0.70, 0.26, 0.85), false, Color("13264d"), Color("0a1631"))
     rich(lines[0], h[0], "ui_sp", fs, Color("f6ecd2"), Color("ffd257"))
     rich(lines[1], h[0] + Vector2(0, fs * 1.3), "ui_sp", fs, Color("f6ecd2"), Color("ffd257"))
 
