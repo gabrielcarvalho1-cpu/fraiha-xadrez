@@ -29,9 +29,9 @@ func _ready():
     streams["promotion"] = load("res://audio_v025/padrao/promocao.mp3")
     streams["roque"] = load("res://audio_v025/padrao/roque.mp3")
     # R176 · fim de partida (vitória OU derrota, em Ranked, Casual e contra o computador): voz "checkmate" + espada
-    # (o mesmo arquivo enviado pelo dono, já usado no XEQUE/MARCHA). Empate: som próprio ("empate").
-    streams["fim"] = load("res://xeque/audio/voz_xeque_mate_derrota.mp3")
-    streams["empate"] = load("res://marcha/audio/r70/saida_do_peao.mp3")   # R176 · empate (som enviado pelo dono, já usado na MARCHA)
+    # (arquivo enviado pelo dono; cópia no pacote principal — o do XEQUE/MARCHA só baixa depois da Home). Empate: som próprio ("empate").
+    streams["fim"] = load("res://audio_v025/padrao/fim_partida.mp3")
+    streams["empate"] = load("res://audio_v025/padrao/empate.mp3")   # R176 · empate (som enviado pelo dono, já usado na MARCHA)
     for i in range(4):
         var player = AudioStreamPlayer.new()
         player.volume_db = -14
