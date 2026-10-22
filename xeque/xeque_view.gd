@@ -556,6 +556,9 @@ func _draw_mesa_anim():
 
 func _draw_title():
     if desk(): return _desk_title()
+    if ui.layout == "landscape":
+        if ui.LOGO_R55 == null: ui.LOGO_R55 = load(ui.LOGO_R55_PATH)   # só a logo (as cartas grandes do PC não)
+        return _desk_title(Rect2(40, 40, 384, 237))   # R176.5 · celular deitado: a mesma logo do PC
     var lay := L()
     if ui.layout == "portrait":
         # R88 · em pé os ícones (maiores) ocupam o topo: fica só a RODADA, embaixo deles
@@ -1903,9 +1906,8 @@ func card_face(kind: String, c: Vector2, w: float, rot := 0.0, mod: Color = Colo
 
 # ---------------------------------------------------------------- R55 · partes da tela (PC)
 const LOGO_PLAQUE := [0.1951, 0.8086, 0.6112, 0.0747]   # R125 · placa preta da logo (fração da imagem; tools/art/xeque_logo_botao_r125.py)
-func _desk_title():
+func _desk_title(lr := Rect2(16, 2, 342, 211)):
     # R125 · logo nova; a rodada vai na placa preta da própria arte, escrita ao vivo
-    var lr := Rect2(16, 2, 342, 211)
     draw_texture_rect(Crisp.at(ui.LOGO_R55, lr.size * ui.k), lr, false)
     var pq := Rect2(lr.position.x + LOGO_PLAQUE[0] * lr.size.x, lr.position.y + LOGO_PLAQUE[1] * lr.size.y, LOGO_PLAQUE[2] * lr.size.x, LOGO_PLAQUE[3] * lr.size.y)
     var sub := "RODADA %d · BLEFE DE CARTAS" % ui.g.round_no
