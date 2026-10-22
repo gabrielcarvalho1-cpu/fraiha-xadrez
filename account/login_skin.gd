@@ -96,6 +96,9 @@ class SkinButton extends Button:
         add_theme_constant_override("outline_size", 0)
     func _notification(what):
         if what in [NOTIFICATION_MOUSE_ENTER, NOTIFICATION_MOUSE_EXIT]: queue_redraw()
+    ## R176.1 · textura da placa (o destaque dos botões de saída recolore só o miolo dela)
+    func plate_texture() -> Texture2D:
+        return null if baked else (LoginSkinRef.nine_button() if primary else LoginSkinRef.nine_google()).texture
     func _draw():
         var lit := is_hovered() and not disabled
         var down := button_pressed or (is_hovered() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))

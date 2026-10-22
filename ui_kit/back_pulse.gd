@@ -90,6 +90,8 @@ uniform float shine = 1.0;       // força do brilho
 uniform bool use_uv = false;     // arte recortada: UV cobre o botão inteiro
 uniform vec2 box = vec2(200.0, 60.0);
 uniform float phase = 0.0;       // cada botão passa o brilho num momento diferente
+uniform sampler2D plate_mask : filter_nearest;   // miolo da placa na textura do botão (o resto não muda)
+uniform vec2 mask_size = vec2(0.0);
 varying vec2 lp;
 void vertex() { lp = VERTEX; }
 vec3 rgb2hsv(vec3 c) { vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0); vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
@@ -102,11 +104,14 @@ void fragment() {
 	float k = 1.0 + 0.08 * sin(TIME * 6.2831853 / breath) * breathe;
 	vec3 o = COLOR.rgb;
 	bool wine = false;
-	if (recolor > 0.5) {
-		if (hsv.y > 0.16 && hsv.x > 0.50 && hsv.x < 0.80) {
+	bool masked = mask_size.x > 0.0 && abs(float(textureSize(TEXTURE, 0).x) - mask_size.x) < 0.5 && abs(float(textureSize(TEXTURE, 0).y) - mask_size.y) < 0.5;
+	bool inside = !masked || texture(plate_mask, UV).a > 0.5;
+	bool goldish = hsv.x > 0.05 && hsv.x < 0.19 && hsv.y > 0.38 && hsv.z > 0.38;
+	if (recolor > 0.5 && inside) {
+		if (hsv.y > 0.16 && hsv.x > 0.24 && hsv.x < 0.80 && hsv.z >= 0.24) {
 			o = hsv2rgb(vec3(0.992, min(1.0, hsv.y * 1.02), hsv.z * 0.95));   // azul-marinho -> vinho
 			wine = true;
-		} else if (hsv.z < 0.30) {
+		} else if (hsv.z < 0.30 || (hsv.y < 0.25 && hsv.z < 0.55) || (hsv.x > 0.24 && hsv.x < 0.80 && hsv.z < 0.24)) {
 			o = mix(COLOR.rgb, vec3(0.36, 0.06, 0.07) * (0.72 + hsv.z * 2.0), 0.85);   // preto/marrom -> vinho
 			wine = true;
 		}
@@ -119,7 +124,7 @@ void fragment() {
 	float pos = mix(-0.35, 1.35, run);
 	float d = (p.x + (p.y - 0.5) * 0.5) - pos;
 	float band = smoothstep(0.12, 0.0, abs(d)) * (1.0 - step(1.0, run));
-	o += vec3(1.0, 0.88, 0.62) * band * 0.36 * shine;
+	if (inside || goldish) o += vec3(1.0, 0.88, 0.62) * band * 0.36 * shine;
 	COLOR.rgb = o;
 }
 """
@@ -134,16 +139,21 @@ static func recolor_material() -> ShaderMaterial:
 
 ## mesma conta do shader, para recolorir a arte pintada uma vez (CPU)
 static func recolor_px(c: Color) -> Color:
-	if c.s > 0.16 and c.h > 0.50 and c.h < 0.80:
+	if c.s > 0.16 and c.h > 0.24 and c.h < 0.80 and c.v >= 0.24 and c.v < 0.62:
 		var o := Color.from_hsv(0.992, minf(1.0, c.s * 1.02), c.v * 0.95)
 		o.a = c.a
 		return o
-	if c.v < 0.30:
+	if c.v < 0.30 or (c.s < 0.25 and c.v < 0.55) or (c.h > 0.24 and c.h < 0.80 and c.v < 0.24):
 		var w := Color(0.36, 0.06, 0.07) * (0.72 + c.v * 2.0)
 		var o2 := c.lerp(w, 0.85)
 		o2.a = c.a
 		return o2
 	return c
+
+## o que segura o preenchimento: a moldura dourada; na textura de botão (sem texto) também o brilho claro da moldura
+static func _wall(c: Color, bright_too: bool) -> bool:
+	if c.h > 0.03 and c.h < 0.2 and c.s > 0.3 and c.v > 0.18: return true   # dourado, inclusive o escuro da moldura
+	return bright_too and c.v > 0.8 and c.s < 0.45
 
 static func _gold(c: Color) -> bool:
 	return c.h > 0.05 and c.h < 0.19 and c.s > 0.38 and c.v > 0.38
@@ -153,7 +163,17 @@ var _patch: Texture2D
 var _t := 0.0   # (testes antigos mexiam nisso; o tempo agora é o TIME do shader)
 
 func _ready():
+	# só monta quando o botão aparece de verdade (arte carregada sob demanda continua sob demanda)
+	var b := get_parent() as Control
+	if b != null and not b.is_visible_in_tree():
+		b.visibility_changed.connect(_first_show)
+		return
 	(func(): _setup()).call_deferred()
+
+func _first_show():
+	var b := get_parent() as Control
+	if b == null or not b.is_visible_in_tree() or _mode != "": return
+	(func(): if _mode == "": _setup()).call_deferred()
 
 func _setup():
 	var b := get_parent() as Control
@@ -192,6 +212,12 @@ func _setup():
 		var bm := recolor_material()
 		bm.set_shader_parameter("phase", ph)
 		bm.set_shader_parameter("box", b.size)
+		var pt := _plate_texture(b)
+		if pt != null:
+			var mk := _mask_of(pt)
+			if mk != null:
+				bm.set_shader_parameter("plate_mask", mk)
+				bm.set_shader_parameter("mask_size", pt.get_size())
 		b.resized.connect(func(): if b.material == bm: bm.set_shader_parameter("box", b.size))
 		b.material = bm
 		for ch in b.get_children():
@@ -209,7 +235,7 @@ static func _painted(b: Control) -> bool:
 	if b is Button:
 		var bt := b as Button
 		var sb := bt.get_theme_stylebox("normal")
-		var empty_box: bool = bt.flat or sb == null or sb is StyleBoxEmpty
+		var empty_box: bool = bt.flat or sb == null or sb is StyleBoxEmpty or (sb is StyleBoxFlat and (sb as StyleBoxFlat).bg_color.a < 0.05 and (sb as StyleBoxFlat).border_width_left == 0)
 		var text_hidden: bool = bt.text.is_empty() or bt.get_theme_color("font_color").a < 0.05
 		return empty_box and text_hidden and not _has_art_child(b)
 	return false
@@ -224,7 +250,8 @@ static func _has_art_child(b: Node) -> bool:
 ## (RefHover) ou a TextureRect de fundo mais próxima que cobre o botão.
 static func _art_source(b: Control) -> Dictionary:
 	if b.has_meta("art_src"):
-		var a: Array = b.get_meta("art_src")
+		var m = b.get_meta("art_src")
+		var a: Array = m.call() if m is Callable else m
 		return {"tex": a[0], "region": a[1]}
 	var hv = b.get_node_or_null("RefHover")
 	if hv is TextureRect and hv.texture is AtlasTexture:
@@ -247,6 +274,28 @@ static func _art_source(b: Control) -> Dictionary:
 		node = par
 	return {}
 
+## textura da placa de um botão desenhado (para recolorir só o miolo, mesmo quando a textura traz fundo junto)
+static func _plate_texture(b: Control) -> Texture2D:
+	if b.has_method("plate_texture"): return b.plate_texture()
+	if b is TextureButton: return (b as TextureButton).texture_normal
+	var sb = b.get_theme_stylebox("normal")
+	if sb is StyleBoxTexture: return (sb as StyleBoxTexture).texture
+	return null
+
+## máscara do miolo (preenchimento do centro até a moldura dourada); nula se a textura já não tem fundo
+static var _mask_cache := {}
+static func _mask_of(t: Texture2D) -> Texture2D:
+	var key := t.get_rid().get_id()
+	if _mask_cache.has(key): return _mask_cache[key]
+	var res: Texture2D = null
+	var ts := t.get_size()
+	var img := _image_of(t) if ts.x * ts.y <= 260000.0 else null   # placas de botão são pequenas; arte grande não
+	if img != null:
+		var pair := _make_patch(t, Rect2(Vector2.ZERO, img.get_size()), true)
+		if not pair.is_empty(): res = pair[0]
+	_mask_cache[key] = res
+	return res
+
 static var _img_cache := {}
 static func _image_of(t: Texture2D) -> Image:
 	if t == null: return null
@@ -261,7 +310,7 @@ static func _image_of(t: Texture2D) -> Image:
 
 ## recorte da arte com SÓ a placa recolorida (fundo transparente): preenche a partir do miolo até bater na
 ## moldura dourada; se vazar (moldura aberta), usa só o miolo azul do recorte.
-static func _make_patch(t: Texture2D, region: Rect2) -> Array:
+static func _make_patch(t: Texture2D, region: Rect2, mask_only := false) -> Array:
 	var img := _image_of(t)
 	if img == null: return []
 	var r := Rect2i(region.position.round(), region.size.round()).intersection(Rect2i(Vector2i.ZERO, img.get_size()))
@@ -269,6 +318,7 @@ static func _make_patch(t: Texture2D, region: Rect2) -> Array:
 	var sub := img.get_region(r)
 	var w := r.size.x
 	var h := r.size.y
+	if mask_only: return _outer_mask(sub, w, h)
 	var seen := PackedByteArray()
 	seen.resize(w * h)
 	var stack: Array[int] = []
@@ -277,7 +327,7 @@ static func _make_patch(t: Texture2D, region: Rect2) -> Array:
 		for fx in [0.5, 0.35, 0.65, 0.2, 0.8]:
 			var x := int(w * fx)
 			var y := int(h * fy)
-			if not _gold(sub.get_pixel(x, y)): stack.append(y * w + x)
+			if not _wall(sub.get_pixel(x, y), mask_only): stack.append(y * w + x)
 	var edge_hits := 0
 	while not stack.is_empty():
 		var i: int = stack.pop_back()
@@ -285,7 +335,7 @@ static func _make_patch(t: Texture2D, region: Rect2) -> Array:
 		var x := i % w
 		var y := i / w
 		var c := sub.get_pixel(x, y)
-		if _gold(c) or c.a < 0.5: continue
+		if _wall(c, mask_only) or c.a < 0.5: continue
 		seen[i] = 1
 		if x == 0 or y == 0 or x == w - 1 or y == h - 1: edge_hits += 1
 		if x > 0: stack.append(i - 1)
@@ -293,8 +343,35 @@ static func _make_patch(t: Texture2D, region: Rect2) -> Array:
 		if y > 0: stack.append(i - w)
 		if y < h - 1: stack.append(i + w)
 	var leaked := edge_hits > (w + h) * 2 * 0.35
+	if leaked: return []   # a placa não fecha na moldura (arte já vermelha, fundo igual…): melhor não mexer
 	var out := Image.create(w, h, false, Image.FORMAT_RGBA8)
 	var gold := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	if mask_only:
+		# manchas escuras do próprio miolo (textura granulada) também entram: cresce sobre o escuro (a moldura é clara)
+		var q: Array[int] = []
+		for i in w * h:
+			if seen[i] == 1: q.append(i)
+		var qi := 0
+		while qi < q.size():
+			var i: int = q[qi]
+			qi += 1
+			var x := i % w
+			var y := i / w
+			for nn in [i - 1, i + 1, i - w, i + w]:
+				var n: int = nn
+				if n < 0 or n >= w * h or seen[n] == 1: continue
+				var nx: int = n % w
+				if absi(nx - x) > 1: continue
+				var pc := sub.get_pixel(nx, n / w)
+				if pc.v < 0.3 or (pc.s < 0.25 and pc.v < 0.55):
+					seen[n] = 1
+					q.append(n)
+		var mimg := Image.create(w, h, false, Image.FORMAT_RGBA8)
+		for y in h:
+			for x in w:
+				if seen[y * w + x] == 1: mimg.set_pixel(x, y, Color.WHITE)
+		return [ImageTexture.create_from_image(mimg)]
+	var flip := _chevron_rect(sub, seen, w, h)   # R176.1 · seta ">" da placa vira "<" (é um botão de VOLTAR)
 	for y in h:
 		for x in w:
 			var c := sub.get_pixel(x, y)
@@ -307,7 +384,90 @@ static func _make_patch(t: Texture2D, region: Rect2) -> Array:
 			var o := recolor_px(c)
 			if o.is_equal_approx(c): continue
 			out.set_pixel(x, y, o)
+	if flip.has_area():
+		var fr := Rect2i(flip)
+		for y in range(fr.position.y, fr.end.y):
+			for x in range(fr.position.x, fr.end.x):
+				var mx := fr.position.x + fr.end.x - 1 - x
+				var c := sub.get_pixel(mx, y)
+				out.set_pixel(x, y, recolor_px(c) if not _gold(c) else c)
+				gold.set_pixel(x, y, c if _gold(c) else Color(0, 0, 0, 0))
 	return [ImageTexture.create_from_image(out), ImageTexture.create_from_image(gold)]
+
+## Máscara da placa numa textura de botão: tudo o que fica DENTRO da moldura externa (o fundo que vem junto na
+## textura é o que se alcança a partir das bordas sem atravessar o dourado). Moldura aberta: sem máscara.
+static func _outer_mask(sub: Image, w: int, h: int) -> Array:
+	var out_px := PackedByteArray()
+	out_px.resize(w * h)
+	var q: Array[int] = []
+	for x in w:
+		q.append(x)
+		q.append((h - 1) * w + x)
+	for y in h:
+		q.append(y * w)
+		q.append(y * w + w - 1)
+	var qi := 0
+	while qi < q.size():
+		var i: int = q[qi]
+		qi += 1
+		if out_px[i] == 1: continue
+		var x: int = i % w
+		var y: int = i / w
+		var c := sub.get_pixel(x, y)
+		if c.a >= 0.5 and _wall(c, true): continue
+		out_px[i] = 1
+		if x > 0: q.append(i - 1)
+		if x < w - 1: q.append(i + 1)
+		if y > 0: q.append(i - w)
+		if y < h - 1: q.append(i + w)
+	if out_px[(h / 2) * w + w / 2] == 1: return []   # o "fora" chegou ao centro: não há moldura fechada
+	var mimg := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for i in w * h:
+		if out_px[i] == 0: mimg.set_pixel(i % w, i / w, Color.WHITE)
+	return [ImageTexture.create_from_image(mimg)]
+
+## Seta ">" pintada no fim da placa: um bloco dourado solto (cercado pelo miolo), estreito, no último quarto.
+## Devolve o retângulo (com folga) para espelhar; vazio se não houver seta.
+static func _chevron_rect(sub: Image, seen: PackedByteArray, w: int, h: int) -> Rect2:
+	var visited := PackedByteArray()
+	visited.resize(w * h)
+	var best := Rect2()
+	for y0 in range(2, h - 2):
+		for x0 in range(int(w * 0.72), w - 2):
+			var i0 := y0 * w + x0
+			if visited[i0] == 1 or seen[i0] == 1 or not _gold(sub.get_pixel(x0, y0)): continue
+			var stack: Array[int] = [i0]
+			var mn := Vector2i(x0, y0)
+			var mxv := Vector2i(x0, y0)
+			var touches := false
+			var count := 0
+			while not stack.is_empty():
+				var i: int = stack.pop_back()
+				if visited[i] == 1: continue
+				var x := i % w
+				var y := i / w
+				if seen[i] == 1 or not _gold(sub.get_pixel(x, y)): continue
+				visited[i] = 1
+				count += 1
+				mn = Vector2i(mini(mn.x, x), mini(mn.y, y))
+				mxv = Vector2i(maxi(mxv.x, x), maxi(mxv.y, y))
+				if x <= 1 or y <= 1 or x >= w - 2 or y >= h - 2:
+					touches = true
+					continue
+				stack.append_array([i - 1, i + 1, i - w, i + w])
+			var bw := mxv.x - mn.x + 1
+			var bh := mxv.y - mn.y + 1
+			if touches or count < 12: continue
+			if bw > w * 0.12 or bh < h * 0.2 or bh > h * 0.75: continue
+			var r := Rect2(mn.x - 3, mn.y - 3, bw + 6, bh + 6)
+			if r.position.x < 0 or r.end.x > w or r.position.y < 0 or r.end.y > h: continue
+			# a folga em volta tem que ser miolo (nada da moldura entra no espelho)
+			var ok := true
+			for yy in range(int(r.position.y), int(r.end.y)):
+				for xx in [int(r.position.x), int(r.end.x) - 1]:
+					if seen[yy * w + xx] != 1 and _gold(sub.get_pixel(xx, yy)): ok = false
+			if ok and r.get_center().x > best.get_center().x: best = r
+	return best
 
 ## a arte embaixo mudou (pele do tabuleiro ligou/desligou): refaz o destaque
 func refresh():

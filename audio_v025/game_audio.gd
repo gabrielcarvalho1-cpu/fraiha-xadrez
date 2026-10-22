@@ -26,12 +26,12 @@ func _ready():
     streams["wood"] = lance
     streams["metal"] = lance
     streams["capture"] = load("res://audio_v025/padrao/captura.mp3")
-    streams["promotion"] = load("res://audio_v025/padrao/promocao.mp3")
+    streams["promotion"] = load("res://audio_v025/padrao/saida_do_peao.mp3")   # R176 · coroação do peão (som enviado pelo dono)
     streams["roque"] = load("res://audio_v025/padrao/roque.mp3")
     # R176 · fim de partida (vitória OU derrota, em Ranked, Casual e contra o computador): voz "checkmate" + espada
     # (arquivo enviado pelo dono; cópia no pacote principal — o do XEQUE/MARCHA só baixa depois da Home). Empate: som próprio ("empate").
     streams["fim"] = load("res://audio_v025/padrao/fim_partida.mp3")
-    streams["empate"] = load("res://audio_v025/padrao/empate.mp3")   # R176 · empate (som enviado pelo dono, já usado na MARCHA)
+    streams["empate"] = load("res://audio_v025/padrao/saida_do_peao.mp3")   # R176 · empate (som enviado pelo dono, já usado na MARCHA)
     for i in range(4):
         var player = AudioStreamPlayer.new()
         player.volume_db = -14
@@ -71,7 +71,7 @@ func play_cue(id: String, from_pos := 0.0):
     player.play(from_pos)
 
 ## R50 · momento do "toc" dentro de cada som novo (o movimento.mp3 tem ~0,5 s quase mudo antes do toc).
-const HIT := {"wood": 0.50, "metal": 0.50, "capture": 0.07, "promotion": 0.07, "roque": 0.07}
+const HIT := {"wood": 0.50, "metal": 0.50, "capture": 0.07, "promotion": 0.0, "roque": 0.07}   # R176 · coroação começa no 1º instante
 ## Toca o som do lance com o toc caindo quando a peça assenta na casa (fim da animação do tabuleiro).
 ## Sem animação (arrastar), o toc sai na hora. O arquivo não é alterado: só o ponto de início.
 func play_move_cue(id: String):

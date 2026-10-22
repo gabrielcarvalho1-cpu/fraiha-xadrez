@@ -134,11 +134,14 @@ func _relayout():
     narrow = vs.x < 760.0
     var outer: Control = root.get_node("TrainingOuter")
     var gutter := 14.0 if narrow else 36.0
-    outer.offset_left = gutter
-    outer.offset_right = -gutter
-    outer.offset_top = 12.0
-    outer.offset_bottom = -8.0
-    column.custom_minimum_size.x = minf(vs.x - gutter * 2.0 - 16.0, 1100.0)
+    # R176 · PC/navegador: a tela inteira cresce junto com a janela (antes ficava minúscula num monitor grande).
+    # Tudo é montado em "unidades" de uma tela 1280 x 760 e ampliado por k; celular em pé continua 1:1.
+    var k := 1.0 if narrow else clampf(minf(vs.x / 1280.0, vs.y / 760.0), 1.0, 2.4)
+    outer.set_anchors_preset(Control.PRESET_TOP_LEFT)
+    outer.scale = Vector2(k, k)
+    outer.position = Vector2(gutter, 12.0)
+    outer.size = Vector2(vs.x - gutter * 2.0, vs.y - 20.0) / k
+    column.custom_minimum_size.x = minf(outer.size.x - 16.0, 1100.0)
     if title != null: title.add_theme_font_size_override("font_size", 17 if narrow else 24)
 
 func _clear():

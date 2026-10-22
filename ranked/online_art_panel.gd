@@ -39,9 +39,11 @@ func setup(owner):
     _hit(TAB_L, "tab_l", func(): _tab("casual"))
     _hit(TAB_R, "tab_r", func(): _tab("ranked"))
     invite_hit = _hit(INVITE, "invite", func(): if not ui.rated(): ui.invite_requested.emit())
-    _hit(BACK, "back", func():
+    var back := _hit(BACK, "back", func():
         var b = ui.footer.find_child("BackButton", true, false)
         if b != null: b.pressed.emit())
+    back.name = "OnlineBack"   # R176.1 · VOLTAR no vinho do jogo (ui_kit/back_pulse.gd recolore a placa da arte)
+    back.set_meta("art_src", func(): return [ART, BACK])
     hide()
 
 ## Deslocamento do i-ésimo cartão VISÍVEL quando há n visíveis (4 = grade 2x2 original).

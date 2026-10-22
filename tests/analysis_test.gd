@@ -211,6 +211,9 @@ func run():
     tr.board.move_tried.emit(epos.legal_moves()[0])
     check(await wait_until(func(): return node("TrainingStars") != null or node("TrainingWhy") != null, 30.0), "exercício avaliado (R169: estrelas ou o porquê do erro)")
     check(node("TrainingHint") != null and node("TrainingShow") != null and node("TrainingSkip") != null, "ajuda em 3 degraus: DICA, MOSTRAR LANCE, PRÓXIMO")
+    if OS.get_environment("SHOT_DIR") != "":   # R176 · print do TREINE MEUS ERROS (tela cresce com a janela)
+        await RenderingServer.frame_post_draw
+        root.get_texture().get_image().save_png(OS.get_environment("SHOT_DIR").path_join(("cel_" if mobile else "pc_") + "treino.png"))
     press("TrainingBack")
     check(not tr.visible, "treino fecha")
     # histórico
