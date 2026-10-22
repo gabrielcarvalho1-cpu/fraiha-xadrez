@@ -25,6 +25,7 @@ func setup(p_stage):
 
 ## Começa um registro novo para a partida atual.
 func begin(mode: String, human_color: String, player_name: String, opponent: String, match_id := ""):
+    preload("res://ui_v022/meta_pixel.gd").track_once("PrimeiraPartida")   # Meta Pixel: 1ª partida neste navegador
     record = Record.new()
     record.start(mode, human_color, player_name, opponent, match_id)
     _prev_count = int(game.move_count)

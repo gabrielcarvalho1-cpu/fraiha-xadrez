@@ -404,6 +404,7 @@ func _start_countdown():
 func start_game():
     if mode == "game" and g != null and g.state != Rules.MATCH_END: return
     online = false
+    preload("res://ui_v022/meta_pixel.gd").track_once("PrimeiraPartida")   # Meta Pixel: 1ª partida neste navegador
     g = Rules.new()
     var names := SEAT_NAMES.duplicate()
     g.setup(seed_override if seed_override != 0 else 0, names)

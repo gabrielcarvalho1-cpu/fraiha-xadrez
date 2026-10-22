@@ -236,6 +236,7 @@ func sign_up(mail: String, password: String, wanted_nickname: String):
     _auth_request(HTTPClient.METHOD_POST, "/auth/v1/signup" + redirect, {"email": mail.strip_edges(), "password": password}, func(code, body):
         busy = false
         if code >= 200 and code < 300:
+            preload("res://ui_v022/meta_pixel.gd").track("CompleteRegistration")   # Meta Pixel (só Web, só com cookies aceitos)
             if body.has("access_token"): _adopt_session(body)
             else: notice.emit("Conta criada! Confirme pelo link enviado para %s e depois entre." % mail.strip_edges(), false)
         else:
