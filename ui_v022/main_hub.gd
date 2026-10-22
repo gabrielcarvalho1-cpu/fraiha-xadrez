@@ -124,9 +124,11 @@ var avatar_detail := {}         # área de detalhe do avatar em foco
 var gallery_count: Label
 var inspected_avatar := ""
 var inspected_badge := "auto"   # R32: ícone em foco na aba ÍCONES do Perfil
-var profile_tab := "avatars"    # "avatars" | "icons" | "frames"
+var profile_tab := "avatars"    # "avatars" | "icons" | "frames" | "emotes"
 var badge_gallery = null        # profile/badge_gallery.gd
 var frame_gallery = null        # R168 · profile/frame_gallery.gd (aba MOLDURAS)
+var emote_gallery = null        # R176.8 · profile/emote_gallery.gd (aba EMOTES)
+var inspected_emote := ""
 var inspected_frame := ""
 var profile_tabs := {}
 var gallery_scrolls := {}
@@ -739,9 +741,25 @@ func _build_pages():
     frame_gallery.setup(self, 4, Vector2(152, 190))
     for c in ["h_separation", "v_separation"]: frame_gallery.add_theme_constant_override(c, 14)
     frame_gallery.inspected.connect(_inspect_frame)
-    gallery_scrolls = {"avatars": gscroll, "icons": bscroll, "frames": fscroll}
-    # barra de rolagem da arte (trilho azul + alça dourada), funcional para as três galerias
-    for sc in [gscroll, bscroll, fscroll]:
+    # R176.8 · EMOTES: quarta aba (coleção do chat da partida: grátis, comprados e os da Loja)
+    var escroll = ScrollContainer.new()
+    escroll.name = "EmoteGalleryScroll"
+    escroll.position = gscroll.position
+    escroll.size = gscroll.size
+    escroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    escroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+    escroll.visible = false
+    profile_panel.add_child(escroll)
+    preload("res://ui_v022/touch_scroll.gd").attach(escroll)
+    emote_gallery = load("res://profile/emote_gallery.gd").new()
+    emote_gallery.name = "EmoteGallery"
+    escroll.add_child(emote_gallery)
+    emote_gallery.setup(self, 4, Vector2(152, 190))
+    for c in ["h_separation", "v_separation"]: emote_gallery.add_theme_constant_override(c, 14)
+    emote_gallery.inspected.connect(_inspect_emote)
+    gallery_scrolls = {"avatars": gscroll, "icons": bscroll, "frames": fscroll, "emotes": escroll}
+    # barra de rolagem da arte (trilho azul + alça dourada), funcional para as quatro galerias
+    for sc in [gscroll, bscroll, fscroll, escroll]:
         var bar := _art_scrollbar(profile_panel, sc, "perfil_bg", PF_BAR, PF_BAR_GRAB, PF_BAR_TRACK, PF_BAR_UP, PF_BAR_DOWN, 204, "GalleryBar")
         var scr: ScrollContainer = sc
         for n in bar: n.visible = scr.visible
@@ -752,9 +770,9 @@ func _build_pages():
     tabs.mouse_filter = Control.MOUSE_FILTER_IGNORE
     profile_panel.add_child(tabs)
     var ti := 0
-    for pair in [["avatars", "AVATARES", "pf_ico_avatares"], ["icons", "ÍCONES", "pf_ico_icones"], ["frames", "MOLDURAS", ""]]:
+    for pair in [["avatars", "AVATARES", "pf_ico_avatares"], ["icons", "ÍCONES", "pf_ico_icones"], ["frames", "MOLDURAS", ""], ["emotes", "EMOTES", "emote"]]:
         var tab_id: String = pair[0]
-        var tr := Rect2(90, 226 + ti * 104, 228, 84)
+        var tr := Rect2(90, 220 + ti * 92, 228, 80)   # R176.8 · 4 abas (EMOTES entrou)
         ti += 1
         var tart := NinePatchRect.new()
         tart.name = "TabArt"
@@ -765,7 +783,13 @@ func _build_pages():
         tart.mouse_filter = Control.MOUSE_FILTER_IGNORE
         tart.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
         tabs.add_child(tart)
-        if pair[2] != "": RefPage.image(tabs, RefPage.tex(pair[2]), Rect2(tr.position.x + 18, tr.position.y + 16, 48, 52))
+        if pair[2] == "emote":
+            var efx = preload("res://social/emote_fx.gd").make("emote_boa_jogada", 50)
+            efx.name = "TabEmoteIcon"
+            efx.playing = false
+            efx.position = Vector2(tr.position.x + 16, tr.position.y + 15)
+            tabs.add_child(efx)
+        elif pair[2] != "": RefPage.image(tabs, RefPage.tex(pair[2]), Rect2(tr.position.x + 18, tr.position.y + 14, 48, 52))
         else:
             var fi := TextureRect.new()
             fi.name = "TabFrameIcon"
@@ -780,7 +804,7 @@ func _build_pages():
         var tl := RefPage.text(tabs, pair[1], Rect2(tr.position.x + 74, tr.position.y, 146, tr.size.y), 20 if tab_id == "frames" else 23, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
         tl.add_theme_font_override("font", FONT_CINZEL)
         var tb := RefPage.hotspot(tabs, tr, func(): set_profile_tab(tab_id), "Tab_" + tab_id)
-        tb.name = {"icons": "ProfileTabIcons", "frames": "ProfileTabFrames"}.get(tab_id, "ProfileTabAvatars")
+        tb.name = {"icons": "ProfileTabIcons", "frames": "ProfileTabFrames", "emotes": "ProfileTabEmotes"}.get(tab_id, "ProfileTabAvatars")
         tb.set_meta("art", tart)
         profile_tabs[tab_id] = tb
     for id in avatar_gallery.cards:
@@ -797,7 +821,7 @@ func _build_pages():
     personalize.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     personalize.tooltip_text = "Ícone, título, moldura, tabuleiro e peças"
     # avisos (bloqueado, aplicado…) na coluna da esquerda, abaixo das abas
-    avatar_note = RefPage.text(profile_panel, "", Rect2(104, 544, 200, 280), 17, MUTED, false)
+    avatar_note = RefPage.text(profile_panel, "", Rect2(104, 592, 200, 170), 17, MUTED, false)   # R176.8 · abaixo das 4 abas
     avatar_note.name = "AvatarNote"
     avatar_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     avatar_note.vertical_alignment = VERTICAL_ALIGNMENT_TOP
@@ -1520,6 +1544,10 @@ func set_profile_tab(tab: String):
         else: tb.modulate = Color.WHITE if k == tab else Color(0.62, 0.66, 0.62)
     if tab == "icons": inspected_badge = cosmetic_pref("badge")
     if tab == "frames": inspected_frame = cosmetic_pref("frame")
+    if tab == "emotes" and emote_gallery != null:
+        if inspected_emote.is_empty(): inspected_emote = String(emote_gallery.all_ids()[0])
+        emote_gallery.focus_id = inspected_emote
+        emote_gallery.update_states()
     if frame_gallery != null:
         frame_gallery.focus_id = inspected_frame
         frame_gallery.update_states()
@@ -1531,6 +1559,9 @@ func set_profile_tab(tab: String):
 ## R176 · APLICAR com confirmação: "Você deseja mesmo aplicar …?" SIM / NÃO. Bloqueado ou já em uso: sem pergunta
 ## (apply_inspected mostra o motivo / não muda nada).
 func request_apply_inspected():
+    if profile_tab == "emotes":   # R176.8 · emote não se aplica: bloqueado abre a Loja de Coroas
+        if emote_gallery != null and emote_gallery.state_of(inspected_emote) == "locked": crowns_client().open_store("emote")
+        return
     var what := "o avatar"
     var id := inspected_avatar if not inspected_avatar.is_empty() else avatar_id
     var nm := ""
@@ -1559,6 +1590,7 @@ func request_apply_inspected():
 
 ## R32 · botão APLICAR da área de detalhe: aplica o avatar ou o ícone em foco.
 func apply_inspected() -> bool:
+    if profile_tab == "emotes": return false
     if profile_tab == "icons": return apply_badge(inspected_badge)
     if profile_tab == "frames": return apply_frame(inspected_frame)
     return apply_avatar(inspected_avatar if not inspected_avatar.is_empty() else avatar_id)
@@ -1595,12 +1627,21 @@ func apply_avatar(id: String) -> bool:
 func _refresh_avatar_detail():
     if avatar_detail.is_empty() or avatar_gallery == null: return
     _show_detail_frame("")
+    if profile_tab != "emotes":
+        var efx = avatar_detail.pic.get_node_or_null("DetailEmoteFx")
+        if efx != null:
+            avatar_detail.pic.remove_child(efx)
+            efx.queue_free()
     if profile_tab == "icons" and badge_gallery != null:
         _refresh_badge_detail()
         _fit_detail_title()
         return
     if profile_tab == "frames" and frame_gallery != null:
         _refresh_frame_detail()
+        _fit_detail_title()
+        return
+    if profile_tab == "emotes" and emote_gallery != null:
+        _refresh_emote_detail()
         _fit_detail_title()
         return
     _refresh_avatar_detail_inner()
@@ -1684,6 +1725,36 @@ func _refresh_badge_detail():
     b.text = "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR ÍCONE")
     b.disabled = st != "unlocked"
 
+## R176.8 · aba EMOTES: tocar inspeciona; o detalhe mostra o emote animado e onde conseguir
+func _inspect_emote(id: String):
+    inspected_emote = id
+    _refresh_avatar_detail()
+
+func _refresh_emote_detail():
+    var EG = preload("res://profile/emote_gallery.gd")
+    var id: String = inspected_emote if not inspected_emote.is_empty() else String(EG.all_ids()[0])
+    var st: String = emote_gallery.state_of(id)
+    avatar_detail.pic.texture = null
+    _detail_material(false)
+    var old = avatar_detail.pic.get_node_or_null("DetailEmoteFx")
+    if old == null or String(old.emote_id) != id:
+        if old != null: old.queue_free()
+        var side: float = minf(avatar_detail.pic.size.x, avatar_detail.pic.size.y) * 0.9
+        var fx = preload("res://social/emote_fx.gd").make(id, side)
+        fx.name = "DetailEmoteFx"
+        fx.position = (avatar_detail.pic.size - fx.size) / 2.0
+        avatar_detail.pic.add_child(fx)
+        old = fx
+    old.modulate = Color(0.5, 0.5, 0.5, 0.9) if st == "locked" else Color.WHITE
+    avatar_detail.title.text = EG.text_of(id).to_upper()
+    avatar_detail.origin.text = "Grátis para todos" if st == "free" else ("Comprado na Loja de Coroas" if st == "owned" else "Na Loja de Coroas · %d coroas" % EG.price_of(id))
+    avatar_detail.status.text = "BLOQUEADO" if st == "locked" else "LIBERADO"
+    avatar_detail.status.add_theme_color_override("font_color", Color("e89a7a") if st == "locked" else Color("49d17a"))
+    avatar_detail.brief.text = "Use no chat da partida (botão EMOTES)."
+    var b: Button = avatar_detail.apply
+    b.text = "VER NA LOJA" if st == "locked" else "LIBERADO"
+    b.disabled = st != "locked"
+
 ## R168 · detalhe da aba MOLDURAS
 func _refresh_frame_detail():
     var FG = preload("res://profile/frame_gallery.gd")
@@ -1747,6 +1818,9 @@ func _refresh_avatars():
     if frame_gallery != null:
         frame_gallery.update_states()
         if profile_tab == "frames": gallery_count.text = "%d de %d molduras liberadas" % [frame_gallery.count_unlocked(), frame_gallery.cards.size() - 1]
+    if emote_gallery != null:
+        emote_gallery.update_states()
+        if profile_tab == "emotes": gallery_count.text = "%d de %d emotes liberados" % [emote_gallery.count_unlocked(), emote_gallery.cards.size()]
     _refresh_avatar_detail()
     if get_parent().has_method("refresh_player_card"): get_parent().refresh_player_card()
 

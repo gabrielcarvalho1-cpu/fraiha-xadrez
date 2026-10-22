@@ -585,6 +585,22 @@ func _profile(content: VBoxContainer, width := 0.0):
             apply_fr.disabled = true
             _set_btn(apply_fr, "EM USO")
             fdetail.text = frames.display_name(String(chosen.frame)).to_upper() + " · EM USO"))
+    # R176.8 · EMOTES: a coleção do chat da partida (grátis, comprados e os da Loja de Coroas)
+    _text(content, "SEUS EMOTES", 16).name = "EmoteTitleMobile"
+    var emotes = load("res://profile/emote_gallery.gd").new()
+    emotes.name = "EmoteGalleryMobile"
+    emotes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    content.add_child(emotes)
+    emotes.setup(hub, cols, Vector2(cw, cw + 48.0))
+    var edetail = _text(content, "%d de %d emotes liberados · use no chat da partida" % [emotes.count_unlocked(), emotes.cards.size()], 14)
+    edetail.name = "EmoteDetailMobile"
+    var shop_em = _button(content, "VER NA LOJA DE COROAS", func(): hub.crowns_client().open_store("emote"))
+    shop_em.name = "EmoteShopMobile"
+    shop_em.visible = false
+    emotes.inspected.connect(func(id):
+        var st: String = emotes.state_of(id)
+        edetail.text = emotes.text_of(id).to_upper() + " · " + ("GRÁTIS" if st == "free" else ("LIBERADO" if st == "owned" else "NA LOJA · %d coroas" % emotes.price_of(id)))
+        shop_em.visible = st == "locked")
     # Foto própria (escolher → enquadrar → salvar) e remover.
     var photo_row = HBoxContainer.new()
     photo_row.add_theme_constant_override("separation", 8)
