@@ -2,7 +2,7 @@ extends "res://ui_v022/home_modal.gd"
 ## R176.8 · SUPORTE: o jogador manda uma mensagem (reclamação, sugestão, dúvida, problema no jogo, pagamento)
 ## que cai direto no Admin → Suporte. Embaixo/ao lado: MEUS TICKETS, com a resposta da equipe (chega na hora se
 ## estiver online — ticket_update). Só com conta (convidado vê o aviso para entrar). Servidor: online_v021/support.
-const CATS := [["reclamacao", "RECLAMAÇÃO"], ["sugestao", "SUGESTÃO"], ["duvida", "DÚVIDA"], ["problema", "PROBLEMA NO JOGO"], ["pagamento", "PAGAMENTO"]]
+const CATS := [["reclamacao", "RECLAMAÇÃO"], ["sugestao", "SUGESTÃO"], ["duvida", "DÚVIDA"], ["problema", "PROBLEMA"], ["pagamento", "PAGAMENTO"]]
 const ST_TXT := {"open": ["AGUARDANDO RESPOSTA", Color("e6c27a")], "answered": ["RESPONDIDO", Color("7fe0a0")], "closed": ["FECHADO", Color("9c9886")]}
 const OK_COL := Color("9fe0a8")
 const ERR_COL := Color("ff9d86")
@@ -109,10 +109,9 @@ func _form(parent: Control):
 		parent.add_child(_wrap(label("Entre na sua conta para mandar uma mensagem ao suporte — assim a gente consegue te responder aqui mesmo, no jogo.", 15, CREAM, true)))
 		parent.add_child(_wrap(label("Sem conta? Fale com a gente no Discord (Conheça o FRAIHA → Comunidade e Suporte).", 13, DIM, true)))
 		return
-	parent.add_child(_wrap(label("Reclamação, sugestão, dúvida, problema no jogo ou pagamento: a mensagem chega direto para a equipe do FRAIHA.", 13, DIM, true)))
-	parent.add_child(label("TIPO", 13, GOLD))
+	parent.add_child(_wrap(label("TIPO  ·  a mensagem chega direto para a equipe do FRAIHA", 13, GOLD)))
 	var grid := GridContainer.new()
-	grid.columns = 2 if narrow() else 3
+	grid.columns = 2 if (narrow() or portrait()) else 5
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
 	parent.add_child(grid)
@@ -122,6 +121,7 @@ func _form(parent: Control):
 		var b := button(c[1], 13, id == category)
 		b.name = "SupportCat_" + id
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.clip_text = true
 		b.custom_minimum_size = Vector2(0, ts(36))
 		b.pressed.connect(func():
 			category = id
@@ -157,7 +157,7 @@ func _form(parent: Control):
 		message_box.placeholder_text = "Conte o que aconteceu, com o máximo de detalhes (modo de jogo, horário, o que apareceu na tela)…"
 		message_box.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 		message_box.text = String(_draft.message)
-		message_box.custom_minimum_size = Vector2(0, ts(130 if not narrow() else 110))
+		message_box.custom_minimum_size = Vector2(0, ts(96 if not narrow() else 110))
 		_field_style(message_box)
 		message_box.text_changed.connect(func(): if message_box.text.length() > 2000: message_box.text = message_box.text.substr(0, 2000))
 		parent.add_child(message_box)
