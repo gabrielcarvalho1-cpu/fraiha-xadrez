@@ -15,14 +15,16 @@ static var readbacks := 0             # get_image() feitos (leitura da GPU; read
 static var readback_ms := 0.0
 
 ## Textura reduzida para `px` (largura × altura em pixels de TELA). Tamanhos parecidos reutilizam a mesma.
-static func at(tex: Texture2D, px: Vector2) -> Texture2D:
+## R176.8b · pad > 0: borda transparente de `pad` px em volta (carta GIRADA: o filtro suave alisa a borda inclinada)
+static func at(tex: Texture2D, px: Vector2, pad := 0) -> Texture2D:
     if tex == null: return tex
     var src := tex.get_size()
     var w := int(round(px.x))
-    if w <= 0 or float(w) >= src.x * 0.92: return tex          # quase do tamanho do arquivo: usa o original
+    if w <= 0 or (float(w) >= src.x * 0.92 and pad == 0): return tex          # quase do tamanho do arquivo: usa o original
+    if float(w) >= src.x * 0.92: w = int(src.x)
     w = int(round(w / 4.0)) * 4                                # degraus de 4 px (cache pequeno ao redimensionar)
     var h := int(round(w * src.y / src.x))
-    var key := "%d_%d" % [tex.get_rid().get_id(), w]
+    var key := "%d_%d_%d" % [tex.get_rid().get_id(), w, pad]
     if _cache.has(key):
         # R89 · LRU: o usado agora vai para o fim (os mais antigos saem primeiro)
         var hit = _cache[key]
@@ -32,7 +34,12 @@ static func at(tex: Texture2D, px: Vector2) -> Texture2D:
     var base := source_image(tex)
     if base == null: return tex
     var img := base.duplicate()
-    img.resize(w, h, Image.INTERPOLATE_LANCZOS)
+    if img.get_width() != w or img.get_height() != h: img.resize(w, h, Image.INTERPOLATE_LANCZOS)
+    if pad > 0:
+        if img.get_format() != Image.FORMAT_RGBA8: img.convert(Image.FORMAT_RGBA8)
+        var big := Image.create(w + pad * 2, h + pad * 2, false, Image.FORMAT_RGBA8)
+        big.blit_rect(img, Rect2i(0, 0, w, h), Vector2i(pad, pad))
+        img = big
     var out := ImageTexture.create_from_image(img)
     # R89 · limite em BYTES (antes: 160 texturas — até ~140 MB com cartas grandes animando no celular)
     _bytes += w * h * 4

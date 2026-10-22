@@ -17,6 +17,7 @@ func run():
 	root.size = size
 	root.content_scale_size = size
 	OS.set_environment("FRAIHA_SERVER_URL", "")
+	if OS.get_environment("MSAA") != "": root.msaa_2d = Viewport.MSAA_4X
 	var stage = load("res://presentation_v019/stage.tscn").instantiate()
 	root.add_child(stage)
 	await frames(20)
@@ -42,5 +43,20 @@ func run():
 		ui._process(0.3)
 	await frames(3)
 	await shot("x2_cartas_na_mesa")
+	# XEQUE em cima da jogada de outro: as cartas viram para cima
+	g.turn = 0
+	g.target = "rainha"
+	g.last_play = {"seat": 3, "cards": ["cavalo", "rainha"], "count": 2}
+	g.plays.append(g.last_play)
+	ui._begin_turn()
+	ui._process(3.0); ui._process(3.0)
+	ui.human_challenge()
+	await frames(2)
+	if not ui.slam.is_empty():
+		ui.slam.t = 0.9
+	ui._process(0.6)
+	await frames(3)
+	await create_timer(1.5).timeout
+	await shot("x3_cartas_reveladas")
 	print("XQ OK")
 	quit(0)

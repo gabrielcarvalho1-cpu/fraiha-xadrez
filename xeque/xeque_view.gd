@@ -108,6 +108,30 @@ func _vignette() -> ImageTexture:
     vignette_layout = ui.layout
     return vignette
 
+## R176.8b · contorno de carta GIRADA com antisserrilhado (draw_rect não suaviza as bordas inclinadas)
+## (o GLES3 da Web não tem MSAA 2D: o contorno vira uma textura de moldura com borda transparente, que o filtro suave alisa)
+var _rings := {}
+func _rect_aa(r: Rect2, col: Color, w: float):
+    var q := 2.0   # textura 2x
+    var key := "%d_%d_%d" % [int(r.size.x), int(r.size.y), int(w * 2)]
+    var t: Texture2D = _rings.get(key)
+    if t == null:
+        var pad := 3
+        var bw := maxi(1, int(round(w * q)))
+        var iw := int(ceil((r.size.x + w) * q)) + pad * 2
+        var ih := int(ceil((r.size.y + w) * q)) + pad * 2
+        var img := Image.create(iw, ih, false, Image.FORMAT_RGBA8)
+        var white := Color.WHITE
+        img.fill_rect(Rect2i(pad, pad, iw - pad * 2, bw), white)
+        img.fill_rect(Rect2i(pad, ih - pad - bw, iw - pad * 2, bw), white)
+        img.fill_rect(Rect2i(pad, pad, bw, ih - pad * 2), white)
+        img.fill_rect(Rect2i(iw - pad - bw, pad, bw, ih - pad * 2), white)
+        t = ImageTexture.create_from_image(img)
+        if _rings.size() > 48: _rings.clear()
+        _rings[key] = t
+    var ts := t.get_size() / q
+    draw_texture_rect(t, Rect2(r.get_center() - ts / 2.0, ts), false, col)
+
 func _init():
     mouse_filter = Control.MOUSE_FILTER_STOP
     # R176.8 · filtro suave: cartas giradas na mesa e o tabuleiro/círculo reduzidos ficavam serrilhados (NEAREST)
@@ -552,7 +576,7 @@ func _draw_mesa_anim():
     var sz := tex.get_size() * sc
     draw_set_transform(ui.origin + pos * ui.k, 0.0, Vector2(ui.k * maxf(0.04, flip), ui.k))
     if t >= 0.5 and t < 1.2:
-        for i in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(6 + i * 6), Color(1, 0.84, 0.35, 0.13 - i * 0.022), false, 6.0)
+        for i in 5: _rect_aa(Rect2(-sz / 2.0, sz).grow(6 + i * 6), Color(1, 0.84, 0.35, 0.13 - i * 0.022), 6.0)
     draw_rect(Rect2(-sz / 2.0, sz).grow(3), Color(0, 0, 0, 0.5 * a))
     if tex == ui.CARD_BACK or ui.cards_clean.is_empty() or a < 0.99: draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false, Color(1, 1, 1, a))
     draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
@@ -1196,14 +1220,14 @@ func _draw_hand():
         if i in ui.selected:
             draw_set_transform(ui.origin + Vector2(it.c) * ui.k, it.rot, Vector2(ui.k, ui.k))
             var a := 0.55 + 0.25 * sin(ui.t * 6.0)
-            for gi in 4: draw_rect(Rect2(-sz / 2.0, sz).grow(3 + gi * 3), Color(1, 0.85, 0.35, a * (0.5 - gi * 0.11)), false, 3.0)
-            draw_rect(Rect2(-sz / 2.0, sz).grow(2), Color("ffd257"), false, 3.0)
+            for gi in 4: _rect_aa(Rect2(-sz / 2.0, sz).grow(3 + gi * 3), Color(1, 0.85, 0.35, a * (0.5 - gi * 0.11)), 3.0)
+            _rect_aa(Rect2(-sz / 2.0, sz).grow(2), Color("ffd257"), 3.0)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         if hand[i] == Rules.JOKER:
             # R36 · Peão = CORINGA: aura verde-dourada pulsando em volta da carta (vale como qualquer peça)
             draw_set_transform(ui.origin + Vector2(it.c) * ui.k, it.rot, Vector2(ui.k, ui.k))
             var pj := 0.5 + 0.5 * sin(ui.t * 5.0 + i)
-            for gj in 4: draw_rect(Rect2(-sz / 2.0, sz).grow(4 + gj * 4 + pj * 3), Color(0.35, 1.0, 0.55, 0.30 - gj * 0.07), false, 4.0)
+            for gj in 4: _rect_aa(Rect2(-sz / 2.0, sz).grow(4 + gj * 4 + pj * 3), Color(0.35, 1.0, 0.55, 0.30 - gj * 0.07), 4.0)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         var mod := Color.WHITE if my_turn or g.turn != 0 else Color(0.9, 0.9, 0.9)
         var cpos: Vector2 = it.c
@@ -1212,7 +1236,7 @@ func _draw_hand():
             var wv := 0.5 + 0.5 * sin(ui.t * 4.0 - i * 0.7)
             if not (i in ui.selected): cpos = cpos + Vector2(0, -6.0 * wv)
             draw_set_transform(ui.origin + cpos * ui.k, it.rot, Vector2(ui.k, ui.k))
-            for gk in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(4 + gk * 5), Color(1.0, 0.82, 0.32, (0.16 - gk * 0.03) * (0.55 + 0.45 * wv)), false, 5.0)
+            for gk in 5: _rect_aa(Rect2(-sz / 2.0, sz).grow(4 + gk * 5), Color(1.0, 0.82, 0.32, (0.16 - gk * 0.03) * (0.55 + 0.45 * wv)), 5.0)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
             mod = Color(1.0 + 0.16 * wv, 1.0 + 0.13 * wv, 1.0 + 0.04 * wv)
         tex_center(tex, cpos, it.sc, it.rot, mod)
@@ -1223,7 +1247,7 @@ func _draw_hand():
             hit(Rect2(Vector2(it.c) - sz / 2.0, sz), "card_%d" % i)
         if ui.hover_id == "card_%d" % i and my_turn and not (i in ui.selected):
             draw_set_transform(ui.origin + Vector2(it.c) * ui.k, it.rot, Vector2(ui.k, ui.k))
-            draw_rect(Rect2(-sz / 2.0, sz).grow(1), Color(1, 0.93, 0.6, 0.7), false, 2.0)
+            _rect_aa(Rect2(-sz / 2.0, sz).grow(1), Color(1, 0.93, 0.6, 0.7), 2.0)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
 
 # ---------------------------------------------------------------- XEQUE: revelação, seguro, xeque-mate
@@ -1249,7 +1273,7 @@ func _draw_reveal(big: bool):
         draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k * maxf(0.05, wscale), ui.k))
         draw_rect(Rect2(-sz / 2.0, sz).grow(3), Color(0, 0, 0, 0.45))
         var lie: bool = not Rules.is_true_card(cards[i], String(r.target))
-        if flip >= 1.0 and lie: draw_rect(Rect2(-sz / 2.0, sz).grow(4), Color("e02a36"), false, 4.0)
+        if flip >= 1.0 and lie: _rect_aa(Rect2(-sz / 2.0, sz).grow(4), Color("e02a36"), 4.0)
         if flip >= 0.5 and not ui.cards_clean.is_empty():
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
             card_face(cards[i], c, sz.x, rot, Color.WHITE, maxf(0.05, wscale))   # R123.1 · nítida
@@ -1765,7 +1789,7 @@ func _draw_intro():
         draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k, ui.k))
         if kinds[i] == Rules.JOKER:
             var pul := 0.5 + 0.5 * sin(ui.t * 6.0)
-            for gl in 5: draw_rect(Rect2(-sz / 2.0, sz).grow(6 + gl * 6 + pul * 4), Color(1.0, 0.35, 0.45, (0.20 - gl * 0.035) * al), false, 6.0)
+            for gl in 5: _rect_aa(Rect2(-sz / 2.0, sz).grow(6 + gl * 6 + pul * 4), Color(1.0, 0.35, 0.45, (0.20 - gl * 0.035) * al), 6.0)
         draw_rect(Rect2(-sz / 2.0 + Vector2(8, 10), sz), Color(0, 0, 0, 0.45 * al))
         if ui.cards_clean.is_empty() or al < 0.99: draw_texture_rect(tex, Rect2(-sz / 2.0, sz), false, Color(1, 1, 1, al))
         draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
@@ -1880,12 +1904,15 @@ func otext(s: String, pos: Vector2, key: String, fs: int, col: Color, width := -
 func card_face(kind: String, c: Vector2, w: float, rot := 0.0, mod: Color = Color.WHITE, squash := 1.0):
     var tex: Texture2D = ui.cards_clean.get(kind, ui.cards.get(kind))
     var want: Vector2 = Vector2(w, w * 1.4) * ui.k
-    var t := Crisp.at(tex, want)
-    var px: Vector2 = t.get_size() if t != tex else want         # 1:1 com a textura reduzida (sem reamostrar)
+    var pad := 3 if absf(rot) > 0.001 else 0   # R176.8b · girada: borda transparente (alisada pelo filtro)
+    var t := Crisp.at(tex, want, pad)
+    var px: Vector2 = (t.get_size() - Vector2(pad, pad) * 2.0) if t != tex else want         # 1:1 com a textura reduzida (sem reamostrar)
     var center: Vector2 = ui.origin + c * ui.k
     draw_set_transform(center, rot, Vector2(maxf(0.04, squash), 1.0))
-    draw_rect(Rect2(-px / 2.0 + Vector2(3, 4), px), Color(0, 0, 0, 0.35))
-    draw_texture_rect(t, Rect2((-px / 2.0).round(), px), false, mod)
+    var full := Rect2((-px / 2.0).round() - Vector2(pad, pad), px + Vector2(pad, pad) * 2.0)
+    if pad > 0: draw_texture_rect(t, Rect2(full.position + Vector2(3, 4), full.size), false, Color(0, 0, 0, 0.35))
+    else: draw_rect(Rect2(-px / 2.0 + Vector2(3, 4), px), Color(0, 0, 0, 0.35))
+    draw_texture_rect(t, full, false, mod)
     if squash >= 0.97 and ui.cards_clean.has(kind):
         var u := px.x / 720.0
         var tl := -px / 2.0
@@ -2304,13 +2331,15 @@ func _desk_reveal_cards():
         if flip >= 0.5:
             if flip >= 1.0 and lie:
                 draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k, ui.k))
-                draw_rect(Rect2(-Vector2(w, w * 1.4) / 2.0, Vector2(w, w * 1.4)).grow(5), Color("e02a36"), false, 5.0)
+                _rect_aa(Rect2(-Vector2(w, w * 1.4) / 2.0, Vector2(w, w * 1.4)).grow(5), Color("e02a36"), 5.0)
                 draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
             card_face(String(cards[i]), c, w, rot, Color.WHITE, wscale)
         else:
             var sz := Vector2(w, w * 1.4)
             draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k * maxf(0.05, wscale), ui.k))
-            draw_texture_rect(Crisp.at(ui.CARD_BACK, sz * ui.k), Rect2(-sz / 2.0, sz), false)
+            var bk := Crisp.at(ui.CARD_BACK, sz * ui.k, 3)   # R176.8b · borda transparente: verso girado liso
+            var bp: Vector2 = Vector2(3, 3) / float(ui.k)
+            draw_texture_rect(bk, Rect2(-sz / 2.0 - bp, sz + bp * 2.0), false)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
 
 ## R55 · placa de aço do XEQUE desenhada na hora (a mesma da imagem pré-composta; usada só enquanto a
