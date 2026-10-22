@@ -15,6 +15,7 @@ const ROUTES = [
   { id: 'founder', label: 'Fundador', ico: '♛', view: V.founder, every: 15000 },
   { id: 'sales', label: 'Vendas', ico: '$', view: V.sales, every: 30000 },
   { id: 'reports', label: 'Denúncias', ico: '⚑', view: V.reports, every: 30000 },
+  { id: 'tickets', label: 'Suporte', ico: '✉', view: V.tickets, every: 30000 },
   { id: 'creators', label: 'Criadores', ico: '★', view: V.creators, every: 30000 },
   { id: 'events', label: 'Torneios', ico: '♜', view: V.events, every: 15000 },
   { id: 'news', label: 'Novidades', ico: '✦', view: V.news, every: 30000 },

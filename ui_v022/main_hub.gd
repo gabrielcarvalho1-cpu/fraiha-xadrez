@@ -2194,8 +2194,9 @@ var about_lead: Label
 var about_topic := 0
 var about_discord: Button   # R141 · COMUNIDADE E SUPORTE: link do Discord clicável
 var about_instagram: Button   # R176 · e o Instagram ao lado
+var about_support: Button     # R176.8 · FALAR COM O SUPORTE (ticket)
 ## R53 · tópicos do CONHEÇA O FRAIHA (fonte única: PC e celular)
-const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez é xadrez online e grátis, direto no navegador do PC ou do celular, num reino medieval em pixel art. Treine contra 11 bots, jogue com pessoas de verdade, suba de liga no Ranked e reveja suas partidas na análise.\n\nAlém do xadrez, tem dois jogos próprios para jogar com os amigos: XEQUE e MARCHA REAL. Feito por jogadores, para jogadores."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nCada ritmo do Ranked (3, 5, 10 e 20 min) tem liga e PL próprios, e a cada 100 PL você sobe de liga. Embaixo a vitória vale mais (Madeira +20); subindo, cada ponto custa mais (Grande Mestre ±6). O adversário é escolhido pelo seu nível de verdade: quem joga acima da própria liga sobe mais rápido. Empate rende PL contra alguém mais forte.\n\nO Challenger é só para os melhores de cada ritmo: complete o Grande Mestre e dispute uma vaga. A maior liga alcançada libera brasão, moldura e cor de tabuleiro para sempre."],["MODOS DE JOGO","## XADREZ\n• Desafio das Ligas: 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\n• Online: escolha 3, 5, 10 ou 20 min e jogue na hora. Não vale PL.\n• Ranqueado: com a sua conta, dispute PL em quatro ritmos.\n## XEQUE\nCartas e blefe para 4. Baixe cartas viradas dizendo que são a peça que a mesa pede. Desconfiou? Aperte XEQUE!\n## MARCHA REAL\nEm dupla, levem os 8 peões até o Salão do Trono jogando cartas."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nEm TABULEIRO E PEÇAS (Configurações ou Ligas) escolha as cores das casas e das peças: várias são grátis, cada liga conquistada no Ranked libera a cor dela e as peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente! No nosso servidor no Discord tem desafios, Torneio da Semana, novidades e salas de voz:\ndiscord.gg/27WRsrUGa6\n\nSiga também o Instagram: @fraihaxadrez\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
+const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez é xadrez online e grátis, direto no navegador do PC ou do celular, num reino medieval em pixel art. Treine contra 11 bots, jogue com pessoas de verdade, suba de liga no Ranked e reveja suas partidas na análise.\n\nAlém do xadrez, tem dois jogos próprios para jogar com os amigos: XEQUE e MARCHA REAL. Feito por jogadores, para jogadores."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nCada ritmo do Ranked (3, 5, 10 e 20 min) tem liga e PL próprios, e a cada 100 PL você sobe de liga. Embaixo a vitória vale mais (Madeira +20); subindo, cada ponto custa mais (Grande Mestre ±6). O adversário é escolhido pelo seu nível de verdade: quem joga acima da própria liga sobe mais rápido. Empate rende PL contra alguém mais forte.\n\nO Challenger é só para os melhores de cada ritmo: complete o Grande Mestre e dispute uma vaga. A maior liga alcançada libera brasão, moldura e cor de tabuleiro para sempre."],["MODOS DE JOGO","## XADREZ\n• Desafio das Ligas: 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\n• Online: escolha 3, 5, 10 ou 20 min e jogue na hora. Não vale PL.\n• Ranqueado: com a sua conta, dispute PL em quatro ritmos.\n## XEQUE\nCartas e blefe para 4. Baixe cartas viradas dizendo que são a peça que a mesa pede. Desconfiou? Aperte XEQUE!\n## MARCHA REAL\nEm dupla, levem os 8 peões até o Salão do Trono jogando cartas."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nEm TABULEIRO E PEÇAS (Configurações ou Ligas) escolha as cores das casas (várias grátis; cada liga conquistada no Ranked libera a cor dela) e as peças: Marfim e ardósia ou as Peças clássicas."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente! No nosso servidor no Discord tem desafios, Torneio da Semana, novidades e salas de voz:\ndiscord.gg/27WRsrUGa6\n\nSiga também o Instagram: @fraihaxadrez\n\nProblema no jogo, dúvida, sugestão ou pagamento? Mande uma mensagem em FALAR COM O SUPORTE: ela chega direto para a equipe e a resposta aparece no jogo. No Discord também tem #ajuda, #reportar-bug e #pagamentos-e-club."]]
 
 func _build_about_page():
     var topics: Array = ABOUT_TOPICS
@@ -2262,11 +2263,25 @@ func _build_about_page():
     about_discord.name = "AboutDiscord"
     about_instagram = instagram_button(panel, Rect2(1036, 684, 270, 60), 26)   # R176
     about_instagram.name = "AboutInstagram"
+    about_support = support_button(panel, Rect2(620, 758, 686, 60), 26)   # R176.8 · ticket direto para o Admin
+    about_support.name = "AboutSupport"
     _show_about_topic(topics, 0)
 
 ## R141 · botão ENTRAR NO DISCORD (PC e celular): dourado sobre azul-marinho, abre a pergunta da COMUNIDADE
 func discord_button(parent: Control, r: Rect2, px: int) -> Button:
     return link_button(parent, r, px, "ENTRAR NO DISCORD  ›", open_community)
+
+## R176.8 · FALAR COM O SUPORTE: abre a tela de tickets (a mensagem cai no Admin → Suporte)
+func support_button(parent: Control, r: Rect2, px: int) -> Button:
+    return link_button(parent, r, px, "FALAR COM O SUPORTE  ›", open_support)
+
+var support_ui = null
+func open_support():
+    if not is_instance_valid(support_ui):
+        support_ui = load("res://social/support_ui.gd").new()
+        add_child(support_ui)
+        support_ui.setup(self, account)
+    support_ui.show_support()
 
 ## R176 · SEGUIR NO INSTAGRAM (mesmo estilo do botão do Discord): abre direto o @fraihaxadrez
 func instagram_button(parent: Control, r: Rect2, px: int) -> Button:
@@ -2326,6 +2341,7 @@ func _show_about_topic(topics: Array, i: int):
     var discord: bool = String(topic[0]) == "COMUNIDADE E SUPORTE"
     if is_instance_valid(about_discord): about_discord.visible = discord
     if is_instance_valid(about_instagram): about_instagram.visible = discord
+    if is_instance_valid(about_support): about_support.visible = discord
     var avail: float = (676.0 if discord else 746.0) - about_body.position.y
     about_body.size.y = avail
     # texto longo: diminui a fonte até caber no quadro (nada passa da moldura)

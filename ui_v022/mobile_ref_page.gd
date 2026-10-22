@@ -400,7 +400,7 @@ func _build_about():
 		if String(topic[0]) == "COMUNIDADE E SUPORTE":
 			# R141 · link do Discord clicável: botão logo abaixo do texto
 			var holder := Control.new()
-			holder.custom_minimum_size = Vector2(632, 270) * s   # R176 · + INSTAGRAM
+			holder.custom_minimum_size = Vector2(632, 395) * s   # R176 · + INSTAGRAM · R176.8 + SUPORTE
 			holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			content.add_child(holder)
 			var db: Button = hub.discord_button(holder, Rect2(Vector2(0, 30) * s, Vector2(560, 110) * s), maxi(10, int(round(40 * s))))
@@ -409,6 +409,9 @@ func _build_about():
 			var ib: Button = hub.instagram_button(holder, Rect2(Vector2(0, 155) * s, Vector2(560, 110) * s), maxi(10, int(round(40 * s))))
 			ib.name = "AboutInstagramMobile"
 			ib.mouse_filter = Control.MOUSE_FILTER_PASS
+			var sb: Button = hub.support_button(holder, Rect2(Vector2(0, 280) * s, Vector2(560, 110) * s), maxi(10, int(round(36 * s))))
+			sb.name = "AboutSupportMobile"
+			sb.mouse_filter = Control.MOUSE_FILTER_PASS
 		if i < topics.size() - 1:
 			var sp := Control.new()
 			sp.custom_minimum_size.y = 56 * s

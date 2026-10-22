@@ -85,6 +85,7 @@ class AdminService {
         if (path === '/admin/api/creators') return need('payments.read') && out(200, await this.creatorsList());   // R121
         if (path === '/admin/api/events') return need('events.read') && out(200, this.backend.events ? await this.backend.events.adminList() : { available: false });   // R157
         if (path === '/admin/api/news') return need('events.read') && out(200, this.backend.news ? await this.backend.news.adminList() : { available: false });   // R161
+        if (path === '/admin/api/tickets') return need('reports.read') && out(200, this.backend.tickets ? await this.backend.tickets.adminList(url.searchParams.get('status') || '') : { available: false });   // R176.8
         return out(404, { error: 'not_found' });
       }
       if (req.method === 'POST') {
@@ -130,6 +131,22 @@ class AdminService {
           try { body = await readJson(req, 4096); }
           catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
           return cp[1] ? this.creatorPay(admin, cp[1], body || {}, out) : this.creatorSave(admin, body || {}, out);
+        }
+        // R176.8 · SUPORTE: responder / fechar / reabrir ticket
+        const tk = /^\/admin\/api\/tickets\/([0-9a-fA-F-]{36})$/.exec(path);
+        if (tk) {
+          if (!need('moderation.write')) return;
+          if (this.limited('write:' + admin.id, 40)) return out(429, { error: 'rate_limited' });
+          if (!this.backend.tickets) return out(503, { error: 'unavailable' });
+          let body;
+          try { body = await readJson(req, 8192); }
+          catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
+          body = body || {};
+          const id = tk[1].toLowerCase();
+          const r = await this.backend.tickets.adminUpdate(admin, id, body);
+          this.audit.record({ actor: admin, action: 'ticket_' + (body.reply !== undefined ? 'reply' : String(body.status || 'update')), target: { ticket_id: id },
+            before: null, after: r.status === 200 ? { status: r.body.ticket.status } : null, result: r.status === 200 ? 'ok' : String(r.body.error || 'error'), reason: '' });
+          return out(r.status, r.status === 200 ? { ticket: { ticket_id: r.body.ticket.ticket_id, status: r.body.ticket.status } } : r.body);
         }
         // R161 · NOVIDADES: criar/editar/apagar (outdoor da Home e abas do jogo)
         const nw = /^\/admin\/api\/news(?:\/([0-9a-fA-F-]{36})(?:\/(delete))?)?$/.exec(path);

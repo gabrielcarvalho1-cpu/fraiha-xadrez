@@ -27,6 +27,7 @@ const { Store: CrownStore } = require('./economy/store');   // R116 · Loja de C
 const { Tournaments } = require('./economy/tournaments');   // R118 · Torneio da Semana
 const { Events } = require('./economy/events');   // R157 · Torneios de evento (código)
 const { News } = require('./economy/news');   // R161 · Novidades (outdoor da Home + abas)
+const { Tickets } = require('./support/tickets');   // R176.8 · Suporte (tickets → Admin)
 const { SeasonPass } = require('./economy/season_pass');   // R120 · Passe da Temporada
 const { Creators } = require('./social/creators');   // R121 · Apoie um Criador
 const { Window, Gate } = require('./net_guard');   // R170 · hardening (auditoria Orca R168)
@@ -107,6 +108,7 @@ class Backend {
     this.tournaments.start();
     this.events = new Events({ backend: this, send: (ws, o) => this.send(ws, o) });   // R157
     this.news = new News({ backend: this });   // R161
+    this.tickets = new Tickets({ backend: this });   // R176.8
     this.seasonPass = new SeasonPass({ backend: this, send: (ws, o) => this.send(ws, o) });   // R120
     this.creators = new Creators({ backend: this, send: (ws, o) => this.send(ws, o) });   // R121
     this.chat.ownedEmotes = uid => this.crownStore.owned(uid);   // R119 · emotes comprados na Loja de Coroas
@@ -648,6 +650,7 @@ class Backend {
       if (a.startsWith('tev_')) return this.events.handle(ws, m);   // R157
       if (a.startsWith('pass_')) return this.seasonPass.handle(ws, m);   // R120
       if (a.startsWith('creator_')) return this.creators.handle(ws, m);   // R121
+      if (a.startsWith('ticket_')) return this.tickets.handle(ws, m);   // R176.8 · suporte
       if (a.startsWith('bot_')) {
         try { return await this.bots.handle(ws, m); }
         catch (e) { if (e === CANCELLED) return; console.error('bots', a, e && e.message); return this.send(ws, { type: 'bot_error', code: 'server_error', message: 'Erro temporário no servidor. Tente novamente.' }); }

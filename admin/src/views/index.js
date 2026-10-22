@@ -566,6 +566,62 @@ export function reports(ctx) {
   };
 }
 
+// ---------------------------------------------------------------- SUPORTE (R176.8)
+const TK_ST = { open: ['Aberto', 'warn'], answered: ['Respondido', 'on'], closed: ['Fechado', 'off'] };
+const TK_CAT = { reclamacao: 'gold', sugestao: 'blue', duvida: '', problema: 'off', pagamento: 'gold' };
+export function tickets(ctx) {
+  const f = frame(ctx, 'Suporte', 'Mensagens que os jogadores mandam pela tela SUPORTE do jogo (reclamação, sugestão, dúvida, problema, pagamento). A resposta aparece para o jogador em MEUS TICKETS e chega na hora se ele estiver online.');
+  let filter = 'open';
+  const drafts = new Map();   // ticket_id -> texto da resposta (não some na atualização automática)
+  const can = () => ctx.session && ctx.session.admin && (ctx.session.admin.perms || []).includes('moderation.write');
+  const reply = async (t, text) => {
+    const v = String(text || '').trim();
+    if (v.length < 2) { toast('Escreva a resposta.', 'err'); return; }
+    try { await ctx.api.post('/admin/api/tickets/' + t.ticket_id, { reply: v }); drafts.delete(t.ticket_id); toast('Resposta enviada.'); }
+    catch (e) { toast(e && e.code === 'migration_0029_missing' ? 'Banco sem a migração 0029.' : 'Não foi possível responder.', 'err'); }
+    ctx.refresh();
+  };
+  const setStatus = async (t, status) => {
+    try { await ctx.api.post('/admin/api/tickets/' + t.ticket_id, { status }); toast(status === 'closed' ? 'Ticket fechado.' : 'Ticket reaberto.'); }
+    catch (e) { toast('Não foi possível atualizar.', 'err'); }
+    ctx.refresh();
+  };
+  return {
+    error: f.error,
+    async load() {
+      const d = await ctx.api.get('/admin/api/tickets' + (filter ? '?status=' + filter : ''));
+      if (!ctx.alive()) return;
+      if (!d.available) return f.show(stateBox('error', d.error === 'migration_0029_missing' ? 'Banco sem a migração 0029 (suporte). Até aplicar, os tickets ficam só no log do servidor.' : 'Suporte indisponível neste servidor.'));
+      const chips = [['open', 'Abertos'], ['answered', 'Respondidos'], ['closed', 'Fechados'], ['', 'Todos']].map(([k, t]) =>
+        h('button', { class: 'btn' + (filter === k ? ' primary' : ''), onclick: () => { filter = k; ctx.refresh(); } }, t));
+      const item = t => {
+        const box = h('textarea', { rows: 3, maxlength: 2000, placeholder: 'Sua resposta (o jogador vê no jogo)', style: 'width:100%;margin-top:8px', oninput: e => drafts.set(t.ticket_id, e.target.value) }, drafts.get(t.ticket_id) || '');
+        const ctxTxt = [t.context && t.context.platform, t.context && t.context.version ? 'v' + t.context.version : '', t.context && t.context.screen].filter(Boolean).join(' · ');
+        return h('div', { class: 'panel' },
+          h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' },
+            h('strong', {}, t.nickname || '?'), h('span', { class: 'badge ' + (TK_ST[t.status] || ['', ''])[1] }, (TK_ST[t.status] || [t.status])[0]),
+            h('span', { class: 'badge ' + (TK_CAT[t.category] || '') }, t.category_label || t.category),
+            ctxTxt ? h('span', { class: 'dim' }, ctxTxt) : '',
+            h('span', { class: 'dim', style: 'margin-left:auto' }, fmtDate(t.created_at) + ' · ' + fmtAgo(t.created_at))),
+          t.subject ? h('p', {}, h('strong', {}, t.subject)) : '',
+          h('div', { class: 'mono', style: 'white-space:pre-wrap;margin:8px 0;max-height:220px;overflow:auto' }, t.message),
+          t.reply ? h('p', { class: 'muted', style: 'white-space:pre-wrap' }, `Resposta (${t.replied_by || 'admin'} · ${fmtDate(t.replied_at)}): ${t.reply}`) : '',
+          can() ? h('div', {},
+            box,
+            h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px' },
+              h('button', { class: 'btn primary', onclick: () => reply(t, box.value) }, t.reply ? 'Responder de novo' : 'Responder'),
+              h('button', { class: 'btn', onclick: () => { location.hash = '#/players/' + t.user_id; } }, 'Ver jogador'),
+              t.status !== 'closed' ? h('button', { class: 'btn ghost', onclick: () => setStatus(t, 'closed') }, 'Fechar') : h('button', { class: 'btn ghost', onclick: () => setStatus(t, 'open') }, 'Reabrir'))) : '');
+      };
+      // a atualização automática não apaga o que está sendo digitado
+      if (document.activeElement && document.activeElement.tagName === 'TEXTAREA' && f.had) return;
+      f.show(h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px' }, ...chips),
+        d.items.length ? h('div', {}, d.items.map(item)) : stateBox('empty', filter === 'open' ? 'Nenhum ticket aberto.' : 'Nada por aqui.'));
+      f.had = true;
+    },
+  };
+}
+
 // ---------------------------------------------------------------- ADMIN LOG
 export function audit(ctx) {
   const f = frame(ctx, 'Admin Log', 'Toda ação administrativa real é registrada pelo SERVIDOR antes de responder.');

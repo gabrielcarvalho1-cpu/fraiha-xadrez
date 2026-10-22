@@ -623,6 +623,25 @@ class MemoryStore {
   async crownLedger(userId, limit = 20) {
     return (this.crownLedgerRows || []).filter(r => r.user_id === userId).slice(-limit).reverse().map(({ key, ...r }) => r);
   }
+  // ---------- R176.8 · suporte (em memória: desenvolvimento/testes) ----------
+  async createTicket(row) {
+    this.tickets = this.tickets || [];
+    const now = new Date().toISOString();
+    const t = { ticket_id: require('crypto').randomUUID(), status: 'open', reply: '', replied_by: null, replied_at: null, subject: '', context: {},
+      nickname: '', created_at: now, updated_at: now, ...row };
+    this.tickets.push(t); return { ...t };
+  }
+  async listTickets(status = '', limit = 200) {
+    return (this.tickets || []).filter(t => !status || t.status === status).slice().reverse().slice(0, limit).map(t => ({ ...t }));
+  }
+  async myTickets(userId, limit = 20) {
+    return (this.tickets || []).filter(t => t.user_id === userId).slice().reverse().slice(0, limit).map(t => ({ ...t }));
+  }
+  async updateTicket(id, patch) {
+    const t = (this.tickets || []).find(x => x.ticket_id === id);
+    if (!t) return null;
+    Object.assign(t, patch); return { ...t };
+  }
   // ---------- R104 · denúncias e suspensão (em memória: desenvolvimento/testes) ----------
   async createReport(row) {
     this.reports = this.reports || [];
@@ -1296,6 +1315,21 @@ class SupabaseStore {
   }
   async crownLedger(userId, limit = 20) {
     return this.req('/crown_ledger?user_id=eq.' + encodeURIComponent(userId) + '&select=delta,reason,ref,created_at&order=id.desc&limit=' + Math.max(1, Math.min(100, limit | 0)));
+  }
+  // ---------- R176.8 · suporte (0029) ----------
+  async createTicket(row) {
+    const rows = await this.req('/support_tickets', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(row) });
+    return rows[0];
+  }
+  async listTickets(status = '', limit = 200) {
+    return this.req('/support_tickets?' + (status ? 'status=eq.' + encodeURIComponent(status) + '&' : '') + 'select=*&order=created_at.desc&limit=' + Math.max(1, Math.min(500, limit | 0)));
+  }
+  async myTickets(userId, limit = 20) {
+    return this.req('/support_tickets?user_id=eq.' + encodeURIComponent(userId) + '&select=*&order=created_at.desc&limit=' + Math.max(1, Math.min(50, limit | 0)));
+  }
+  async updateTicket(id, patch) {
+    const rows = await this.req('/support_tickets?ticket_id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) });
+    return rows[0] || null;
   }
   // ---------- R104 · denúncias (0013) e suspensão ----------
   async createReport(row) {
