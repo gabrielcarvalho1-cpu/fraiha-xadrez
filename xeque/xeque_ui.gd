@@ -296,7 +296,7 @@ func _prewarm_step():
     if _prewarm.is_empty() or not (mode == "tutorial" or (mode == "game" and intro_anim >= 0.0)): return
     var j: Array = _prewarm.pop_front()
     if j[0] is String: view._vignette()
-    else: Crisp.at(j[0], j[1])
+    else: Crisp.at(j[0], j[1], j[2] if j.size() > 2 else 0)
     if _prewarm.is_empty(): Crisp.release_sources()   # R61: memória — fontes na CPU só durante o preparo
 
 func close():

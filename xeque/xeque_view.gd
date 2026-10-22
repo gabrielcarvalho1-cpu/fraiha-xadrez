@@ -2386,6 +2386,15 @@ func prewarm_jobs() -> Array:
             var tx: Texture2D = ui.cards_clean[kind]
             var pz: Vector2 = Vector2(230.0, 230.0 * 1.4) * ui.k
             if not Crisp.has(tx, pz): out.append([tx, pz])
+    # R176.8b · apresentação do baralho: cartas GIRADAS (versão com borda transparente, a mesma conta de _draw_intro)
+    if not ui.cards_clean.is_empty():
+        var kinds: Array = Rules.TARGETS + [Rules.JOKER]
+        var cw := 300.0 if ui.layout != "portrait" else 230.0
+        for i in 4:
+            var tx2: Texture2D = ui.cards_clean.get(kinds[i], ui.cards.get(kinds[i]))
+            var w2: float = ui.cards[kinds[i]].get_size().x * (cw / 360.0)
+            var pz2: Vector2 = Vector2(w2, w2 * 1.4) * ui.k
+            if not Crisp.has(tx2, pz2, 3): out.append([tx2, pz2, 3])
     if ui.slam_tex != null and not Crisp.has(ui.slam_tex, _slam_rect().size * ui.k): out.append([ui.slam_tex, _slam_rect().size * ui.k])   # R126 · anúncio XEQUE!
     if d:
         # R125 · logo nova e botão XEQUE (estados) no tamanho exato da tela

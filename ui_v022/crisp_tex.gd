@@ -73,12 +73,12 @@ static func release_sources() -> void:
     _src.clear()
 
 ## Já existe a redução deste tamanho? (para preparar antes só o que falta)
-static func has(tex: Texture2D, px: Vector2) -> bool:
+static func has(tex: Texture2D, px: Vector2, pad := 0) -> bool:
     if tex == null: return true
     var w := int(round(px.x))
-    if w <= 0 or float(w) >= tex.get_size().x * 0.92: return true
+    if w <= 0 or (float(w) >= tex.get_size().x * 0.92 and pad == 0): return true
     w = int(round(w / 4.0)) * 4
-    return _cache.has("%d_%d" % [tex.get_rid().get_id(), w])
+    return _cache.has("%d_%d_%d" % [tex.get_rid().get_id(), w, pad])
 
 ## Imagem de origem na CPU (decodificada uma vez). Sem leitura da GPU quando o arquivo importado é legível.
 static func source_image(tex: Texture2D) -> Image:
