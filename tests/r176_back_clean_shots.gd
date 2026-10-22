@@ -45,4 +45,9 @@ func run():
 	stage._open_casual()
 	await create_timer(0.8).timeout
 	await grab("online")
+	stage.open_home()
+	await frames(6)
+	stage._start_bot("easy", "w")
+	await create_timer(0.8).timeout
+	await grab("partida_bot")
 	quit(0)

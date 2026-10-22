@@ -905,6 +905,7 @@ class Marks extends Control:
         var font := get_theme_default_font()
         var fs := int(round(13.5 * k))
         var r: Rect2 = skin.R(M.status)
+        if txt == "Voz desligada": return   # R176.8 · o ícone riscado já diz isso
         var lines := _wrap(font, txt, fs, r.size.x)
         var y := r.position.y + (r.size.y - lines.size() * fs * 1.22) / 2.0 + fs * 0.98
         for line in lines.slice(0, 2):

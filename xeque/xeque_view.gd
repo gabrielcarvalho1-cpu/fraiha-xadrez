@@ -70,6 +70,7 @@ const SCENE_SOFT_PATH := "res://xeque/art/mesa/mesa_cena_soft.png"   # tools/xeq
 var _scene_soft: Texture2D = null
 func release_art():
     _scene_soft = null
+    _tapete_hd = null
     _scene_full = null
     _scene_blur = null
     vignette = null
@@ -109,6 +110,8 @@ func _vignette() -> ImageTexture:
 
 func _init():
     mouse_filter = Control.MOUSE_FILTER_STOP
+    # R176.8 · filtro suave: cartas giradas na mesa e o tabuleiro/círculo reduzidos ficavam serrilhados (NEAREST)
+    texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 func _gui_input(event):
     var pos := Vector2.INF
@@ -383,9 +386,11 @@ func _draw_scene():
     var o: Vector2 = sc[1]
     if not desk():
         _draw_scene_full(Rect2(o, Vector2(1672, 941) * s))
+        _draw_tapete_hd(o, s)
         return
     if _scene_soft == null: _scene_soft = load(SCENE_SOFT_PATH)
     draw_texture_rect(_scene_soft, Rect2(o, Vector2(1672, 941) * s), false)
+    _draw_tapete_hd(o, s)
     var d: Vector2 = ui.design
     draw_texture_rect(_vignette(), Rect2(Vector2.ZERO, d), false)
     var end_y: float = minf(o.y + 941 * s, d.y)
@@ -395,6 +400,12 @@ func _draw_scene():
     draw_polygon(PackedVector2Array([Vector2(-2000, end_y - fade), Vector2(d.x + 2000, end_y - fade), Vector2(d.x + 2000, end_y), Vector2(-2000, end_y)]),
         PackedColorArray([Color(shade, 0.0), Color(shade, 0.0), shade, shade]))
     if end_y < d.y + 600: draw_rect(Rect2(-2000, end_y, d.x + 4000, 600), shade)
+
+## R176.8 · medalhão do centro da mesa liso (a arte em pixel ficava serrilhada): tools/xeque_tapete_hd_r176.py
+var _tapete_hd: Texture2D = null
+func _draw_tapete_hd(o: Vector2, s: float):
+    if _tapete_hd == null: _tapete_hd = load("res://xeque/art/mesa/tapete_hd.png")
+    draw_texture_rect(_tapete_hd, Rect2(o + Vector2(714.5, 376.5) * s, Vector2(243, 243) * s), false)
 
 ## R71 · celular (em pé e deitado): o cenário inteiro, nítido e sem escurecer. A arte fica no mesmo lugar (o tabuleiro
 ## dela continua sob o tabuleiro do jogo) e continua para os lados/cima/baixo em espelho, até cobrir a tela toda —

@@ -87,6 +87,7 @@ static func draw_leave_badge(ci: CanvasItem, r: Rect2) -> Rect2:
 
 ## Texto curto de estado ao lado do botão (Marcha/XEQUE desenham à mão).
 static func draw_status(ci: CanvasItem, right_x: float, center_y: float, width: float, txt: String, fs: int, col: Color) -> void:
+    if txt == "Voz desligada": return   # R176.8 · o ícone riscado já diz isso; o texto cobria os outros botões
     var font := ThemeDB.fallback_font
     var lines := [txt]
     if font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > width:

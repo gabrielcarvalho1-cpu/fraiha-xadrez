@@ -87,7 +87,7 @@ func refresh() -> void:
     ear.tooltip_text = "Voltar a ouvir a voz" if voice.speaker_muted else "Silenciar a voz recebida (continuo na sala; meu microfone não muda)"
     ear.queue_redraw()
     var txt: String = voice.status_text()
-    label.text = txt
+    label.text = "" if txt == "Voz desligada" else txt   # R176.8 · o ícone riscado já diz isso (o texto cobria os botões)
     _fit()
     mic.tooltip_text = {"DISCONNECTED": "Entrar na voz", "CONNECTED": "Ficar mudo", "MUTED": "Ligar o microfone", "ERROR": "Tentar de novo"}.get(st, "Voz") + " — " + txt
     mic.queue_redraw()
