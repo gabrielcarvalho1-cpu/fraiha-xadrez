@@ -98,6 +98,7 @@ var marks: Control
 var settings: Control          # R55 · painel CONFIGURAÇÕES (por cima de cartões e textos)
 var hits := []               # [Button, Rect2 de tela, id] → brilho de hover + estado (som desligado etc.)
 var _orig := {}              # registro do que foi alterado (desfeito em restore)
+var _art_src_set: Array = []  # R176.1 · botões com a arte de baixo marcada (destaque de saída)
 var _circle: ShaderMaterial
 var _bare_clocks := []
 # celular: botões próprios (som, opções, mais, barra do chat) e o menu de opções
@@ -219,6 +220,12 @@ func restore() -> void:
                 if had: ctrl.add_theme_constant_override(e[2], e[3])
                 else: ctrl.remove_theme_constant_override(e[2])
     _orig.clear()
+    for b in _art_src_set:
+        if is_instance_valid(b):
+            b.remove_meta("art_src")
+            var bp = b.get_node_or_null("BackPulse")
+            if bp != null: bp.refresh()
+    _art_src_set.clear()
     for ck in _bare_clocks: if is_instance_valid(ck): ck.set_bare(false)
     _bare_clocks.clear()
     for id in mob_buttons: mob_buttons[id].hide()
@@ -269,6 +276,12 @@ func _ghost(b: Control, r: Rect2, id := "") -> void:
     _place(b, r)
     _rec(b, "self_modulate", Color(1, 1, 1, 0))
     hits.append([b, r, id])
+    # R176.1 · destaque dos botões de saída (INÍCIO): recolore a placa pintada na arte, no lugar exato
+    if bg != null and bg.tex != null and not (b.has_meta("art_src") and b.get_meta("art_src")[0] == bg.tex):
+        b.set_meta("art_src", [bg.tex, r])
+        _art_src_set.append(b)
+        var bp = b.get_node_or_null("BackPulse")
+        if bp != null: bp.refresh()
 
 ## Botão com texto vivo (SILENCIAR/REATIVAR, DENUNCIAR/DENUNCIADO): sem fundo (a moldura é da arte).
 func _text_button(b: Button, r: Rect2, fs: float) -> void:
