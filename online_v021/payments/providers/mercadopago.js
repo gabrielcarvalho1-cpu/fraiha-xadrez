@@ -59,6 +59,15 @@ async function withOptional(send, body, strip) {
   }
 }
 const stripExtras = (b) => { const c = { ...b }; delete c.additional_info; delete c.statement_descriptor; return c; };
+// R175E-teste · o Mercado Pago só aceita back_urls públicas: auto_return exige back_urls.success válida (HTTPS, host
+// público). Com o jogo em localhost/127.0.0.1 (cliente de teste) as duas ficam de fora; o checkout funciona igual,
+// só não volta sozinho para o jogo. Produção (https://jogar.fraihaxadrez.com) continua mandando as duas.
+function publicBackUrl(u) {
+  let x; try { x = new URL(String(u || '')); } catch { return ''; }
+  const h = x.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (x.protocol !== 'https:' || !h || h === 'localhost' || h.endsWith('.localhost') || h === '::1' || h === '0.0.0.0' || /^127\./.test(h)) return '';
+  return x.toString();
+}
 
 class MercadoPago {
   constructor(env = process.env) {
@@ -131,7 +140,7 @@ class MercadoPago {
       const pref = await withOptional((b, k) => this.call('POST', '/checkout/preferences', b, ref + idemSuffix + k), {
         items: [{ ...itemInfo(productId, title, amount), currency_id: 'BRL' }],
         payer: { email }, external_reference: ref, notification_url,
-        back_urls: { success: this.gameUrl, pending: this.gameUrl, failure: this.gameUrl }, auto_return: 'approved',
+        ...(publicBackUrl(this.gameUrl) ? { back_urls: { success: this.gameUrl, pending: this.gameUrl, failure: this.gameUrl }, auto_return: 'approved' } : {}),
         payment_methods: { excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }] },
         statement_descriptor: 'FRAIHA XADREZ',
         expires: true, expiration_date_to: brt(expires), metadata,
@@ -313,4 +322,4 @@ class MercadoPago {
   }
 }
 
-module.exports = { create: (env) => new MercadoPago(env), MercadoPago, STATUS, brt };
+module.exports = { publicBackUrl, create: (env) => new MercadoPago(env), MercadoPago, STATUS, brt };
