@@ -16,6 +16,7 @@ const LEAGUES = ["Madeira","Ferro","Bronze","Prata","Ouro","Platina","Esmeralda"
 const GOLD = Color("f4ce7f")
 const Cosmetics = preload("res://profile/premium_cosmetics.gd")
 const PlayerPortrait = preload("res://profile/player_portrait.gd")
+
 const Plaque = preload("res://ranked/player_plaque.gd")   # R46 · placa do jogador (proposta A aprovada)
 const DeskArt = preload("res://ranked/desk_art_modal.gd")   # R54 · telas do PC na arte de referência
 ## R55.4 · artes SÓ do PC (R54): caminhos, não preload — no celular não são carregadas (eram ~22 MB RGBA
@@ -164,6 +165,7 @@ func setup(service, ranked_controller):
         var st = get_parent()
         if st != null and st.has_method("open_analysis"): st.open_analysis())
     resign_button = Button.new()
+    resign_button.name = "MatchResign"   # R176 · botão de saída: tom avermelhado (ui_kit/back_pulse.gd)
     resign_button.text = "DESISTIR"
     resign_button.add_theme_font_size_override("font_size", 16)
     resign_button.pressed.connect(_confirm_resign)
@@ -179,7 +181,13 @@ func setup(service, ranked_controller):
     hud.add_child(link_label)
     controller.queued.connect(func(_m): _show("searching"))
     controller.found.connect(func(_m): _show("found"))
-    controller.finished.connect(func(_m): _show("result"))
+    # R176 · fim de partida: alguns segundos para VER a posição final (o mate) antes do painel de resultado,
+    # como no chess.com. Se outra partida/tela começar nesse meio-tempo, o painel não abre por cima.
+    controller.finished.connect(func(m):
+        var mid := String(controller.match_id)
+        var secs: float = preload("res://ranked/end_pause.gd").secs()
+        if not bool(m.get("unknown", false)) and secs > 0.0: await get_tree().create_timer(secs).timeout
+        if String(controller.match_id) == mid and String(controller.status) == "finished": _show("result"))
     controller.problem.connect(_on_problem)
     controller.state_changed.connect(func(): if screen == "found" and controller.status == "playing": close_panel())
     account.changed.connect(_refresh_modes_keep_notice)

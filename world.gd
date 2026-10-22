@@ -356,27 +356,29 @@ func _spawn_capture(center:Vector2, victim:String):
         var speed=70.0+float((i*37)%90)
         particles.append({"pos":center,"vel":Vector2(cos(a),sin(a))*speed,"life":0.45+float(i%5)*0.05,"col":col})
 
-## R142 · casa de cada opção da promoção (Dama, Torre, Bispo, Cavalo) — PC e celular usam o mesmo painel
+## R176 · painel PROMOÇÃO DO PEÃO = arte enviada pelo dono (ranked/art/promo_panel.png, 1842 x 854), igual em todos os
+## modos (Ranked, Casual, contra o computador; PC e celular). As peças das casas são as NOSSAS (cor de quem promove).
+const PROMO_ART := preload("res://ranked/art/promo_panel.png")
+const PROMO_ART_SIZE := Vector2(1842, 854)
+const PROMO_RECT := Rect2(190, 337.6, 640, 296.7)          # unidades do tabuleiro (centrado no tabuleiro)
+const PROMO_CELLS := [Vector2(267, 567), Vector2(614, 900), Vector2(950, 1234), Vector2(1284, 1578)]   # x das casas (px da arte)
+const PROMO_CELL_Y := Vector2(438, 710)
+
+## casa de cada opção da promoção (Dama, Torre, Bispo, Cavalo) — PC e celular usam o mesmo painel
 func promotion_choice_rect(i: int) -> Rect2:
-    return Rect2(269+i*130,473,105,95)
+    var s := PROMO_RECT.size.x / PROMO_ART_SIZE.x
+    var cx: Vector2 = PROMO_CELLS[i]
+    return Rect2(PROMO_RECT.position + Vector2(cx.x, PROMO_CELL_Y.x) * s, Vector2(cx.y - cx.x, PROMO_CELL_Y.y - PROMO_CELL_Y.x) * s)
 
 func _draw_promotion_overlay():
     if not promotion_pending: return
     if online != null and promotion_color != online.color: return
-    var font=ThemeDB.fallback_font
     draw_rect(presentation_rect,Color(0,0,0,0.58))
-    var box=Rect2(222,363,580,250)
-    draw_rect(box,Color("#201813"))
-    draw_rect(box.grow(-8),Color("#b88a4a"),false,4)
-    draw_string(font,Vector2(286,413),"PROMOÇÃO DO PEÃO",HORIZONTAL_ALIGNMENT_LEFT,-1,28,Color("#f0cf77"))
-    draw_string(font,Vector2(286,446),"Escolha a nova peça",HORIZONTAL_ALIGNMENT_LEFT,-1,17,Color("#e8ddc3"))
+    draw_texture_rect(PROMO_ART, PROMO_RECT, false)
     var opts=["Q","R","B","N"]
     for i in range(4):
         var rr=promotion_choice_rect(i)
-        draw_rect(rr,Color("#4d6c3d") if i%2==0 else Color("#b89a61"))
-        draw_rect(rr,Color("#f0cf77"),false,3)
         _piece(rr.get_center()+Vector2(0,3),promotion_color+opts[i])
-        draw_string(font,Vector2(rr.position.x+43,595),str(i+1),HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("#f0cf77"))
 
 func _finish_promotion(kind:String):
     if bot != null:

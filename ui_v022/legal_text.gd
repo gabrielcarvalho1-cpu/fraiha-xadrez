@@ -3,7 +3,7 @@ extends RefCounted
 ## revisar com um advogado antes de lançar oficialmente). Ficam no código (não em .txt) para irem na build Web.
 ## R103 · contato = e-mail do responsável; compras com direito de arrependimento e sem renovação automática.
 ## ATUALIZADO também é a versão dos Termos aceita no cadastro (máx. 40 caracteres).
-const CONTATO := "gabriel_carvalho1@hotmail.com"
+const CONTATO := "contato@fraihaxadrez.com"   # R176 · e-mail oficial do jogo
 const ATUALIZADO := "14 de outubro de 2026 · versão 2"
 
 static func contato() -> String:

@@ -349,6 +349,11 @@ func _build_mais():
 			var src = mobile._source_button(title)
 			action = func(): if src != null: src.pressed.emit()
 		_hot(panel, art, r, 0.0, title, action)
+	# R176 · INSTAGRAM logo abaixo do painel (junto da COMUNIDADE): abre direto o @fraihaxadrez
+	var ig: Button = hub.instagram_button(panel, Rect2(Vector2(150.0 * s, art.size.y + 14.0 * s), Vector2(600, 112) * s), maxi(10, int(round(44 * s))))
+	ig.name = "InstagramMais"
+	ig.text = "INSTAGRAM  @fraihaxadrez  ›"
+	panel.size.y = art.size.y + 140.0 * s
 
 # ------------------------------------------------------------------ CONHEÇA O FRAIHA (ref4)
 const ABOUT_Y0 := 40.0
@@ -400,12 +405,15 @@ func _build_about():
 		if String(topic[0]) == "COMUNIDADE E SUPORTE":
 			# R141 · link do Discord clicável: botão logo abaixo do texto
 			var holder := Control.new()
-			holder.custom_minimum_size = Vector2(632, 150) * s
+			holder.custom_minimum_size = Vector2(632, 270) * s   # R176 · + INSTAGRAM
 			holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			content.add_child(holder)
 			var db: Button = hub.discord_button(holder, Rect2(Vector2(0, 30) * s, Vector2(560, 110) * s), maxi(10, int(round(40 * s))))
 			db.name = "AboutDiscordMobile"
 			db.mouse_filter = Control.MOUSE_FILTER_PASS   # o dedo ainda rola a lista
+			var ib: Button = hub.instagram_button(holder, Rect2(Vector2(0, 155) * s, Vector2(560, 110) * s), maxi(10, int(round(40 * s))))
+			ib.name = "AboutInstagramMobile"
+			ib.mouse_filter = Control.MOUSE_FILTER_PASS
 		if i < topics.size() - 1:
 			var sp := Control.new()
 			sp.custom_minimum_size.y = 56 * s

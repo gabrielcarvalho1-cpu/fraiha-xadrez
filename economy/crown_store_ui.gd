@@ -242,6 +242,11 @@ func _buy(id: String):
 	_rebuild()
 
 func _use(id: String):
+	# R176 · "Você deseja mesmo aplicar …?"
+	var what: String = {"avatar": "o avatar", "frame": "a moldura", "emote": "o emote", "badge": "o ícone", "title": "o título"}.get(tab, "o item")
+	preload("res://ui_kit/confirm_box.gd").ask_change(self, what, String(Catalog.item(id).get("name", id)), func(): _use_now(id))
+
+func _use_now(id: String):
 	if tab == "avatar":   # R163 · avatar comprado: aplica direto (o servidor confere a posse)
 		hub.inspected_avatar = ""
 		hub.choose_avatar(id)

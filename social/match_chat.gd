@@ -32,6 +32,8 @@ var restore_button: Button
 ## R119 · EMOTES: os de graça + os comprados na Loja de Coroas (premium_cosmetics.shop_owned)
 const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
 const Cosmetics := preload("res://profile/premium_cosmetics.gd")
+const EmotePrefs := preload("res://social/emote_prefs.gd")      # R176
+const EmoteBanner := preload("res://social/emote_banner.gd")    # R176
 var emote_button: Button
 var emote_row: HFlowContainer
 var bubble_layer: Control
@@ -41,6 +43,31 @@ var local_mode := false
 var local_name := "Computador"
 class LocalMarker extends RefCounted:
     pass
+
+## R176 · campo vazio e sem foco: um cursor dourado pisca no começo do campo e a borda brilha de leve,
+## para a pessoa ver onde digitar. Com foco, o cursor do próprio LineEdit assume.
+class InputHint extends Control:
+    var edit: LineEdit
+    var _t := 0.0
+    func _init():
+        mouse_filter = Control.MOUSE_FILTER_IGNORE
+    func _process(d):
+        _t += d
+        if is_visible_in_tree(): queue_redraw()
+    func _draw():
+        if edit == null or not edit.editable: return
+        var empty := edit.text.is_empty()
+        var focused := edit.has_focus()
+        var pulse := 0.5 + 0.5 * sin(_t * TAU / 1.6)
+        # borda: dourada suave (mais forte com foco)
+        var bc := Color(0.96, 0.81, 0.50, (0.85 if focused else 0.28 + 0.22 * pulse))
+        draw_rect(Rect2(Vector2(1, 1), size - Vector2(2, 2)), bc, false, 2.0 if focused else 1.5)
+        if empty and not focused and fmod(_t, 1.1) < 0.6:
+            var sb := edit.get_theme_stylebox("normal")
+            var x0: float = (sb.get_margin(SIDE_LEFT) if sb != null else 8.0) - 3.0
+            var fs := edit.get_theme_font_size("font_size")
+            var hh := clampf(fs * 1.05, 12.0, size.y - 10.0)
+            draw_rect(Rect2(x0, (size.y - hh) / 2.0, 2.0, hh), Color("f4ce7f"))
 
 func setup(service):
     account = service
@@ -109,10 +136,21 @@ func setup(service):
     col.add_child(row)
     input = LineEdit.new()
     input.name = "ChatInput"
-    input.placeholder_text = "Mensagem…"
+    input.placeholder_text = "Digite sua mensagem…"
     input.max_length = MAX_LEN
     input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     input.text_submitted.connect(func(_t): send_current())
+    # R176 · o campo não pode parecer apagado: cursor dourado piscando (também antes do clique) e dica mais clara
+    input.caret_blink = true
+    input.caret_blink_interval = 0.55
+    input.add_theme_color_override("caret_color", GOLD)
+    input.add_theme_constant_override("caret_width", 2)
+    input.add_theme_color_override("font_placeholder_color", Color(0.93, 0.89, 0.80, 0.78))
+    var hint := InputHint.new()
+    hint.name = "InputHint"
+    hint.edit = input
+    hint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    input.add_child(hint)
     row.add_child(input)
     # Web no celular: campo HTML real sobre o LineEdit para o teclado virtual abrir ao tocar.
     preload("res://ui_v022/web_text_field.gd").attach(input, true)   # R90 · barra de envio acima do teclado
@@ -299,62 +337,63 @@ func send_emote(id: String):
     else:
         _show_status("Sem conexão. Tente de novo em instantes.")
 
-## balão grande por cima do jogo (2,5 s) — o emote "fala" sem precisar olhar o chat
+## R176 · faixa do emote (padrão da referência), pequena, AO LADO DA FOTO de quem mandou (2,5 s). Nunca no meio
+## do tabuleiro. Desligado em Configurações/opções da partida → não aparece. Uma faixa por lado (a nova troca a antiga).
+var avatar_rect: Callable   # (mine: bool) -> Rect2 da foto na tela (o stage liga; vazio = canto da tela)
+var card_texts: Callable    # (mine: bool) -> [CanvasItem] textos do cartão que a faixa cobre (somem enquanto ela aparece)
 func show_bubble(text: String, mine: bool, who: String, emote_id := ""):
+    if not EmotePrefs.enabled(): return
     if bubble_layer == null:
         bubble_layer = Control.new()
         bubble_layer.name = "EmoteBubbles"
         bubble_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
         bubble_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
         add_child(bubble_layer)
-    for c in bubble_layer.get_children(): c.queue_free()
-    var p := PanelContainer.new()
-    p.name = "EmoteBubble"
-    p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    var st := StyleBoxTexture.new()
-    st.texture = preload("res://ui_kit/art/fr_btn_azul.png")
-    for side in ["left", "right", "top", "bottom"]: st.set("texture_margin_" + side, 18.0)
-    for side in ["left", "right"]: st.set("content_margin_" + side, 28.0)
-    for side in ["top", "bottom"]: st.set("content_margin_" + side, 12.0)
-    p.add_theme_stylebox_override("panel", st)
-    var v := VBoxContainer.new()
-    v.add_theme_constant_override("separation", 0)
-    p.add_child(v)
-    var n := Label.new()
-    n.text = "VOCÊ" if mine else who.to_upper()
-    n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    n.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
-    n.add_theme_font_size_override("font_size", 14)
-    n.add_theme_color_override("font_color", Color("bcd4ff"))
-    v.add_child(n)
-    # R169 · ícone animado do emote ao lado da frase (cavalo pulando, coroa girando…)
-    var line := HBoxContainer.new()
-    line.alignment = BoxContainer.ALIGNMENT_CENTER
-    line.add_theme_constant_override("separation", 14)
-    v.add_child(line)
-    if not emote_id.is_empty():
-        line.add_child(preload("res://social/emote_fx.gd").make(emote_id, 44.0 if Mobile.active(get_viewport()) else 64.0))
-    var l := Label.new()
-    l.text = text
-    l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    l.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
-    l.add_theme_font_size_override("font_size", 24 if Mobile.active(get_viewport()) else 36)
-    l.add_theme_color_override("font_color", GOLD)
-    l.add_theme_color_override("font_outline_color", Color(0.1, 0.05, 0.0))
-    l.add_theme_constant_override("outline_size", 5)
-    line.add_child(l)
-    bubble_layer.add_child(p)
+    var nm := "EmoteBubble_" + ("me" if mine else "opp")
+    for c in bubble_layer.get_children():
+        if c.name == nm or c.is_queued_for_deletion():
+            bubble_layer.remove_child(c)
+            c.queue_free()
     var vs := get_viewport().get_visible_rect().size
-    var sz := p.get_combined_minimum_size()
-    p.size = sz
-    p.position = Vector2(floorf((vs.x - sz.x) * 0.5), vs.y * (0.62 if mine else (0.3 if Mobile.active(get_viewport()) else 0.16)))
+    var a := Rect2()
+    if avatar_rect.is_valid(): a = avatar_rect.call(mine)
+    var mob := Mobile.active(get_viewport())
+    if not a.has_area():   # sem foto na tela: canto direito (em cima = adversário, embaixo = você)
+        var s := 64.0 if mob else 84.0
+        a = Rect2(Vector2(vs.x - s * 3.9, vs.y * (0.72 if mine else 0.1)), Vector2(s, s))
+    var h := clampf(a.size.y * 0.86, 44.0, 84.0)   # menor que a foto: não cobre o relógio nem o tabuleiro
+    var p: Control = EmoteBanner.make(text, "Você" if mine else who, emote_id, h)
+    p.name = nm
+    var w := p.size.x
+    var x := a.end.x + 6.0
+    if x + w > vs.x - 4.0: x = a.position.x - w - 6.0   # não cabe à direita: vai à esquerda da foto
+    x = clampf(x, 4.0, maxf(4.0, vs.x - w - 4.0))
+    # alinhada ao topo da foto: cobre o nome do cartão por inteiro (nada aparece "vazando" por cima da faixa)
+    var y := clampf(a.position.y + a.size.y * 0.04, 4.0, maxf(4.0, vs.y - h - 4.0))
+    p.position = Vector2(floorf(x), floorf(y))
+    bubble_layer.add_child(p)
+    p.pivot_offset = Vector2(0, h / 2.0)
     p.modulate.a = 0.0
+    p.scale = Vector2(0.92, 0.92)
+    # textos do cartão debaixo da faixa (nome, liga) somem enquanto ela está na tela: nada "vaza" por cima
+    var under: Array = card_texts.call(mine) if card_texts.is_valid() else []
+    for n in under:
+        if is_instance_valid(n): n.self_modulate.a = 0.0
+    p.tree_exiting.connect(func():
+        for n in under:
+            if is_instance_valid(n): n.self_modulate.a = 1.0)
     var tw := create_tween()
+    tw.set_parallel(true)
     tw.tween_property(p, "modulate:a", 1.0, 0.15)
-    tw.tween_interval(2.3)
-    tw.tween_property(p, "modulate:a", 0.0, 0.4)
-    tw.tween_callback(p.queue_free)
+    tw.tween_property(p, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tw.chain().tween_interval(2.3)
+    tw.chain().tween_property(p, "modulate:a", 0.0, 0.4)
+    tw.chain().tween_callback(p.queue_free)
+
+## Preferência mudou (Configurações / opções da partida): desligar some com as faixas na hora.
+func emotes_pref_changed():
+    if bubble_layer != null and not EmotePrefs.enabled():
+        for c in bubble_layer.get_children(): c.queue_free()
 
 func _toggle_mute():
     muted = not muted

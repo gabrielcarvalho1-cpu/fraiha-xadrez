@@ -530,12 +530,12 @@ func _profile(content: VBoxContainer, width := 0.0):
         detail.text = hub.AvatarCatalog.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + gallery.hint(id) if st == "locked" else ("conquistado · arte em breve" if st == "no_art_unlocked" else ("EM USO" if st == "selected" else "toque em APLICAR AVATAR")))
         apply_av.disabled = st != "unlocked"
         _set_btn(apply_av, "EM USO" if st == "selected" else ("BLOQUEADO" if st != "unlocked" else "APLICAR AVATAR")))
-    apply_av.pressed.connect(func():
+    apply_av.pressed.connect(func(): preload("res://ui_kit/confirm_box.gd").ask_change(hub, "o avatar", hub.AvatarCatalog.display_name(String(chosen.avatar)), func():   # R176
         if hub.apply_avatar(String(chosen.avatar)):
             gallery.update_states()
             apply_av.disabled = true
             _set_btn(apply_av, "EM USO")
-            detail.text = hub.AvatarCatalog.display_name(String(chosen.avatar)).to_upper() + " · EM USO")
+            detail.text = hub.AvatarCatalog.display_name(String(chosen.avatar)).to_upper() + " · EM USO"))
     # ÍCONE (selo ao lado do nome): separado do avatar.
     _text(content, "SEU ÍCONE", 16).name = "BadgeTitleMobile"
     var badges = load("res://profile/badge_gallery.gd").new()
@@ -554,12 +554,12 @@ func _profile(content: VBoxContainer, width := 0.0):
         bdetail.text = badges.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + badges.hint(id) if st == "locked" else ("EM USO" if st == "selected" else "toque em APLICAR ÍCONE"))
         apply_bd.disabled = st != "unlocked"
         _set_btn(apply_bd, "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR ÍCONE")))
-    apply_bd.pressed.connect(func():
+    apply_bd.pressed.connect(func(): preload("res://ui_kit/confirm_box.gd").ask_change(hub, "o ícone", badges.display_name(String(chosen.badge)), func():   # R176
         if hub.apply_badge(String(chosen.badge)):
             badges.update_states()
             apply_bd.disabled = true
             _set_btn(apply_bd, "EM USO")
-            bdetail.text = badges.display_name(String(chosen.badge)).to_upper() + " · EM USO")
+            bdetail.text = badges.display_name(String(chosen.badge)).to_upper() + " · EM USO"))
     # R168 · MOLDURA do retrato: galeria própria, como avatares e ícones.
     _text(content, "SUA MOLDURA", 16).name = "FrameTitleMobile"
     var frames = load("res://profile/frame_gallery.gd").new()
@@ -579,12 +579,12 @@ func _profile(content: VBoxContainer, width := 0.0):
         fdetail.text = frames.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + frames.hint(id) if st == "locked" else ("EM USO" if st == "selected" else "toque em APLICAR MOLDURA"))
         apply_fr.disabled = st != "unlocked"
         _set_btn(apply_fr, "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR MOLDURA")))
-    apply_fr.pressed.connect(func():
+    apply_fr.pressed.connect(func(): preload("res://ui_kit/confirm_box.gd").ask_change(hub, "a moldura", frames.display_name(String(chosen.frame)), func():   # R176
         if hub.apply_frame(String(chosen.frame)):
             frames.update_states()
             apply_fr.disabled = true
             _set_btn(apply_fr, "EM USO")
-            fdetail.text = frames.display_name(String(chosen.frame)).to_upper() + " · EM USO")
+            fdetail.text = frames.display_name(String(chosen.frame)).to_upper() + " · EM USO"))
     # Foto própria (escolher → enquadrar → salvar) e remover.
     var photo_row = HBoxContainer.new()
     photo_row.add_theme_constant_override("separation", 8)
@@ -592,7 +592,7 @@ func _profile(content: VBoxContainer, width := 0.0):
     var change_photo = _button(photo_row, "ALTERAR FOTO", func(): hub.pick_photo())
     change_photo.name = "ChangePhoto"
     change_photo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    var remove_photo = _button(photo_row, "REMOVER FOTO", func(): hub.remove_custom_avatar())
+    var remove_photo = _button(photo_row, "REMOVER FOTO", func(): hub.request_remove_photo())   # R176 · com confirmação
     remove_photo.name = "RemovePhoto"
     remove_photo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     # R31: ícone, título, moldura, universo e peças (Fundador / Club).
@@ -645,7 +645,7 @@ func _ranking(content: VBoxContainer):
     preview.custom_minimum_size.y = 160
     content.add_child(preview)
     if hub.DEV_PREVIEW_BUTTON: _button(content,"TESTAR UNIVERSO",hub._preview_league)
-    _button(content,"PEÇAS CLÁSSICAS",func(): hub.piece_set_requested.emit("classic"))
+    _button(content,"PEÇAS CLÁSSICAS",func(): preload("res://ui_kit/confirm_box.gd").ask_change(hub, "as peças", "PEÇAS CLÁSSICAS", func(): hub.piece_set_requested.emit("classic")))   # R176
 
 ## R52f · CONFIGURAÇÕES no celular. Desde o R51 a página do PC é a arte de referência (sem coluna em
 ## page_scrolls) e o celular abria o painel vazio. Aqui a coluna é montada com os mesmos controles e as
@@ -687,6 +687,18 @@ func _settings(content: VBoxContainer):
     # R139 · TABULEIRO E PEÇAS (cores das casas e das peças)
     var bc: TextureButton = hub._page_button(content, 1, "TABULEIRO E PEÇAS", "Cores das casas e das peças", func(): hub.open_board_colors())
     bc.name = "BoardColorsMobile"
+    # R176 · EMOTES (faixas ao lado da foto na partida): liga/desliga, salvo no aparelho
+    var EmotePrefs = preload("res://social/emote_prefs.gd")
+    var em: TextureButton = hub._page_button(content, 1, "", "", func(): pass)
+    em.name = "EmotesToggleMobile"
+    var paint_em := func():
+        var labels := em.get_child(0).get_child(0)
+        (labels.get_child(0) as Label).text = "EMOTES: " + ("LIGADOS" if EmotePrefs.enabled() else "DESLIGADOS")
+        (labels.get_child(1) as Label).text = "Faixas ao lado da foto na partida" if EmotePrefs.enabled() else "Toque para ligar"
+    em.pressed.connect(func():
+        EmotePrefs.toggle()
+        paint_em.call())
+    paint_em.call()
     # R53 · TELA CHEIA saiu do MAIS (o painel da referência tem só VOLTAR / CONFIGURAÇÕES / CONHEÇA / SAIR)
     if hub.screen_mode != null and hub.screen_mode.supported():
         hub._settings_section(content, "TELA")

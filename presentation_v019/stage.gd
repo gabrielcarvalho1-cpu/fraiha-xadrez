@@ -45,6 +45,10 @@ var mobile_fx: Button
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
 var board_skin = null   # R49 · ranked/board_skin.gd
 var mobile_hud = null   # R53 · ranked/mobile_match_hud.gd
+const EndPause := preload("res://ranked/end_pause.gd")   # R176
+var end_pause := false
+var _end_seq := 0
+signal end_pause_done
 
 func mobile_hud_on() -> bool:
     return mobile_hud != null and mobile_hud.on
@@ -93,6 +97,7 @@ func _enter_tree():
 
 func _ready():
     preload("res://ui_v022/fonts_msdf.gd").apply()   # R124 · letras nítidas em qualquer escala
+    preload("res://ui_kit/back_pulse.gd").watch(get_tree())   # R176 · VOLTAR/SAIR/DESISTIR avermelhados, respirando
     get_tree().auto_accept_quit = false
     bot_controller = preload("res://bot/controller.gd").new()
     bot_controller.name = "BotController"
@@ -553,6 +558,23 @@ func _setup_account():
     add_child(match_chat)
     match_chat.setup(account)
     match_chat.layout_needed.connect(_layout)
+    # R176 · as faixas dos emotes aparecem ao lado da foto de quem mandou (cartão de baixo = você; de cima = adversário)
+    match_chat.avatar_rect = func(mine: bool) -> Rect2:
+        if game == null or not game.visible or not mode in ["ranked", "casual", "bot"]: return Rect2()
+        var u = casual_ui if mode == "casual" else ranked_ui
+        if u == null or not u.get("strips") is Dictionary or not u.strips.has("bottom"): return Rect2()
+        var pt: Control = u.strips["bottom" if mine else "top"].portrait
+        if pt == null or not pt.is_visible_in_tree(): return Rect2()
+        var xf: Transform2D = pt.get_global_transform_with_canvas()
+        return Rect2(xf.origin, pt.size * xf.get_scale())
+    match_chat.card_texts = func(mine: bool) -> Array:
+        var u = casual_ui if mode == "casual" else ranked_ui
+        if u == null or not u.get("strips") is Dictionary or not u.strips.has("bottom"): return []
+        var st: Dictionary = u.strips["bottom" if mine else "top"]
+        var out := []
+        for key in ["name", "sub", "seal", "emblem"]:
+            if st.get(key) is CanvasItem: out.append(st[key])
+        return out
     var toggle: Button = match_chat.toggle_button
     toggle.custom_minimum_size.y = 44
     toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1549,6 +1571,7 @@ func _setup_analysis():
 
 ## Executa `action` quando a animação de VITÓRIA/DERROTA sair da tela (ou já, se não estiver aberta).
 func _after_result_overlay(action: Callable):
+    if end_pause: await end_pause_done   # R176 · primeiro a pausa olhando o tabuleiro final
     # espera a animação de VITÓRIA terminar (inclusive o fade de saída) antes de abrir o painel
     if result_overlay != null and (result_overlay.is_showing() or result_overlay.visible):
         await result_overlay.dismissed
@@ -1602,6 +1625,17 @@ func _on_match_finished(record):
     if match_history != null: match_history.add(record)
     if record == null or result_overlay == null: return
     if String(record.human_color).is_empty(): return
+    # R176 · antes da animação de VITÓRIA/DERROTA/EMPATE: alguns segundos para ver a posição final (o mate),
+    # como no chess.com. Painéis que chegarem nesse meio-tempo (recompensa do bot) esperam a pausa terminar.
+    _end_seq += 1
+    var seq := _end_seq
+    end_pause = true
+    var secs := EndPause.secs()
+    if secs > 0.0: await get_tree().create_timer(secs).timeout
+    if seq != _end_seq: return
+    end_pause = false
+    end_pause_done.emit()
+    if secs > 0.0 and recorder != null and not is_same(recorder.current(), record) and record is Object: return   # já começou outra partida durante a pausa
     var res := String(record.result)
     if res == "win": result_overlay.show_result("victory")
     elif res == "loss": result_overlay.show_result("defeat")

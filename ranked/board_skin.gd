@@ -43,8 +43,11 @@ static func colored_pieces(hub, base: Dictionary) -> Dictionary:
     return BoardColors.pieces(id, base)
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
 ## R55 · painel CONFIGURAÇÕES da partida no PC (arte do dono: tools/ui_ref/config/configuracoes_ref.png)
+const EmotePrefs := preload("res://social/emote_prefs.gd")   # R176
+const CHAT_BOX := preload("res://social/art/chat_box_pc.png")   # R176 · quadro do chat (PC), mesmo lugar da arte
+const CHAT_BOX_BOT := preload("res://social/art/chat_box_pc_bot.png")   # R176 · idem, sem DENUNCIAR (contra o computador)
 const SETTINGS_FRAME_PATH := "res://ranked/art/desk_settings_frame.png"   # R55.4 · só no PC (1º uso)
-const SETTINGS_PANEL := Rect2(1359, 86, 309, 282)     # px da arte do PC (logo abaixo da engrenagem)
+const SETTINGS_PANEL := Rect2(1359, 86, 309, 333)     # R176 · + linha EMOTES (era 282)     # px da arte do PC (logo abaixo da engrenagem)
 const CREAM := Color("f3ede0")
 const GOLD := Color("f4ce7f")
 
@@ -63,8 +66,8 @@ const PC := {
     "material": Rect2(1250, 249, 376, 22), "material_fs": 17.0,
     "card_dy": 566.0,
     # chat
-    "chat": Rect2(1158, 305, 488, 370), "title": [1195.0, 351.0, 110.0, 25.0],
-    "mute": Rect2(1314, 321, 115, 38), "report": Rect2(1442, 321, 126, 38), "min": Rect2(1581, 321, 41, 38),
+    "chat": Rect2(1158, 305, 488, 370), "title": [1193.0, 350.0, 70.0, 23.0],   # R176 · cabeçalho: CHAT · EMOTES · SILENCIAR · DENUNCIAR · —
+    "emotes": Rect2(1266, 321, 92, 38), "mute": Rect2(1364, 321, 100, 38), "report": Rect2(1470, 321, 102, 38), "min": Rect2(1581, 321, 41, 38),
     "list": Rect2(1184, 374, 424, 214), "input": Rect2(1182, 607, 309, 50), "send": Rect2(1504, 605, 119, 53),
     "resign": Rect2(1416, 867, 230, 67), "link": Rect2(1186, 548, 420, 40),
     "after": Rect2(1486, 868, 144, 42),   # JOGAR DE NOVO / ANALISAR (bot, fim da partida): base do layout R51
@@ -223,6 +226,7 @@ func restore() -> void:
     on = false
     kind = ""
     bg.visible = false
+    bg.chat_tex = null
     if settings != null: settings.hide()
     layer.hide()
     if menu != null: menu.hide()
@@ -411,24 +415,29 @@ func _skin_chat_pc(M: Dictionary) -> void:
     _ov(c.panel, "style", "panel", StyleBoxEmpty.new())
     c.panel.position = R(M.chat).position
     c.panel.size = R(M.chat).size
+    # R176 · o quadro do chat (com as molduras de EMOTES, SILENCIAR, DENUNCIAR, —, campo e ENVIAR) é uma arte
+    # própria por cima do cenário: vale no Ranked/Casual e também contra o computador (a arte do bot não tem o chat)
+    bg.chat_tex = CHAT_BOX_BOT if stage.mode == "bot" else CHAT_BOX
+    bg.chat_rect = R(M.chat)
+    bg.queue_redraw()
     _text(c.title, M.title, FONT_BOLD, Color("f3ead8"), 3)
-    _text_button(c.mute_button, M.mute, 18.0)
-    _text_button(c.report_button, M.report, 18.0)
+    _text_button(c.mute_button, M.mute, 17.0)
+    _text_button(c.report_button, M.report, 17.0)
     _ghost(c.minimize_button, M.min, "min")
     _ghost(c.send_button, M.send, "send")
-    # R119 · EMOTES: botão no canto de baixo da lista; a fileira de emotes abre por cima da lista
+    # R176 · EMOTES no cabeçalho, ao lado de SILENCIAR; a fileira de emotes abre por cima da lista
     var lr: Rect2 = M.list
-    _place(c.scroll, Rect2(lr.position.x, lr.position.y, lr.size.x, lr.size.y - 40))
+    _place(c.scroll, lr)
     if c.emote_button != null:
-        _text_button(c.emote_button, Rect2(lr.end.x - 124, lr.end.y - 36, 124, 34), 16.0)
-        _place(c.emote_row, Rect2(lr.position.x + 6, lr.position.y + 6, lr.size.x - 12, lr.size.y - 50))
+        _text_button(c.emote_button, M.emotes, 17.0)
+        _place(c.emote_row, Rect2(lr.position.x + 6, lr.position.y + 6, lr.size.x - 12, lr.size.y - 12))
     _place(c.status, Rect2(M.list.position.x, M.list.end.y - 30, M.list.size.x, 28))
     _place(c.input, M.input)
     var empty := StyleBoxEmpty.new()
     empty.content_margin_left = 14.0 * k
     for st in ["normal", "focus", "read_only"]: _ov(c.input, "style", st, empty)
     _ov(c.input, "size", "font_size", int(round(20 * k)))
-    _ov(c.input, "color", "font_placeholder_color", Color(0.78, 0.76, 0.72, 0.62))
+    _ov(c.input, "color", "font_placeholder_color", Color(0.93, 0.89, 0.80, 0.78))
     _ov(c.input, "color", "font_color", Color("f1ece2"))
     if c.restore_button.visible:
         c.restore_button.position = R(Rect2(M.title[0] - 8, M.title[1] - 28, 120, 38)).position
@@ -494,6 +503,8 @@ func _apply_bot(M: Dictionary) -> void:
         _rec(c.panel, "visible", false)
     elif c != null:
         for n in [c.panel, c.restore_button]: _rec(n, "visible", false)
+    bg.chat_tex = null   # R176 · quadro de LANCES: a arte do bot já tem a moldura vazia
+    bg.queue_redraw()
     if kind != "pc":
         # celular: sem voz e sem chat; a barra do chat vira a linha dos últimos lances
         var mv = stage.mobile_voice
@@ -737,6 +748,8 @@ class ArtBg extends Node2D:
     ## PC: região da arte SEM interface (só floresta). As sobras da tela vêm só daqui — nunca da borda inteira,
     ## que tem INÍCIO, barra de cima e painéis (espelhar a borda duplicava a interface em janela mais larga/alta).
     var clean := Rect2()
+    var chat_tex: Texture2D = null   # R176 · quadro do chat por cima da arte (PC)
+    var chat_rect := Rect2()
     var _fill: ShaderMaterial
     const FILL_SHADER := """
 shader_type canvas_item;
@@ -803,6 +816,7 @@ void fragment() {
             _fill.set_shader_parameter("ramp", 260.0)   # px da arte
             f.queue_redraw()
             draw_texture_rect(tex, rect, false)
+            if chat_tex != null: draw_texture_rect(chat_tex, chat_rect, false)
             return
         if has_node("Fill"): get_node("Fill").visible = false
         var ts := tex.get_size()
@@ -965,6 +979,7 @@ func setting_state(id: String) -> Array:
         "full":
             var sm = stage.get("screen_mode")
             return [sm != null and sm.on_cached(), sm != null and sm.supported()]
+        "emotes": return [EmotePrefs.enabled(), true]   # R176
     return [false, false]
 
 func toggle_setting(id: String) -> void:
@@ -983,6 +998,9 @@ func toggle_setting(id: String) -> void:
         "full":
             var sm = stage.get("screen_mode")
             if sm != null: sm.toggle()
+        "emotes":
+            EmotePrefs.toggle()
+            if stage.match_chat != null: stage.match_chat.emotes_pref_changed()
     for b in [stage.desk_music, stage.desk_fx, stage.desk_fullscreen]:
         if b != null: b.queue_redraw()
     marks.queue_redraw()
@@ -991,7 +1009,8 @@ func toggle_setting(id: String) -> void:
 ## Painel na arte enviada: moldura de madeira (PNG) + cabeçalho, ícones, textos e chaves desenhados ao vivo.
 ## Medidas em px da arte enviada (266 x 243); u = px de tela por px da arte.
 class SettingsPanel extends Control:
-    const ROWS := [["music", "Música", 73.0], ["fx", "Efeitos sonoros", 117.0], ["mic", "Microfone", 161.5], ["full", "Tela cheia", 206.0]]
+    const ROWS := [["music", "Música", 73.0], ["fx", "Efeitos sonoros", 117.0], ["mic", "Microfone", 161.5], ["full", "Tela cheia", 206.0], ["emotes", "Emotes", 250.0]]
+    const FRAME_H := 287.0   # R176 · moldura de 243 esticada: repete uma faixa de linha (96..140) para caber a 5ª linha
     const TITLE := "CONFIGURAÇÕES"
     var skin
     var frame_tex: Texture2D = null     # R55.4 · moldura carregada no 1º uso (só no PC)
@@ -1043,7 +1062,12 @@ class SettingsPanel extends Control:
         var px := pointer_x
         var top := -2.0 * k
         draw_colored_polygon(PackedVector2Array([Vector2(px, top - 14 * k), Vector2(px + 9 * k, top), Vector2(px - 9 * k, top)]), Color("e8901f"))
-        if frame_tex != null: draw_texture_rect(frame_tex, Rect2(Vector2.ZERO, size), false)
+        if frame_tex != null:
+            # R176 · topo (0..140) + uma faixa repetida (96..140) + base (140..243)
+            var fw := 266.0 * k
+            draw_texture_rect_region(frame_tex, Rect2(0, 0, fw, 140 * k), Rect2(0, 0, 266, 140))
+            draw_texture_rect_region(frame_tex, Rect2(0, 140 * k, fw, 44 * k), Rect2(0, 96, 266, 44))
+            draw_texture_rect_region(frame_tex, Rect2(0, 184 * k, fw, 103 * k), Rect2(0, 140, 266, 103))
         # cabeçalho: engrenagem + CONFIGURAÇÕES
         var cream := Color("f3e3bd")
         _gear(Vector2(37, 28) * k, 11.0 * k, cream)
@@ -1123,6 +1147,7 @@ class SettingsPanel extends Control:
                 draw_arc(c + Vector2(0, -h * 0.02), h * 0.27, 0.15, PI - 0.15, 14, col, w * 0.9)
                 draw_line(c + Vector2(0, h * 0.25), c + Vector2(0, h * 0.40), col, w)
                 draw_line(c + Vector2(-h * 0.17, h * 0.42), c + Vector2(h * 0.17, h * 0.42), col, w)
+            "emotes": EmotePrefs.draw_icon(self, r, col)
             "full":
                 var a := h * 0.42
                 var arm := h * 0.22

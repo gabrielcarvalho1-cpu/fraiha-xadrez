@@ -1,7 +1,7 @@
 extends Button
 ## Botão do HUD da partida no estilo FRAIHA: fundo verde-escuro, moldura dourada, cravos nos
 ## cantos e ícone desenhado em pixel (sem depender de fonte com símbolos).
-## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off", "trophy", "chat", "crown", "community". hint: tecla (ex.: "ESC").
+## glyph: "fullscreen", "exit_fullscreen", "home", "gear", "restart", "sound_on", "sound_off", "trophy", "chat", "crown", "community", "instagram". hint: tecla (ex.: "ESC").
 const GOLD := Color("f4ce7f")
 const GOLD_DIM := Color("b99555")
 const INK := Color("10141e")
@@ -207,6 +207,18 @@ func _draw():
                 var sh := PackedVector2Array()
                 for i in 13: sh.append(p + Vector2(0, r * 0.75 * k) + Vector2(cos(PI + PI * i / 12.0), sin(PI + PI * i / 12.0)) * r * 0.78 * k)
                 draw_colored_polygon(sh, col)
+        "instagram":
+            # R176 · INSTAGRAM: câmera (quadrado arredondado + lente + pontinho do flash)
+            var q := Rect2(center - Vector2(r, r) * 0.92, Vector2(r, r) * 1.84)
+            var sq := StyleBoxFlat.new()
+            sq.draw_center = false
+            sq.border_color = col
+            sq.set_border_width_all(maxi(2, int(round(w * 1.15))))
+            sq.set_corner_radius_all(int(round(r * 0.52)))
+            sq.anti_aliasing = true
+            draw_style_box(sq, q)
+            draw_arc(center, r * 0.42, 0.0, TAU, 28, col, w * 1.15, true)
+            draw_circle(center + Vector2(r * 0.5, -r * 0.5), maxf(1.5, r * 0.12), col)
         "mail":
             # R162 · MENSAGENS: envelope fechado (aba em V)
             var e := Rect2(center + Vector2(-r * 1.05, -r * 0.72), Vector2(r * 2.1, r * 1.44))

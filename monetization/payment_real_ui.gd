@@ -358,7 +358,7 @@ func open_card_form():
     _note("")
     CardForm.release_game_focus(get_viewport())
     card_form.open(String(charge.get("public_key", "")), int(charge.get("amount_cents", 0)), String(acc.email) if acc != null else "",
-        String(Catalog.product(product_id).get("name", "FRAIHA")).to_upper(), _price_text())
+        String(Catalog.product(product_id).get("name", "FRAIHA")).to_upper(), _price_text(), _club())   # R176 · moldura do Club / Fundador
 
 func _note(text: String):
     if card_note != null and is_instance_valid(card_note): card_note.text = text
@@ -410,8 +410,13 @@ func _waiting_block(v: VBoxContainer):
     row.add_child(spin)
     status_label = Art.label(row, "Aguardando a confirmação do pagamento…", hub.fs(18), Color("ffe6a0"), Art.FONT_SEMI)
     status_label.name = "PaymentWaiting"
-    status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    status_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    # R176 · celular estreito: a frase quebra linha (sem quebra ela alargava a moldura e cortava a borda da direita)
+    if hub.narrow:
+        status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    else:
+        status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+        status_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     countdown = Art.label(v, "", hub.fs(15), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
     countdown.name = "PaymentCountdown"
     _tick_countdown()

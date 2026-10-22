@@ -84,8 +84,11 @@ static func option(hub, parent: Node, node_name: String, preview: Control, title
         if locked:
             hub.open_confirm("BLOQUEADO", title + "\n\n" + hint + ".", "", "ENTENDI", Callable())
             return
-        on_pick.call()
-        hub._rebuild())
+        if selected: return
+        # R176 · pergunta antes de trocar (ícone, título, moldura, universo, peças)
+        preload("res://ui_kit/confirm_box.gd").ask(hub, "CONFIRMAR TROCA?", "Você deseja mesmo aplicar:\n" + title + "?", "SIM, APLICAR", func():
+            on_pick.call()
+            hub._rebuild()))
     parent.add_child(b)
     return b
 

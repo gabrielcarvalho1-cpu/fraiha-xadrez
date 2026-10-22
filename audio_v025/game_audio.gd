@@ -10,6 +10,7 @@ var previous_count := -1
 var previous_captures := 0
 var previous_board := {}
 var previous_end := false
+var end_armed := false   # R176
 var previous_theme := ""
 var was_promotion := false
 var promoted_now := false
@@ -27,6 +28,10 @@ func _ready():
     streams["capture"] = load("res://audio_v025/padrao/captura.mp3")
     streams["promotion"] = load("res://audio_v025/padrao/promocao.mp3")
     streams["roque"] = load("res://audio_v025/padrao/roque.mp3")
+    # R176 · fim de partida (vitória OU derrota, em Ranked, Casual e contra o computador): voz "checkmate" + espada
+    # (o mesmo arquivo enviado pelo dono, já usado no XEQUE/MARCHA). Empate: som próprio ("empate").
+    streams["fim"] = load("res://xeque/audio/voz_xeque_mate_derrota.mp3")
+    streams["empate"] = load("res://marcha/audio/r70/saida_do_peao.mp3")   # R176 · empate (som enviado pelo dono, já usado na MARCHA)
     for i in range(4):
         var player = AudioStreamPlayer.new()
         player.volume_db = -14
@@ -259,6 +264,7 @@ func _process(_delta):
     if not game.game_started:
         previous_count = -1
         previous_end = false
+        end_armed = false
         return
     var captures: int = game.captured_white.size()+game.captured_black.size()
     if previous_count >= 0 and game.move_count == previous_count+1:
@@ -276,15 +282,20 @@ func _process(_delta):
     if was_promotion and not game.promotion_pending and previous_count >= 0 and not promoted_now:
         play_cue("promotion")
     promoted_now = false
-    if game.game_over and not previous_end and previous_count >= 0:
-        var human: String = game.bot.human_color if game.bot != null else (game.online.color if game.online != null else "")
-        if String(game.status).begins_with("EMPATE"): pass   # R127 · "MATERIAL INSUFICIENTE" contém "MATE": empate não toca som de mate/vitória/derrota
-        elif "MATE" in game.status:
-            play_cue("mate")
-            if not human.is_empty(): play_cue("loss" if game.turn == human else "win")
-        elif "VENC" in game.status:
-            var winning_color = "w" if "BRANCAS" in game.status else "b"
-            play_cue("win" if human.is_empty() or winning_color == human else "loss")
+    # R176 · som de fim: armado enquanto a partida corre; dispara quando o resultado chega (online o "match_result"
+    # pode chegar alguns quadros depois do estado "finished", por isso espera o texto do resultado)
+    if not game.game_over:
+        end_armed = true
+    elif end_armed:
+        var st := String(game.status)
+        # R127 · "MATERIAL INSUFICIENTE" contém "MATE": empate não toca som de fim
+        if st == "PARTIDA ENCERRADA": end_armed = false   # servidor reiniciou: ninguém ganhou nem perdeu, sem som
+        elif st.begins_with("EMPATE"):
+            end_armed = false
+            play_cue("empate")
+        elif "MATE" in st or "VENC" in st or st.begins_with("VITÓRIA") or st.begins_with("DERROTA"):
+            end_armed = false
+            play_cue("fim")   # vitória OU derrota: xeque-mate, tempo, desistência
     previous_count = game.move_count
     previous_captures = captures
     previous_board = game.pieces.duplicate()

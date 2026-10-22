@@ -54,7 +54,7 @@ class FakeCard extends Node:
 	signal closed
 	var is_open := false
 	var opens := 0
-	func open(_pk, _amount, _email, _title, _price):
+	func open(_pk, _amount, _email, _title, _price, _club := false):
 		is_open = true
 		opens += 1
 	func resolve_ok(): pass

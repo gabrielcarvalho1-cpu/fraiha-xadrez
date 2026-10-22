@@ -790,7 +790,7 @@ func _build_pages():
     # Os 3 botões de baixo já estão desenhados na arte: aqui só as áreas de clique.
     var change_photo := RefPage.hotspot(profile_panel, Rect2(1070, 775, 194, 58), pick_photo, "ChangePhoto")
     change_photo.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    var remove_photo := RefPage.hotspot(profile_panel, Rect2(1279, 775, 193, 58), remove_custom_avatar, "RemovePhoto")
+    var remove_photo := RefPage.hotspot(profile_panel, Rect2(1279, 775, 193, 58), request_remove_photo, "RemovePhoto")   # R176 · com confirmação
     remove_photo.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     # R31: ícone, título, moldura, universo e peças exclusivos (Fundador / Club).
     var personalize := RefPage.hotspot(profile_panel, Rect2(1487, 775, 203, 58), func(): open_premium("personalize"), "OpenPersonalize")
@@ -1027,6 +1027,8 @@ func _build_settings_page():
     bct.add_theme_font_override("font", FONT_CINZEL)
     RefPage.text(panel, "Cores das casas e das peças", Rect2(346, 996, 820, 40), 28, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
     bc_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    # R176 · EMOTES ligados/desligados (faixas ao lado da foto na partida): chave na linha do título PARTIDA
+    _build_emotes_toggle(panel, Rect2(892, 720, 430, 54))
     var note := Label.new()
     note.name = "SettingsNote"
     note.text = "Preferências salvas automaticamente. O botão de som da tela inicial silencia tudo."
@@ -1057,6 +1059,54 @@ func _build_settings_page():
     var ver := RefPage.text(panel, "FRAIHA Xadrez · versão %s" % APP_VERSION, Rect2(900, 1128, 422, 40), 21, Color("e3dccb"), false, HORIZONTAL_ALIGNMENT_RIGHT)
     ver.name = "SettingsVersion"
     pages["settings"] = panel
+
+## R176 · chave EMOTES (mesmo padrão da placa TERMOS: azul com borda dourada) + chave verde/cinza desenhada.
+func _build_emotes_toggle(parent: Control, r: Rect2) -> void:
+    var EmotePrefs = preload("res://social/emote_prefs.gd")
+    var b := Button.new()
+    b.name = "SettingsEmotes"
+    b.focus_mode = Control.FOCUS_NONE
+    b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    b.tooltip_text = "Faixas dos emotes ao lado da foto dos jogadores durante a partida"
+    b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+    b.add_theme_font_override("font", FONT_CINZEL)
+    b.add_theme_font_size_override("font_size", 25)
+    for pair in [["normal", Color("15213a")], ["hover", Color("1f3156")], ["pressed", Color("0e182b")]]:
+        var st := StyleBoxFlat.new()
+        st.bg_color = pair[1]
+        st.border_color = Color("c99a45")
+        st.set_border_width_all(2)
+        st.set_corner_radius_all(3)
+        st.content_margin_left = 66
+        b.add_theme_stylebox_override(pair[0], st)
+    b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+    for k in ["font_color", "font_hover_color", "font_pressed_color"]: b.add_theme_color_override(k, Color("f4ce7f"))
+    b.position = r.position
+    b.size = r.size
+    var deco := Control.new()
+    deco.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    deco.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    deco.draw.connect(func():
+        var on: bool = EmotePrefs.enabled()
+        var h := deco.size.y
+        EmotePrefs.draw_icon(deco, Rect2(14, 7, h - 14, h - 14), Color("f4ce7f"))
+        var sw := Rect2(deco.size.x - 86, h / 2.0 - 15, 70, 30)
+        var rad := sw.size.y / 2.0
+        var track := Color("3c9a3a") if on else Color("4a4a4a")
+        deco.draw_circle(sw.position + Vector2(rad, rad), rad, track)
+        deco.draw_circle(Vector2(sw.end.x - rad, sw.position.y + rad), rad, track)
+        deco.draw_rect(Rect2(sw.position.x + rad, sw.position.y, sw.size.x - 2 * rad, sw.size.y), track)
+        var kc := Vector2((sw.end.x - rad) if on else (sw.position.x + rad), sw.position.y + rad)
+        deco.draw_circle(kc, rad * 0.78, Color.WHITE))
+    b.add_child(deco)
+    var refresh := func():
+        b.text = "Emotes: " + ("Ligados" if EmotePrefs.enabled() else "Desligados")
+        deco.queue_redraw()
+    refresh.call()
+    b.pressed.connect(func():
+        EmotePrefs.toggle()
+        refresh.call())
+    parent.add_child(b)
 
 ## Slider sobre o trilho desenhado na arte: preenchimento dourado e o botão esmeralda recortados da referência.
 func _ref_slider(parent: Control, node_name: String, rect: Rect2) -> HSlider:
@@ -1462,7 +1512,7 @@ func _build_avatar_detail(parent: Control, r: Rect2) -> Dictionary:
     apply.position = Vector2(r.size.x - 244, r.size.y - 54)
     apply.size = Vector2(230,42)
     apply.mouse_filter = Control.MOUSE_FILTER_STOP
-    apply.pressed.connect(apply_inspected)
+    apply.pressed.connect(request_apply_inspected)   # R176 · pergunta antes de trocar
     box.add_child(apply)
     return {"box": box, "pic": pic, "title": title, "origin": origin, "status": status, "brief": brief, "apply": apply, "frame_slot": frame_slot}
 
@@ -1509,6 +1559,35 @@ func set_profile_tab(tab: String):
         badge_gallery.focus_id = inspected_badge
         badge_gallery.update_states()
     _refresh_avatars()
+
+## R176 · APLICAR com confirmação: "Você deseja mesmo aplicar …?" SIM / NÃO. Bloqueado ou já em uso: sem pergunta
+## (apply_inspected mostra o motivo / não muda nada).
+func request_apply_inspected():
+    var what := "o avatar"
+    var id := inspected_avatar if not inspected_avatar.is_empty() else avatar_id
+    var nm := ""
+    var current := false
+    var ok := true
+    if profile_tab == "icons":
+        what = "o ícone"
+        id = inspected_badge
+        nm = preload("res://profile/badge_gallery.gd").display_name(id)
+        current = id == cosmetic_pref("badge")
+        ok = id == "auto" or Cosmetics.allowed("badge", id, is_founder(), club_active(), is_legend())
+    elif profile_tab == "frames":
+        what = "a moldura"
+        id = inspected_frame if not inspected_frame.is_empty() else "auto"
+        nm = preload("res://profile/frame_gallery.gd").display_name(id)
+        current = id == cosmetic_pref("frame")
+        ok = id == "auto" or Cosmetics.allowed("frame", id, is_founder(), club_active(), is_legend())
+    else:
+        nm = AvatarCatalog.display_name(id)
+        current = id == avatar_id and custom_avatar() == null
+        ok = avatar_unlocked(id) and AvatarCatalog.has_art(id)
+    if current or not ok:
+        apply_inspected()
+        return
+    preload("res://ui_kit/confirm_box.gd").ask_change(self, what, nm, func(): apply_inspected())
 
 ## R32 · botão APLICAR da área de detalhe: aplica o avatar ou o ícone em foco.
 func apply_inspected() -> bool:
@@ -2065,8 +2144,9 @@ var about_icon: TextureRect
 var about_lead: Label
 var about_topic := 0
 var about_discord: Button   # R141 · COMUNIDADE E SUPORTE: link do Discord clicável
+var about_instagram: Button   # R176 · e o Instagram ao lado
 ## R53 · tópicos do CONHEÇA O FRAIHA (fonte única: PC e celular)
-const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez é xadrez online e grátis, direto no navegador do PC ou do celular, num reino medieval em pixel art. Treine contra 11 bots, jogue com pessoas de verdade, suba de liga no Ranked e reveja suas partidas na análise.\n\nAlém do xadrez, tem dois jogos próprios para jogar com os amigos: XEQUE e MARCHA REAL. Feito por jogadores, para jogadores."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nCada ritmo do Ranked (3, 5, 10 e 20 min) tem liga e PL próprios, e a cada 100 PL você sobe de liga. Embaixo a vitória vale mais (Madeira +20); subindo, cada ponto custa mais (Grande Mestre ±6). O adversário é escolhido pelo seu nível de verdade: quem joga acima da própria liga sobe mais rápido. Empate rende PL contra alguém mais forte.\n\nO Challenger é só para os melhores de cada ritmo: complete o Grande Mestre e dispute uma vaga. A maior liga alcançada libera brasão, moldura e cor de tabuleiro para sempre."],["MODOS DE JOGO","## XADREZ\n• Desafio das Ligas: 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\n• Online: escolha 3, 5, 10 ou 20 min e jogue na hora. Não vale PL.\n• Ranqueado: com a sua conta, dispute PL em quatro ritmos.\n## XEQUE\nCartas e blefe para 4. Baixe cartas viradas dizendo que são a peça que a mesa pede. Desconfiou? Aperte XEQUE!\n## MARCHA REAL\nEm dupla, levem os 8 peões até o Salão do Trono jogando cartas."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nEm TABULEIRO E PEÇAS (Configurações ou Ligas) escolha as cores das casas e das peças: várias são grátis, cada liga conquistada no Ranked libera a cor dela e as peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente! No nosso servidor no Discord tem desafios, Torneio da Semana, novidades e salas de voz:\ndiscord.gg/27WRsrUGa6\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
+const ABOUT_TOPICS := [["O PROJETO","Um tabuleiro, muitas histórias.\n\nFRAIHA Xadrez é xadrez online e grátis, direto no navegador do PC ou do celular, num reino medieval em pixel art. Treine contra 11 bots, jogue com pessoas de verdade, suba de liga no Ranked e reveja suas partidas na análise.\n\nAlém do xadrez, tem dois jogos próprios para jogar com os amigos: XEQUE e MARCHA REAL. Feito por jogadores, para jogadores."],["COMO JOGAR","Clique em uma peça e depois em uma casa marcada, ou arraste a peça.\n\nESC abre a confirmação para abandonar. O jogo ocupa a tela inteira (no PC, Alt+Enter alterna janela/tela cheia). Ao jogar de pretas, suas peças ficam na parte inferior do tabuleiro."],["SISTEMA DE LIGAS","Madeira, Ferro, Bronze, Prata, Ouro, Platina, Esmeralda, Diamante, Mestre, Grande Mestre e Challenger.\n\nCada ritmo do Ranked (3, 5, 10 e 20 min) tem liga e PL próprios, e a cada 100 PL você sobe de liga. Embaixo a vitória vale mais (Madeira +20); subindo, cada ponto custa mais (Grande Mestre ±6). O adversário é escolhido pelo seu nível de verdade: quem joga acima da própria liga sobe mais rápido. Empate rende PL contra alguém mais forte.\n\nO Challenger é só para os melhores de cada ritmo: complete o Grande Mestre e dispute uma vaga. A maior liga alcançada libera brasão, moldura e cor de tabuleiro para sempre."],["MODOS DE JOGO","## XADREZ\n• Desafio das Ligas: 11 bots com Stockfish, do BOT MADEIRA ao BOT CHALLENGER. Cada vitória libera o próximo e uma recompensa.\n• Online: escolha 3, 5, 10 ou 20 min e jogue na hora. Não vale PL.\n• Ranqueado: com a sua conta, dispute PL em quatro ritmos.\n## XEQUE\nCartas e blefe para 4. Baixe cartas viradas dizendo que são a peça que a mesa pede. Desconfiou? Aperte XEQUE!\n## MARCHA REAL\nEm dupla, levem os 8 peões até o Salão do Trono jogando cartas."],["PERSONALIZAÇÃO","Escolha seu avatar no Perfil. Novos avatares são liberados vencendo os bots do Desafio das Ligas.\n\nEm TABULEIRO E PEÇAS (Configurações ou Ligas) escolha as cores das casas e das peças: várias são grátis, cada liga conquistada no Ranked libera a cor dela e as peças clássicas também continuam disponíveis."],["COMUNIDADE E SUPORTE","Venha jogar junto com a gente! No nosso servidor no Discord tem desafios, Torneio da Semana, novidades e salas de voz:\ndiscord.gg/27WRsrUGa6\n\nSiga também o Instagram: @fraihaxadrez\n\nProblema no jogo? Fale com a equipe em #ajuda, #reportar-bug ou #pagamentos-e-club."]]
 
 func _build_about_page():
     var topics: Array = ABOUT_TOPICS
@@ -2127,14 +2207,23 @@ func _build_about_page():
         RefPage.hotspot(panel, r, func(): _show_about_topic(topics, idx), "AboutTopic%d" % i)
     RefPage.hotspot(panel, Rect2(122, 685, 430, 82), back, "AboutBack")
     # R141 · COMUNIDADE E SUPORTE: botão de verdade para o Discord (o link no texto não era clicável)
-    about_discord = discord_button(panel, Rect2(620, 684, 430, 60), 26)
+    about_discord = discord_button(panel, Rect2(620, 684, 400, 60), 26)
     about_discord.name = "AboutDiscord"
+    about_instagram = instagram_button(panel, Rect2(1036, 684, 270, 60), 26)   # R176
+    about_instagram.name = "AboutInstagram"
     _show_about_topic(topics, 0)
 
 ## R141 · botão ENTRAR NO DISCORD (PC e celular): dourado sobre azul-marinho, abre a pergunta da COMUNIDADE
 func discord_button(parent: Control, r: Rect2, px: int) -> Button:
+    return link_button(parent, r, px, "ENTRAR NO DISCORD  ›", open_community)
+
+## R176 · SEGUIR NO INSTAGRAM (mesmo estilo do botão do Discord): abre direto o @fraihaxadrez
+func instagram_button(parent: Control, r: Rect2, px: int) -> Button:
+    return link_button(parent, r, px, "INSTAGRAM  ›", InstagramLink.open)
+
+func link_button(parent: Control, r: Rect2, px: int, text: String, action: Callable) -> Button:
     var b := Button.new()
-    b.text = "ENTRAR NO DISCORD  ›"
+    b.text = text
     b.position = r.position
     b.size = r.size
     b.focus_mode = Control.FOCUS_NONE
@@ -2155,7 +2244,7 @@ func discord_button(parent: Control, r: Rect2, px: int) -> Button:
     for c in ["font_hover_color", "font_pressed_color"]: b.add_theme_color_override(c, Color("fff0b8"))
     b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
     b.add_theme_constant_override("outline_size", 3)
-    b.pressed.connect(open_community)
+    b.pressed.connect(action)
     parent.add_child(b)
     return b
 
@@ -2185,6 +2274,7 @@ func _show_about_topic(topics: Array, i: int):
     about_body.position.y = 470.0 if lead_ok else 384.0
     var discord: bool = String(topic[0]) == "COMUNIDADE E SUPORTE"
     if is_instance_valid(about_discord): about_discord.visible = discord
+    if is_instance_valid(about_instagram): about_instagram.visible = discord
     var avail: float = (676.0 if discord else 746.0) - about_body.position.y
     about_body.size.y = avail
     # texto longo: diminui a fonte até caber no quadro (nada passa da moldura)
@@ -2378,6 +2468,10 @@ func _build_ranking():
 func _toggle_classic_pieces():
     # clássicas em uso → volta às peças da liga ("" = acompanha o cenário); senão, liga as clássicas
     var want := "" if current_piece_set == "classic" else "classic"
+    # R176 · pergunta antes de trocar as peças
+    preload("res://ui_kit/confirm_box.gd").ask_change(self, "as peças", "PEÇAS CLÁSSICAS" if want == "classic" else "PEÇAS DA SUA LIGA", func(): _apply_classic_pieces(want))
+
+func _apply_classic_pieces(want: String):
     piece_set_requested.emit(want)
     if want == "classic": current_piece_set = "classic"   # sem o gerenciador (testes), o estado segue o clique
     elif current_piece_set == "classic": current_piece_set = ""
@@ -2640,7 +2734,7 @@ const WIDE_PATCHES := {   # recorte (mesmos números de tools/home_wide_r153.py)
     "logo": [Rect2(470, 0, 732, 312), ["NewsTicker"]],
     "profile": [Rect2(1210, 18, 446, 232), ["RefProfileButton", "ProfilePanel", "ProfileStack"]],
     "account": [Rect2(20, 832, 354, 100), ["AccountCard", "AccountPanel", "RefAccountAvatar", "RefAccountAvatarFrameHost"]],
-    "community": [Rect2(1388, 856, 262, 64), ["CommunityButton"]],
+    "community": [Rect2(1388, 856, 262, 64), ["CommunityButton", "InstagramButton"]],
 }
 var _wide_on := false
 var _wide_orig := {}          # nó -> posição original (para voltar ao normal)
@@ -3129,6 +3223,18 @@ func make_community_button(sz: Vector2, frame: Texture2D, font_px: int) -> Butto
     b.add_theme_color_override("font_color", Color("f4ce7f"))
     b.set_frame(frame, 14.0 if frame == TOP_FRAME_PC else 16.0)
     b.pressed.connect(open_community)   # R124 · pergunta antes de abrir o Discord
+    return b
+
+## R176 · INSTAGRAM (@fraihaxadrez): botão quadrado na moldura dos botões do topo, ao lado da COMUNIDADE
+const InstagramLink := preload("res://social/instagram_link.gd")
+func make_instagram_button(side: float) -> Button:
+    var b: Button = preload("res://ui_v022/hud_button.gd").make("instagram")
+    b.name = "InstagramButton"
+    b.size = Vector2(side, side)
+    b.custom_minimum_size = Vector2(side, side)
+    b.tooltip_text = InstagramLink.TIP
+    b.set_frame(TOP_FRAME_PC, 14.0)
+    b.pressed.connect(InstagramLink.open)
     return b
 
 ## R113 · moldura dos botões do topo, recortada da arte da Home (PC: som em 363,17; celular: som em 730,45)
@@ -4004,6 +4110,10 @@ func _build_reference_chrome():
     var community := make_community_button(Vector2(262, 64), TOP_FRAME_PC, 22)
     community.position = Vector2(1388, 856)
     canvas.add_child(community)
+    # R176 · INSTAGRAM: logo à esquerda da COMUNIDADE, mesma moldura; abre direto o @fraihaxadrez
+    var insta := make_instagram_button(64.0)
+    insta.position = Vector2(1388 - 64 - 8, 856)
+    canvas.add_child(insta)
     # R161 · OUTDOOR: a faixa "ESTRATÉGIA PARA IR MAIS LONGE" vira a frase do Admin e abre NOVIDADES
     var ticker := make_news_ticker(19, Color("010612"), Color("030b1c"))
     ticker.position = Vector2(631, 273)
@@ -4488,6 +4598,13 @@ func _on_photo_saved(image: Image, bytes: PackedByteArray):
         else: _avatar_message("Foto salva neste aparelho. Conecte-se para enviá-la à conta.", false)
     else:
         _avatar_message("Foto salva neste aparelho. Entre na conta para usá-la em todo lugar.", false)
+
+## R176 · REMOVER FOTO pergunta antes (sem foto: nada a perguntar)
+func request_remove_photo():
+    if custom_avatar() == null:
+        remove_custom_avatar()
+        return
+    preload("res://ui_kit/confirm_box.gd").ask(self, "REMOVER SUA FOTO?", "Você deseja mesmo remover a sua foto do perfil?\nO avatar escolhido volta a aparecer.", "SIM, REMOVER", func(): remove_custom_avatar())
 
 func remove_custom_avatar():
     avatar_store.clear_local(avatar_key())

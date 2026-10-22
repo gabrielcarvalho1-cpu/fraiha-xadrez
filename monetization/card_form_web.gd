@@ -26,14 +26,14 @@ static func release_game_focus(vp: Viewport):
     if DisplayServer.has_feature(DisplayServer.FEATURE_IME): DisplayServer.window_set_ime_active(false)
     if DisplayServer.has_feature(DisplayServer.FEATURE_VIRTUAL_KEYBOARD): DisplayServer.virtual_keyboard_hide()
 
-func open(public_key: String, amount_cents: int, email: String, title: String, price: String):
+func open(public_key: String, amount_cents: int, email: String, title: String, price: String, club := false):
     if not available(): return
     release_game_focus(get_viewport())
     if _cb == null:
         _cb = JavaScriptBridge.create_callback(_on_js)
         JavaScriptBridge.get_interface("window").fraihaCardCb = _cb
     is_open = true
-    var cfg := {"pk": public_key, "amount": amount_cents / 100.0, "email": email, "title": title, "price": price, "sdk": SDK_URL}
+    var cfg := {"pk": public_key, "amount": amount_cents / 100.0, "email": email, "title": title, "price": price, "sdk": SDK_URL, "club": club}
     JavaScriptBridge.eval(JS_OPEN.replace("__CFG__", JSON.stringify(cfg)))
 
 ## Pagamento aprovado/pendente: libera o formulário (some o "processando").
@@ -100,29 +100,52 @@ const JS_OPEN := """
     const cb = (k, v) => { try { W.fraihaCardCb(k, v || ''); } catch (e) {} };
     if (s.ctrl) { try { s.ctrl.unmount(); } catch (e) {} s.ctrl = null; }
     const old = D.getElementById('fraiha-card-overlay'); if (old) old.remove();
+    // R176 · mesma arte das telas de pagamento do jogo (PIX): moldura escura com losangos, borda dourada dupla,
+    // gemas nos cantos, selo azul PAGAMENTO SEGURO, títulos em Cinzel dourado. Nada de verde.
+    const gem = cfg.club ? ['#7fb6ff', '#1d4c99'] : ['#ff5a4a', '#8a1712'];
+    const bgTop = cfg.club ? '#12141a' : '#1c140a', bgBot = cfg.club ? '#050608' : '#080503';
+    if (!D.getElementById('fraiha-cinzel')) {
+        const lf = D.createElement('link'); lf.id = 'fraiha-cinzel'; lf.rel = 'stylesheet';
+        lf.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap'; D.head.appendChild(lf);
+    }
+    const CIN = '"Cinzel",Georgia,"Times New Roman",serif';
     const ov = D.createElement('div'); ov.id = 'fraiha-card-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(3,9,5,.82);display:flex;align-items:flex-start;justify-content:center;padding:16px;box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(2,3,6,.84);display:flex;align-items:flex-start;justify-content:center;padding:max(14px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));box-sizing:border-box;overflow-y:auto;-webkit-overflow-scrolling:touch;';
     const box = D.createElement('div'); box.id = 'fraiha-card-box';
-    box.style.cssText = 'width:100%;max-width:520px;margin:auto 0;background:#0e2618;border:2px solid #c99a44;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.65);padding:14px 16px 12px;box-sizing:border-box;color:#f2e6c6;font-family:Georgia,"Times New Roman",serif;';
-    const head = D.createElement('div'); head.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
-    const badge = D.createElement('span'); badge.textContent = 'PAGAMENTO SEGURO · MERCADO PAGO';
-    badge.style.cssText = 'font:700 11px Arial,sans-serif;letter-spacing:.05em;color:#9be89a;border:1px solid #3f9b4c;border-radius:4px;padding:4px 7px;';
+    box.style.cssText = 'position:relative;width:100%;max-width:520px;margin:auto 0;box-sizing:border-box;padding:18px 18px 14px;color:#f4e8c8;font-family:Georgia,"Times New Roman",serif;'
+        + 'background:repeating-linear-gradient(45deg,rgba(201,154,69,.06) 0 1px,transparent 1px 26px),repeating-linear-gradient(-45deg,rgba(201,154,69,.06) 0 1px,transparent 1px 26px),linear-gradient(180deg,' + bgTop + ',' + bgBot + ');'
+        + 'border:3px solid #c99a45;border-radius:4px;box-shadow:inset 0 0 0 2px #6e4b18,inset 0 0 0 3px rgba(241,213,138,.55),0 14px 50px rgba(0,0,0,.7);';
+    const mkGem = (css) => { const g = D.createElement('span');
+        g.style.cssText = 'position:absolute;width:12px;height:12px;transform:rotate(45deg);background:radial-gradient(circle at 35% 35%,#fff6 0 18%,' + gem[0] + ' 20% 60%,' + gem[1] + ' 100%);border:2px solid #d9b25a;box-shadow:0 0 6px rgba(0,0,0,.6);' + css; return g; };
+    box.append(mkGem('left:-9px;top:-9px'), mkGem('right:-9px;top:-9px'), mkGem('left:-9px;bottom:-9px'), mkGem('right:-9px;bottom:-9px'), mkGem('left:calc(50% - 8px);top:-9px'));
+    const head = D.createElement('div'); head.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:10px;';
+    const badge = D.createElement('span'); badge.append('PAGAMENTO SEGURO', D.createElement('br'), 'MERCADO PAGO');
+    badge.style.cssText = 'font:700 13px/1.2 ' + CIN + ';letter-spacing:.03em;color:#f4e8c8;text-align:center;padding:7px 18px;background:linear-gradient(180deg,#2a4ba3,#172d6b);border:2px solid #d9b25a;clip-path:polygon(9px 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,9px 100%,0 50%);';
     const gap = D.createElement('span'); gap.style.flex = '1';
     const x = D.createElement('button'); x.id = 'fraiha-card-close'; x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Fechar');
-    x.style.cssText = 'width:40px;height:40px;border-radius:8px;border:1px solid #c99a44;background:#14301f;color:#f4ce7f;font:20px Arial,sans-serif;cursor:pointer;';
+    x.style.cssText = 'width:42px;height:42px;flex:none;border-radius:4px;border:2px solid #c99a45;background:linear-gradient(180deg,#3a1610,#160806);color:#f1d58a;font:20px Arial,sans-serif;cursor:pointer;animation:fraihaBackPulse 2s ease-in-out infinite;';
+    // R176 · botão de sair avermelhado "respirando" devagar (igual aos VOLTAR/SAIR do jogo)
+    if (!D.getElementById('fraiha-back-pulse-css')) {
+        const st = D.createElement('style'); st.id = 'fraiha-back-pulse-css';
+        st.textContent = '@keyframes fraihaBackPulse{0%,100%{box-shadow:inset 0 0 0 1px #6e4b18,0 0 2px rgba(220,40,30,.25)}50%{box-shadow:inset 0 0 0 1px #6e4b18,inset 0 0 14px rgba(220,40,30,.45),0 0 10px rgba(220,40,30,.55)}}';
+        D.head.appendChild(st);
+    }
     head.append(badge, gap, x);
-    const title = D.createElement('div'); title.id = 'fraiha-card-title'; title.textContent = cfg.title;
-    title.style.cssText = 'font-weight:700;font-size:22px;color:#f4ce7f;letter-spacing:.02em;';
+    const title = D.createElement('div'); title.id = 'fraiha-card-heading'; title.textContent = 'PAGUE COM CARTÃO';
+    title.style.cssText = 'font:700 24px ' + CIN + ';color:#f1d58a;text-align:center;letter-spacing:.02em;text-shadow:0 2px 0 #000;margin-top:4px;';
+    const sub = D.createElement('div'); sub.id = 'fraiha-card-title'; sub.textContent = cfg.title;
+    sub.style.cssText = 'font:600 14px ' + CIN + ';color:#c9c2a8;text-align:center;margin-top:2px;';
     const price = D.createElement('div'); price.id = 'fraiha-card-price'; price.textContent = cfg.price;
-    price.style.cssText = 'font-size:16px;color:#fff1c0;margin:2px 0 10px;';
+    price.style.cssText = 'font:600 15px ' + CIN + ';color:#fff1c0;text-align:center;margin:6px 0 12px;';
     const msg = D.createElement('div'); msg.id = 'fraiha-card-msg';
-    msg.style.cssText = 'display:none;font:600 15px Arial,sans-serif;line-height:1.35;padding:9px 11px;margin:0 0 10px;border:1px solid #c99a44;border-radius:6px;background:rgba(0,0,0,.25);';
+    msg.style.cssText = 'display:none;font:600 15px Arial,sans-serif;line-height:1.35;padding:9px 11px;margin:0 0 10px;border:1px solid #c99a44;border-radius:4px;background:rgba(0,0,0,.3);';
     const load = D.createElement('div'); load.id = 'fraiha-card-loading'; load.textContent = 'Carregando o formulário seguro do Mercado Pago…';
     load.style.cssText = 'font:15px Arial,sans-serif;color:#ffe6a0;text-align:center;padding:26px 0;';
     const host = D.createElement('div'); host.id = 'fraihaCardBrick';
+    host.style.cssText = 'border:1px solid rgba(201,154,69,.55);border-radius:4px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6);overflow:hidden;';
     const foot = D.createElement('div'); foot.textContent = 'Os dados do cartão vão direto para o Mercado Pago. O FRAIHA nunca vê o número nem o código de segurança. Pagamento à vista (1x).';
-    foot.style.cssText = 'font:12px Arial,sans-serif;color:#b9ab86;text-align:center;margin-top:10px;line-height:1.35;';
-    box.append(head, title, price, msg, load, host, foot); ov.appendChild(box); D.body.appendChild(ov);
+    foot.style.cssText = 'font:12px Arial,sans-serif;color:#c9c2a8;text-align:center;margin-top:12px;line-height:1.35;';
+    box.append(head, title, sub, price, msg, load, host, foot); ov.appendChild(box); D.body.appendChild(ov);
     x.addEventListener('click', () => cb('close'));
     s.onKey = (e) => { if (e.key === 'Escape' && D.getElementById('fraiha-card-overlay')) { e.stopPropagation(); cb('close'); } };
     D.addEventListener('keydown', s.onKey, true);
@@ -133,7 +156,15 @@ const JS_OPEN := """
             const mp = new W.MercadoPago(cfg.pk, { locale: 'pt-BR' });
             mp.bricks().create('cardPayment', 'fraihaCardBrick', {
                 initialization: { amount: cfg.amount, payer: { email: cfg.email } },
-                customization: { visual: { style: { theme: 'dark' }, hideFormTitle: true },
+                // R176 · cores do jogo no formulário do Mercado Pago (campos escuros, botão dourado, contornos dourados)
+                customization: { visual: { hideFormTitle: true, style: { theme: 'dark', customVariables: {
+                        formBackgroundColor: '#0d0a06', inputBackgroundColor: '#07060a',
+                        textPrimaryColor: '#f4e8c8', textSecondaryColor: '#c9c2a8',
+                        baseColor: '#d9b25a', baseColorFirstVariant: '#f1d58a', baseColorSecondVariant: '#8a6224',
+                        buttonTextColor: '#1a1208', outlinePrimaryColor: '#c99a45', outlineSecondaryColor: '#6e4b18',
+                        errorColor: '#ff9a7a', successColor: '#8fd88a',
+                        borderRadiusSmall: '3px', borderRadiusMedium: '4px', borderRadiusLarge: '6px', borderRadiusFull: '6px',
+                        inputFocusedBoxShadow: '0 0 0 2px rgba(241,213,138,.45)' } } },
                     paymentMethods: { maxInstallments: 1, minInstallments: 1 } },
                 callbacks: {
                     onReady: () => { load.style.display = 'none'; cb('ready'); },

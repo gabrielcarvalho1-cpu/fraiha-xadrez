@@ -15,6 +15,7 @@ const MobileLayout := preload("res://ui_v022/mobile_layout.gd")
 const ModeSound := preload("res://ui_v022/mode_sound.gd")
 const VoiceGlyph := preload("res://voice/voice_glyph.gd")
 const Kit := preload("res://ui_kit/kit.gd")
+const EmotePrefs := preload("res://social/emote_prefs.gd")   # R176
 const FONT_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")
 const SkinRef := preload("res://ranked/board_skin.gd")
 const ART := "res://ranked/art/mob_hud_%s.png"
@@ -909,7 +910,7 @@ func _build_panel() -> void:
 	tiles_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(tiles_box)
 	# ações possíveis; cada uma aparece só quando existe naquela partida (refresh_actions)
-	for id in ["resign", "draw", "mark", "analyze", "music", "fx", "mic", "ear", "leave", "full"]:
+	for id in ["resign", "draw", "mark", "analyze", "music", "fx", "mic", "ear", "leave", "full", "emotes"]:
 		var b := _flat_button("Action_" + id)
 		var t := NinePatchRect.new()
 		t.name = "Tile"
@@ -1036,6 +1037,7 @@ func _available() -> Dictionary:
 		"ear": voice_on and mv.ear.visible,
 		"leave": voice_on and mv.off.visible,
 		"full": st.mobile_fullscreen != null and st.mobile_fullscreen.visible,
+		"emotes": st.match_chat != null and st.match_chat.active(),   # R176
 	}
 
 func _caption(id: String) -> String:
@@ -1057,6 +1059,7 @@ func _caption(id: String) -> String:
 		"ear": return "Ouvir voz" + (": NÃO" if st.voice != null and st.voice.speaker_muted else "")
 		"leave": return "Sair da voz"
 		"full": return "Tela cheia"
+		"emotes": return "Emotes" + ("" if EmotePrefs.enabled() else ": NÃO")
 	return id
 
 func _shown_tiles() -> Array:
@@ -1100,6 +1103,9 @@ func _do_action(id: String) -> void:
 		"ear": if mv != null: mv.ear.pressed.emit()
 		"leave": if mv != null: mv.off.pressed.emit()
 		"full": st.mobile_fullscreen.pressed.emit()
+		"emotes":
+			EmotePrefs.toggle()
+			if st.match_chat != null: st.match_chat.emotes_pref_changed()
 	refresh_actions()
 
 func is_open() -> bool:
@@ -1313,6 +1319,9 @@ class ActionIcon extends Control:
 				draw_line(q.position, q.end, col, maxf(2.0, r.size.y * 0.08))
 				draw_line(Vector2(q.position.x, q.end.y), Vector2(q.end.x, q.position.y), col, maxf(2.0, r.size.y * 0.08))
 			"full": _tex_in(_icon("full"), r)
+			"emotes":
+				off = not EmotePrefs.enabled()
+				EmotePrefs.draw_icon(self, _square(r), Color(0.55, 0.55, 0.55) if off else col)
 		if off:
 			var q := _square(r)
 			draw_line(q.position + q.size * 0.15, q.end - q.size * 0.15, Color("e0614b"), maxf(2.0, r.size.y * 0.08))

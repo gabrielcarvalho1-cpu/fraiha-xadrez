@@ -19,7 +19,7 @@ class FakeForm extends Node:
     var resolved := 0
     var rejected := []
     var flog := {"closed": 0}   # sobrevive ao formulário ser liberado junto com a janela
-    func open(pk: String, amount_cents: int, email: String, title: String, price: String):
+    func open(pk: String, amount_cents: int, email: String, title: String, price: String, _club := false):
         is_open = true
         opened.append({"pk": pk, "amount": amount_cents, "email": email, "title": title, "price": price})
     func resolve_ok(): resolved += 1

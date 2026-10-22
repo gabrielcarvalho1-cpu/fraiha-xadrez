@@ -172,7 +172,7 @@ func _swatch(id: String, nome: String, is_board: bool, selected: bool, reason: S
 		lk.size = Vector2(ls, ls)
 		lk.position = Vector2((w - ls) / 2.0, (w * 0.62 - ls) / 2.0 + 3)
 		b.add_child(lk)
-	b.pressed.connect(func(): _pick(id, is_board, reason, nome))
+	b.pressed.connect(func(): if not selected: _pick(id, is_board, reason, nome))   # R176 · a cor em uso não pergunta
 	return b
 
 ## quantas linhas o nome ocupa nessa largura (quebrando só entre palavras; palavra maior que a linha = não cabe)
@@ -199,8 +199,10 @@ func _pick(id: String, is_board: bool, reason: String, nome: String):
 	status.remove_theme_color_override("font_color")
 	status.add_theme_color_override("font_color", DIM)
 	status.text = ""
-	if is_board: hub.set_board_colors(id, "")
-	else: hub.set_board_colors("", id)
+	# R176 · pergunta antes de trocar (a cor já em uso não pergunta)
+	preload("res://ui_kit/confirm_box.gd").ask_change(self, "as cores do tabuleiro" if is_board else "as cores das peças", nome, func():
+		if is_board: hub.set_board_colors(id, "")
+		else: hub.set_board_colors("", id))
 
 var _list_w := 600.0   # largura da coluna das listas (calculada no _layout pelo tamanho da janela)
 func _cell_w() -> float:
