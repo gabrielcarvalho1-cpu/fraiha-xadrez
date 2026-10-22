@@ -39,15 +39,17 @@ const LAYOUTS := {
         "mate_line": [Vector2(540, 1326), 27],
     },
     "landscape": {
+        # R176.2 · celular deitado: tudo maior (o dono achou pequeno) — colunas mais largas, cartões dos bots,
+        # botões do topo, JOGAR CARTAS e a mão; o tabuleiro e o cenário ficam onde estavam.
         "scene": [0.9924, Vector2(145.4, -125.9)], "board": Rect2(715, 143, 520, 450),
-        "title": [Vector2(38, 76), 80], "sub": [Vector2(38, 102), 20],
-        "mesa": Rect2(40, 130, 320, 170), "como": null,
-        "plates": {0: ["h", Rect2(40, 460, 320, 120)], 1: ["v", Vector2(560, 368), 180], 2: ["hc", Rect2(857, 2, 236, 90)], 3: ["v", Vector2(1390, 368), 180]},
-        "turn": Rect2(42, 342, 318, 62), "meter": Rect2(1590, 56, 320, 128),
-        "xeque": [Vector2(1750, 360), 0.837], "play": Rect2(1581, 459, 326, 96),
-        "hint": [Vector2(1750, 632), 22], "help": Rect2(1798, 2, 50, 48), "menu": Rect2(1856, 2, 50, 48),
-        "music": Rect2(1682, 2, 50, 48), "fx": Rect2(1740, 2, 50, 48), "full": Rect2(1624, 2, 50, 48), "voice": Rect2(1566, 2, 50, 48), "voice_ear": Rect2(1508, 2, 50, 48),
-        "hand": [Vector2(975, 772), 0.183], "pile": [Vector2(975, 369), 0.122], "clock": [Vector2(975, 248), 0.185],
+        "title": [Vector2(34, 70), 72], "sub": [Vector2(34, 94), 18],
+        "mesa": Rect2(26, 108, 410, 214), "como": null,
+        "plates": {0: ["h", Rect2(26, 444, 410, 150)], 1: ["v", Vector2(562, 380), 232], 2: ["hc", Rect2(822, 2, 306, 112)], 3: ["v", Vector2(1388, 380), 232]},
+        "turn": Rect2(26, 338, 410, 88), "meter": Rect2(1512, 84, 420, 156),
+        "xeque": [Vector2(1722, 366), 0.95], "play": Rect2(1512, 470, 420, 124),
+        "hint": [Vector2(1722, 650), 26], "help": Rect2(1798, 4, 64, 64), "menu": Rect2(1868, 4, 64, 64),
+        "music": Rect2(1658, 4, 64, 64), "fx": Rect2(1728, 4, 64, 64), "full": Rect2(1588, 4, 64, 64), "voice": Rect2(1518, 4, 64, 64), "voice_ear": Rect2(1448, 4, 64, 64),
+        "hand": [Vector2(975, 748), 0.228], "pile": [Vector2(975, 369), 0.122], "clock": [Vector2(975, 248), 0.185],
         "reveal": [Vector2(975, 356), 0.16], "mate_clock": [Vector2(975, 222), 0.31], "mate_title": [Vector2(975, 690), 124],
         "mate_line": [Vector2(975, 800), 26],
     },
@@ -306,6 +308,7 @@ func fullscreen_button(r: Rect2, on: bool):
 func _draw_voice(lay: Dictionary):
     var vo = ui.voice()
     if not lay.has("voice"): return
+    if not bool(ui.online): return   # R176.2 · contra bots: sem microfone
     if vo == null or not vo.in_match() or not vo.available():
         # R77 · microfone sempre no lugar; sem voz (bots / navegador sem suporte) fica apagado e o toque explica
         var dr: Rect2 = lay.voice

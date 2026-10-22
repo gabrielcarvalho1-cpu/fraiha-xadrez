@@ -7,6 +7,8 @@ var card: PanelContainer
 var ok_button: Button
 var yes_button: Button      # R124 · pergunta com SIM / NÃO (ex.: ir para o Discord)
 var _yes_action: Callable
+var alt_button: Button      # R176.2 · 2ª ação (COMUNIDADE: DISCORD ou INSTAGRAM)
+var _alt_action: Callable
 
 func setup(p_hub, title: String):
 	build(p_hub, title)
@@ -41,7 +43,7 @@ func setup(p_hub, title: String):
 	ok_button.name = "NoticeOk"
 	ok_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ok_button.pressed.connect(close)
-	var row := HBoxContainer.new()
+	var row := BoxContainer.new()   # R176.2 · BoxContainer: vira coluna no celular com 3 botões
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 12)
 	col.add_child(row)
@@ -51,6 +53,13 @@ func setup(p_hub, title: String):
 		close()
 		if _yes_action.is_valid(): _yes_action.call())
 	row.add_child(yes_button)
+	alt_button = button("INSTAGRAM", 22, true)
+	alt_button.name = "NoticeAlt"
+	alt_button.pressed.connect(func():
+		close()
+		if _alt_action.is_valid(): _alt_action.call())
+	row.add_child(alt_button)
+	alt_button.hide()
 	if ok_button.get_parent() != null: ok_button.get_parent().remove_child(ok_button)   # R136: sem erro no console
 	row.add_child(ok_button)
 	yes_button.hide()
@@ -59,6 +68,7 @@ func show_notice(title: String, text: String):
 	title_label.text = title
 	text_label.text = text
 	yes_button.hide()
+	alt_button.hide()
 	ok_button.text = "ENTENDI"
 	style_button(ok_button, true)
 	open()
@@ -71,9 +81,18 @@ func ask(title: String, text: String, yes_text: String, no_text: String, action:
 	_yes_action = action
 	yes_button.text = yes_text
 	yes_button.show()
+	alt_button.hide()
 	ok_button.text = no_text
 	style_button(ok_button, false)
 	open()
+	_fit_card()
+
+## R176.2 · pergunta com DUAS ações (ex.: COMUNIDADE → DISCORD ou INSTAGRAM) + o botão que só fecha.
+func ask_two(title: String, text: String, yes_text: String, action: Callable, alt_text: String, alt_action: Callable, no_text: String):
+	ask(title, text, yes_text, no_text, action)
+	_alt_action = alt_action
+	alt_button.text = alt_text
+	alt_button.show()
 	_fit_card()
 
 func _layout():
@@ -91,7 +110,11 @@ func _fit_card():
 	text_label.custom_minimum_size.x = w - 2.0 * m
 	text_label.add_theme_font_size_override("font_size", ts(26) if not narrow() else 16)
 	ok_button.add_theme_font_size_override("font_size", ts(22) if not narrow() else 16)
-	var bw: int = (ts(300) if not narrow() else 200) if not yes_button.visible else (ts(240) if not narrow() else int((w - 2.0 * m - 12.0) / 2.0))
-	for b in [ok_button, yes_button]:
+	var n := 1 + int(yes_button.visible) + int(alt_button != null and alt_button.visible)
+	# R176.2 · celular com 3 botões: um embaixo do outro (lado a lado não cabiam e o cartão vazava da moldura)
+	var stack := narrow() and n >= 3
+	(ok_button.get_parent() as BoxContainer).vertical = stack
+	var bw: int = (ts(300) if not narrow() else 200) if n == 1 else (ts(240) if not narrow() else (int(w - 2.0 * m) if stack else int((w - 2.0 * m - 12.0 * (n - 1)) / n)))
+	for b in [ok_button, yes_button, alt_button]:
 		b.add_theme_font_size_override("font_size", ts(22) if not narrow() else 14)
 		b.custom_minimum_size = Vector2(bw, ts(58) if not narrow() else 46)

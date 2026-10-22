@@ -349,11 +349,6 @@ func _build_mais():
 			var src = mobile._source_button(title)
 			action = func(): if src != null: src.pressed.emit()
 		_hot(panel, art, r, 0.0, title, action)
-	# R176 · INSTAGRAM logo abaixo do painel (junto da COMUNIDADE): abre direto o @fraihaxadrez
-	var ig: Button = hub.instagram_button(panel, Rect2(Vector2(150.0 * s, art.size.y + 14.0 * s), Vector2(600, 112) * s), maxi(10, int(round(44 * s))))
-	ig.name = "InstagramMais"
-	ig.text = "INSTAGRAM  @fraihaxadrez  ›"
-	panel.size.y = art.size.y + 140.0 * s
 
 # ------------------------------------------------------------------ CONHEÇA O FRAIHA (ref4)
 const ABOUT_Y0 := 40.0

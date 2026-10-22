@@ -295,6 +295,32 @@ func _terms_ok() -> bool:
     return false
 
 
+## R176.2 · o conteúdo da página tem que caber DENTRO da moldura (CRIAR CONTA no celular deixava os links
+## soltos embaixo, fora do painel): primeiro aperta o espaçamento, depois encolhe o bloco inteiro, centralizado.
+## os textos com quebra de linha só sabem a altura depois do 1º layout: mede no quadro seguinte
+func _fit_box_later():
+    var pg := page
+    await get_tree().process_frame
+    await get_tree().process_frame
+    if page != pg or not is_instance_valid(box): return
+    _fit_box()
+    status_label.position = Vector2(SLOT_STATUS.position.x, INNER.position.y + 16.0 + box.get_combined_minimum_size().y * box.scale.y + 12.0)
+
+func _fit_box():
+    var room := INNER.size.y - 16.0 - 56.0   # sobra para a linha de status
+    box.scale = Vector2.ONE
+    box.position = INNER.position + Vector2(0, 16)
+    box.add_theme_constant_override("separation", 18)
+    var h := box.get_combined_minimum_size().y
+    if h > room:
+        box.add_theme_constant_override("separation", 8)
+        h = box.get_combined_minimum_size().y
+    if h > room:
+        var s := room / h
+        box.scale = Vector2(s, s)
+        box.position.x = INNER.position.x + INNER.size.x * (1.0 - s) / 2.0
+    box.size = Vector2(INNER.size.x, maxf(h, INNER.size.y - 16.0))
+
 func _divider():
     links_box = null
     var d = LoginSkin.Divider.new()
@@ -367,13 +393,13 @@ func _show(target: String):
             _input_field("email", "E-mail da conta")
             _button("ENVIAR LINK", func(): account.recover(_value("email")), true)
             _divider()
-            _link("Voltar", func(): _show("login"))
+            _button("VOLTAR", func(): _show("login"))   # R176.2 · botão no padrão (antes um link solto)
         "new_password":
             _input_field("password", "Nova senha (mín. 8 caracteres)", true)
             _input_field("password_confirm", "Confirmar nova senha", true)
             _button("SALVAR NOVA SENHA", _save_password, true)
             _divider()
-            _link("Fechar", close)
+            _button("FECHAR", close)   # R176.2
         "set_password":
             if account.provider != "email":
                 _label("Crie uma senha para entrar também com e-mail e senha. O login com Google continua funcionando na mesma conta.", 15)
@@ -382,7 +408,7 @@ func _show(target: String):
             _input_field("password_confirm", "Confirmar nova senha", true).text_submitted.connect(func(_t): _save_password())
             _button("SALVAR SENHA", _save_password, true)
             _divider()
-            _link("Voltar", func(): _show("account"))
+            _button("VOLTAR", func(): _show("account"))   # R176.2
         "nickname":
             _label("É assim que os adversários verão você. Seu e-mail nunca é mostrado.", 15)
             _input_field("nickname", "Nome de jogador (3 a 16)").text_submitted.connect(func(t): if _terms_ok(): account.create_profile(t))
@@ -412,7 +438,9 @@ func _show(target: String):
         var spacer := Control.new()
         spacer.custom_minimum_size.y = 4
         box.add_child(spacer)
-        status_label.position = Vector2(SLOT_STATUS.position.x, INNER.position.y + 16.0 + box.get_combined_minimum_size().y + 12.0)
+        box.scale = Vector2.ONE
+        box.position = INNER.position + Vector2(0, 16)
+        _fit_box_later()
     message = ""
     if not fields.is_empty() and not Mobile.active(get_viewport()):
         fields.values()[0].grab_focus.call_deferred()

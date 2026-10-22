@@ -2686,7 +2686,7 @@ class TableView extends Control:
         # FRAIHA Voice (partida online com outro humano): à esquerda dos ícones, no mesmo estilo
         var vo = ui.voice()
         var voice_on: bool = vo != null and vo.in_match() and vo.available()
-        if not lobby and ui.mode == "game" and not voice_on:
+        if not lobby and ui.mode == "game" and not voice_on and ui.online:   # R176.2 · contra bots: sem microfone
             # R77 · o microfone fica SEMPRE no lugar dele na partida; sem voz (bots, navegador sem suporte) fica
             # apagado e o toque explica onde a voz funciona
             var dr: Rect2 = ui.mic_rect()

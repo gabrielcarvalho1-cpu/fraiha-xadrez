@@ -68,6 +68,9 @@ func build(p_hub, p_title: String):
 	close_button.add_theme_stylebox_override("hover", glow)
 	close_button.add_theme_stylebox_override("pressed", glow)
 	close_button.pressed.connect(go_back)
+	close_button.name = "ModalBack"
+	# R176.1 · o VOLTAR pintado na moldura fica no vinho dos botões de saída (ui_kit/back_pulse.gd)
+	close_button.set_meta("art_src", func(): return [frame.texture, CEL_CLOSE if frame.texture == FRAME_CEL else PC_CLOSE])
 	add_child(close_button)
 	body = VBoxContainer.new()
 	body.add_theme_constant_override("separation", 8)
@@ -134,6 +137,13 @@ func open():
 	for n in [frame, body, title_label]:
 		n.modulate.a = 0.0
 		create_tween().tween_property(n, "modulate:a", 1.0, 0.14)
+
+var _back_art: Texture2D = null
+func _refresh_back_art():
+	if frame.texture == _back_art: return
+	_back_art = frame.texture
+	var bp = close_button.get_node_or_null("BackPulse")
+	if bp != null and bp.has_method("refresh"): bp.refresh()
 
 func go_back():
 	var prev := back_to
@@ -203,6 +213,7 @@ func _layout():
 		title_label.add_theme_font_size_override("font_size", _fit_title(int(clampf(CEL_TITLE.size.y * s * 0.62, 18.0, 40.0)), CEL_TITLE.size.x * s * 0.92))
 		_place(title_label, CEL_TITLE, s, origin)
 		_place(close_button, CEL_CLOSE, s, origin)
+		_refresh_back_art()
 		_body_rect = Rect2(origin + Vector2(CEL_BODY_X.x, CEL_TOP + 6.0) * s,
 			Vector2((CEL_BODY_X.y - CEL_BODY_X.x) * s, (h_tex - CEL_TOP - CEL_BOTTOM + 24.0) * s))
 	else:
@@ -223,6 +234,7 @@ func _layout():
 		title_label.add_theme_font_size_override("font_size", _fit_title(int(clampf(PC_TITLE.size.y * s * 0.55, 16.0, 40.0)), PC_TITLE.size.x * s * 0.92))
 		_place(title_label, PC_TITLE, s, origin)
 		_place(close_button, PC_CLOSE, s, origin)
+		_refresh_back_art()
 		_body_rect = Rect2(origin + PC_BODY.position * s, PC_BODY.size * s)
 	body.position = _body_rect.position
 	body.size = _body_rect.size

@@ -2734,7 +2734,7 @@ const WIDE_PATCHES := {   # recorte (mesmos números de tools/home_wide_r153.py)
     "logo": [Rect2(470, 0, 732, 312), ["NewsTicker"]],
     "profile": [Rect2(1210, 18, 446, 232), ["RefProfileButton", "ProfilePanel", "ProfileStack"]],
     "account": [Rect2(20, 832, 354, 100), ["AccountCard", "AccountPanel", "RefAccountAvatar", "RefAccountAvatarFrameHost"]],
-    "community": [Rect2(1388, 856, 262, 64), ["CommunityButton", "InstagramButton"]],
+    "community": [Rect2(1388, 856, 262, 64), ["CommunityButton"]],
 }
 var _wide_on := false
 var _wide_orig := {}          # nó -> posição original (para voltar ao normal)
@@ -3225,17 +3225,8 @@ func make_community_button(sz: Vector2, frame: Texture2D, font_px: int) -> Butto
     b.pressed.connect(open_community)   # R124 · pergunta antes de abrir o Discord
     return b
 
-## R176 · INSTAGRAM (@fraihaxadrez): botão quadrado na moldura dos botões do topo, ao lado da COMUNIDADE
+## R176 · INSTAGRAM (@fraihaxadrez): fica dentro da COMUNIDADE (open_community) e em CONHEÇA O FRAIHA
 const InstagramLink := preload("res://social/instagram_link.gd")
-func make_instagram_button(side: float) -> Button:
-    var b: Button = preload("res://ui_v022/hud_button.gd").make("instagram")
-    b.name = "InstagramButton"
-    b.size = Vector2(side, side)
-    b.custom_minimum_size = Vector2(side, side)
-    b.tooltip_text = InstagramLink.TIP
-    b.set_frame(TOP_FRAME_PC, 14.0)
-    b.pressed.connect(InstagramLink.open)
-    return b
 
 ## R113 · moldura dos botões do topo, recortada da arte da Home (PC: som em 363,17; celular: som em 730,45)
 const TOP_FRAME_PC := preload("res://ui_v022/assets/r113/moldura_botao_topo_pc_azul.png")   # R122 · miolo azul
@@ -3322,8 +3313,13 @@ func ask(title: String, text: String, yes_text: String, no_text: String, action:
     notice_modal.ask(title, text, yes_text, no_text, action)
 
 func open_community():
-    ask("COMUNIDADE", "Você vai sair do jogo e abrir o servidor FRAIHA Xadrez no Discord: desafios, Torneio da Semana, novidades e suporte.\n\nQuer abrir o Discord agora?",
-        "ABRIR DISCORD", "AGORA NÃO", CommunityLink.open)
+    # R176.2 · COMUNIDADE reúne o Discord e o Instagram (o Instagram saiu da tela do jogo)
+    if not is_instance_valid(notice_modal):
+        notice_modal = load("res://ui_v022/notice_modal.gd").new()
+        add_child(notice_modal)
+        notice_modal.setup(self, "COMUNIDADE")
+    notice_modal.ask_two("COMUNIDADE", "DISCORD: desafios, torneios e suporte.\nINSTAGRAM: @fraihaxadrez\n\nO app escolhido abre fora do jogo.",
+        "DISCORD", CommunityLink.open, "INSTAGRAM", InstagramLink.open, "AGORA NÃO")
 
 func open_legal(tab := "termos"):
     if not is_instance_valid(legal_ui):
@@ -4110,10 +4106,6 @@ func _build_reference_chrome():
     var community := make_community_button(Vector2(262, 64), TOP_FRAME_PC, 22)
     community.position = Vector2(1388, 856)
     canvas.add_child(community)
-    # R176 · INSTAGRAM: logo à esquerda da COMUNIDADE, mesma moldura; abre direto o @fraihaxadrez
-    var insta := make_instagram_button(64.0)
-    insta.position = Vector2(1388 - 64 - 8, 856)
-    canvas.add_child(insta)
     # R161 · OUTDOOR: a faixa "ESTRATÉGIA PARA IR MAIS LONGE" vira a frase do Admin e abre NOVIDADES
     var ticker := make_news_ticker(19, Color("010612"), Color("030b1c"))
     ticker.position = Vector2(631, 273)
