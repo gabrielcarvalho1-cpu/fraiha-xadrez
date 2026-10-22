@@ -155,6 +155,17 @@ static func _wall(c: Color, bright_too: bool) -> bool:
 	if c.h > 0.03 and c.h < 0.2 and c.s > 0.3 and c.v > 0.18: return true   # dourado, inclusive o escuro da moldura
 	return bright_too and c.v > 0.8 and c.s < 0.45
 
+## R176.8 · miolo de placa pintada: TODO pixel do miolo (menos texto claro) vira o mesmo vinho, só pelo brilho —
+## antes azul e escuro iam por contas diferentes e a placa ficava manchada (SAIR do lobby).
+static func recolor_plate_px(c: Color) -> Color:
+	if c.v > 0.72 and c.s < 0.35: return c          # letra/realce claro
+	if _gold(c): return c
+	var lum := 0.3 * c.r + 0.59 * c.g + 0.11 * c.b
+	var f := clampf(0.42 + lum * 2.1, 0.42, 1.25)
+	var o := Color(0.50, 0.075, 0.09) * f
+	o.a = c.a
+	return o
+
 static func _gold(c: Color) -> bool:
 	return c.h > 0.05 and c.h < 0.19 and c.s > 0.38 and c.v > 0.38
 
@@ -308,8 +319,11 @@ static func _image_of(t: Texture2D) -> Image:
 	_img_cache[key] = img
 	return img
 
-## recorte da arte com SÓ a placa recolorida (fundo transparente): preenche a partir do miolo até bater na
-## moldura dourada; se vazar (moldura aberta), usa só o miolo azul do recorte.
+## recorte da arte com SÓ a placa recolorida (fundo transparente).
+## R176.8 · PLACA LIMPA: o miolo inteiro (dentro da moldura dourada, inclusive o "buraco" das letras) vira um vinho
+## liso com degradê; as letras/ícones da arte são separados por brilho (só manchas grandes o bastante: pingos e
+## risquinhos da textura somem) e recompostos nítidos com sombra suave. A seta ">" só vira "<" quando é mesmo uma
+## seta solta no fim da placa (nunca uma letra).
 static func _make_patch(t: Texture2D, region: Rect2, mask_only := false) -> Array:
 	var img := _image_of(t)
 	if img == null: return []
@@ -320,78 +334,224 @@ static func _make_patch(t: Texture2D, region: Rect2, mask_only := false) -> Arra
 	var h := r.size.y
 	if mask_only: return _outer_mask(sub, w, h)
 	var seen := PackedByteArray()
+	for wv in [0.5, 0.3, 0.18]:
+		seen = _flood_center(sub, w, h, wv)
+		if not seen.is_empty(): break
+	if seen.is_empty(): return []
+	var m := _fill_holes(seen, w, h)
+	return _clean_plate(sub, m, w, h)
+
+## miolo alcançado do centro sem atravessar a moldura (dourado com brilho >= wall_v); vazio se vazar
+static func _flood_center(sub: Image, w: int, h: int, wall_v: float) -> PackedByteArray:
+	var seen := PackedByteArray()
 	seen.resize(w * h)
 	var stack: Array[int] = []
-	# sementes: pontos do miolo (faixa central) que não são dourados
+	var wall := func(c: Color) -> bool: return c.a < 0.5 or (c.h > 0.03 and c.h < 0.2 and c.s > 0.3 and c.v > wall_v)
 	for fy in [0.5, 0.4, 0.6]:
 		for fx in [0.5, 0.35, 0.65, 0.2, 0.8]:
 			var x := int(w * fx)
 			var y := int(h * fy)
-			if not _wall(sub.get_pixel(x, y), mask_only): stack.append(y * w + x)
+			if not wall.call(sub.get_pixel(x, y)): stack.append(y * w + x)
 	var edge_hits := 0
+	var count := 0
 	while not stack.is_empty():
 		var i: int = stack.pop_back()
 		if seen[i] == 1: continue
 		var x := i % w
 		var y := i / w
-		var c := sub.get_pixel(x, y)
-		if _wall(c, mask_only) or c.a < 0.5: continue
+		if wall.call(sub.get_pixel(x, y)): continue
 		seen[i] = 1
+		count += 1
 		if x == 0 or y == 0 or x == w - 1 or y == h - 1: edge_hits += 1
 		if x > 0: stack.append(i - 1)
 		if x < w - 1: stack.append(i + 1)
 		if y > 0: stack.append(i - w)
 		if y < h - 1: stack.append(i + w)
-	var leaked := edge_hits > (w + h) * 2 * 0.35
-	if leaked: return []   # a placa não fecha na moldura (arte já vermelha, fundo igual…): melhor não mexer
-	var out := Image.create(w, h, false, Image.FORMAT_RGBA8)
-	var gold := Image.create(w, h, false, Image.FORMAT_RGBA8)
-	if mask_only:
-		# manchas escuras do próprio miolo (textura granulada) também entram: cresce sobre o escuro (a moldura é clara)
-		var q: Array[int] = []
-		for i in w * h:
-			if seen[i] == 1: q.append(i)
-		var qi := 0
-		while qi < q.size():
-			var i: int = q[qi]
-			qi += 1
+	if edge_hits > (w + h) * 2 * 0.35 or count < w * h * 0.2: return PackedByteArray()
+	return seen
+
+## miolo + tudo o que ele cerca (letras, ícones, o "buraco" do O): o que NÃO se alcança da borda do recorte
+static func _fill_holes(seen: PackedByteArray, w: int, h: int) -> PackedByteArray:
+	var outside := PackedByteArray()
+	outside.resize(w * h)
+	var q: Array[int] = []
+	for x in w:
+		q.append(x)
+		q.append((h - 1) * w + x)
+	for y in h:
+		q.append(y * w)
+		q.append(y * w + w - 1)
+	var qi := 0
+	while qi < q.size():
+		var i: int = q[qi]
+		qi += 1
+		if outside[i] == 1 or seen[i] == 1: continue
+		outside[i] = 1
+		var x := i % w
+		if x > 0: q.append(i - 1)
+		if x < w - 1: q.append(i + 1)
+		if i >= w: q.append(i - w)
+		if i < w * (h - 1): q.append(i + w)
+	var m := PackedByteArray()
+	m.resize(w * h)
+	for i in w * h:
+		if outside[i] == 0: m[i] = 1
+	return m
+
+## quanto um pixel é "tinta" (letra creme/dourada) — 0 = fundo
+static func _ink(c: Color) -> float:
+	var warm := c.s < 0.32 or c.h < 0.2 or c.h > 0.94
+	if not warm: return 0.0
+	return clampf((c.v - 0.40) / 0.22, 0.0, 1.0)
+
+static func _clean_plate(sub: Image, m: PackedByteArray, w: int, h: int) -> Array:
+	var n := w * h
+	# costura: pixel escuro/azul colado no miolo (entre o miolo e a moldura) também vira placa
+	var m2 := m.duplicate()
+	for i in n:
+		if m[i] == 1: continue
+		var x := i % w
+		var y := i / w
+		var c := sub.get_pixel(x, y)
+		if _gold(c) or c.a < 0.5: continue
+		var touch := false
+		for dy in [-2, -1, 0, 1, 2]:
+			for dx in [-2, -1, 0, 1, 2]:
+				var nx: int = x + dx
+				var ny: int = y + dy
+				if nx >= 0 and ny >= 0 and nx < w and ny < h and m[ny * w + nx] == 1: touch = true
+		if touch: m2[i] = 1
+	m = m2
+	# 0) distância até a moldura (sombra interna; enfeite colado na moldura não é letra)
+	var dist := PackedByteArray()
+	dist.resize(n)
+	for i in n: dist[i] = 0 if m[i] == 0 else 255
+	for step in 5:
+		for i in n:
+			if dist[i] != 255: continue
 			var x := i % w
 			var y := i / w
-			for nn in [i - 1, i + 1, i - w, i + w]:
-				var n: int = nn
-				if n < 0 or n >= w * h or seen[n] == 1: continue
-				var nx: int = n % w
-				if absi(nx - x) > 1: continue
-				var pc := sub.get_pixel(nx, n / w)
-				if pc.v < 0.3 or (pc.s < 0.25 and pc.v < 0.55):
-					seen[n] = 1
-					q.append(n)
-		var mimg := Image.create(w, h, false, Image.FORMAT_RGBA8)
-		for y in h:
-			for x in w:
-				if seen[y * w + x] == 1: mimg.set_pixel(x, y, Color.WHITE)
-		return [ImageTexture.create_from_image(mimg)]
-	var flip := _chevron_rect(sub, seen, w, h)   # R176.1 · seta ">" da placa vira "<" (é um botão de VOLTAR)
+			var near := (x > 0 and dist[i - 1] == step) or (x < w - 1 and dist[i + 1] == step) or (y > 0 and dist[i - w] == step) or (y < h - 1 and dist[i + w] == step)
+			if near: dist[i] = step + 1
+	# 1) tinta e componentes (8-vizinhos) do núcleo da tinta
+	var ink := PackedFloat32Array()
+	ink.resize(n)
+	for i in n:
+		if m[i] == 1: ink[i] = _ink(sub.get_pixel(i % w, i / w))
+	var lab := PackedInt32Array()
+	lab.resize(n)
+	lab.fill(-1)
+	var comps: Array = []   # {area, mn, mx, col}
+	var min_area := maxi(4, int(h * h * 0.0006))
+	for i0 in n:
+		if lab[i0] != -1 or ink[i0] < 0.5: continue
+		var id := comps.size()
+		var st: Array[int] = [i0]
+		lab[i0] = id
+		var area := 0
+		var mn := Vector2i(w, h)
+		var mx := Vector2i(-1, -1)
+		var acc := Color(0, 0, 0, 0)
+		var near_frame := false
+		while not st.is_empty():
+			var i: int = st.pop_back()
+			var x := i % w
+			var y := i / w
+			area += 1
+			if dist[i] <= 3: near_frame = true
+			mn = Vector2i(mini(mn.x, x), mini(mn.y, y))
+			mx = Vector2i(maxi(mx.x, x), maxi(mx.y, y))
+			if ink[i] > 0.85: acc += sub.get_pixel(x, y)
+			for dy in [-1, 0, 1]:
+				for dx in [-1, 0, 1]:
+					var nx: int = x + dx
+					var ny: int = y + dy
+					if nx < 0 or ny < 0 or nx >= w or ny >= h: continue
+					var j := ny * w + nx
+					if lab[j] == -1 and ink[j] >= 0.5:
+						lab[j] = id
+						st.append(j)
+		var col := Color(0.96, 0.84, 0.55)
+		if acc.a > 0.5: col = Color(acc.r / acc.a, acc.g / acc.a, acc.b / acc.a)
+		var thin: bool = (mx.y - mn.y + 1) <= maxi(3, int(h * 0.04)) and (mx.x - mn.x + 1) > 5 * (mx.y - mn.y + 1)   # risco da textura/moldura
+		comps.append({"area": area, "mn": mn, "mx": mx, "col": col, "keep": area >= min_area and not thin and not (near_frame and area < h * h * 0.01)})
+	# 2) borda macia das letras: pixel de tinta fraca herda o componente vizinho (até 2 px); pingos somem
+	var a_out := PackedFloat32Array()
+	a_out.resize(n)
+	var c_out: Array[Color] = []
+	c_out.resize(n)
+	for i in n:
+		if m[i] == 0 or ink[i] <= 0.0: continue
+		var id := lab[i]
+		if id == -1:
+			var x := i % w
+			var y := i / w
+			for dy in [-2, -1, 0, 1, 2]:
+				for dx in [-2, -1, 0, 1, 2]:
+					var nx: int = x + dx
+					var ny: int = y + dy
+					if nx < 0 or ny < 0 or nx >= w or ny >= h: continue
+					var l2 := lab[ny * w + nx]
+					if l2 != -1 and comps[l2].keep:
+						id = l2
+						break
+				if id != -1: break
+		if id == -1 or not comps[id].keep: continue
+		a_out[i] = ink[i]
+		c_out[i] = sub.get_pixel(i % w, i / w) if ink[i] > 0.85 else comps[id].col
+	# 3) seta ">" solta no fim da placa vira "<" (espelha só os pixels dela)
+	for id in comps.size():
+		var cp: Dictionary = comps[id]
+		if not cp.keep: continue
+		var bw: int = cp.mx.x - cp.mn.x + 1
+		var bh: int = cp.mx.y - cp.mn.y + 1
+		if (cp.mn.x + cp.mx.x) * 0.5 < w * 0.72 or bw > w * 0.12 or bh < h * 0.2 or bh > h * 0.75: continue
+		var alone := true
+		for id2 in comps.size():
+			if id2 == id or not comps[id2].keep or comps[id2].area < cp.area * 0.25: continue
+			var o: Dictionary = comps[id2]
+			var vert: bool = o.mx.y >= cp.mn.y and o.mn.y <= cp.mx.y
+			if vert and o.mx.x < cp.mn.x and cp.mn.x - o.mx.x < w * 0.05: alone = false
+			if vert and o.mn.x > cp.mx.x and o.mn.x - cp.mx.x < w * 0.05: alone = false
+		if not alone: continue
+		var x0: int = maxi(0, cp.mn.x - 2)
+		var x1: int = mini(w - 1, cp.mx.x + 2)
+		var y0: int = maxi(0, cp.mn.y - 2)
+		var y1: int = mini(h - 1, cp.mx.y + 2)
+		for y in range(y0, y1 + 1):
+			var row_a: Array = []
+			var row_c: Array = []
+			for x in range(x0, x1 + 1):
+				row_a.append(a_out[y * w + x])
+				row_c.append(c_out[y * w + x])
+			for x in range(x0, x1 + 1):
+				var k := x1 - x
+				a_out[y * w + x] = row_a[k]
+				c_out[y * w + x] = row_c[k]
+	# 4) montagem
+	var sh := maxi(1, int(round(h / 60.0)))   # sombra das letras
+	var out := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var gold := Image.create(w, h, false, Image.FORMAT_RGBA8)
 	for y in h:
+		var fy := float(y) / float(maxi(1, h - 1))
+		var base := Color(0.58, 0.10, 0.12).lerp(Color(0.33, 0.05, 0.07), fy)
 		for x in w:
-			var c := sub.get_pixel(x, y)
-			var inside: bool = seen[y * w + x] == 1
-			if leaked:
-				inside = x > 4 and y > 4 and x < w - 5 and y < h - 5 and c.s > 0.16 and c.h > 0.5 and c.h < 0.8
-			if not inside:
-				if _gold(c): gold.set_pixel(x, y, c)   # moldura: cópia exata (só para o brilho passar por ela)
+			var i := y * w + x
+			if m[i] == 0:
+				var c := sub.get_pixel(x, y)
+				if _gold(c): gold.set_pixel(x, y, c)
 				continue
-			var o := recolor_px(c)
-			if o.is_equal_approx(c): continue
+			var d: int = mini(dist[i], 5)
+			var bg := base * (0.72 + 0.28 * float(d - 1) / 4.0)
+			var sx := x - sh
+			var sy := y - sh
+			if sx >= 0 and sy >= 0:
+				var sa: float = a_out[sy * w + sx]
+				if sa > 0.0: bg = bg.lerp(Color(0.12, 0.02, 0.03), sa * 0.55)
+			var a: float = a_out[i]
+			var o := bg.lerp(c_out[i], a) if a > 0.0 else bg
+			o.a = 1.0
 			out.set_pixel(x, y, o)
-	if flip.has_area():
-		var fr := Rect2i(flip)
-		for y in range(fr.position.y, fr.end.y):
-			for x in range(fr.position.x, fr.end.x):
-				var mx := fr.position.x + fr.end.x - 1 - x
-				var c := sub.get_pixel(mx, y)
-				out.set_pixel(x, y, recolor_px(c) if not _gold(c) else c)
-				gold.set_pixel(x, y, c if _gold(c) else Color(0, 0, 0, 0))
 	return [ImageTexture.create_from_image(out), ImageTexture.create_from_image(gold)]
 
 ## Máscara da placa numa textura de botão: tudo o que fica DENTRO da moldura externa (o fundo que vem junto na

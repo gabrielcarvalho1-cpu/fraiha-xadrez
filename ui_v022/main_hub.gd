@@ -991,7 +991,7 @@ func _style_name_editor(ed):
         for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, Color("f6e7bf"))
 func _build_settings_page():
     # R52 · painel/modal próprio: centralizado por cima da Home escurecida (fade em show_page)
-    var panel := RefPage.modal(canvas, "config_bg", CONFIG_REF, DESIGN)
+    var panel := RefPage.modal(canvas, "config_bg_r176", CONFIG_REF, DESIGN)   # R176.8 · 4 placas (2x2)
     panel.name = "SettingsPage"
     # FRAIHA PREMIUM (Fundador + Club): a arte já desenha a entrada; o botão do jogo fica por cima, invisível
     var premium_entry = preload("res://monetization/premium_entry.gd").new()
@@ -1012,101 +1012,69 @@ func _build_settings_page():
     slider.value = round(volume*100)
     slider.value_changed.connect(_set_volume)
     _set_volume(slider.value, false)
-    premove_button = RefPage.hotspot(panel, Rect2(126, 782, 1196, 130), _toggle_premove, "PremoveToggle")
-    var pt := RefPage.text(panel, "", Rect2(340, 800, 820, 52), 40, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
-    pt.add_theme_font_override("font", FONT_CINZEL)
-    var ps := RefPage.text(panel, "", Rect2(346, 848, 820, 40), 28, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
-    premove_button.set_meta("ref_labels", [pt, ps])
+    # R176.8 · PARTIDA: quatro placas iguais em 2x2 (tools/config_plates_r176.py) — PRÉ-MOVE, TABULEIRO E PEÇAS,
+    # EMOTES e TERMOS E CONTA (antes a chave dos emotes e os termos ficavam soltos num canto)
+    var cells := [Rect2(126, 782, 591, 130), Rect2(731, 782, 591, 130), Rect2(126, 930, 591, 130), Rect2(731, 930, 591, 130)]
+    premove_button = RefPage.hotspot(panel, cells[0], _toggle_premove, "PremoveToggle")
+    premove_button.set_meta("ref_labels", _settings_plate(panel, cells[0], RefPage.tex("config_ico_premove"), "", ""))
     _refresh_premove_button()
-    # R145 · TABULEIRO E PEÇAS: placa igual à do PRÉ-MOVE, logo abaixo dela (a arte ganhou a 2ª placa)
-    var bc_btn := RefPage.hotspot(panel, Rect2(126, 930, 1196, 130), open_board_colors, "SettingsBoardColors")
-    var bc_ic := RefPage.image(panel, RefPage.tex("about_ico_perso"), Rect2(186, 948, 98, 94))
-    bc_ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-    bc_ic.size = Vector2(98, 94)
-    var bct := RefPage.text(panel, "Tabuleiro e Peças", Rect2(340, 948, 820, 52), 40, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
-    bct.add_theme_font_override("font", FONT_CINZEL)
-    RefPage.text(panel, "Cores das casas e das peças", Rect2(346, 996, 820, 40), 28, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
+    var bc_btn := RefPage.hotspot(panel, cells[1], open_board_colors, "SettingsBoardColors")
+    _settings_plate(panel, cells[1], RefPage.tex("about_ico_perso"), "Tabuleiro e Peças", "Cores das casas e peças")
     bc_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    # R176 · EMOTES ligados/desligados (faixas ao lado da foto na partida): chave na linha do título PARTIDA
-    _build_emotes_toggle(panel, Rect2(892, 720, 430, 54))
+    var EmotePrefs = preload("res://social/emote_prefs.gd")
+    var em_btn := RefPage.hotspot(panel, cells[2], func(): pass, "SettingsEmotes")
+    em_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    var em_ic := Control.new()
+    em_ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    em_ic.position = cells[2].position + Vector2(44, 20)
+    em_ic.size = Vector2(90, 90)
+    em_ic.draw.connect(func(): EmotePrefs.draw_icon(em_ic, Rect2(Vector2.ZERO, em_ic.size), Color("f5cf72")))
+    panel.add_child(em_ic)
+    var el: Array = _settings_plate(panel, cells[2], null, "", "")
+    var paint_em := func():
+        el[0].text = "Emotes: " + ("Ligados" if EmotePrefs.enabled() else "Desligados")
+        el[1].text = "Faixas ao lado da foto" if EmotePrefs.enabled() else "Clique para ligar"
+        _fit_plate_title(el[0])
+    paint_em.call()
+    em_btn.pressed.connect(func():
+        EmotePrefs.toggle()
+        paint_em.call())
+    var lg_btn := RefPage.hotspot(panel, cells[3], func(): open_legal("termos"), "SettingsLegal")
+    lg_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    _settings_plate(panel, cells[3], RefPage.tex("about_ico_projeto"), "Termos e Conta", "Privacidade · excluir conta")
     var note := Label.new()
     note.name = "SettingsNote"
     note.text = "Preferências salvas automaticamente. O botão de som da tela inicial silencia tudo."
     note.visible = false
     panel.add_child(note)
     RefPage.hotspot(panel, Rect2(132, 1080, 668, 98), back, "SettingsBack")
-    # R97 · TERMOS, PRIVACIDADE e EXCLUIR CONTA (placa pequena no canto da moldura, acima da versão)
-    var legal_btn := Button.new()
-    legal_btn.name = "SettingsLegal"
-    legal_btn.text = "TERMOS · PRIVACIDADE · CONTA"
-    legal_btn.focus_mode = Control.FOCUS_NONE
-    legal_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    legal_btn.add_theme_font_override("font", FONT_CINZEL)
-    legal_btn.add_theme_font_size_override("font_size", 22)
-    for pair in [["normal", Color("15213a")], ["hover", Color("1f3156")], ["pressed", Color("0e182b")]]:
-        var st := StyleBoxFlat.new()
-        st.bg_color = pair[1]
-        st.border_color = Color("c99a45")
-        st.set_border_width_all(2)
-        st.set_corner_radius_all(3)
-        legal_btn.add_theme_stylebox_override(pair[0], st)
-    legal_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-    for k in ["font_color", "font_hover_color", "font_pressed_color"]: legal_btn.add_theme_color_override(k, Color("f4ce7f"))
-    legal_btn.position = Vector2(880, 1078)
-    legal_btn.size = Vector2(442, 50)
-    legal_btn.pressed.connect(func(): open_legal("termos"))
-    panel.add_child(legal_btn)
     var ver := RefPage.text(panel, "FRAIHA Xadrez · versão %s" % APP_VERSION, Rect2(900, 1128, 422, 40), 21, Color("e3dccb"), false, HORIZONTAL_ALIGNMENT_RIGHT)
     ver.name = "SettingsVersion"
     pages["settings"] = panel
 
-## R176 · chave EMOTES (mesmo padrão da placa TERMOS: azul com borda dourada) + chave verde/cinza desenhada.
-func _build_emotes_toggle(parent: Control, r: Rect2) -> void:
-    var EmotePrefs = preload("res://social/emote_prefs.gd")
-    var b := Button.new()
-    b.name = "SettingsEmotes"
-    b.focus_mode = Control.FOCUS_NONE
-    b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-    b.tooltip_text = "Faixas dos emotes ao lado da foto dos jogadores durante a partida"
-    b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-    b.add_theme_font_override("font", FONT_CINZEL)
-    b.add_theme_font_size_override("font_size", 25)
-    for pair in [["normal", Color("15213a")], ["hover", Color("1f3156")], ["pressed", Color("0e182b")]]:
-        var st := StyleBoxFlat.new()
-        st.bg_color = pair[1]
-        st.border_color = Color("c99a45")
-        st.set_border_width_all(2)
-        st.set_corner_radius_all(3)
-        st.content_margin_left = 66
-        b.add_theme_stylebox_override(pair[0], st)
-    b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-    for k in ["font_color", "font_hover_color", "font_pressed_color"]: b.add_theme_color_override(k, Color("f4ce7f"))
-    b.position = r.position
-    b.size = r.size
-    var deco := Control.new()
-    deco.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    deco.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    deco.draw.connect(func():
-        var on: bool = EmotePrefs.enabled()
-        var h := deco.size.y
-        EmotePrefs.draw_icon(deco, Rect2(14, 7, h - 14, h - 14), Color("f4ce7f"))
-        var sw := Rect2(deco.size.x - 86, h / 2.0 - 15, 70, 30)
-        var rad := sw.size.y / 2.0
-        var track := Color("3c9a3a") if on else Color("4a4a4a")
-        deco.draw_circle(sw.position + Vector2(rad, rad), rad, track)
-        deco.draw_circle(Vector2(sw.end.x - rad, sw.position.y + rad), rad, track)
-        deco.draw_rect(Rect2(sw.position.x + rad, sw.position.y, sw.size.x - 2 * rad, sw.size.y), track)
-        var kc := Vector2((sw.end.x - rad) if on else (sw.position.x + rad), sw.position.y + rad)
-        deco.draw_circle(kc, rad * 0.78, Color.WHITE))
-    b.add_child(deco)
-    var refresh := func():
-        b.text = "Emotes: " + ("Ligados" if EmotePrefs.enabled() else "Desligados")
-        deco.queue_redraw()
-    refresh.call()
-    b.pressed.connect(func():
-        EmotePrefs.toggle()
-        refresh.call())
-    parent.add_child(b)
+## R176.8 · conteúdo de uma placa das Configurações (ícone + título dourado + linha de baixo), em px da arte.
+func _settings_plate(panel: Control, r: Rect2, icon: Texture2D, title: String, sub: String) -> Array:
+    if icon != null:
+        var ic := RefPage.image(panel, icon, Rect2(r.position + Vector2(40, 18), Vector2(98, 94)))
+        ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+        ic.size = Vector2(98, 94)
+    var tw := r.size.x - 160.0 - 104.0
+    var t := RefPage.text(panel, title, Rect2(r.position + Vector2(160, 18), Vector2(tw, 50)), 36, Color("f5cf72"), true, HORIZONTAL_ALIGNMENT_LEFT)
+    t.add_theme_font_override("font", FONT_CINZEL)
+    t.clip_text = true
+    t.set_meta("fit_w", tw)
+    _fit_plate_title(t)
+    var u := RefPage.text(panel, sub, Rect2(r.position + Vector2(162, 68), Vector2(tw, 38)), 24, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
+    u.clip_text = true
+    return [t, u]
+
+## título da placa: a fonte encolhe até o texto caber (até 36 px da arte)
+func _fit_plate_title(t: Label) -> void:
+    if not t.has_meta("fit_w"): return
+    var w: float = t.get_meta("fit_w")
+    var px := 36
+    while px > 18 and FONT_CINZEL.get_string_size(t.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > w - 4.0: px -= 1
+    t.add_theme_font_size_override("font_size", px)
 
 ## Slider sobre o trilho desenhado na arte: preenchimento dourado e o botão esmeralda recortados da referência.
 func _ref_slider(parent: Control, node_name: String, rect: Rect2) -> HSlider:
@@ -3470,6 +3438,7 @@ func _refresh_premove_button():
         var labs: Array = premove_button.get_meta("ref_labels")
         labs[0].text = "Pré-move: " + ("Ligado" if premove_enabled else "Desligado")
         labs[1].text = sub
+        if labs[0] is Label: _fit_plate_title(labs[0])
         return
     var labels := premove_button.get_child(0).get_child(0)
     (labels.get_child(0) as Label).text = title

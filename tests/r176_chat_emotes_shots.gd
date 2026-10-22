@@ -95,7 +95,7 @@ func run():
 	await frames(10)
 	var sb = stage.hub.pages["settings"].find_child("SettingsEmotes", true, false)
 	if mobile: sb = root.find_child("EmotesToggleMobile", true, false)
-	check(sb != null and (mobile or String(sb.text).begins_with("Emotes")), "Configurações: chave Emotes")
+	check(sb != null, "Configurações: placa Emotes")
 	await shot("06_configuracoes")
 	print("RESULT %s" % ("OK" if fails == 0 else "%d FALHAS" % fails))
 	quit(1 if fails else 0)
