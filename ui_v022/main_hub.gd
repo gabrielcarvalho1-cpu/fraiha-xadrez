@@ -2123,7 +2123,7 @@ func _build_about_page():
     panel.name = "AboutPage"
     pages["about"] = panel
     about_icon = RefPage.image(panel, null, Rect2(626, 248, 92, 94))
-    about_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # R91 · pixel art nítido
+    about_icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # R176.8 · ícones novos (arte lisa)
     about_title = RefPage.text(panel, "", Rect2(766, 250, 660, 74), 50, Color("f5cf6a"), true, HORIZONTAL_ALIGNMENT_LEFT)
     about_title.add_theme_font_override("font", FONT_CINZEL)
     about_lead = RefPage.text(panel, "", Rect2(620, 384, 720, 56), 34, Color("efe6cf"), true, HORIZONTAL_ALIGNMENT_LEFT, false)
@@ -2161,10 +2161,12 @@ func _build_about_page():
         panel.add_child(art)
         about_nav_art.append(art)
         var ic: Texture2D = RefPage.tex(ABOUT_ICONS[i])
-        var ih := 50.0   # R91 · ícones novos em pixel art (32x32 com margem): um pouco maiores
-        var iw := minf(58.0, ih * ic.get_size().x / ic.get_size().y) if ic != null else 0.0
+        var ih := 58.0   # R176.8 · ícones da referência do dono (256 px, fundo transparente)
+        var iw := minf(62.0, ih * ic.get_size().x / ic.get_size().y) if ic != null else 0.0
         var icr := Rect2(178 - iw / 2.0, r.position.y + (r.size.y - ih) / 2.0, iw, ih)
-        RefPage.image(panel, ic, icr).size = icr.size   # a imagem (128 px) não pode empurrar o retângulo
+        var icn := RefPage.image(panel, ic, icr)
+        icn.size = icr.size   # a imagem (256 px) não pode empurrar o retângulo
+        icn.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
         var tl := RefPage.text(panel, String(topic[0]), Rect2(226, r.position.y, 276, r.size.y), 21, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
         tl.add_theme_font_override("font", FONT_CINZEL)
         for px in [21, 20, 19, 18, 17]:   # nome longo encolhe para não passar da seta
