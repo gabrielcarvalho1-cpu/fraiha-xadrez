@@ -163,7 +163,60 @@ func _str(f: Font, s: String, pos: Vector2, fs: int, col: Color, max_w := -1.0, 
 	draw_string(f, pos, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 	return f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 
+## R178e · a ARTE do dono (tools/pass_button_r178e.py): placa 2036x502 sem a frase, sem o roxo da barra e sem o
+## número; o jogo escreve a frase, estica o roxo até o progresso e escreve o nível — nos mesmos lugares da arte.
+const PLATE := preload("res://economy/art/pass_button_plate.png")
+const FILL := preload("res://economy/art/pass_button_fill.png")
+const ART := Vector2(2036, 502)
+const F_SERIF := preload("res://account/fonts/Cinzel-Bold.woff")
 func _draw():
+	_draw_art()
+
+func _draw_art():
+	var k: float = minf(size.x / ART.x, size.y / ART.y)
+	var o: Vector2 = (size - ART * k) / 2.0
+	var at := func(p: Vector2) -> Vector2: return o + p * k
+	var glow := 0.5 + 0.5 * sin(t * 2.4)
+	var mod := Color(1, 1, 1) if not (is_hovered() or button_pressed) else Color(1.12, 1.1, 1.04)
+	draw_texture_rect(PLATE, Rect2(o, ART * k), false, mod)
+	var has := not state.is_empty() and bool(state.get("available", true))
+	# frase de baixo (creme, como na arte)
+	var sub := (String(state.get("name", "")) + (" • " + _days() if _days() != "" else "")) if has else "Suba de nível jogando e ganhe prêmios"
+	var fs := int(68.0 * k)
+	while fs > 6 and F_INFO.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > 1120.0 * k: fs -= 1
+	draw_string(F_INFO, at.call(Vector2(460, 295)) + Vector2(0, 1.5 * k * 3), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.45))
+	draw_string(F_INFO, at.call(Vector2(460, 295)), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color8(246, 236, 207))
+	# barra roxa até o progresso (corpo esticado + a ponta da arte)
+	var f := _frac() if has else 0.0
+	var full := 1184.0
+	var len := full * f
+	if len > 1.0:
+		var tip := 32.0
+		var body := maxf(0.0, len - tip)
+		var bpos: Vector2 = at.call(Vector2(453, 335))
+		var fsz := FILL.get_size()
+		if body > 0.0:
+			draw_texture_rect_region(FILL, Rect2(bpos, Vector2(body, fsz.y) * k), Rect2(0, 0, fsz.x - tip, fsz.y))
+		var tw := minf(tip, len)
+		draw_texture_rect_region(FILL, Rect2(bpos + Vector2(body * k, 0), Vector2(tw, fsz.y) * k), Rect2(fsz.x - tip, 0, tw, fsz.y))
+		# brilho passando pela barra
+		var ph := fmod(t, 2.6) / 2.6
+		var gx: float = bpos.x + (len * k) * ph
+		draw_rect(Rect2(gx - 10.0 * k, bpos.y + 6.0 * k, 20.0 * k, (fsz.y - 12.0) * k), Color(1, 0.85, 1, 0.18))
+	# número do nível no escudo (dourado com contorno escuro)
+	var nt := str(_level())
+	var ns := int(137.0 * k)
+	while ns > 6 and F_SERIF.get_string_size(nt, HORIZONTAL_ALIGNMENT_LEFT, -1, ns).x > 120.0 * k: ns -= 1
+	var nw := F_SERIF.get_string_size(nt, HORIZONTAL_ALIGNMENT_LEFT, -1, ns).x
+	var np: Vector2 = at.call(Vector2(1830.5, 353)) - Vector2(nw / 2.0, 0)
+	draw_string_outline(F_SERIF, np, nt, HORIZONTAL_ALIGNMENT_LEFT, -1, ns, maxi(2, int(10.0 * k)), Color("2a1204"))
+	draw_string(F_SERIF, np, nt, HORIZONTAL_ALIGNMENT_LEFT, -1, ns, Color8(251, 212, 52).lerp(Color("fff1b0"), glow * 0.25))
+	if _boost():   # selo XP 2x por cima, no canto do escudo
+		var bh := 70.0 * k
+		var bw := F_INFO.get_string_size("XP 2x", HORIZONTAL_ALIGNMENT_LEFT, -1, int(bh * 0.62)).x + bh * 0.5
+		_xp2(at.call(Vector2(1830.5, 0)) - Vector2(bw / 2.0, bh * 0.15), bh)
+
+func _draw_old():
 	var r := Rect2(Vector2.ZERO, size)
 	var h := size.y
 	_frame(r, h * (0.22 if style == "card" else 0.3))

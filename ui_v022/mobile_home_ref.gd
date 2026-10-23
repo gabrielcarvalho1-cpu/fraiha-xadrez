@@ -22,10 +22,10 @@ const MENU := [
     ["JOGAR RANQUEADO", Rect2(140, 738, 575, 120), "JOGAR RANQUEADO", Rect2(279, 765, 346, 29), "default", "Compita e conquiste seu lugar", Rect2(281, 805, 341, 0)],
     ["JOGAR ONLINE", Rect2(142, 877, 573, 108), "JOGAR ONLINE", Rect2(280, 902, 241, 25), "default", "Partida casual · fila automática", Rect2(282, 939, 325, 0)],
     ["JOGAR CONTRA O COMPUTADOR", Rect2(140, 1002, 575, 105), "CONTRA O COMPUTADOR", Rect2(283, 1025, 354, 24), "default", "Treine e evolua seu jogo", Rect2(282, 1059, 268, 0)],
-    ["MARCHA REAL", Rect2(138, 1204, 282, 75), "MARCHA REAL", Rect2(217, 1232, 112, 17), "squeeze", "", Rect2()],
-    ["XEQUE", Rect2(433, 1204, 282, 75), "XEQUE", Rect2(542, 1232, 60, 17), "squeeze", "", Rect2()],
-    ["LIGAS E RANKING", Rect2(138, 1294, 282, 75), "LIGAS E RANKING", Rect2(229, 1320, 161, 19), "squeeze", "", Rect2()],
-    ["HISTÓRICO DE PARTIDAS", Rect2(433, 1294, 282, 75), "HISTÓRICO", Rect2(544, 1320, 109, 19), "squeeze", "", Rect2()],
+    ["MARCHA REAL", Rect2(138, 1256, 282, 75), "MARCHA REAL", Rect2(217, 1284, 112, 17), "squeeze", "", Rect2()],
+    ["XEQUE", Rect2(433, 1256, 282, 75), "XEQUE", Rect2(542, 1284, 60, 17), "squeeze", "", Rect2()],
+    ["LIGAS E RANKING", Rect2(138, 1346, 282, 75), "LIGAS E RANKING", Rect2(229, 1372, 161, 19), "squeeze", "", Rect2()],
+    ["HISTÓRICO DE PARTIDAS", Rect2(433, 1346, 282, 75), "HISTÓRICO", Rect2(544, 1372, 109, 19), "squeeze", "", Rect2()],
 ]
 ## barra de baixo: [id, retângulo, texto, (x, topo, largura, maiúsculas)]
 ## R178 · 5 abas: o PASSE entra no meio (embaixo do losango azul) — arte refeita em assets/home_nav5.png
@@ -38,7 +38,7 @@ const NAV := [
     ["mais", Rect2(667, 1690, 168, 130), "MAIS", Rect2(667, 1779, 159, 16)],
 ]
 const NAV_ART := "res://ui_v022/assets/home_nav5.png"
-const PASS_STRIP := Rect2(146, 1113, 562, 82)   # R178d · botão do PASSE no meio do menu (a arte v9 abriu 44 px ali)
+const PASS_STRIP := Rect2(146, 1110, 562, 139)   # R178d · botão do PASSE no meio do menu (a arte v9 abriu 44 px ali)
 const CLUB_RECT := Rect2(25, 45, 355, 73)
 const SOUND_RECT := Rect2(730, 45, 82, 75)
 const CARD_RECT := Rect2(108, 495, 637, 173)

@@ -3391,7 +3391,7 @@ func make_top_button(glyph: String, tip: String, action: Callable, side := 62.0)
 ## R122 · COMUNIDADE: botão largo (duas pessoas + "COMUNIDADE") na moldura dos botões do topo; abre o Discord.
 const CommunityLink := preload("res://social/community_link.gd")
 const PassHomeCard := preload("res://economy/pass_home_card.gd")   # R178
-const PASS_CARD_PC := Rect2(14, 94, 346, 80)   # R178 · embaixo da placa CLUB (topo esquerdo)
+const PASS_CARD_PC := Rect2(14, 94, 346, 85)   # R178e · proporção da arte do botão (2036x502)   # R178 · embaixo da placa CLUB (topo esquerdo)
 func make_community_button(sz: Vector2, frame: Texture2D, font_px: int) -> Button:
     var b: Button = preload("res://ui_v022/hud_button.gd").make("community", "COMUNIDADE")
     b.name = "CommunityButton"
