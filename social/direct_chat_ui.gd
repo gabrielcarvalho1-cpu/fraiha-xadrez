@@ -165,13 +165,13 @@ func _ready():
 		b.add_theme_stylebox_override("hover", hv)
 		root.add_child(b)
 		hits[id] = b
-	hits.close.tooltip_text = "Fechar · o chat continua aberto: uma mensagem nova do administrador reabre"
+	hits.close.tooltip_text = "Minimizar · a conversa fica no botão CHAT EXCLUSIVO no canto da tela"
 	hits.profile.tooltip_text = "Ver perfil · sobre o administrador"
 	hits.channel.tooltip_text = "Canal oficial · novidades e avisos"
 	hits.plus.tooltip_text = "Mensagens rápidas"
 	hits.emoji.tooltip_text = "Emotes"
 	hits.send.tooltip_text = "Enviar"
-	hits.close.pressed.connect(hide_chat)
+	hits.close.pressed.connect(minimize)
 	hits.send.pressed.connect(send_current)
 	hits.plus.pressed.connect(func(): _toggle_pop("quick"))
 	hits.emoji.pressed.connect(func(): _toggle_pop("emotes"))
@@ -188,13 +188,14 @@ func _ready():
 	root.add_child(status)
 	visible = false
 	get_viewport().size_changed.connect(func(): if visible: _layout())
+	_build_pill()
 
 func _input(e: InputEvent):
 	if visible and e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_ESCAPE:
 		get_viewport().set_input_as_handled()
 		if pop != null and pop.visible: _close_pop()
 		elif info != null and info.visible: info.hide()
-		else: hide_chat()
+		else: minimize()
 
 # ---------------------------------------------------------------- mensagens do servidor
 func _on_message(m: Dictionary):
@@ -203,15 +204,29 @@ func _on_message(m: Dictionary):
 	match t:
 		"dchat_open":
 			chat = m.get("chat", {}) if m.get("chat") is Dictionary else {}
+			var before := messages.size()
 			messages = Array(chat.get("messages", [])) if chat.get("messages") is Array else []
 			ended = not bool(chat.get("open", true))
+			if minimized and not _reopening:
+				# R177c · minimizado pelo jogador: a mensagem nova NÃO abre a janela no meio do jogo — o botão do canto
+				# mostra quantas chegaram e pisca; tocar nele abre
+				for i in range(before, messages.size()):
+					if String(messages[i].get("from", "")) == "admin":
+						unread += 1
+						_ding(messages[i])
+				_refresh_pill()
+				return
+			_reopening = false
 			show_chat()
 		"dchat_msg":
 			var msg = m.get("msg")
 			if not (msg is Dictionary): return
 			for x in messages: if int(x.get("id", -1)) == int(msg.get("id", -2)): return
 			messages.append(msg)
-			if not is_open and String(msg.get("from", "")) == "admin": show_chat()
+			if minimized:
+				if String(msg.get("from", "")) == "admin": unread += 1
+				_refresh_pill()
+			elif not is_open and String(msg.get("from", "")) == "admin": show_chat()
 			else: _add_row(msg, true)
 			if String(msg.get("from", "")) == "admin": _ding(msg)
 		"dchat_closed":
@@ -219,6 +234,8 @@ func _on_message(m: Dictionary):
 			messages.append({"id": -1, "from": "system", "text": "O administrador encerrou o chat. Obrigado pela conversa!", "ts": ""})
 			if is_open: _add_row(messages[-1], true)
 			_refresh_enabled()
+			minimized = false
+			_refresh_pill()
 		"dchat_error":
 			_flash(String(m.get("message", "Não foi possível enviar.")))
 			if String(m.get("code", "")) == "not_open":
@@ -232,7 +249,125 @@ func _ding(msg: Dictionary):
 	if snd != null: preload("res://ui_v022/mode_sound.gd").play(stage, snd, -6.0, 1.15)
 
 # ---------------------------------------------------------------- abrir / fechar
+## R177c · X / ESC: a conversa NÃO some — vira o botão "CHAT EXCLUSIVO" no canto da tela (perto do COMUNIDADE).
+## Tocar nele abre de novo. Chat encerrado pelo administrador: aí sim o X fecha de vez.
+var minimized := false
+var unread := 0
+var _reopening := false
+var pill_layer: CanvasLayer
+var pill: Button
+var pill_badge: Label
+
+func minimize():
+	if ended:
+		hide_chat()
+		return
+	hide_chat()
+	minimized = true
+	unread = 0
+	_refresh_pill()
+
+func reopen():
+	minimized = false
+	unread = 0
+	_refresh_pill()
+	_reopening = true
+	show_chat()
+	if account != null and account.has_method("send_server"): account.send_server({"type": "dchat_get"})
+
+func _build_pill():
+	pill_layer = CanvasLayer.new()
+	pill_layer.layer = 109
+	pill_layer.name = "DirectChatPillLayer"
+	add_sibling.call_deferred(pill_layer)
+	pill = Button.new()
+	pill.name = "DirectChatPill"
+	pill.text = "CHAT EXCLUSIVO"
+	pill.icon = CROWN
+	pill.expand_icon = false
+	pill.focus_mode = Control.FOCUS_NONE
+	pill.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	pill.tooltip_text = "Chat exclusivo · conversa com o administrador"
+	pill.add_theme_font_override("font", FONT_T)
+	pill.add_theme_color_override("font_color", GOLD)
+	pill.add_theme_color_override("font_hover_color", Color("fff1c8"))
+	pill.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	pill.add_theme_constant_override("outline_size", 3)
+	pill.add_theme_constant_override("h_separation", 8)
+	for pair in [["normal", Color("0b1730")], ["hover", Color("142650")], ["pressed", Color("081022")], ["focus", Color("0b1730")]]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = pair[1]
+		sb.border_color = Color("e0b64a")
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(10)
+		sb.shadow_color = Color(0, 0, 0, 0.55)
+		sb.shadow_size = 8
+		sb.content_margin_left = 12
+		sb.content_margin_right = 14
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+		pill.add_theme_stylebox_override(pair[0], sb)
+	pill.pressed.connect(reopen)
+	pill_layer.add_child(pill)
+	pill_badge = Label.new()
+	pill_badge.name = "DirectChatPillBadge"
+	pill_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pill_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	pill_badge.add_theme_font_override("font", SERIF_B)
+	pill_badge.add_theme_color_override("font_color", Color.WHITE)
+	var bs := StyleBoxFlat.new()
+	bs.bg_color = Color("c4161f")
+	bs.border_color = Color("ffd98a")
+	bs.set_border_width_all(2)
+	bs.set_corner_radius_all(14)
+	pill_badge.add_theme_stylebox_override("normal", bs)
+	pill_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pill.add_child(pill_badge)
+	pill.hide()
+	get_viewport().size_changed.connect(_place_pill)
+
+func _refresh_pill():
+	if pill == null: return
+	pill.visible = minimized and not ended
+	pill_badge.visible = unread > 0
+	pill_badge.text = str(unread)
+	_place_pill()
+
+## perto do botão COMUNIDADE (lobby do PC); sem ele na tela (partidas, celular), canto de baixo à direita
+func _place_pill():
+	if pill == null or not pill.visible: return
+	var vs := get_viewport().get_visible_rect().size
+	var mob := vs.y > vs.x or vs.y < 520.0
+	var fs := 15 if mob else 17
+	pill.add_theme_font_size_override("font_size", fs)
+	pill_badge.add_theme_font_size_override("font_size", fs - 2)
+	pill.reset_size()
+	var sz := pill.get_combined_minimum_size()
+	pill.size = sz
+	var pos := Vector2(vs.x - sz.x - 12.0, vs.y * (0.80 if vs.y > vs.x else 0.70))
+	var cb = get_tree().root.find_child("CommunityButton", true, false) if get_tree() != null else null
+	if cb is Control and (cb as Control).is_visible_in_tree():
+		var r: Rect2 = (cb as Control).get_global_transform_with_canvas() * Rect2(Vector2.ZERO, (cb as Control).size)
+		pos = Vector2(r.end.x - sz.x, r.position.y - sz.y - 10.0)
+	pos.x = clampf(pos.x, 6.0, vs.x - sz.x - 6.0)
+	pos.y = clampf(pos.y, 6.0, vs.y - sz.y - 6.0)
+	pill.position = pos
+	var bh := float(fs) + 10.0
+	pill_badge.size = Vector2(maxf(bh, pill_badge.get_minimum_size().x + 8.0), bh)
+	pill_badge.position = Vector2(sz.x - pill_badge.size.x * 0.6, -bh * 0.45)
+
+func _process(_d):
+	if pill != null and pill.visible:
+		_place_pill()
+		var a := 1.0
+		if unread > 0: a = 0.75 + 0.25 * sin(Time.get_ticks_msec() / 220.0)
+		pill.modulate = Color(1, 1, 1, a)
+
 func show_chat():
+	if pill != null and minimized:
+		minimized = false
+		unread = 0
+		_refresh_pill()
 	if not visible:
 		visible = true
 		is_open = true
