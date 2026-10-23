@@ -23,6 +23,13 @@ func is_photo(t: Texture2D, photo: Texture2D) -> bool:
 	if t == null or photo == null or t.get_width() != photo.get_width(): return false
 	var a: Image = t.get_image(); var b: Image = photo.get_image()
 	return a.get_pixel(1, 1).a < 0.1 and a.get_pixel(80, 80).is_equal_approx(b.get_pixel(80, 80))
+## R176.8 · lista de amigos: retrato QUADRADO (moldura quadrada), a própria foto sem recorte redondo
+func is_square_photo(t: Texture2D, photo: Texture2D) -> bool:
+	if t == null or photo == null: return false
+	if t == photo: return true
+	if t.get_width() != photo.get_width(): return false
+	var a: Image = t.get_image(); var b: Image = photo.get_image()
+	return a.get_pixel(1, 1).a > 0.9 and a.get_pixel(80, 80).is_equal_approx(b.get_pixel(80, 80))
 func wait_peer(hub, uid: String, ms := 8000) -> bool:
 	var got := [false]
 	var cb := func(u): if u == uid: got[0] = true
@@ -73,7 +80,7 @@ func run():
 	soc._show("list")
 	await frames(6)
 	var rects: Array = soc.find_children("*", "TextureRect", true, false).filter(func(n): return n.has_meta("peer_uid") and n.get_meta("peer_uid") == "u-namorada")
-	check(rects.size() > 0 and is_photo(rects[0].texture, t1), "lista de amigos mostra a foto da amiga (redonda)")
+	check(rects.size() > 0 and is_square_photo(rects[0].texture, t1), "lista de amigos mostra a foto da amiga (quadrada, R176.8)")
 	await shot("lista_amigos_foto")
 	# 4) a amiga troca a foto: o servidor avisa (friend_profile) → nova foto aparece sem reabrir
 	soc._on_message({"type": "friend_profile", "profile": {"user_id": "u-namorada", "nickname": "Namorada", "avatar_id": "archer", "avatar_url": base + "/b2.png"}})
@@ -81,7 +88,7 @@ func run():
 	await frames(4)
 	rects = soc.find_children("*", "TextureRect", true, false).filter(func(n): return n.has_meta("peer_uid") and n.get_meta("peer_uid") == "u-namorada")
 	var t2: Texture2D = hub.avatar_texture_for({"user_id": "u-namorada", "avatar_url": base + "/b2.png"})
-	check(t2 != null and t2 != t1 and rects.size() > 0 and is_photo(rects[0].texture, t2), "lista troca para a foto nova na hora")
+	check(t2 != null and t2 != t1 and rects.size() > 0 and is_square_photo(rects[0].texture, t2), "lista troca para a foto nova na hora")
 	var ia: Image = t2.get_image()
 	check(ia.get_pixel(5, 5).g > ia.get_pixel(5, 5).r, "é mesmo a foto nova (fundo verde)")
 	await shot("lista_amigos_foto_nova")
