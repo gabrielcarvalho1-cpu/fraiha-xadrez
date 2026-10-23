@@ -1208,7 +1208,7 @@ func _draw_hint():
 
 # ---------------------------------------------------------------- mão
 ## R90 · lugar do botão CHAT no celular em pé (mesa online): canto direito, na altura da mão
-const CHAT_PORTRAIT := Rect2(904, 1732, 152, 68)   # R178i · menor e mais baixo (não cobre a carta da mão no zoom da sua vez)
+const CHAT_PORTRAIT := Rect2(660, 1744, 120, 54)   # R178j · pequeno, centrado logo acima do JOGAR CARTAS (embaixo da mão)
 func chat_column() -> bool:
     return ui.layout == "portrait" and bool(ui.online) and not desk()
 
@@ -1224,10 +1224,7 @@ func hand_layout() -> Array:
     var step := cw * lerpf(0.737, 0.70, z)
     if n > 1: step = minf(step, (1060.0 - cw * 0.5) / float(n - 1))     # nunca sai da tela
     var base: Vector2 = Vector2(hd[0]) + Vector2(0, -95.0 * z)
-    if chat_column():
-        # R90 · mesa online em pé: a coluna da direita é do CHAT; a mão fica centrada no que sobra
-        base.x = CHAT_PORTRAIT.position.x / 2.0
-        if n > 1: step = minf(step, (CHAT_PORTRAIT.position.x - 20.0 - cw * 0.5) / float(n - 1))
+    # R178j · o CHAT agora fica embaixo da mão (acima do JOGAR CARTAS): a mão usa a largura toda
     var out := []
     var mid := (n - 1) / 2.0
     for i in n:
