@@ -43,6 +43,11 @@ func run():
 			stage.account.server_message.emit(JSON.parse_string(f.get_as_text()))
 			await frames(12)
 		await shot("passe_aberto")
+		var pp2 = stage.hub.crowns_client().pass_panel
+		if pp2 != null and pp2.scroll != null:
+			pp2.scroll.scroll_vertical = 100000
+			await frames(8)
+			await shot("passe_fim")
 	quit(0)
 
 func _find(n: Node, nm: String) -> Node:

@@ -195,11 +195,12 @@ func _row(rw: Dictionary, level: int, club: bool) -> Control:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 8)
 	p.add_child(h)
-	var n := label(str(l) if not bool(rw.get("bonus", false)) else "%d★" % l, 18, GOLD if done else DIM)   # R178 · ★ = nível bônus
+	var n := label(str(l), 18, GOLD if done else DIM)   # R178g · sem símbolo (a fonte não tem ★); o bônus vai no texto
 	n.custom_minimum_size = Vector2(ts(56), 0)
 	h.add_child(n)
 	var f = rw.get("free")
-	var ft := label(("✓ " if done and f != null else "") + _reward_text(f) if f != null else "—", 13 if narrow() else 15, CREAM if done else DIM, true)
+	var bonus_tag := "BÔNUS · " if bool(rw.get("bonus", false)) else ""
+	var ft := label(("✓ " if done and f != null else "") + bonus_tag + _reward_text(f) if f != null else "—", 13 if narrow() else 15, CREAM if done else DIM, true)
 	ft.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ft.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	h.add_child(ft)
