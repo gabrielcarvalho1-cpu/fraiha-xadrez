@@ -382,6 +382,27 @@ func _draw_voice(lay: Dictionary):
         if er.position.y == r.position.y: text_right = er.position.x - 10
     if ui.layout != "portrait": VoiceGlyph.draw_status(self, text_right, r.get_center().y, 300, vo.status_text(), 18, Color("f6ecd2"))
 
+## R178k · celular em pé: o JOGAR CARTAS é dividido ao meio — metade JOGAR CARTAS, metade CHAT (azul, padrão
+## dos cartões dos jogadores). O toque do CHAT é o botão do party_chat, invisível por cima desta metade.
+const CHAT_GAP := 12.0
+func chat_split() -> bool:
+    if ui.layout != "portrait" or desk(): return false
+    var pc = ui.stage.get("party_chat") if ui.stage != null else null
+    return pc != null and pc.visible and bool(pc.get("dock_icon")) and pc.toggle != null and pc.toggle.visible
+
+func split_rects() -> Array:
+    var r: Rect2 = L().play
+    var w := (r.size.x - CHAT_GAP) / 2.0
+    return [Rect2(r.position, Vector2(w, r.size.y)), Rect2(r.position + Vector2(w + CHAT_GAP, 0), Vector2(w, r.size.y))]
+
+func _draw_chat_half(r: Rect2):
+    var pc = ui.stage.get("party_chat") if ui.stage != null else null
+    var hov: bool = pc != null and pc.toggle != null and pc.toggle.is_hovered()
+    panel(r, Color("e8b242") if not hov else Color("ffeea5"), false, Color("1b3366"), Color("0d1d40"))
+    var n := int(pc.get("unread")) if pc != null else 0
+    var t := "CHAT" + (" (%d)" % n if n > 0 else "")
+    text(t, Vector2(r.position.x, r.position.y + r.size.y * 0.7), "ui_sp", int(r.size.y * 0.56), Color("f6ecd2"), r.size.x, HORIZONTAL_ALIGNMENT_CENTER)
+
 func square_button(r: Rect2, glyph: String, id: String):
     var hov: bool = ui.hover_id == id
     if desk(): desk_square(r, hov)
@@ -1179,6 +1200,10 @@ func _balloon_box(bg: Color, border: Color, fs: int) -> StyleBoxFlat:
 func _draw_play_button():
     if desk(): return _desk_play_button()
     var r: Rect2 = L().play
+    if chat_split():
+        var sr: Array = split_rects()
+        r = sr[0]
+        _draw_chat_half(sr[1])
     var g = ui.g
     var my_turn: bool = ui.phase == "" and g.state == Rules.TURN_WAITING and g.turn == 0 and not ui.input_locked
     if ui.can_human_accept():

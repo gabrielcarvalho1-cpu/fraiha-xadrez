@@ -400,9 +400,13 @@ func set_blocked(v: bool):
     if v == blocked: return
     blocked = v
     _layout()
-func set_dock(r: Rect2):
-    if r == dock_rect: return
+## R178k · icon = true: o modo desenha um ÍCONE de chat (na fileira de ícones do topo) e o botão vira só a área de
+## toque, invisível, por cima dele — nunca mais um botão de texto disputando lugar com as cartas
+var dock_icon := false
+func set_dock(r: Rect2, icon := false):
+    if r == dock_rect and icon == dock_icon: return
     dock_rect = r
+    dock_icon = icon
     if r.size.x <= 1.0 and toggle != null:
         toggle.custom_minimum_size = Vector2.ZERO
         toggle.remove_theme_font_size_override("font_size")
@@ -426,6 +430,7 @@ func _layout():
         toggle.size = dock_rect.size
         toggle.position = dock_rect.position
         tsz = dock_rect.size
+    toggle.modulate.a = 0.0 if (dock_icon and dock_rect.size.x > 1.0) else 1.0
     toggle.visible = not blocked
     panel.visible = opened and not blocked
     panel.scale = Vector2(s, s)

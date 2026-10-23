@@ -803,10 +803,13 @@ func _sync_chat_dock():
     if pc == null or not pc.has_method("set_dock"): return
     var lay: Dictionary = view.L() if view != null else {}
     var d: Rect2 = lay.get("chat", Rect2()) if ((online or bool(pc.get("local"))) and mode == "game" and visible) else Rect2()
+    var icon := false
     if d.size.x > 0.0 and layout == "portrait":
-        # R90 · celular em pé: CHAT no cantinho direito, ao lado das cartas da mão (a mão anda para a esquerda)
-        d = view.CHAT_PORTRAIT
-    pc.set_dock(Rect2(origin + d.position * k, d.size * k) if d.size.x > 0.0 else Rect2())
+        # R178k · celular em pé: metade direita do JOGAR CARTAS (o desenho é da view; aqui só a área de toque)
+        d = view.split_rects()[1]
+        icon = true
+    pc.set_dock(Rect2(origin + d.position * k, d.size * k) if d.size.x > 0.0 else Rect2(), icon)
+    if view != null: view.queue_redraw()
 
 ## R88 · retângulo (em pixels de tela) da área de toque com este id — para abrir o volume junto do ícone
 func _hit_screen_rect(id: String) -> Rect2:
