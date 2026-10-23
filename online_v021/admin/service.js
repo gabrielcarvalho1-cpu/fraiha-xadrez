@@ -85,6 +85,9 @@ class AdminService {
         if (path === '/admin/api/creators') return need('payments.read') && out(200, await this.creatorsList());   // R121
         if (path === '/admin/api/events') return need('events.read') && out(200, this.backend.events ? await this.backend.events.adminList() : { available: false });   // R157
         if (path === '/admin/api/news') return need('events.read') && out(200, this.backend.news ? await this.backend.news.adminList() : { available: false });   // R161
+        if (path === '/admin/api/dchat') return need('moderation.write') && out(200, this.backend.dchat ? this.backend.dchat.adminList() : { available: false });   // R177
+        const dg = /^\/admin\/api\/dchat\/([0-9a-fA-F-]{36})$/.exec(path);
+        if (dg) { if (!need('moderation.write')) return; if (!this.backend.dchat) return out(503, { error: 'unavailable' }); const r = this.backend.dchat.adminGet(dg[1].toLowerCase()); return out(r.status, r.body); }
         if (path === '/admin/api/tickets') return need('reports.read') && out(200, this.backend.tickets ? await this.backend.tickets.adminList(url.searchParams.get('status') || '') : { available: false });   // R176.8
         return out(404, { error: 'not_found' });
       }
@@ -131,6 +134,23 @@ class AdminService {
           try { body = await readJson(req, 4096); }
           catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
           return cp[1] ? this.creatorPay(admin, cp[1], body || {}, out) : this.creatorSave(admin, body || {}, out);
+        }
+        // R177 · CHAT EXCLUSIVO: abrir na tela do jogador / mandar mensagem / presente / encerrar
+        const dc = /^\/admin\/api\/dchat\/([0-9a-fA-F-]{36})\/(open|send|gift|close)$/.exec(path);
+        if (dc) {
+          const act = dc[2];
+          if (!need(act === 'gift' ? 'entitlements.write' : 'moderation.write')) return;
+          if (this.limited('write:' + admin.id, 120)) return out(429, { error: 'rate_limited' });
+          if (!this.backend.dchat) return out(503, { error: 'unavailable' });
+          let body;
+          try { body = await readJson(req, 8192); }
+          catch (e) { headers['Connection'] = 'close'; return out(e.code === 'too_large' ? 413 : 400, { error: e.code === 'too_large' ? 'body_too_large' : 'bad_json' }); }
+          body = body || {};
+          const uid = dc[1].toLowerCase(), D = this.backend.dchat;
+          const r = act === 'open' ? D.adminOpen(admin, uid) : act === 'send' ? D.adminSend(admin, uid, body) : act === 'gift' ? await D.adminGift(admin, uid, body) : D.adminClose(admin, uid);
+          if (act !== 'send') this.audit.record({ actor: admin, action: 'dchat_' + act, target: { type: 'player', id: uid }, before: null,
+            after: act === 'gift' && r.status === 200 ? r.body.gift : null, result: r.status === 200 ? 'ok' : String(r.body.error || 'error'), reason: act === 'gift' ? 'presente pelo chat exclusivo' : '' });
+          return out(r.status, r.body);
         }
         // R176.8 · SUPORTE: responder / fechar / reabrir ticket
         const tk = /^\/admin\/api\/tickets\/([0-9a-fA-F-]{36})$/.exec(path);

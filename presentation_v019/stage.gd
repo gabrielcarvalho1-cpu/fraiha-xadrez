@@ -6,6 +6,7 @@ const MobileLayout = preload("res://ui_v022/mobile_layout.gd")
 @onready var forest: Sprite2D = $ForestExtensions
 @onready var online: CanvasLayer = $Online
 @onready var hub: CanvasLayer = $MainHub
+var direct_chat = null   # R177 · chat exclusivo (Admin ↔ jogador)
 var windowed_size := Vector2i(1280, 720)
 var windowed_position := Vector2i.ZERO
 var windowed_mode := Window.MODE_WINDOWED
@@ -509,6 +510,10 @@ func _setup_account():
     voice.setup(account)
     voice.changed.connect(_on_voice_changed)
     hub.bind_account(account)
+    # R177 · CHAT EXCLUSIVO com o administrador (abre na tela quando o dono aciona pelo Admin)
+    direct_chat = preload("res://social/direct_chat_ui.gd").new()
+    add_child(direct_chat)
+    direct_chat.setup(self, account)
     # R37 · cartão de perfil ao passar o mouse no avatar (Ranked, Casual, Marcha, Xeque)
     profile_popup = preload("res://social/profile_popup.gd").new()
     add_child(profile_popup)

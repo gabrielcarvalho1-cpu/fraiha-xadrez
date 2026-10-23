@@ -242,7 +242,8 @@ function player(ctx) {
         h('div', { class: 'profile-head', style: 'margin-top:12px' }, h('div', { class: 'avatar' }, (p.nickname || '?').slice(0, 1).toUpperCase()),
           h('div', {}, h('h1', {}, p.nickname), h('div', { class: 'mono dim' }, p.user_id)),
           h('div', { class: 'spacer', style: 'flex:1' }),
-          h('span', { class: 'badge ' + (w.place === 'offline' ? 'unavailable' : 'on') }, PLACE_LABEL[w.place] + (w.family ? ` · ${FAMILY_LABEL[w.family]} ${w.mode}` : '') + (w.voice ? ' · voz' : ''))),
+          h('span', { class: 'badge ' + (w.place === 'offline' ? 'unavailable' : 'on') }, PLACE_LABEL[w.place] + (w.family ? ` · ${FAMILY_LABEL[w.family]} ${w.mode}` : '') + (w.voice ? ' · voz' : '')),
+          w.place !== 'offline' ? h('a', { class: 'btn primary', style: 'margin-left:10px', href: '#/dchat/' + p.user_id }, 'Chat exclusivo') : ''),
         entErr ? h('div', { class: 'banner err', id: 'ent-error' }, `Clube/Founder: ${d.club.read_error}. O status real deste jogador é DESCONHECIDO agora (não significa "não possui").`) : '',
         h('div', { class: 'cols3' },
           h('div', { class: 'panel' }, h('h2', {}, 'Dados básicos'), h('div', { class: 'kv' },
@@ -618,6 +619,146 @@ export function tickets(ctx) {
       f.show(h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px' }, ...chips),
         d.items.length ? h('div', {}, d.items.map(item)) : stateBox('empty', filter === 'open' ? 'Nenhum ticket aberto.' : 'Nada por aqui.'));
       f.had = true;
+    },
+  };
+}
+
+// ---------------------------------------------------------------- R177 · CHAT EXCLUSIVO
+// O dono escolhe um jogador ONLINE, abre o chat (a janela CHAT EXCLUSIVO aparece na tela dele na hora), conversa por aqui
+// e manda presentes (Coroas ou item da Loja de Coroas). A conversa fica na memória do servidor (some se ele reiniciar).
+const DC_ERR = { offline: 'O jogador não está online agora.', not_open: 'O chat não está aberto. Clique em ABRIR CHAT.', invalid_amount: 'Quantidade de 1 a 100.000 Coroas.',
+  already_owned: 'O jogador já tem este item.', unknown_item: 'Item não encontrado.', migration_0016_missing: 'Banco sem a migração 0016 (Coroas).', migration_0017_missing: 'Banco sem a migração 0017 (Loja).',
+  forbidden: 'Sua conta de admin não tem permissão para isso.', rate_limited: 'Calma: muitas ações seguidas.', empty: 'Escreva a mensagem.' };
+const dcErr = e => DC_ERR[e && e.body && e.body.error] || DC_ERR[e && e.code] || (e && e.status === 403 ? DC_ERR.forbidden : 'Não foi possível concluir.');
+const fmtHour = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+export function dchat(ctx) {
+  const uid = (ctx.arg || '').toLowerCase();
+  const can = p => ctx.session && ctx.session.admin && (ctx.session.admin.perms || []).includes(p);
+  if (!uid) {
+    const f = frame(ctx, 'Chat Exclusivo', 'Escolha um jogador ONLINE e abra o CHAT EXCLUSIVO: a janela aparece na tela dele na hora. Você conversa por aqui e pode mandar presentes (Coroas, molduras, títulos, avatares, emotes).');
+    return {
+      error: f.error,
+      async load() {
+        const [on, d] = await Promise.all([ctx.api.get('/admin/api/online'), ctx.api.get('/admin/api/dchat')]);
+        if (!ctx.alive()) return;
+        const chats = d.items || [];
+        const open = async p => {
+          try { await ctx.api.post('/admin/api/dchat/' + p.user_id + '/open', {}); location.hash = '#/dchat/' + p.user_id; }
+          catch (e) { toast(dcErr(e), 'err'); }
+        };
+        f.show(
+          h('div', { class: 'panel' }, h('h2', {}, 'Conversas ', h('span', { class: 'badge real' }, String(chats.length))),
+            chats.length ? h('div', { class: 'onlist' }, chats.map(c => h('div', { class: 'onrow click', style: 'grid-template-columns:1fr', onclick: () => { location.hash = '#/dchat/' + c.user_id; } },
+              h('div', { class: 'who2' }, h('span', { class: 'av' }, (c.nickname || '?').slice(0, 1).toUpperCase()),
+                h('div', {}, h('b', {}, c.nickname || '(sem nome)'), h('div', { class: 'dim', style: 'font-size:12px' }, c.last || '—')),
+                h('span', { class: 'badge ' + (c.open ? 'on' : 'off') }, c.open ? 'ABERTO' : 'ENCERRADO'),
+                h('span', { class: 'badge ' + (c.online ? 'on' : 'unavailable') }, c.online ? 'ONLINE' : 'OFFLINE'),
+                c.unread ? h('span', { class: 'badge gold' }, c.unread + ' nova' + (c.unread > 1 ? 's' : '')) : '',
+                h('span', { class: 'dim', style: 'margin-left:auto' }, fmtAgo(c.last_at))))))
+              : stateBox('empty', 'Nenhuma conversa ainda.')),
+          h('div', { class: 'panel' }, h('h2', {}, 'Jogadores online agora ', h('span', { class: 'badge real' }, String(on.items.length))),
+            on.items.length ? h('div', { class: 'onlist' }, on.items.map(p => h('div', { class: 'onrow', style: 'grid-template-columns:1fr auto' },
+              h('div', { class: 'who2' }, avatarOf(p), h('div', {}, h('b', {}, p.nickname || '(sem nome)'), h('div', { class: 'mono dim' }, p.user_id.slice(0, 8) + '…')),
+                h('span', { class: 'badge on' }, p.where.place === 'match' ? 'EM PARTIDA' : p.where.place === 'queue' ? 'EM FILA' : 'ONLINE')),
+              can('moderation.write') ? h('button', { class: 'btn primary', style: 'white-space:nowrap', onclick: () => open(p) }, 'Abrir chat exclusivo') : '')))
+              : stateBox('empty', 'Nenhuma conta online agora.')));
+      },
+    };
+  }
+  // ---- conversa com um jogador
+  const f = frame(ctx, 'Chat Exclusivo', 'Canal direto com o jogador. Ele vê suas mensagens na janela CHAT EXCLUSIVO do jogo.');
+  const list = h('div', { class: 'dc-list', style: 'display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow:auto;padding:12px;background:#0b0f0c;border:1px solid #6b5520;border-radius:10px' });
+  const input = h('textarea', { rows: 2, maxlength: 1000, placeholder: 'Digite sua mensagem… (Enter envia, Shift+Enter quebra linha)', style: 'flex:1;resize:vertical' });
+  const sendBtn = h('button', { class: 'btn primary' }, 'Enviar');
+  const head = h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0' });
+  const amount = h('input', { type: 'number', min: 1, max: 100000, step: 1, value: 100, style: 'width:120px' });
+  const itemSel = h('select', { style: 'min-width:240px' });
+  const giftNote = h('input', { type: 'text', maxlength: 300, placeholder: 'Mensagem do presente (opcional)', style: 'flex:1;min-width:200px' });
+  let lastCount = -1, catalogLoaded = false, chat = null;
+  const post = async (act, body) => {
+    try { const r = await ctx.api.post('/admin/api/dchat/' + uid + '/' + act, body); ctx.refresh(); return r; }
+    catch (e) { toast(dcErr(e), 'err'); return null; }
+  };
+  const doSend = async () => {
+    const v = input.value.trim();
+    if (!v) return;
+    sendBtn.disabled = true;
+    const r = await post('send', { text: v });
+    sendBtn.disabled = false;
+    if (r) { input.value = ''; input.focus(); }
+  };
+  sendBtn.onclick = doSend;
+  input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } });
+  const giftCrowns = async () => {
+    const n = Number(amount.value);
+    if (!Number.isInteger(n) || n < 1) return toast(DC_ERR.invalid_amount, 'err');
+    if (!confirm(`Enviar ${n} Coroas de presente para ${chat ? chat.nickname : 'o jogador'}?`)) return;
+    if (await post('gift', { kind: 'crowns', amount: n, text: giftNote.value.trim() })) { giftNote.value = ''; toast('Coroas enviadas.'); }
+  };
+  const giftItem = async () => {
+    if (!itemSel.value) return toast('Escolha o item.', 'err');
+    const label = itemSel.options[itemSel.selectedIndex].textContent;
+    if (!confirm(`Dar de presente: ${label}?`)) return;
+    if (await post('gift', { kind: 'item', item: itemSel.value, text: giftNote.value.trim() })) { giftNote.value = ''; toast('Presente enviado.'); }
+  };
+  const bubble = m => {
+    const mine = m.from === 'admin';
+    const gift = m.gift ? h('div', { style: 'margin-top:6px;padding:6px 10px;border-radius:8px;background:#2a2108;border:1px solid #e0b64a;color:#ffe08a;font-weight:600' },
+      '🎁 ' + (m.gift.kind === 'crowns' ? m.gift.amount + ' Coroas' : (m.gift.kind_label || 'Item') + ': ' + m.gift.name)) : '';
+    return h('div', { style: `display:flex;justify-content:${mine ? 'flex-start' : 'flex-end'}` },
+      h('div', { style: `max-width:75%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;${mine ? 'background:#15130e;border:1px solid #c99a3c;color:#f2e6c8' : 'background:#0f3a33;border:1px solid #c99a3c;color:#e8f5ef'}` },
+        h('div', { style: 'font-size:12px;opacity:.75;margin-bottom:2px' }, (mine ? 'Fraiha 👑' + (m.by ? ' · ' + m.by : '') : (chat && chat.nickname) || 'Jogador') + ' · ' + fmtHour(m.ts)),
+        m.emote ? h('span', {}, h('span', { class: 'badge blue' }, 'EMOTE'), ' ', m.text) : m.text, gift));
+  };
+  return {
+    error: f.error,
+    async load() {
+      const d = await ctx.api.get('/admin/api/dchat/' + uid);
+      if (!ctx.alive()) return;
+      if (!catalogLoaded) {
+        catalogLoaded = true;
+        try {
+          const all = await ctx.api.get('/admin/api/dchat');
+          const groups = {};
+          for (const it of all.catalog || []) (groups[it.kind_label] = groups[it.kind_label] || []).push(it);
+          itemSel.replaceChildren(h('option', { value: '' }, '— escolha o item —'),
+            ...Object.entries(groups).map(([g, its]) => h('optgroup', { label: g }, its.map(it => h('option', { value: it.id }, `${g}: ${it.name} (${it.price} coroas na loja)`)))));
+        } catch (e) { /* sem catálogo: presentes de item ficam vazios */ }
+      }
+      chat = d.chat;
+      const online = chat ? chat.online : d.online;
+      const nick = chat ? chat.nickname : d.nickname;
+      head.replaceChildren(
+        h('a', { href: '#/dchat' }, '← Conversas'),
+        h('span', { class: 'av' }, (nick || '?').slice(0, 1).toUpperCase()),
+        h('b', { style: 'font-size:18px' }, nick || uid.slice(0, 8)),
+        h('span', { class: 'badge ' + (online ? 'on' : 'unavailable') }, online ? 'ONLINE' : 'OFFLINE'),
+        chat ? h('span', { class: 'badge ' + (chat.open ? 'on' : 'off') }, chat.open ? (chat.hidden ? 'ABERTO · janela fechada pelo jogador' : 'ABERTO NA TELA DELE') : 'ENCERRADO') : '',
+        h('span', { style: 'flex:1' }),
+        (!chat || !chat.open) && can('moderation.write') ? h('button', { class: 'btn primary', disabled: !online, onclick: () => post('open', {}) }, 'Abrir chat na tela dele') : '',
+        chat && chat.open && can('moderation.write') ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Encerrar o chat exclusivo? A janela fecha na tela do jogador.')) post('close', {}); } }, 'Encerrar chat') : '',
+        h('a', { class: 'btn', href: '#/players/' + uid }, 'Ver jogador'));
+      const msgs = chat ? chat.messages : [];
+      if (msgs.length !== lastCount) {
+        const atEnd = list.scrollTop + list.clientHeight >= list.scrollHeight - 30;
+        list.replaceChildren(...(msgs.length ? msgs.map(bubble) : [h('div', { class: 'dim', style: 'text-align:center;padding:20px' }, chat ? 'Nenhuma mensagem ainda. Diga olá!' : 'Clique em "Abrir chat na tela dele" (o jogador precisa estar online).')]));
+        if (atEnd || lastCount < 0) list.scrollTop = list.scrollHeight;
+        lastCount = msgs.length;
+      }
+      const isOpen = !!(chat && chat.open);
+      input.disabled = sendBtn.disabled = !isOpen;
+      if (!f.had) {
+        f.had = true;
+        f.show(head, list,
+          h('div', { style: 'display:flex;gap:8px;margin-top:10px;align-items:flex-end' }, input, sendBtn),
+          can('entitlements.write') ? h('div', { class: 'panel', style: 'margin-top:14px' }, h('h2', {}, '🎁 Enviar presente'),
+            h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px' }, giftNote),
+            h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' },
+              amount, h('button', { class: 'btn', onclick: giftCrowns }, 'Enviar Coroas'),
+              h('span', { class: 'dim' }, ' ou '), itemSel, h('button', { class: 'btn', onclick: giftItem }, 'Dar item da Loja')),
+            h('p', { class: 'dim', style: 'font-size:12px;margin-top:8px' }, 'Coroas entram no extrato como "Admin". O item fica com o jogador para sempre (como se tivesse comprado), sem descontar Coroas. Tudo vai para o Admin Log.'))
+            : h('p', { class: 'dim' }, 'Presentes: só a conta dona (owner).'));
+      }
     },
   };
 }
