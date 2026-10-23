@@ -98,6 +98,7 @@ func _enter_tree():
 func _ready():
     preload("res://ui_v022/fonts_msdf.gd").apply()   # R124 · letras nítidas em qualquer escala
     preload("res://ui_kit/back_pulse.gd").watch(get_tree())   # R176 · VOLTAR/SAIR/DESISTIR avermelhados, respirando
+    add_child(preload("res://ui_kit/tooltip_host.gd").new())   # R176.9 · dicas dos botões no visual do jogo
     get_tree().auto_accept_quit = false
     bot_controller = preload("res://bot/controller.gd").new()
     bot_controller.name = "BotController"
