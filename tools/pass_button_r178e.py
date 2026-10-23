@@ -64,10 +64,34 @@ for y in range(by0, by1):
     xs = np.arange(bx0, fx1 + 8)
     keep = (R[y, xs] > 150) & (G[y, xs] > 90) & (B[y, xs] < 110) & ~purple[y, xs]   # ouro da ponta esquerda
     clean[y, xs[~keep]] = ref
-# máscara do roxo (alfa do preenchimento): só o que era roxo
+# R178f · trilho vazio liso: cada linha do miolo com a cor mediana da linha (sem manchas/restos de roxo)
+for y in range(by0 + 3, by1 - 2):
+    ref = np.median(rgb[y, 1250:1650], axis=0)
+    if ref[2] > 150 and ref[1] > 90 and ref[0] < 120: continue
+    clean[y, bx0 + 14:bx1 - 22] = ref
+# R178f · preenchimento roxo LISO: o perfil vertical da arte (cor média de cada linha no meio do roxo), sem as
+# falhas do recorte; ponta esquerda e direita com o chanfro da arte
+prof = np.median(rgb[fy0:fy1, 600:1000], axis=1)          # (h, 3) BGR
+hh, ww = fy1 - fy0, fx1 - fx0
+body = np.repeat(prof[:, None, :], ww, axis=1)
+# brilho suave ao longo da barra (como o reflexo da arte), sem manchas
+xx = np.linspace(0, 1, ww)[None, :, None]
+body = body * (0.96 + 0.06 * np.sin(xx * np.pi))
 fa = purple[fy0:fy1, fx0:fx1].astype(np.float32)
-fa = cv2.GaussianBlur(fa, (0, 0), 0.8)
-fill_rgba = np.dstack([fill_img[..., :3], (fa * 255).astype(np.uint8)])
+col = fa.mean(axis=1) > 0.5                                 # linhas que são roxo
+rows = np.nonzero(col)[0]
+col[rows.min():rows.max() + 1] = True                        # o brilho branco de cima também faz parte
+alpha = np.zeros((hh, ww), np.float32)
+alpha[col, :] = 1.0
+# chanfros: na esquerda e na ponta direita, a forma da arte (tamanho = altura)
+for i in range(hh):
+    if not col[i]: continue
+    d = abs(i - hh / 2.0)
+    cut = int(max(0, d - hh * 0.18))
+    alpha[i, :cut] = 0
+    alpha[i, ww - cut:] = 0
+alpha = cv2.GaussianBlur(alpha, (0, 0), 0.7)
+fill_rgba = np.dstack([np.clip(body, 0, 255).astype(np.uint8), (alpha * 255).astype(np.uint8)])
 X0, Y0, X1, Y1 = BOX
 plate = np.dstack([np.clip(clean, 0, 255).astype(np.uint8), A])[Y0:Y1, X0:X1]
 cv2.imwrite(os.path.join(ROOT, "economy/art/pass_button_plate.png"), plate, [cv2.IMWRITE_PNG_COMPRESSION, 9])
