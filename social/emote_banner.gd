@@ -73,7 +73,7 @@ static func _diamond(ci: CanvasItem, c: Vector2, r: float, edge: Color, fill: Co
 func _label(t: String, center: Vector2, w: float, fs: float, col: Color, outline: int, wrap := true) -> float:
 	var room := w - outline * 2.0
 	var px := maxi(6, int(round(fs)))
-	var lo := maxi(6 if not wrap else 8, int(round(fs * (0.4 if not wrap else 0.62))))
+	var lo := maxi(6 if not wrap else 8, int(round(fs * (0.4 if not wrap else 0.5))))   # R178i · frase curta numa faixa pequena: uma linha só
 	while px > lo and FONT.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > room: px -= 1
 	var shown := t
 	var lines := 1

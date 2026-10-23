@@ -41,7 +41,7 @@ func run():
 		check(hub.avatar_detail.apply.text == "VER NA LOJA", "emote bloqueado: VER NA LOJA")
 		hub.set_cosmetic("title", "auto")   # estado salvo de rodadas anteriores
 		hub.set_profile_tab("titles")
-		check(hub.title_gallery != null and hub.title_gallery.cards.size() == 15, "aba TÍTULOS com 15 opções")
+		check(hub.title_gallery != null and hub.title_gallery.cards.size() == 23, "aba TÍTULOS com 23 opções (R178: +8 do Passe)")
 		await shot("perfil_titulos")
 		hub.title_gallery.cards["estrategista"].pressed.emit()
 		await shot("perfil_titulo_bloqueado")

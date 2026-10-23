@@ -46,6 +46,13 @@ func run():
 	for c in pc.bubble_layer.get_children(): if String(c.name) != "PartyEmote_0": bot_any = true
 	check(bot_any or pc.messages.size() >= 2, "XEQUE bots: bot responde com emote")
 	await shot("xeque_bots_emotes")
+	# R178i · todos mandam ao mesmo tempo: cada faixa do tamanho do próprio cartão
+	for st in [0, 1, 2, 3]: pc.show_emote({"from_seat": st, "text": "Boa jogada!", "emote": "emote_boa_jogada", "nickname": "Bot %d" % st})
+	await frames(12)
+	await shot("xeque_todos_emotes")
+	xu.view.set("hand_zoom", 1.0)
+	await frames(6)
+	await shot("xeque_zoom_mao")
 	xu.close()
 	await frames(6)
 	check(not pc.local and not pc.visible, "fechar o XEQUE desliga o chat local")
@@ -62,5 +69,8 @@ func run():
 	await frames(6)
 	check(pc.bubble_layer.get_node_or_null("PartyEmote_0") != null, "MARCHA bots: faixa do meu emote")
 	await shot("marcha_bots_emotes")
+	for st in [0, 1, 2, 3]: pc.show_emote({"from_seat": st, "text": "Parabéns!", "emote": "emote_parabens", "nickname": "Bot %d" % st})
+	await frames(12)
+	await shot("marcha_todos_emotes")
 	print("RESULT ", "OK" if fails == 0 else "FAIL %d" % fails)
 	quit(1 if fails > 0 else 0)

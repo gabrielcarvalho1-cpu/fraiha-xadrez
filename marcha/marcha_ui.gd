@@ -1472,8 +1472,14 @@ func _wide_layout():
     var panel := Rect2(rx + (lw - pnw) / 2.0, icons.end.y + 10.0 + gap, pnw, pnh)
     var cards := Rect2(rx + (lw - cw) / 2.0, panel.end.y + gap, cw, ch)
     # R91.3 · celular deitado: CHAT (mesa online) no espaço livre embaixo das cartas, sem cobrir o JOGAR CARTA
-    var chh: float = clampf(H - cards.end.y - 18.0, 0.0, 96.0)
-    wide_chat = Rect2(cards.end.x - 240.0, H - 10.0 - chh, 240.0, chh) if chh >= 54.0 else Rect2()
+    # R178i · mais para cima (no iPhone deitado a barra/canto da tela cortava): 40 de folga embaixo
+    var chh: float = clampf(H - cards.end.y - 52.0, 0.0, 84.0)
+    if chh < 54.0:   # pouco espaço: as cartas sobem um pouco para caber o CHAT
+        var need: float = 54.0 - chh
+        cards.position.y -= need
+        panel.position.y -= need * 0.5
+        chh = 54.0
+    wide_chat = Rect2(cards.end.x - 220.0, H - 40.0 - chh, 220.0, chh)
     portrait_game = [
         [Rect2(0, 0, 500, 95), title],
         [Rect2(1150, 0, 500, 80), icons],

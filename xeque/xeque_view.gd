@@ -1208,7 +1208,7 @@ func _draw_hint():
 
 # ---------------------------------------------------------------- mão
 ## R90 · lugar do botão CHAT no celular em pé (mesa online): canto direito, na altura da mão
-const CHAT_PORTRAIT := Rect2(846, 1592, 210, 118)
+const CHAT_PORTRAIT := Rect2(904, 1732, 152, 68)   # R178i · menor e mais baixo (não cobre a carta da mão no zoom da sua vez)
 func chat_column() -> bool:
     return ui.layout == "portrait" and bool(ui.online) and not desk()
 
