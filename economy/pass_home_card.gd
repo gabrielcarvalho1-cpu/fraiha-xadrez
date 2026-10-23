@@ -3,7 +3,7 @@ extends Button
 ## com nível, barra de XP e quanto falta para a temporada acabar. Tocar abre o Passe.
 ## Dois jeitos: "card" (PC e celular deitado, embaixo do cartão de perfil) e "strip" (celular em pé, faixa
 ## entre o perfil e o JOGAR RANQUEADO). O desenho é todo em _draw (coordenadas do próprio botão).
-const CROWN := preload("res://marcha/art/coroa_coroacao.png")
+const CROWN := preload("res://economy/art/pass_crown.png")   # cópia pequena no pacote principal (a da Marcha é do conteúdo extra)
 const F_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")
 const F_INFO := preload("res://ui_kit/fonts/Alegreya-Bold.woff")
 const GOLD := Color("f3c54e")
