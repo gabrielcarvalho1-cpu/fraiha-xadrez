@@ -500,7 +500,7 @@ func _process(delta):
     if mode == "over":
         over_t += delta
         # R36 · fim de partida: chuva de confete (vitória) ou de cinzas (derrota) por alguns segundos
-        if g != null and over_t < 7.0:
+        if g != null and over_t < 7.0 and layout != "portrait":   # R177h · em pé: sem confete (parecia pontinhos soltos)
             var won: bool = g.winner == 0
             var rate := (90.0 if over_t < 2.5 else 35.0) if won else 22.0
             var n := int(rate * delta + fx_rng.randf())
