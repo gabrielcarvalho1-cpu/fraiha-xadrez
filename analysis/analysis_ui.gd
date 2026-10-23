@@ -279,7 +279,7 @@ func _page_progress():
     var vs := root.get_viewport_rect().size
     var f := Art.Frame.new("club", 24)
     f.name = "ProgressPanel"
-    f.custom_minimum_size.y = maxf(320.0, vs.y - 12.0 - 8.0 - 46.0 - 8.0 - 8.0)
+    f.custom_minimum_size.y = maxf(320.0, vs.y - (112.0 if narrow else 12.0 + 8.0 + 46.0 + 8.0 + 8.0))   # R177b · celular: o cabeçalho tem 2 linhas
     f.size_flags_vertical = Control.SIZE_EXPAND_FILL
     column.add_child(f)
     var v := VBoxContainer.new()
@@ -290,12 +290,12 @@ func _page_progress():
     t.name = "ProgressTitle"
     Art.label(v, "O motor revisa cada lance; ao final você vê a avaliação e pode guardar os lances.", fs(14), Art.MUTED, null, HORIZONTAL_ALIGNMENT_CENTER)
     var layout: BoxContainer = VBoxContainer.new() if narrow else HBoxContainer.new()
-    layout.add_theme_constant_override("separation", 28)
+    layout.add_theme_constant_override("separation", 12 if narrow else 28)
     layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
     layout.alignment = BoxContainer.ALIGNMENT_CENTER
     v.add_child(layout)
     progress_board = ReviewBoard.new()
-    var side_px := minf(column.custom_minimum_size.x - 8.0, 380.0) if narrow else clampf(f.custom_minimum_size.y - 190.0, 320.0, 640.0)
+    var side_px := clampf(minf(column.custom_minimum_size.x - 72.0, vs.y - 640.0), 140.0, 380.0) if narrow else clampf(f.custom_minimum_size.y - 190.0, 320.0, 640.0)   # R177b · celular: cabe na moldura (antes cortava a borda direita)
     progress_board.custom_minimum_size = Vector2(side_px, side_px)
     progress_board.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     progress_board.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -307,7 +307,7 @@ func _page_progress():
     side.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     side.add_theme_constant_override("separation", 12)
     layout.add_child(side)
-    var pct := Art.label(side, "0%", fs(64), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
+    var pct := Art.label(side, "0%", fs(48 if narrow else 64), Art.GOLD, Art.FONT_BOLD, HORIZONTAL_ALIGNMENT_CENTER)
     pct.name = "ProgressPercent"
     progress_label = Art.label(side, "LANCE 0 DE %d" % record.moves.size(), fs(22), Art.CREAM, Art.FONT_SEMI, HORIZONTAL_ALIGNMENT_CENTER)
     progress_label.name = "ProgressLabel"
@@ -329,7 +329,7 @@ func _page_progress():
     progress_bar.add_theme_stylebox_override("fill", fgs)
     side.add_child(progress_bar)
     var ff := Art.Frame.new("dark", 12)
-    ff.custom_minimum_size.y = 170 if narrow else 230
+    ff.custom_minimum_size.y = 110 if narrow else 230
     side.add_child(ff)
     var fv := VBoxContainer.new()
     fv.add_theme_constant_override("separation", 4)

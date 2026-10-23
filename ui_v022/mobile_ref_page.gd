@@ -563,7 +563,7 @@ func _build_ranking():
 		name_l.name = "LeagueName_" + (id if not classic else "classic")
 		name_l.add_theme_constant_override("line_spacing", int(round(-8 * s)))
 		if classic:
-			var sub := _label(panel, "Cores das casas e das peças", R(284, y + 56, 290, 34), 26, CREAM, Kit.SERIF, HORIZONTAL_ALIGNMENT_LEFT, 0)
+			var sub := _label(panel, "Cores das casas e das peças", R(284, y + 56, 260, 34), 26, CREAM, Kit.SERIF, HORIZONTAL_ALIGNMENT_LEFT, 0)
 			sub.name = "ClassicPiecesSubMobile"
 			name_l.position.y = (y + 10) * s
 			name_l.size.y = 50 * s

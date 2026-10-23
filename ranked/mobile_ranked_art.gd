@@ -143,22 +143,33 @@ func _band(n: String, y: float) -> TextureRect:
 	panel.add_child(r)
 	return r
 
-func _label(text: String, rect: Rect2, px: float, color: Color, font: Font, align := HORIZONTAL_ALIGNMENT_LEFT, outline := 0.0) -> Label:
+func _label(text: String, rect: Rect2, px: float, color: Color, font: Font, align := HORIZONTAL_ALIGNMENT_LEFT, outline := 0.0, fit := true) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.clip_text = true
+	l.clip_text = fit
+	if not fit and " " in text and not "\n" in text: l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # R177b · frase: quebra na largura
 	l.position = rect.position
 	l.size = rect.size
 	l.horizontal_alignment = align
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.add_theme_font_override("font", font)
-	l.add_theme_font_size_override("font_size", maxi(8, int(round(px * s))))
+	# R177b · o texto encolhe até caber na caixa (CONVENCIONAL cortava o L)
+	var fs := maxi(8, int(round(px * s)))
+	var ow := int(round(outline * s)) * 2
+	var widest := func(q: int) -> float:
+		var m := 0.0
+		for line in text.split("\n"): m = maxf(m, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, q).x)
+		return m
+	var nl := text.count("\n") + 1
+	while fit and fs > 8 and (widest.call(fs) + ow > rect.size.x - 2.0 or (nl > 1 and font.get_height(fs) * nl > rect.size.y + 4.0)): fs -= 1
+	l.add_theme_font_size_override("font_size", fs)
 	l.add_theme_color_override("font_color", color)
 	if outline > 0.0:
 		l.add_theme_color_override("font_outline_color", Color(0.08, 0.04, 0.0, 0.9))
 		l.add_theme_constant_override("outline_size", maxi(1, int(round(outline * s))))
 	panel.add_child(l)
+	l.size = rect.size
 	return l
 
 ## Toque transparente que repassa para o botão real da ranked_ui (mesma ação).
@@ -196,11 +207,36 @@ func _build():
 	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	panel.size.x = _w
 	body.add_child(panel)
-	_band("rk_top", 0)
+	var casual: bool = not ui.rated()
+	_band("rk_top_casual" if casual else "rk_top", 0)
+	if casual:
+		# R177b · JOGAR ONLINE (Casual) no mesmo visual do Ranqueado: a placa de cima sem o texto, com o texto vivo
+		var tl := _label("JOGAR\nONLINE", R(150, 222, 600, 166), 84, Color("f6c85a"), TITLE_FONT, HORIZONTAL_ALIGNMENT_CENTER, 8, false)
+		tl.name = "CasualTitle"
+		tl.add_theme_constant_override("line_spacing", int(round(-38 * s)))
+		var sub := _label("Partida casual contra outro jogador. Não vale PL e não altera o Ranked.", R(170, 438, 560, 80), 30, CREAM, Kit.SERIF, HORIZONTAL_ALIGNMENT_CENTER, 0.0, false)
+		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		sub.size = R(170, 438, 560, 80).size
+		sub.name = "CasualSub"
 	var modes: Array = ui.mode_list()
 	var y := TOP_H
 	for item in modes:
-		_card(item, y)
+		if casual: _casual_card(item, y)
+		else: _card(item, y)
+		y += CARD_H
+	if casual and not modes.is_empty() and ui.box.find_child("InviteFriendButton", true, false) != null:
+		# CONVIDAR AMIGO: um cartão a mais, com o botão no lugar do BUSCAR PARTIDA
+		var inv := _band("rk_card_casual", y)
+		inv.name = "CasualInviteCard"
+		_label("JOGAR COM UM AMIGO", R(150, y + 40, 600, 70), 50, Color("f6c85a"), TITLE_FONT, HORIZONTAL_ALIGNMENT_CENTER, 6)
+		var t2 := _label("Chame um amigo online para uma partida casual.", R(150, y + 130, 600, 90), 32, CREAM, Kit.SERIF, HORIZONTAL_ALIGNMENT_CENTER, 0.0, false)
+		t2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		t2.size = R(150, y + 130, 600, 90).size
+		var cover := _label("CONVIDAR AMIGO", R(230, y + 296, 440, 60), 44, Color("f7ecd2"), TITLE_FONT, HORIZONTAL_ALIGNMENT_CENTER, 5)
+		cover.name = "CasualInviteText"
+		_cover_btn_text(y)
+		_hit(Rect2(140, y + 278, 626, 94), "CONVIDAR AMIGO", "InviteFriendButton")
+		move_child_to_top(cover)
 		y += CARD_H
 	if modes.is_empty():
 		# Admin fechou todos os ritmos: o aviso no lugar dos cartões (o cartão vazio da arte por baixo)
@@ -217,6 +253,47 @@ func _build():
 	if warn.is_empty() and not ui.account.persistent_backend: warn = "Servidor em modo de teste: resultados NÃO ficam salvos."
 	set_notice(warn)
 	_place()
+
+func move_child_to_top(n: Control):
+	panel.move_child(n, panel.get_child_count() - 1)
+
+## o texto BUSCAR PARTIDA vem pintado na arte do cartão: coberto pela cor do botão para trocar o texto
+func _cover_btn_text(y: float):
+	# a própria arte do botão (faixa sem texto entre o losango e a palavra) esticada por cima do texto
+	var at := AtlasTexture.new()
+	at.atlas = load("res://ui_kit/mobile/rk_card_casual.png")
+	at.region = Rect2(222, 300, 24, 56)
+	var c := TextureRect.new()
+	c.name = "BtnTextCover"
+	c.texture = at
+	c.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	c.stretch_mode = TextureRect.STRETCH_SCALE
+	c.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.position = Vector2(246, y + 300) * s
+	c.size = Vector2(412, 56) * s
+	panel.add_child(c)
+
+## R177b · cartão do JOGAR ONLINE (Casual): coroa no lugar do brasão da liga, sem barra de PL
+func _casual_card(item: Array, y: float):
+	var id: String = item[0]
+	var card := _band("rk_card_casual", y)
+	card.name = "CasualCard_" + id
+	var crest := TextureRect.new()
+	crest.name = "CasualCrest_" + id
+	crest.texture = load("res://ui_kit/mobile/bots_crown.png")
+	crest.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	crest.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	crest.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	crest.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	crest.position = Vector2(132, y + 30) * s
+	crest.size = Vector2(150, 140) * s
+	panel.add_child(crest)
+	_label(String(item[1]), R(292, y + 24, 470, 66), 56, Color("f6c85a"), TITLE_FONT, HORIZONTAL_ALIGNMENT_LEFT, 7).name = "RankedName_" + id
+	_label("%d min por jogador" % int(item[2]), R(294, y + 86, 440, 44), 34, CREAM, Kit.SERIF)
+	_label("PARTIDA CASUAL · SEM PL", R(290, y + 133, 460, 48), 32, Color("f4ecd8"), Kit.SERIF_BOLD, HORIZONTAL_ALIGNMENT_LEFT, 3)
+	_label("Não altera sua liga nem o Ranked", R(150, y + 196, 600, 44), 30, Color("c9c2ae"), Kit.SERIF, HORIZONTAL_ALIGNMENT_CENTER)
+	_hit(Rect2(140, y + 278, 626, 94), "BUSCAR " + id, "Queue_" + id)
 
 func _card(item: Array, y: float):
 	var id: String = item[0]

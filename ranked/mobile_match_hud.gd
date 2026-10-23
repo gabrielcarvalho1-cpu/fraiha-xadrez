@@ -456,7 +456,9 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 	bg.mode = "l"
 	bg.wood = wood
 	bg.full = Rect2(Vector2.ZERO, vs)
-	bg.top_rect = Rect2((vs - Vector2(L_W, L_H) * kb) / 2.0, Vector2(L_W, L_H) * kb)
+	# R177b · tela larga: a arte corta embaixo, não em cima (as bandeirinhas do alto ficavam pela metade)
+	var art_sz := Vector2(L_W, L_H) * kb
+	bg.top_rect = Rect2(Vector2((vs.x - art_sz.x) / 2.0, 0.0 if art_sz.y > vs.y else (vs.y - art_sz.y) / 2.0), art_sz)
 	bg.frame_rect = frame
 	bg.visible = true
 	nav.hide()
@@ -484,10 +486,14 @@ func _layout_landscape(vs: Vector2, safe: Rect2) -> Rect2:
 	# R157.1 · coluna da direita (entre o tabuleiro e a aba AÇÕES): botão CHAT no meio; o chat abre ocupando ela
 	var rx0: float = frame.end.x + 6.0
 	right_col = Rect2(rx0, top_y, maxf(60.0, corner.tab.position.x - 6.0 - rx0), safe.end.y - 4.0 - top_y)
-	# botão no alto da coluna (fica visível com o chat aberto: tocar de novo fecha); o chat ocupa o resto da coluna
-	var chs := clampf(minf(right_col.size.x * 0.36, vs.y * 0.17), 44.0, 72.0)
-	_set_rect(corner.chat, Rect2(Vector2(right_col.get_center().x - chs / 2.0, right_col.position.y), Vector2(chs, chs)))
-	right_col = Rect2(right_col.position.x, right_col.position.y + chs + 6.0, right_col.size.x, right_col.size.y - chs - 6.0)
+	# R177b · botão CHAT retangular EMBAIXO da coluna (fica visível com o chat aberto: tocar de novo fecha);
+	# o chat ocupa o resto da coluna, acima dele
+	var chh := clampf(vs.y * 0.17, 44.0, 64.0)
+	var chw := minf(right_col.size.x, maxf(150.0, chh * 3.6))
+	var chat_r := Rect2(Vector2(right_col.get_center().x - chw / 2.0, safe.end.y - chh), Vector2(chw, chh))
+	_set_rect(corner.chat, chat_r)
+	_fit_chat_button(corner.chat)
+	right_col = Rect2(right_col.position.x, right_col.position.y, right_col.size.x, chat_r.position.y - 6.0 - right_col.position.y)
 	for key in ["top", "bottom"]:
 		var c: Rect2 = rects[key]
 		var p: Dictionary = plates[key]
@@ -648,7 +654,7 @@ func _layout_chat(board: Rect2, safe: Rect2) -> void:
 		var w := minf(420.0, safe.size.x * 0.5)
 		var y0: float = right_col.position.y if right_col.size.y > 0.0 else safe.position.y + 4.0
 		c.panel.position = Vector2(corner.tab.position.x - w - 6.0, y0)
-		c.panel.size = Vector2(w, safe.end.y - 4.0 - y0)
+		c.panel.size = Vector2(w, maxf(120.0, corner.chat.position.y - 6.0 - y0))   # R177b · acima do botão CHAT
 
 ## Botão da direita da barra: CHAT nas partidas online; contra o computador (sem chat) é LANCES.
 func _third_pressed() -> void:
@@ -817,6 +823,41 @@ func _fit_nav_button(b: Button) -> void:
 func _build_corner() -> void:
 	for spec in [["back", "l_back"], ["gear", "l_gear"], ["chat", "l_chat"], ["tab", "l_tab"]]:
 		var b := _flat_button("HudCorner_" + String(spec[0]))
+		if spec[0] == "chat":
+			# R177b · deitado: CHAT é um botão retangular grande embaixo da coluna da direita (placa do jogo,
+			# ícone do balão + CHAT), não mais o quadradinho no alto
+			var np := NinePatchRect.new()
+			np.name = "Art"
+			np.texture = tex("tile")
+			np.patch_margin_left = 18
+			np.patch_margin_right = 18
+			np.patch_margin_top = 18
+			np.patch_margin_bottom = 18
+			np.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			np.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			b.add_child(np)
+			var ic := TextureRect.new()
+			ic.name = "Icon"
+			ic.texture = tex("ico_chat")
+			ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			ic.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+			ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			b.add_child(ic)
+			var cl := Label.new()
+			cl.name = "Caption"
+			cl.text = "CHAT"
+			cl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			cl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			cl.add_theme_font_override("font", FONT_TITLE)
+			cl.add_theme_color_override("font_color", Color("f6e7bf"))
+			cl.add_theme_color_override("font_outline_color", Color(0.1, 0.05, 0.0, 0.85))
+			cl.add_theme_constant_override("outline_size", 3)
+			b.add_child(cl)
+			root.add_child(b)
+			corner[spec[0]] = b
+			b.hide()
+			continue
 		var art := TextureRect.new()
 		art.name = "Art"
 		art.texture = tex(String(spec[1]))
@@ -849,6 +890,28 @@ func _build_corner() -> void:
 	corner.tab.pressed.connect(toggle_actions)
 	corner.gear.tooltip_text = "Opções da partida"
 	corner.tab.tooltip_text = "Ações da partida"
+
+## R177b · ícone + CHAT centralizados no botão retangular (deitado); o selo de mensagens novas no canto
+func _fit_chat_button(b: Button) -> void:
+	var ic: TextureRect = b.get_node_or_null("Icon")
+	var cl: Label = b.get_node_or_null("Caption")
+	if ic == null or cl == null: return
+	var h := b.size.y
+	var fs := maxi(12, int(round(h * 0.36)))
+	cl.add_theme_font_size_override("font_size", fs)
+	var tw := FONT_TITLE.get_string_size(cl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var isz := h * 0.52
+	var total := isz + h * 0.16 + tw
+	var x0 := (b.size.x - total) / 2.0
+	ic.position = Vector2(x0, (h - isz) / 2.0)
+	ic.size = Vector2(isz, isz)
+	cl.position = Vector2(x0 + isz + h * 0.16, 0)
+	cl.size = Vector2(tw + 4.0, h)
+	var badge: Label = b.get_node_or_null("Badge")
+	if badge != null:
+		badge.add_theme_font_size_override("font_size", maxi(10, int(round(h * 0.26))))
+		badge.size = Vector2(h * 0.4, h * 0.4)
+		badge.position = Vector2(b.size.x - h * 0.3, -h * 0.12)
 
 func _flat_button(nm: String) -> Button:
 	var b := Button.new()

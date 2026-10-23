@@ -576,7 +576,7 @@ func _show(which: String):
         dim.modulate.a = 1.0
     art_panel.visible = which == "modes" and not Mobile.active(get_viewport())
     # R53 · celular + Ranqueado: a tela de ritmos é o painel da referência do celular (o JOGAR ONLINE casual segue a lista)
-    var mob_art: bool = which == "modes" and rated() and Mobile.active(get_viewport())
+    var mob_art: bool = which == "modes" and Mobile.active(get_viewport())   # R177b · o JOGAR ONLINE também
     if mob_art:
         panel.hide()
         art_frame.hide()

@@ -16,20 +16,28 @@ func setup(p_hub, acc, p_client):
 	account = acc
 	client = p_client
 	if account != null and account.has_signal("server_message"): account.server_message.connect(_on_message)
-	head = VBoxContainer.new()
-	head.name = "PassHead"
-	head.add_theme_constant_override("separation", 6)
-	body.add_child(head)
+	# R177b · a página INTEIRA rola (nível, XP, regras e a trilha): antes só a trilha rolava e, no celular em pé,
+	# sobrava uma faixa mínima para ela; deitado, o cabeçalho ocupava tudo e não dava para descer
 	scroll = ScrollContainer.new()
+	scroll.name = "PassScroll"
 	preload("res://ui_v022/touch_scroll.gd").attach(scroll)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(scroll)
+	var page := VBoxContainer.new()
+	page.name = "PassPage"
+	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	page.add_theme_constant_override("separation", 10)
+	scroll.add_child(page)
+	head = VBoxContainer.new()
+	head.name = "PassHead"
+	head.add_theme_constant_override("separation", 6)
+	page.add_child(head)
 	track = VBoxContainer.new()
 	track.name = "PassTrack"
 	track.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	track.add_theme_constant_override("separation", 6)
-	scroll.add_child(track)
+	page.add_child(track)
 
 func show_pass():
 	open()
@@ -135,7 +143,7 @@ func _render():
 		b.name = "PassClubCta"
 		b.pressed.connect(func(): close(); hub.open_premium("club"))
 		head.add_child(b)
-	# cabeçalho das colunas (fora da rolagem: sempre visível)
+	# cabeçalho das colunas
 	var hr := HBoxContainer.new()
 	hr.add_theme_constant_override("separation", 8)
 	head.add_child(hr)
@@ -150,13 +158,13 @@ func _render():
 	hr.add_child(c2)
 	for rw in state.get("rewards", []):
 		track.add_child(_row(rw, level, club))
-	# rola até o nível atual
-	_scroll_to.call_deferred(level)
+	# R177b · abre no alto (nível, XP e regras à vista); a trilha vem logo abaixo, na mesma rolagem
+	scroll.scroll_vertical = 0
 
 func _scroll_to(level: int):
 	await get_tree().process_frame
 	var n = track.get_node_or_null("PassLv_%d" % maxi(1, level - 1))
-	if n != null: scroll.scroll_vertical = int(n.position.y)
+	if n != null: scroll.scroll_vertical = int(track.position.y + n.position.y)
 
 func _reward_text(rw) -> String:
 	if not (rw is Dictionary): return "—"

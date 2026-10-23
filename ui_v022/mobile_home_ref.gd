@@ -244,6 +244,11 @@ func _build_top():
     sup.size = Vector2(bw, SOUND_RECT.size.y)
     sup.position = slot.call(5)
     top.add_child(sup)
+    # R177b · os seis botões com a MESMA largura (os de make_top_button tinham mínimo quadrado de 75 e passavam
+    # por cima do vizinho; a coroa, com 66, parecia menor e fora de esquadro)
+    for b in [sound_button, chip, mail, sup] + top.get_children().filter(func(n): return n is Button and (String(n.name) == "TrophyTopButton" or String(n.name) == "ChatTopButton")):
+        b.custom_minimum_size = Vector2(bw, SOUND_RECT.size.y)
+        b.size = Vector2(bw, SOUND_RECT.size.y)
     # cartão do jogador (toque abre o Perfil)
     var card := _hit(top, CARD_RECT, "PERFIL", func(): hub.show_page("profile"))
     card.name = "RefProfileCard"

@@ -118,3 +118,24 @@ func _fit_card():
 	for b in [ok_button, yes_button, alt_button]:
 		b.add_theme_font_size_override("font_size", ts(22) if not narrow() else 14)
 		b.custom_minimum_size = Vector2(bw, ts(58) if not narrow() else 46)
+	_shrink_to_fit()
+
+## R177b · o cartão nunca passa da moldura: se não couber na altura (celular com 3 botões), encolhe
+## espaços, letra e botões até caber (antes o INSTAGRAM/AGORA NÃO saíam para fora do recorte)
+func _shrink_to_fit():
+	var col := text_label.get_parent() as VBoxContainer
+	var row := ok_button.get_parent() as BoxContainer
+	var room := _body_rect.size.y - 12.0
+	var st: StyleBoxFlat = card.get_theme_stylebox("panel")
+	col.add_theme_constant_override("separation", 26)
+	row.add_theme_constant_override("separation", 12)
+	for side in ["top", "bottom"]: st.set("content_margin_" + side, 30)
+	for i in 12:
+		if card.get_combined_minimum_size().y <= room: return
+		col.add_theme_constant_override("separation", maxi(8, col.get_theme_constant("separation") - 4))
+		row.add_theme_constant_override("separation", maxi(6, row.get_theme_constant("separation") - 2))
+		for side in ["top", "bottom"]: st.set("content_margin_" + side, maxf(12.0, st.get("content_margin_" + side) - 4.0))
+		var fs := text_label.get_theme_font_size("font_size")
+		text_label.add_theme_font_size_override("font_size", maxi(12, fs - 1))
+		for b in [ok_button, yes_button, alt_button]:
+			b.custom_minimum_size.y = maxf(36.0, b.custom_minimum_size.y - 3.0)
