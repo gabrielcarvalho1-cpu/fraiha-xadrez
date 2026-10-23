@@ -354,7 +354,7 @@ func show_emote(m: Dictionary):
     # R178i · do tamanho do cartão de quem mandou (vários ao mesmo tempo não se cobrem): a faixa não passa da
     # largura do cartão e fica entre 34 e 70 px de altura
     var h := clampf(maxf(minf(a.size.y * 0.55, vs.y * 0.12), vs.y * 0.065), 52.0, 70.0)
-    if a.has_area(): h = clampf(minf(h, a.size.x * 1.0 * EmoteBanner.REF.y / EmoteBanner.REF.x), 34.0, 70.0)
+    if a.has_area(): h = clampf(minf(h, a.size.x * 1.0 * EmoteBanner.REF.y / EmoteBanner.REF.x), 44.0, 70.0)   # R180 · mín. 44: abaixo disso a frase não cabe legível na placa
     var p: Control = EmoteBanner.make(String(m.get("text", "")), "Você" if mine else String(m.get("nickname", "")), String(m.get("emote", "")), h)
     p.name = nm
     var w := p.size.x
