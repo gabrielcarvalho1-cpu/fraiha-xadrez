@@ -38,7 +38,7 @@ const NAV := [
     ["mais", Rect2(667, 1690, 168, 130), "MAIS", Rect2(667, 1779, 159, 16)],
 ]
 const NAV_ART := "res://ui_v022/assets/home_nav5.png"
-const PASS_STRIP := Rect2(150, 676, 554, 56)   # R178 · faixa do PASSE entre o perfil e o JOGAR RANQUEADO
+const PASS_STRIP := Rect2(140, 1107, 575, 49)   # R178 · faixa do PASSE no meio do menu (entre os 3 botões grandes e MARCHA/XEQUE)
 const CLUB_RECT := Rect2(25, 45, 355, 73)
 const SOUND_RECT := Rect2(730, 45, 82, 75)
 const CARD_RECT := Rect2(108, 495, 637, 173)
@@ -199,7 +199,7 @@ func _source(title: String) -> TextureButton:
     return null
 
 func _build_top():
-    # R178 · PASSE DA TEMPORADA: faixa dourada entre o perfil e o JOGAR RANQUEADO
+    # R178 · PASSE DA TEMPORADA: faixa dourada no meio do menu, no lugar do filete com o losango
     var pass_strip = load("res://economy/pass_home_card.gd").new()
     pass_strip.setup(hub, "strip")
     pass_strip.name = "PassHomeStrip"

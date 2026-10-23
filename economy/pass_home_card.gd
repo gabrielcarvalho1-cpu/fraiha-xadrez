@@ -182,17 +182,17 @@ func _draw():
 		# faixa fina do celular em pé: coroa · PASSE DA TEMPORADA · NÍV X · barra · ›
 		_crown(Vector2(h * 0.62, h * 0.5), h * 0.86)
 		var x := h * 1.2
-		var tw2 := _str(F_TITLE, "PASSE DA TEMPORADA", Vector2(x, h * 0.66), int(h * 0.36), GOLD, size.x * 0.46, 2)
+		var tw2 := _str(F_TITLE, "PASSE DA TEMPORADA", Vector2(x, h * 0.68), int(h * 0.42), GOLD, size.x * 0.5, 2)
 		x += tw2 + h * 0.3
 		var chip := "NÍV %d" % lv
-		var cs := int(h * 0.3)
+		var cs := int(h * 0.34)
 		var cw := F_INFO.get_string_size(chip, HORIZONTAL_ALIGNMENT_LEFT, -1, cs).x + h * 0.36
-		var cr := Rect2(x, h * 0.2, cw, h * 0.6)
+		var cr := Rect2(x, h * 0.17, cw, h * 0.66)
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color("e7a52a")
 		sb.set_corner_radius_all(int(h * 0.14))
 		draw_style_box(sb, cr)
-		draw_string(F_INFO, Vector2(cr.position.x + h * 0.18, h * 0.62), chip, HORIZONTAL_ALIGNMENT_LEFT, -1, cs, Color("2a1604"))
+		draw_string(F_INFO, Vector2(cr.position.x + h * 0.18, h * 0.63), chip, HORIZONTAL_ALIGNMENT_LEFT, -1, cs, Color("2a1604"))
 		x = cr.end.x + h * 0.25
 		var bw := size.x - x - h * 0.75
 		if bw > h: _bar(Rect2(x, h * 0.42, bw, h * 0.18), _frac() if has else 0.0)

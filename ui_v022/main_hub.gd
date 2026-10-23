@@ -2904,7 +2904,7 @@ const WIDE_PATCHES := {   # recorte (mesmos números de tools/home_wide_r153.py)
     "club": [Rect2(10, 4, 354, 84), ["ClubHomeEntry"]],
     "icons": [Rect2(356, 6, 146, 82), ["SoundButton", "FullscreenButton", "TrophyTopButton", "ChatTopButton", "CrownsTopButton", "MailTopButton", "SupportTopButton"]],
     "logo": [Rect2(470, 0, 732, 312), ["NewsTicker"]],
-    "profile": [Rect2(1210, 18, 446, 232), ["RefProfileButton", "ProfilePanel", "ProfileStack", "PassHomeCard"]],
+    "profile": [Rect2(1210, 18, 446, 232), ["RefProfileButton", "ProfilePanel", "ProfileStack"]],
     "account": [Rect2(20, 832, 354, 100), ["AccountCard", "AccountPanel", "RefAccountAvatar", "RefAccountAvatarFrameHost"]],
     "community": [Rect2(1388, 856, 262, 64), ["CommunityButton"]],
 }
@@ -2985,6 +2985,13 @@ func _layout_wide(dims: Vector2):
     # logo: no meio do espaço livre da coluna da esquerda (entre os ícones e a conta), do tamanho que couber
     var lsrc: Rect2 = WIDE_PATCHES["logo"][0]
     var top: float = v.position.y + m + 90.0 * kl + 84.0 * kl
+    # R178 · o cartão do PASSE vai embaixo dos ícones, e o logo desce junto
+    var pcard = canvas.get_node_or_null("PassHomeCard")
+    if pcard != null:
+        if not _wide_orig.has(pcard): _wide_orig[pcard] = [pcard.position, pcard.scale]
+        pcard.scale = Vector2.ONE * kl
+        pcard.position = Vector2(v.position.x + m, top + 4.0 * kl)
+        top += (PASS_CARD_PC.size.y + 12.0) * kl
     var bottom: float = v.end.y - (100.0 + m * 2.0) * kl
     var k2: float = minf(left_w / lsrc.size.x, (bottom - top) / lsrc.size.y)
     var lsz: Vector2 = lsrc.size * maxf(0.2, k2)
@@ -3383,6 +3390,7 @@ func make_top_button(glyph: String, tip: String, action: Callable, side := 62.0)
 ## R122 · COMUNIDADE: botão largo (duas pessoas + "COMUNIDADE") na moldura dos botões do topo; abre o Discord.
 const CommunityLink := preload("res://social/community_link.gd")
 const PassHomeCard := preload("res://economy/pass_home_card.gd")   # R178
+const PASS_CARD_PC := Rect2(14, 94, 346, 80)   # R178 · embaixo da placa CLUB (topo esquerdo)
 func make_community_button(sz: Vector2, frame: Texture2D, font_px: int) -> Button:
     var b: Button = preload("res://ui_v022/hud_button.gd").make("community", "COMUNIDADE")
     b.name = "CommunityButton"
@@ -4289,11 +4297,11 @@ func _build_reference_chrome():
     var community := make_community_button(Vector2(262, 64), TOP_FRAME_PC, 22)
     community.position = Vector2(1388, 856)
     canvas.add_child(community)
-    # R178 · PASSE DA TEMPORADA bem à vista: cartão dourado embaixo do cartão de perfil (toque abre o Passe)
+    # R178 · PASSE DA TEMPORADA bem à vista: cartão dourado no topo esquerdo, embaixo do CLUB (toque abre o Passe)
     var pass_card := PassHomeCard.new()
     pass_card.setup(self, "card")
-    pass_card.position = Vector2(1222, 258)
-    pass_card.size = Vector2(422, 92)
+    pass_card.position = Vector2(PASS_CARD_PC.position)
+    pass_card.size = PASS_CARD_PC.size
     canvas.add_child(pass_card)
     # R161 · OUTDOOR: a faixa "ESTRATÉGIA PARA IR MAIS LONGE" vira a frase do Admin e abre NOVIDADES
     var ticker := make_news_ticker(19, Color("010612"), Color("030b1c"))
