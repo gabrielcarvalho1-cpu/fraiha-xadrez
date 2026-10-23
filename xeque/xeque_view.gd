@@ -17,6 +17,7 @@ const LAYOUTS := {
         "plates": {0: ["h", Rect2(35, 887, 368, 133)], 1: ["v", Vector2(515, 475), 180], 2: ["hc", Rect2(817, 6, 293, 104)], 3: ["v", Vector2(1406, 475), 180]},
         "turn": Rect2(1535, 22, 355, 69), "meter": Rect2(1522, 155, 370, 146),
         "xeque": [Vector2(1718, 636), 0.92], "xeque_rect": Rect2(1532, 478, 362, 218), "play": Rect2(1536, 721, 362, 90),   # R125 · botão novo (arte 1,66:1)
+        "chat": Rect2(1592, 330, 250, 64),   # R178l · CHAT azul no espaço acima da logo XEQUE
         "hint": [Vector2(1718, 875), 24], "help": Rect2(1763, 975, 58, 58), "menu": Rect2(1834, 975, 58, 58),
         "music": Rect2(1621, 975, 58, 58), "fx": Rect2(1692, 975, 58, 58), "full": Rect2(1550, 975, 58, 58), "voice": Rect2(1479, 975, 58, 58), "voice_ear": Rect2(1408, 975, 58, 58),
         "hand": [Vector2(960, 930), 0.212], "pile": [Vector2(960, 478), 0.128], "clock": [Vector2(960, 333), 0.22],
@@ -385,10 +386,12 @@ func _draw_voice(lay: Dictionary):
 ## R178k · celular em pé: o JOGAR CARTAS é dividido ao meio — metade JOGAR CARTAS, metade CHAT (azul, padrão
 ## dos cartões dos jogadores). O toque do CHAT é o botão do party_chat, invisível por cima desta metade.
 const CHAT_GAP := 12.0
-func chat_split() -> bool:
-    if ui.layout != "portrait" or desk(): return false
+func chat_drawn() -> bool:
     var pc = ui.stage.get("party_chat") if ui.stage != null else null
     return pc != null and pc.visible and bool(pc.get("dock_icon")) and pc.toggle != null and pc.toggle.visible
+
+func chat_split() -> bool:
+    return ui.layout == "portrait" and not desk() and chat_drawn()
 
 func split_rects() -> Array:
     var r: Rect2 = L().play
@@ -1198,6 +1201,7 @@ func _balloon_box(bg: Color, border: Color, fs: int) -> StyleBoxFlat:
     return _balloon_cache[key]
 
 func _draw_play_button():
+    if ui.layout != "portrait" and chat_drawn() and L().has("chat"): _draw_chat_half(L().chat)   # R178l · PC e deitado: CHAT azul
     if desk(): return _desk_play_button()
     var r: Rect2 = L().play
     if chat_split():

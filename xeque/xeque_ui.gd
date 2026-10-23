@@ -803,7 +803,7 @@ func _sync_chat_dock():
     if pc == null or not pc.has_method("set_dock"): return
     var lay: Dictionary = view.L() if view != null else {}
     var d: Rect2 = lay.get("chat", Rect2()) if ((online or bool(pc.get("local"))) and mode == "game" and visible) else Rect2()
-    var icon := false
+    var icon := d.size.x > 0.0   # R178l · o CHAT é desenhado pela mesa (azul) em todos os jeitos de tela
     if d.size.x > 0.0 and layout == "portrait":
         # R178k · celular em pé: metade direita do JOGAR CARTAS (o desenho é da view; aqui só a área de toque)
         d = view.split_rects()[1]

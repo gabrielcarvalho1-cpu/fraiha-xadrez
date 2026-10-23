@@ -13,6 +13,7 @@ const NAME_C := Vector2(388, 87)     # centro do nome (entre os dois filetes dou
 const LINE_X := Vector2(228, 548)    # onde os filetes começam/terminam
 const TEXT_C := Vector2(402, 137)    # centro da frase
 const TEXT_W := 360.0                # largura útil da frase
+const TEXT_MID := Vector2(398, 114)  # R178l · centro da frase sem o nome
 
 ## Monta a faixa com altura h (px de tela).
 static func make(text: String, who: String, emote_id: String, h: float) -> Control:
@@ -39,27 +40,8 @@ func _build(text: String, who: String, emote_id: String, h: float) -> void:
 		var fx: Control = preload("res://social/emote_fx.gd").make(emote_id, side)
 		fx.position = MEDAL * u - Vector2(side, side) / 2.0
 		add_child(fx)
-	var nw := _label(who.to_upper(), NAME_C * u, 230.0 * u, 23.0 * u, Color("e6eefc"), 2, false)   # R177b · nome numa linha só
-	# filetes dourados dos dois lados do nome (com losango na ponta) + losango pequeno em cima, como na referência
-	var orn := Control.new()
-	orn.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	orn.size = size
-	orn.draw.connect(func():
-		var y := NAME_C.y * u
-		var gap := 10.0 * u
-		var gold := Color("f0c35a")
-		var th := maxf(1.0, 1.9 * u)
-		var l1 := NAME_C.x * u - nw / 2.0 - gap
-		var r0 := NAME_C.x * u + nw / 2.0 + gap
-		if l1 - LINE_X.x * u > 8.0 * u:
-			orn.draw_line(Vector2(LINE_X.x * u, y), Vector2(l1, y), gold, th, true)
-			_diamond(orn, Vector2(l1, y), 3.6 * u, gold, gold)
-		if LINE_X.y * u - r0 > 8.0 * u:
-			orn.draw_line(Vector2(r0, y), Vector2(LINE_X.y * u, y), gold, th, true)
-			_diamond(orn, Vector2(r0, y), 3.6 * u, gold, gold)
-		_diamond(orn, Vector2(NAME_C.x * u, 61.0 * u), 5.0 * u, gold, Color("2a5fd6")))
-	add_child(orn)
-	_label(text.to_upper(), TEXT_C * u, TEXT_W * u, 50.0 * u, Color("f6d27a"), maxi(2, int(round(5.0 * u))))
+	# R178l · sem o nome de quem mandou (a faixa já fica no cartão dele): só a frase, maior e no meio da placa
+	_label(text.to_upper(), TEXT_MID * u, TEXT_W * u, 62.0 * u, Color("f6d27a"), maxi(2, int(round(5.0 * u))))
 
 static func _diamond(ci: CanvasItem, c: Vector2, r: float, edge: Color, fill: Color) -> void:
 	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]), edge)
