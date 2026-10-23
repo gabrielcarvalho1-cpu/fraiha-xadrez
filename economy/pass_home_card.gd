@@ -175,9 +175,10 @@ func _draw():
 		var x0 := h * 1.12
 		var right_w := h * 0.95
 		var tw := size.x - x0 - right_w - h * 0.15
-		_str(F_TITLE, "PASSE DA TEMPORADA", Vector2(x0, h * 0.36), int(h * 0.24), GOLD, tw, 2)
+		var wide := size.x > h * 5.5   # R178d · celular em pé: cartão bem largo, letras maiores
+		_str(F_TITLE, "PASSE DA TEMPORADA", Vector2(x0, h * (0.38 if wide else 0.36)), int(h * (0.30 if wide else 0.24)), GOLD, tw, 2)
 		var sub := (String(state.get("name", "")) + ("  ·  " + _days() if _days() != "" else "")) if has else "Suba de nível jogando e ganhe prêmios"
-		_str(F_INFO, sub, Vector2(x0, h * 0.60), int(h * 0.17), CREAM, tw, 1)
+		_str(F_INFO, sub, Vector2(x0, h * 0.61), int(h * (0.2 if wide else 0.17)), CREAM, tw, 1)
 		_bar(Rect2(x0, h * 0.70, tw, h * 0.11), _frac() if has else 0.0)
 		# selo do nível
 		var c := Vector2(size.x - right_w / 2.0 - h * 0.08, h * 0.5)
