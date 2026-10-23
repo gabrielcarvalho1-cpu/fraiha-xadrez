@@ -21,6 +21,15 @@ var dom_id := ""
 var _last := ""
 var _shown := false
 var _was_docked := false
+## R180e · modo BARRA (celular na partida): o <input> fica INVISÍVEL por cima do botão CHAT (trigger). Tocar no CHAT
+## = tocar no campo → o teclado abre e a barra de digitar aparece colada nele. A janela grande do chat não abre.
+var trigger: Control = null
+var trigger_fn: Callable   # R180e · () -> Control: o botão CHAT visível agora (vários lugares conforme a tela)
+## chips em cima da barra (emotes rápidos / PARA TODOS · SÓ ALIADO): Callable -> Array de {id, text, sel}
+var chips_provider: Callable
+signal chip_pressed(id: String)
+var _chips_json := ""
+var _chips_t := 0.0
 
 static func attach(line: LineEdit, chat_mode := false) -> Node:
     var helper = load("res://ui_v022/web_text_field.gd").new()
@@ -77,7 +86,10 @@ func _ready():
                     'box-shadow:0 -4px 14px rgba(0,0,0,.55)}' +
                     '.fraiha-chat-bar button{flex:0 0 auto;height:46px;padding:0 16px;border-radius:8px;border:2px solid #7a5512;' +
                     'background:#e9b23a;color:#2a1a04;font:bold 16px Georgia,serif;letter-spacing:1px;touch-action:manipulation}' +
-                    '.fraiha-chat-bar button:active{background:#ffd56a}';
+                    '.fraiha-chat-bar button:active{background:#ffd56a}' +
+                    '.fraiha-chat-chips button{display:inline-block;height:34px;margin-right:6px;padding:0 12px;border-radius:7px;' +
+                    'border:2px solid #c99a45;background:#16306a;color:#f4ce7f;font:bold 14px Georgia,serif;touch-action:manipulation}' +
+                    '.fraiha-chat-chips button.sel{background:#e9b23a;color:#2a1a04}';
                 document.head.appendChild(st);
             }
             document.body.appendChild(el);
@@ -96,6 +108,19 @@ func _ready():
             send.addEventListener('click', e => { e.preventDefault(); fire(); });
             bar.appendChild(send);
             document.body.appendChild(bar);
+            // R180e · fileira de chips (emotes rápidos) logo acima da barra; tocar não tira o foco do campo
+            const chips = document.createElement('div');
+            chips.id = id + '-chips'; chips.className = 'fraiha-chat-chips';
+            chips.style.cssText = 'position:fixed;left:0;right:0;z-index:30;display:none;gap:6px;padding:6px 8px;overflow-x:auto;' +
+                'white-space:nowrap;box-sizing:border-box;background:rgba(14,10,8,.92);-webkit-overflow-scrolling:touch';
+            chips.addEventListener('pointerdown', e => { if (e.target.tagName === 'BUTTON') e.preventDefault(); }, {passive: false});
+            chips.addEventListener('mousedown', e => e.preventDefault());
+            const pick = e => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); el.dataset.chip = b.dataset.id; };
+            chips.addEventListener('click', pick);
+            chips.addEventListener('touchend', e => { const b = e.target.closest('button'); if (!b || chips._moved) { chips._moved = false; return; } pick(e); }, {passive: false});
+            chips.addEventListener('touchmove', () => { chips._moved = true; }, {passive: true});
+            chips.addEventListener('touchstart', () => { chips._moved = false; }, {passive: true});
+            document.body.appendChild(chips);
             const vv = window.visualViewport;
             // R151 · barra EMBAIXO da área visível (logo acima do teclado), não no topo da tela: antes ficavam
             // duas faixas (a do topo com o campo e a do teclado embaixo) e parecia ter duas caixas de mensagem.
@@ -110,6 +135,8 @@ func _ready():
                 const top = (el.dataset.docked === '1' && !kbOpen()) ? vtop : Math.max(vtop, vtop + vh - h);
                 bar.style.top = top + 'px';
                 if (el.dataset.docked === '1') el.style.top = (top + 8) + 'px';
+                chips.style.display = (el.dataset.docked === '1' && chips.childElementCount) ? 'block' : 'none';
+                chips.style.top = (top - (chips.offsetHeight || 46)) + 'px';
             };
             const dock = () => {
                 if (el.dataset.docked === '1') return;
@@ -127,6 +154,7 @@ func _ready():
                 if (el.dataset.docked !== '1') return;
                 el.dataset.docked = '';
                 bar.style.display = 'none';
+                chips.style.display = 'none';
                 Object.assign(el.style, el._geo || {}, {zIndex: '20', background: 'transparent', border: '0'});
             };
             el.addEventListener('focus', dock);
@@ -178,7 +206,11 @@ func docked() -> bool:
 
 func _process(_delta):
     if el == null: return
-    var show := field.is_visible_in_tree() and field.editable and not _covered_for(field) and (docked() or _inside_clip())
+    if trigger_fn.is_valid():
+        var tg = trigger_fn.call()
+        trigger = tg if tg is Control and is_instance_valid(tg) else null
+    var on_trigger := trigger != null and is_instance_valid(trigger)
+    var show := field.editable and not _covered_for(field if not on_trigger else trigger) and (docked() or (trigger.is_visible_in_tree() if on_trigger else (field.is_visible_in_tree() and _inside_clip())))
     if show != _shown:
         _shown = show
         if not show:
@@ -195,14 +227,19 @@ func _process(_delta):
             _was_docked = d
             var row := field.get_parent() as CanvasItem
             if row != null: row.modulate.a = 0.0 if d else 1.0
+    if on_trigger:
+        # invisível por cima do botão CHAT; aparece (estilo da barra) só com o teclado aberto
+        el.style.opacity = "1" if docked() else "0"
+        _sync_chips(_delta)
     if not docked():
         # Posição: coordenadas do viewport → pixels CSS da página (o canvas ocupa a janela).
-        var xf := field.get_global_transform_with_canvas()
-        var vp := field.get_viewport().get_visible_rect().size
+        var tgt: Control = trigger if on_trigger else field
+        var xf := tgt.get_global_transform_with_canvas()
+        var vp := tgt.get_viewport().get_visible_rect().size
         var css := Vector2(float(win.innerWidth), float(win.innerHeight))
         var k := Vector2(css.x / maxf(1.0, vp.x), css.y / maxf(1.0, vp.y))
         var pos := xf.origin * k
-        var size := field.size * xf.get_scale() * k
+        var size := tgt.size * xf.get_scale() * k
         el.style.left = "%dpx" % roundi(pos.x)
         el.style.top = "%dpx" % roundi(pos.y)
         el.style.width = "%dpx" % roundi(size.x)
@@ -222,8 +259,27 @@ func _process(_delta):
     elif field.text != _last:
         el.value = field.text
     _last = field.text
+    if str(el.dataset.chip) != "" and str(el.dataset.chip) != "undefined":
+        var cid := str(el.dataset.chip)
+        el.dataset.chip = ""
+        chip_pressed.emit(cid)
+        _chips_t = 0.0   # atualiza já (ex.: PARA TODOS / SÓ ALIADO)
     if str(el.dataset.submit) == "1":
         el.dataset.submit = ""
         field.text_submitted.emit(field.text)
         _last = field.text
         el.value = field.text
+
+
+## R180e · chips em cima da barra (refaz só quando a lista muda)
+func _sync_chips(delta: float) -> void:
+    _chips_t -= delta
+    if _chips_t > 0.0 or not chips_provider.is_valid(): return
+    _chips_t = 0.5
+    var items: Array = chips_provider.call()
+    var j := JSON.stringify(items)
+    if j == _chips_json: return
+    _chips_json = j
+    JavaScriptBridge.eval("""(() => { const c = document.getElementById(%s + '-chips'); if (!c) return; c.innerHTML = '';
+        for (const it of %s) { const b = document.createElement('button'); b.type = 'button'; b.dataset.id = it.id; b.textContent = it.text;
+            if (it.sel) b.className = 'sel'; c.appendChild(b); } })()""" % [JSON.stringify(dom_id), j])

@@ -38,6 +38,8 @@ var emote_button: Button
 var emote_row: ScrollContainer   # R176.8c · rola quando há muitos emotes (antes a fileira vazava por cima do campo)
 var emote_flow: HFlowContainer
 var bubble_layer: Control
+var web_field: Node                  # R180e · campo HTML (web no celular)
+var chat_buttons: Array = []         # R180e · botões CHAT da partida (HUD do celular, pele do tabuleiro…): o 1º visível é o gatilho
 ## R169 · CHAT CONTRA O COMPUTADOR (fase de testes): o mesmo chat e os mesmos EMOTES funcionam na partida contra
 ## o bot, só no aparelho (nada vai ao servidor). O bot responde com um emote de vez em quando.
 var local_mode := false
@@ -163,7 +165,12 @@ func setup(service):
     input.add_child(hint)
     row.add_child(input)
     # Web no celular: campo HTML real sobre o LineEdit para o teclado virtual abrir ao tocar.
-    preload("res://ui_v022/web_text_field.gd").attach(input, true)   # R90 · barra de envio acima do teclado
+    web_field = preload("res://ui_v022/web_text_field.gd").attach(input, true)   # R90 · barra de envio acima do teclado
+    # R180e · celular (navegador): o CHAT da partida é SÓ a barra de digitar — o campo fica invisível em cima do botão
+    # CHAT; tocar abre o teclado e a barra. A janela grande não abre. Emotes rápidos em chips em cima da barra.
+    web_field.trigger_fn = func(): return _chat_trigger()
+    web_field.chips_provider = func(): return _chips()
+    web_field.chip_pressed.connect(func(id): send_emote(id))
     send_button = _small(row, "ENVIAR", send_current)
     send_button.name = "ChatSend"
     toggle_button = Button.new()
@@ -413,6 +420,61 @@ func show_bubble(text: String, mine: bool, who: String, emote_id := ""):
     tw.chain().tween_property(p, "modulate:a", 0.0, 0.4)
     tw.chain().tween_callback(p.queue_free)
 
+## R180e · modo barra (web no celular): o botão CHAT visível agora vira o gatilho do teclado
+func bar_mode() -> bool:
+    return web_field != null and web_field.has_method("wanted") and web_field.wanted(get_viewport()) and active()
+
+var _find_t := 0
+func _chat_trigger():
+    if not active(): return null
+    # os botões CHAT da partida podem nascer antes ou depois do chat: procura pelo nome (no máx. 1x por segundo)
+    var now := Time.get_ticks_msec()
+    if now - _find_t > 1000:
+        _find_t = now
+        for nm in ["Hud_chat", "HudCorner_chat", "Skin_chatbar"]:
+            var b = get_tree().root.find_child(nm, true, false)
+            if b is Control and not chat_buttons.has(b): chat_buttons.append(b)
+    for b in chat_buttons:
+        if is_instance_valid(b) and (b as Control).is_visible_in_tree(): return b
+    if is_instance_valid(toggle_button) and toggle_button.is_visible_in_tree(): return toggle_button
+    return null
+
+func _chips() -> Array:
+    var out := []
+    if not EmotePrefs.enabled(): return out
+    for e in ShopCatalog.my_emotes(Cosmetics.shop_owned): out.append({"id": String(e.id), "text": String(e.text)})
+    return out
+
+## R180e · mensagem de TEXTO no celular: balão perto do cartão de quem mandou (a janela do chat não abre mais)
+func show_text_bubble(text: String, mine: bool, who: String):
+    if text.strip_edges().is_empty(): return
+    if bubble_layer == null:
+        bubble_layer = Control.new()
+        bubble_layer.name = "EmoteBubbles"
+        bubble_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        bubble_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+        add_child(bubble_layer)
+    var nm := "ChatBubble_" + ("me" if mine else "opp")
+    for c in bubble_layer.get_children():
+        if c.name == nm:
+            bubble_layer.remove_child(c)
+            c.queue_free()
+    var vs := get_viewport().get_visible_rect().size
+    var a := Rect2()
+    if avatar_rect.is_valid(): a = avatar_rect.call(mine)
+    if not a.has_area(): a = Rect2(Vector2(12, vs.y * (0.72 if mine else 0.12)), Vector2(64, 64))
+    var p: Control = preload("res://social/chat_bubble.gd").make(who, text, minf(vs.x * 0.72, 380.0), mine)
+    p.name = nm
+    bubble_layer.add_child(p)
+    p.reset_size()
+    var sz := p.get_combined_minimum_size()
+    var x := clampf(a.position.x, 6.0, maxf(6.0, vs.x - sz.x - 6.0))
+    # adversário: logo abaixo do cartão dele; você: logo acima do seu cartão
+    var y := (a.end.y + 8.0) if not mine else (a.position.y - sz.y - 8.0)
+    y = clampf(y, 6.0, maxf(6.0, vs.y - sz.y - 6.0))
+    p.position = Vector2(floorf(x), floorf(y))
+    p.play(self)
+
 ## Preferência mudou (Configurações / opções da partida): desligar some com as faixas na hora.
 func emotes_pref_changed():
     if bubble_layer != null and not EmotePrefs.enabled():
@@ -439,7 +501,9 @@ func _on_message(msg: Dictionary):
                 _add_line(msg)
                 if msg.has("emote"):   # R119
                     show_bubble(String(msg.get("text", "")), String(msg.get("from_color", "")) == my_color, String(msg.get("nickname", "")), String(msg.get("emote", "")))
-                if String(msg.get("from_color", "")) != my_color and not _visible_now():
+                elif not _visible_now() and Mobile.active(get_viewport()):   # R180e · celular: balão com a mensagem
+                    show_text_bubble(String(msg.get("text", "")), String(msg.get("from_color", "")) == my_color, String(msg.get("nickname", "")))
+                if String(msg.get("from_color", "")) != my_color and not _visible_now() and not Mobile.active(get_viewport()):   # R180e · celular: o balão já avisa
                     unread += 1
                     _refresh_toggle()
         "chat_history":

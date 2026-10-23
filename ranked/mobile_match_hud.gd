@@ -762,6 +762,7 @@ func _build_nav() -> void:
 	nav.add_child(art)
 	for spec in [["home", "INÍCIO", "ico_home"], ["actions", "AÇÕES", "ico_bars"], ["chat", "CHAT", "ico_chat"]]:
 		var b := _flat_button("Hud_" + String(spec[0]))
+		if spec[0] == "chat" and stage.match_chat != null: stage.match_chat.chat_buttons.append(b)   # R180e · gatilho da barra do chat
 		var ic := TextureRect.new()
 		ic.name = "Icon"
 		ic.texture = tex(String(spec[2]))
@@ -823,6 +824,7 @@ func _fit_nav_button(b: Button) -> void:
 func _build_corner() -> void:
 	for spec in [["back", "l_back"], ["gear", "l_gear"], ["chat", "l_chat"], ["tab", "l_tab"]]:
 		var b := _flat_button("HudCorner_" + String(spec[0]))
+		if spec[0] == "chat" and stage.match_chat != null: stage.match_chat.chat_buttons.append(b)   # R180e · gatilho da barra do chat
 		if spec[0] == "chat":
 			# R177b · deitado: CHAT é um botão retangular grande embaixo da coluna da direita (placa do jogo,
 			# ícone do balão + CHAT), não mais o quadradinho no alto

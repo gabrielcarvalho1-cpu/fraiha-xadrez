@@ -749,6 +749,7 @@ func _build_mobile_controls() -> void:
         b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
         layer.add_child(b)
         mob_buttons[id] = b
+        if id == "chatbar" and stage.match_chat != null: stage.match_chat.chat_buttons.append(b)   # R180e
         b.hide()
     mob_buttons.sound.pressed.connect(func(): stage.hub.toggle_sound())
     mob_buttons.gear.pressed.connect(func(): toggle_menu())

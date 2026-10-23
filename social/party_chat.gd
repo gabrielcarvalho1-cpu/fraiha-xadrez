@@ -15,6 +15,7 @@ var names: Array = []              # nomes da mesa já girados (você = 0)
 var messages: Array = []
 var unread := 0
 var opened := false
+var web_field: Node   # R180e
 var toggle: Button
 var panel: PanelContainer
 var title: Label
@@ -33,6 +34,7 @@ var panel_style: StyleBoxFlat
 var local := false
 var emote_row: HFlowContainer
 const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
+const Mobile = preload("res://ui_v022/mobile_layout.gd")
 const EmotePrefs := preload("res://social/emote_prefs.gd")
 const EmoteBanner := preload("res://social/emote_banner.gd")
 ## R177b · onde está a foto de cada lugar da mesa (0 = você), em pixels da tela — o modo (XEQUE/MARCHA) informa
@@ -145,7 +147,14 @@ func setup(acc):
     input.text_submitted.connect(func(_t): send_current())
     row.add_child(input)
     # R90 · Web no celular: campo HTML real (teclado abre no iPhone) com barra de envio fixa acima do teclado
-    preload("res://ui_v022/web_text_field.gd").attach(input, true)
+    web_field = preload("res://ui_v022/web_text_field.gd").attach(input, true)
+    # R180e · celular (navegador): só a barra de digitar — campo invisível em cima do botão CHAT da mesa; a janela
+    # grande não abre. Chips em cima da barra: PARA TODOS / SÓ ALIADO (Marcha) e os emotes.
+    web_field.trigger_fn = func(): return toggle if visible and not blocked and toggle != null and toggle.is_visible_in_tree() else null
+    web_field.chips_provider = func(): return _chips()
+    web_field.chip_pressed.connect(func(id):
+        if String(id).begins_with("to:"): set_to(String(id).substr(3))
+        else: send_emote(String(id)))
     send_btn = Button.new()
     var send := send_btn
     send.text = "ENVIAR"
@@ -299,13 +308,58 @@ func _on_message(msg: Dictionary):
             messages.append(msg)
             if messages.size() > 60: messages.pop_front()
             if msg.has("emote"): show_emote(msg)   # R177b · o emote aparece na mesa (faixa ao lado da foto de quem mandou)
-            if not opened and int(msg.get("from_seat", 0)) != 0: unread += 1
+            elif not opened and Mobile.active(get_viewport()): show_text_bubble(msg)   # R180e · celular: balão com a mensagem
+            if not opened and int(msg.get("from_seat", 0)) != 0 and not Mobile.active(get_viewport()): unread += 1   # R180e · celular: o balão já avisa
             _rebuild()
         "party_chat_history":
             messages = (msg.get("messages", []) as Array).duplicate()
             _rebuild()
         "party_chat_error":
             status.text = String(msg.get("message", ""))
+
+func _chips() -> Array:
+    var out := []
+    if game == "marcha" and not local:
+        out.append({"id": "to:all", "text": "PARA TODOS", "sel": to == "all"})
+        out.append({"id": "to:ally", "text": "SÓ ALIADO", "sel": to != "all"})
+    if EmotePrefs.enabled():
+        for e in ShopCatalog.my_emotes(Cosmetics.shop_owned): out.append({"id": String(e.id), "text": String(e.text)})
+    return out
+
+## R180e · mensagem de TEXTO no celular: balão perto do cartão de quem mandou (a janela do chat não abre mais)
+func show_text_bubble(m: Dictionary):
+    var text := String(m.get("text", "")).strip_edges()
+    if text.is_empty(): return
+    if bubble_layer == null:
+        bubble_layer = Control.new()
+        bubble_layer.name = "PartyEmoteBubbles"
+        bubble_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        bubble_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        add_child(bubble_layer)
+    var seat := int(m.get("from_seat", 0))
+    var mine := seat == 0
+    var nm := "PartyText_%d" % seat
+    for c in bubble_layer.get_children():
+        if c.name == nm:
+            bubble_layer.remove_child(c)
+            c.queue_free()
+    var vs := get_viewport().get_visible_rect().size
+    var a := Rect2()
+    if seat_rect.is_valid(): a = seat_rect.call(seat)
+    if not a.has_area(): a = Rect2(Vector2(vs.x * 0.5 - 40, vs.y * (0.62 if mine else 0.12)), Vector2(80, 80))
+    var who := String(m.get("nickname", ""))
+    if String(m.get("to", "all")) != "all": who += " (aliado)"
+    var p: Control = preload("res://social/chat_bubble.gd").make(who, text, minf(vs.x * 0.7, 360.0), mine)
+    p.name = nm
+    bubble_layer.add_child(p)
+    p.reset_size()
+    var sz := p.get_combined_minimum_size()
+    var x := clampf(a.get_center().x - sz.x / 2.0, 6.0, maxf(6.0, vs.x - sz.x - 6.0))
+    var y := a.end.y + 6.0
+    if mine and vs.y > vs.x: y = a.position.y - sz.y - 6.0
+    y = clampf(y, 6.0, maxf(6.0, vs.y - sz.y - 6.0))
+    p.position = Vector2(floorf(x), floorf(y))
+    p.play(self)
 
 func _rebuild():
     if list == null: return
