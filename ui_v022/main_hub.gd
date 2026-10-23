@@ -18,7 +18,7 @@ const ConteudoExtra = preload("res://web_content/conteudo_extra.gd")   # R137
 const DESIGN = Vector2(1672, 941)
 const FRAME_MARGIN = 0.0
 const EDGE_CROP = 1.035
-const APP_VERSION = "0.37"
+const APP_VERSION = "0.38"
 # Home oficial (Fase 8.2): mesma composição com painéis, conta, versão e Ranqueado já desenhados na arte.
 ## R89 · as artes da Home do PC (≈30 MB de textura) não são mais constantes: no celular em pé elas nem são
 ## carregadas (e são soltas quando a Home deitada sai da tela). Os nomes continuam os mesmos para o resto do código.
