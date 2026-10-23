@@ -136,10 +136,10 @@ func run():
 	art.scroll.scroll_vertical = int(art.scroll.get_v_scroll_bar().max_value)
 	await frames(3)
 	check(await reveal_tap("Ref_VOLTAR") and stage.mode == "home" and not art.visible and not ui.panel_open(), "VOLTAR volta à Home")
-	# Casual (JOGAR ONLINE) continua na lista de antes no celular
+	# R177b · Casual (JOGAR ONLINE) no celular agora usa a MESMA arte do Ranqueado (pedido do dono)
 	stage._open_casual()
 	await frames(6)
-	check(not stage.casual_ui.mobile_art.visible and stage.casual_ui.panel.visible, "JOGAR ONLINE (casual) segue a lista do celular")
+	check(stage.casual_ui.mobile_art.visible, "JOGAR ONLINE (casual) no visual do Ranqueado")
 	stage.casual_ui.close_panel()
 	print("RESULT ", "OK" if failures == 0 else "FALHAS=%d" % failures)
 	quit(0 if failures == 0 else 1)

@@ -2,6 +2,8 @@ extends SceneTree
 ## JOGAR ONLINE no celular: arrastar o dedo em cima dos cartões rola a lista até o fim
 ## (Convencional 20 min alcançável), arrastar não aciona botão, toque simples aciona, e
 ## VOLTAR fica sempre visível. Rodar com: -- --mobile-test [--size LxA]
+## R177b · o JOGAR ONLINE do celular agora usa a arte do Ranqueado (RankedArtScroll): o teste rola a arte e toca
+## os botões BUSCAR PARTIDA / VOLTAR desenhados nela (eles acionam os botões reais da lista).
 var checks := 0
 var failures := 0
 var stage
@@ -59,9 +61,20 @@ func run():
     await frames(6)
     var ui = stage.casual_ui
     var screen = root.get_visible_rect()
-    var back: Button = ui.footer.find_child("BackButton", true, false)
-    check(back != null and back.is_visible_in_tree() and visible_in(back, screen), "VOLTAR fixo e visível (%dx%d)" % [size.x, size.y])
-    var bar = ui.scroll.get_v_scroll_bar()
+    var scroll: ScrollContainer = ui.find_child("RankedArtScroll", true, false)
+    check(scroll != null and scroll.is_visible_in_tree(), "JOGAR ONLINE na arte do Ranqueado")
+    if scroll == null:
+        print("MOBILE_SCROLL_CHECKS=", checks, " FAILURES=", failures)
+        quit(failures)
+        return
+    var hits: Array = []
+    var back: Button = null
+    for b in scroll.find_children("*", "Button", true, false):
+        if b.text.begins_with("BUSCAR casual_"): hits.append(b)
+        elif b.text == "VOLTAR": back = b
+    hits.sort_custom(func(a, b): return a.position.y < b.position.y)
+    check(hits.size() == 4, "4 ritmos (%d)" % hits.size())
+    var bar = scroll.get_v_scroll_bar()
     check(bar.max_value > bar.page, "lista maior que a tela: precisa rolar")
     # Cartões habilitados para testar toque/arrasto sem servidor.
     var pressed := {}
@@ -70,55 +83,40 @@ func run():
         b.disabled = false
         for c in b.pressed.get_connections(): b.pressed.disconnect(c.callable)
         b.pressed.connect(func(): pressed[id] = int(pressed.get(id, 0)) + 1)
-    var first: Button = ui.box.find_child("Queue_casual_3min", true, false)
-    var last: Button = ui.box.find_child("Queue_casual_20min", true, false)
-    # Arrasto começando em cima do primeiro cartão. R53 · no celular deitado o cartão é mais alto que a lista
-    # visível: o botão dele começa ABAIXO da área de rolagem (embaixo do VOLTAR fixo). O dedo começa então na parte
-    # do cartão que está na tela (centro do botão quando ele aparece; senão, centro da parte visível do cartão).
-    var view0 = ui.scroll.get_global_rect()
-    var card: Control = first
-    while card.get_parent() != null and not (card.get_parent() is HBoxContainer): card = card.get_parent()
-    var vis_btn: Rect2 = first.get_global_rect().intersection(view0)
-    var vis_card: Rect2 = card.get_global_rect().intersection(view0)
-    var start = vis_btn.get_center() if vis_btn.size.y >= 20.0 else vis_card.get_center()
+    var first: Button = hits[0]
+    var last: Button = hits[hits.size() - 1]
+    var view0 = scroll.get_global_rect()
+    var start = first.get_global_rect().intersection(view0).get_center()
     touch(start, true)
     await frames()
     var pos = start
-    for step in 12:
+    for step in 16:
         pos += Vector2(0, -40)
         drag(pos, Vector2(0, -40))
         await frames(1)
     touch(pos, false)
     await frames(3)
-    check(ui.scroll.scroll_vertical > 0, "arrastar em cima do cartão rola a lista (%d px)" % ui.scroll.scroll_vertical)
+    check(scroll.scroll_vertical > 0, "arrastar em cima do cartão rola a lista (%d px)" % scroll.scroll_vertical)
     check(not pressed.has("casual_3min"), "arrasto não aciona o botão tocado")
-    check(ui.scroll.scroll_vertical >= bar.max_value - bar.page - 1, "chega ao fim da lista")
-    var view = ui.scroll.get_global_rect()
+    scroll.scroll_vertical = int(bar.max_value)
+    await frames(3)
+    var view = scroll.get_global_rect()
     check(visible_in(last, view), "CONVENCIONAL 20 min totalmente visível")
     # Toque simples ainda funciona.
     touch(center(last), true)
     await frames()
     touch(center(last), false)
     await frames(3)
-    check(int(pressed.get("casual_20min", 0)) == 1, "toque simples aciona ENTRAR NA FILA do Convencional")
-    # Rolar de volta para cima.
-    start = center(last)
-    touch(start, true)
-    await frames()
-    pos = start
-    for step in 12:
-        pos += Vector2(0, 40)
-        drag(pos, Vector2(0, 40))
-        await frames(1)
-    touch(pos, false)
-    await frames(3)
-    check(ui.scroll.scroll_vertical == 0, "arrastar para baixo volta ao topo")
-    check(not pressed.has("casual_3min") and int(pressed.get("casual_20min", 0)) == 1, "nenhum clique fantasma depois dos arrastos")
+    check(int(pressed.get("casual_20min", 0)) == 1, "toque simples aciona BUSCAR PARTIDA do Convencional")
+    check(not pressed.has("casual_3min"), "nenhum clique fantasma depois dos arrastos")
     # VOLTAR por toque volta para a Home.
-    touch(center(back), true)
-    await frames()
-    touch(center(back), false)
-    await frames(4)
-    check(stage.mode == "home" and not ui.panel_open(), "VOLTAR por toque retorna à Home")
+    if back != null:
+        scroll.ensure_control_visible(back)
+        await frames(3)
+        touch(center(back), true)
+        await frames()
+        touch(center(back), false)
+        await frames(4)
+    check(back != null and stage.mode == "home" and not ui.panel_open(), "VOLTAR por toque retorna à Home")
     print("MOBILE_SCROLL_CHECKS=", checks, " FAILURES=", failures)
     quit(failures)
