@@ -25,7 +25,7 @@ func run():
 	await shot("home")
 	# conta logada no nível 7 da temporada
 	stage.account.server_message.emit({"type": "pass_state", "available": true, "name": "Temporada de Outubro", "level": 7, "xp": 7 * 150 + 90,
-		"xp_per_level": 150, "levels": 30, "ends_in_s": 8 * 86400 + 3600})
+		"xp_per_level": 150, "levels": 40, "main_levels": 30, "ends_in_s": 8 * 86400 + 3600, "xp_boost": {"mult": 2, "ends_in_s": 4 * 86400}})
 	await frames(10)
 	await shot("home_nivel7")
 	var card = stage.hub.canvas.get_node_or_null("PassHomeCard") if stage.hub.get("canvas") != null else null

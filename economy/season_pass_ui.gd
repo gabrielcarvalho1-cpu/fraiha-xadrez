@@ -111,7 +111,8 @@ func _render():
 	name_l.clip_text = true
 	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(name_l)
-	var lv := label("NÍVEL %d/%d" % [level, levels], 18 if narrow() else 22, GOLD)
+	var main_l := int(state.get("main_levels", levels))   # R178 · 30 níveis + bônus
+	var lv := label(("NÍVEL %d/%d" % [level, main_l]) if level <= main_l else ("BÔNUS %d/%d" % [level - main_l, levels - main_l]), 18 if narrow() else 22, GOLD)
 	lv.name = "PassLevel"
 	top.add_child(lv)
 	var bar := ProgressBar.new()
@@ -134,6 +135,11 @@ func _render():
 	var r: Dictionary = state.get("xp_rules", {}) if state.get("xp_rules") is Dictionary else {}
 	var sub := "%s XP para o próximo nível · termina em %s" % ["—" if level >= levels else str((level + 1) * per - xp), _left(int(state.get("ends_in_s", 0)))]
 	head.add_child(_wrap(label(sub, 13, CREAM, true)))
+	var boost = state.get("xp_boost")
+	if boost is Dictionary:   # R178 · XP EM DOBRO (lançamento)
+		var bl := label("XP EM DOBRO! Toda XP vale 2x por mais %s." % _left(int(boost.get("ends_in_s", 0))), 15, Color("ffd96a"), true)
+		bl.name = "PassXpBoost"
+		head.add_child(_wrap(bl))
 	head.add_child(_wrap(label("XP: vitória online %d · partida online %d · missão do dia %d · entrada do dia %d" % [int(r.get("win", 30)), int(r.get("play", 10)), int(r.get("mission", 50)), int(r.get("daily", 20))], 12, DIM, true)))
 	var cl := label(("FAIXA CLUB ATIVA — você recebe as duas faixas." if club else "FAIXA CLUB: assine o Club FRAIHA e receba também a faixa Club (inclusive dos níveis que já alcançou)."), 13, BLUE if club else DIM, true)
 	cl.name = "PassClubNote"
@@ -168,8 +174,10 @@ func _scroll_to(level: int):
 
 func _reward_text(rw) -> String:
 	if not (rw is Dictionary): return "—"
-	if rw.has("crowns"): return "%d COROAS" % int(rw.crowns)
-	return "%s: %s" % [{"emote": "EMOTE", "title": "TÍTULO", "frame": "MOLDURA", "avatar": "AVATAR"}.get(String(rw.get("kind", "")), "ITEM"), String(rw.get("name", ""))]
+	if not rw.has("item"): return "%d COROAS" % int(rw.get("crowns", 0))
+	var t := "%s: %s" % [{"emote": "EMOTE", "title": "TÍTULO", "frame": "MOLDURA", "avatar": "AVATAR"}.get(String(rw.get("kind", "")), "ITEM"), String(rw.get("name", ""))]
+	if rw.has("crowns"): t += " + %d COROAS" % int(rw.crowns)   # R178 · nível 30: título + Coroas
+	return t
 
 func _row(rw: Dictionary, level: int, club: bool) -> Control:
 	var l := int(rw.get("level", 0))
@@ -187,7 +195,7 @@ func _row(rw: Dictionary, level: int, club: bool) -> Control:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 8)
 	p.add_child(h)
-	var n := label(str(l), 18, GOLD if done else DIM)
+	var n := label(str(l) if not bool(rw.get("bonus", false)) else "%d★" % l, 18, GOLD if done else DIM)   # R178 · ★ = nível bônus
 	n.custom_minimum_size = Vector2(ts(56), 0)
 	h.add_child(n)
 	var f = rw.get("free")
@@ -197,7 +205,7 @@ func _row(rw: Dictionary, level: int, club: bool) -> Control:
 	h.add_child(ft)
 	_thumb(h, f, ft)
 	var c = rw.get("club")
-	var item: bool = c is Dictionary and not c.has("crowns")
+	var item: bool = c is Dictionary and c.has("item")
 	var ct := label(("✓ " if done and club else "") + _reward_text(c), 13 if narrow() else 15, (BLUE if club and done else (GOLD if item else DIM)), not item)
 	ct.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ct.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

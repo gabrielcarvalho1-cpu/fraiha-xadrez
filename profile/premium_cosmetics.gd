@@ -23,17 +23,26 @@ const BADGE_ART_SMALL := {
 ## Títulos exibidos sob o nome. "" = nenhum.
 ## R116 · depois dos títulos de direito, os da LOJA DE COROAS (economy/crown_store_catalog.gd; comprados = para sempre).
 const TITLES := ["", "fundador", "lendario", "club",
-	"estrategista", "mestre_tatico", "rei_do_blitz", "guardiao", "dama_de_ferro", "cavaleiro", "gambito", "lenda_xeque", "senhor_marcha", "imperador"]
+	"estrategista", "mestre_tatico", "rei_do_blitz", "guardiao", "dama_de_ferro", "cavaleiro", "gambito", "lenda_xeque", "senhor_marcha", "imperador",
+	# R178 · títulos do PASSE DA TEMPORADA (não estão à venda; a conta precisa ter ganhado)
+	"pt_escudeiro", "pt_peao_valente", "pt_aprendiz_coroa", "pt_conselheiro", "pt_nobre_corte", "pt_estrela_corte", "pt_campeao_temporada", "pt_lenda_temporada"]
+const PASS_TITLES := ["pt_escudeiro", "pt_peao_valente", "pt_aprendiz_coroa", "pt_conselheiro", "pt_nobre_corte", "pt_estrela_corte", "pt_campeao_temporada", "pt_lenda_temporada"]
 const TITLE_TEXT := {"": "", "fundador": "Fundador do Reino", "lendario": "Fundador Lendário", "club": "Membro do Club FRAIHA",
 	"estrategista": "Estrategista", "mestre_tatico": "Mestre Tático", "rei_do_blitz": "Rei do Blitz", "guardiao": "Guardião do Reino",
 	"dama_de_ferro": "Dama de Ferro", "cavaleiro": "Cavaleiro da Coroa", "gambito": "Mestre do Gambito", "lenda_xeque": "Lenda do XEQUE",
-	"senhor_marcha": "Senhor da Marcha", "imperador": "Imperador do Tabuleiro"}
+	"senhor_marcha": "Senhor da Marcha", "imperador": "Imperador do Tabuleiro",
+	"pt_escudeiro": "Escudeiro do Reino", "pt_peao_valente": "Peão Valente", "pt_aprendiz_coroa": "Aprendiz da Coroa",
+	"pt_conselheiro": "Conselheiro Real", "pt_nobre_corte": "Nobre da Corte", "pt_estrela_corte": "Estrela da Corte",
+	"pt_campeao_temporada": "Campeão da Temporada", "pt_lenda_temporada": "Lenda da Temporada"}
 ## R176.9 · cada título tem COR PRÓPRIA (e brilho, title_tag.gd): cartão do adversário no início da partida,
 ## CHAT GLOBAL, cartão do lobby e a aba TÍTULOS do Perfil.
 const TITLE_COLOR := {"fundador": Color("ffcf5a"), "lendario": Color("ff8a4a"), "club": Color("5fe39a"),
 	"estrategista": Color("7fc8ff"), "mestre_tatico": Color("9ea8ff"), "rei_do_blitz": Color("ffe066"), "guardiao": Color("8ce0c8"),
 	"dama_de_ferro": Color("d7dde8"), "cavaleiro": Color("f2b866"), "gambito": Color("ff9db0"), "lenda_xeque": Color("ff6b6b"),
-	"senhor_marcha": Color("c9a2ff"), "imperador": Color("ffd84a")}
+	"senhor_marcha": Color("c9a2ff"), "imperador": Color("ffd84a"),
+	"pt_escudeiro": Color("b8d98a"), "pt_peao_valente": Color("e6c9a0"), "pt_aprendiz_coroa": Color("f0d890"),
+	"pt_conselheiro": Color("8fd3ff"), "pt_nobre_corte": Color("d9a8ff"), "pt_estrela_corte": Color("ffe9a8"),
+	"pt_campeao_temporada": Color("ffb347"), "pt_lenda_temporada": Color("ff7ad9")}
 static func title_color(id: String) -> Color:
     return TITLE_COLOR.get(id, Color("f6d27a"))
 const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
@@ -65,6 +74,7 @@ static func requirement(kind: String, id: String) -> String:
     if kind == "frame" and id in ELO_FRAMES: return "league"
     var shop := ShopCatalog.item(id)
     if not shop.is_empty() and String(shop.kind) == kind: return "shop"
+    if kind == "title" and id in PASS_TITLES: return "pass"   # R178
     if id == "lendario": return "legend"
     if id == "fundador": return "founder"
     if kind == "badge" and id.begins_with("club_"): return "club"
@@ -76,7 +86,7 @@ static func allowed(kind: String, id: String, founder: bool, club: bool, legend 
         "founder": return founder
         "legend": return founder and legend
         "club": return club
-        "shop": return id in shop_owned
+        "shop", "pass": return id in shop_owned
         "league": return highest_league >= elo_index(id)
     return true
 
@@ -86,6 +96,7 @@ static func lock_hint(kind: String, id: String) -> String:
         "legend": return "Exclusivo do Fundador Lendário"
         "club": return "Exclusivo do Club FRAIHA"
         "shop": return "Loja de Coroas · %d Coroas" % int(ShopCatalog.item(id).get("price", 0))
+        "pass": return "Prêmio do Passe da Temporada"
         "league": return "Alcance a liga %s no Ranked" % LEAGUE_NAMES[maxi(0, elo_index(id))]
     return ""
 

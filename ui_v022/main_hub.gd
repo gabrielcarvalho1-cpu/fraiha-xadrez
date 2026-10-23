@@ -1591,6 +1591,7 @@ func request_apply_inspected():
         var tst: String = title_gallery.state_of(tid)
         if tst == "locked":
             if Cosmetics.requirement("title", tid) == "shop": crowns_client().open_store("title")
+            elif Cosmetics.requirement("title", tid) == "pass": crowns_client().open_pass()   # R178
             else: open_premium("personalize")
             return
         if tst == "selected": return
@@ -1815,7 +1816,7 @@ func _refresh_title_detail():
     var b: Button = avatar_detail.apply
     b.visible = true
     if st == "locked":
-        b.text = "VER NA LOJA" if Cosmetics.requirement("title", id) == "shop" else "CONHECER"
+        b.text = "VER NA LOJA" if Cosmetics.requirement("title", id) == "shop" else ("VER O PASSE" if Cosmetics.requirement("title", id) == "pass" else "CONHECER")
         b.disabled = false
     else:
         b.text = "EM USO" if st == "selected" else "USAR TÍTULO"

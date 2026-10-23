@@ -86,6 +86,21 @@ func _days() -> String:
 	if dd >= 1: return "faltam %d dia%s" % [dd, "" if dd == 1 else "s"]
 	return "termina em %dh" % maxi(1, s / 3600)
 
+## R178 · XP EM DOBRO (lançamento): selo vermelho piscando
+func _boost() -> bool: return state.get("xp_boost") is Dictionary
+func _xp2(at: Vector2, h: float) -> float:
+	var txt := "XP 2x"
+	var fs := int(h * 0.62)
+	var w := F_INFO.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + h * 0.5
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("c8202a").lerp(Color("ff4a3a"), 0.5 + 0.5 * sin(t * 5.0))
+	sb.set_corner_radius_all(int(h * 0.25))
+	sb.border_color = Color("ffd96a")
+	sb.set_border_width_all(1)
+	draw_style_box(sb, Rect2(at, Vector2(w, h)))
+	draw_string(F_INFO, Vector2(at.x + h * 0.25, at.y + h * 0.74), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
+	return w
+
 func _frame(r: Rect2, rad: float):
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color("0b1530")
@@ -178,6 +193,10 @@ func _draw():
 		var s2 := int(h * 0.32)
 		draw_string_outline(F_TITLE, Vector2(c.x - F_TITLE.get_string_size(nt, HORIZONTAL_ALIGNMENT_LEFT, -1, s2).x / 2.0, c.y + rr * 0.62), nt, HORIZONTAL_ALIGNMENT_LEFT, -1, s2, 3, Color("120a04"))
 		draw_string(F_TITLE, Vector2(c.x - F_TITLE.get_string_size(nt, HORIZONTAL_ALIGNMENT_LEFT, -1, s2).x / 2.0, c.y + rr * 0.62), nt, HORIZONTAL_ALIGNMENT_LEFT, -1, s2, GOLD)
+		if _boost():   # selo XP 2x por cima da borda, acima do nível
+			var bh := h * 0.26
+			var bw := F_INFO.get_string_size("XP 2x", HORIZONTAL_ALIGNMENT_LEFT, -1, int(bh * 0.62)).x + bh * 0.5
+			_xp2(Vector2(c.x - bw / 2.0, -bh * 0.45), bh)
 	else:
 		# faixa fina do celular em pé: coroa · PASSE DA TEMPORADA · NÍV X · barra · ›
 		_crown(Vector2(h * 0.62, h * 0.5), h * 0.86)
@@ -193,7 +212,9 @@ func _draw():
 		sb.set_corner_radius_all(int(h * 0.14))
 		draw_style_box(sb, cr)
 		draw_string(F_INFO, Vector2(cr.position.x + h * 0.18, h * 0.63), chip, HORIZONTAL_ALIGNMENT_LEFT, -1, cs, Color("2a1604"))
-		x = cr.end.x + h * 0.25
+		x = cr.end.x + h * 0.2
+		if _boost():
+			x += _xp2(Vector2(x, h * 0.17), h * 0.66) + h * 0.2
 		var bw := size.x - x - h * 0.75
 		if bw > h: _bar(Rect2(x, h * 0.42, bw, h * 0.18), _frac() if has else 0.0)
 		var ar := "›"

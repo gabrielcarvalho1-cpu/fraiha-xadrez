@@ -31,10 +31,11 @@ test('temporada e níveis', () => {
   assert.equal(P.seasonOf(Date.parse('2026-11-01T02:59:00Z')), '2026-10', '31/10 23:59 de Brasília');
   assert.equal(P.seasonOf(Date.parse('2026-11-01T03:00:00Z')), '2026-11');
   assert.equal(P.seasonName('2026-10'), 'Temporada de Outubro');
-  assert.equal(P.levelOf(0), 0); assert.equal(P.levelOf(149), 0); assert.equal(P.levelOf(150), 1); assert.equal(P.levelOf(1e9), 30);
+  assert.equal(P.levelOf(0), 0); assert.equal(P.levelOf(149), 0); assert.equal(P.levelOf(150), 1); assert.equal(P.levelOf(1e9), 40);   // R178 · +10 níveis bônus
   const r = P.rewards('2026-10');
-  assert.equal(r.length, 30);
-  assert.ok(r[9].club.item && r[19].club.item && r[29].club.crowns === 500, 'itens nos níveis 10 e 20 e 500 Coroas no 30 da faixa Club (R167)');
+  assert.equal(r.length, 40);
+  assert.ok(r[4].club.item && r[9].club.item && r[19].club.item && r[29].club.crowns === 1000, 'R178 · itens nos níveis 5, 10 e 20 e 1000 Coroas no 30 da faixa Club');
+  assert.ok(r.every(x => x.free && x.club), 'R178 · prêmio em todo nível, nas duas faixas');
   assert.notDeepEqual(P.seasonItems('2026-10'), P.seasonItems('2026-11'), 'itens mudam com a temporada');
 });
 
@@ -48,9 +49,9 @@ test('faixa grátis: sobe de nível e recebe uma vez; limite de XP de partidas p
   c = await h.st.crownDaily(A, '2026-10-01');
   assert.equal(c.pass_xp, 470); assert.equal(P.levelOf(470), 3);
   const w = await h.st.crownWallet(A);
-  assert.equal(w.balance, 30, 'nível 3 da faixa grátis: +30 (sem Club, nada da faixa Club)');
+  assert.equal(w.balance, 45, 'R178 · níveis 1–3 da faixa grátis: 15 cada (sem Club, nada da faixa Club)');
   await h.SP.grant(A, '2026-10', 1, 3, false);
-  assert.equal((await h.st.crownWallet(A)).balance, 30, 'não paga duas vezes');
+  assert.equal((await h.st.crownWallet(A)).balance, 45, 'não paga duas vezes');
 });
 
 test('faixa Club: retroativo ao assinar, item da loja no nível 10 (ou +300 se já tinha)', async t => {
@@ -83,4 +84,31 @@ test('partida online dá XP do passe (via Coroas)', async t => {
   await h.backend.crowns.onGame(A, { kind: 'casual', ref: 'm1', result: 'win' }); await flush();
   const xp = (await h.st.crownDaily(A, '2026-10-01')).pass_xp;
   assert.ok(xp >= 30 && (xp - 30) % 50 === 0, 'vitória 30 (+50 por missão que completou): ' + xp);
+});
+
+// R178 · títulos exclusivos do Passe (nível 5 / 30), Coroas junto do título no 30, níveis bônus e XP em dobro
+test('R178: títulos do Passe, nível 30 com Coroas, bônus 31–40 e XP em dobro', async t => {
+  const h = await fixture(t);
+  await h.st.crownBump(A, '2026-10-01', { pass_xp: 30 * 150 });
+  await h.SP.grant(A, '2026-10', 1, 30, false);
+  const items = await h.st.crownItems(A);
+  const r = P.rewards('2026-10');
+  assert.ok(items.includes(r[4].free.item) && r[4].free.kind === 'title', 'título da faixa grátis no nível 5');
+  assert.ok(items.includes('pt_campeao_temporada'), 'Campeão da Temporada no nível 30');
+  const bal = (await h.st.crownWallet(A)).balance;
+  const coins = r.slice(0, 30).reduce((n, x) => n + (x.free.crowns || 0), 0);
+  assert.equal(bal, coins, 'Coroas da faixa grátis até o 30, inclusive as 300 do nível 30 junto do título');
+  await h.SP.grant(A, '2026-10', 31, 31, false);
+  assert.equal((await h.st.crownWallet(A)).balance, bal + 50, 'nível bônus 31: +50');
+  // título do Passe só vale para quem tem
+  const C = require('../../online_v021/accounts/cosmetics');
+  assert.ok(C.TITLES.includes('pt_campeao_temporada'));
+  const v = C.validate({ title: 'pt_lenda_temporada' }, {}, null, []);
+  assert.ok(v && v.error && /Passe/.test(v.error), 'sem o item, o título do Passe fica bloqueado');
+  // XP em dobro só dentro da janela
+  const env = { FRAIHA_PASS_XP2_FROM: '2026-11-01T03:00:00Z', FRAIHA_PASS_XP2_UNTIL: '2026-11-08T03:00:00Z' };
+  assert.equal(P.xpBoost(Date.parse('2026-10-31T12:00:00Z'), env), null);
+  assert.equal(P.xpBoost(Date.parse('2026-11-03T12:00:00Z'), env).mult, 2);
+  assert.equal(P.xpBoost(Date.parse('2026-11-08T03:00:00Z'), env), null);
+  assert.equal(P.xpBoost(Date.parse('2026-11-03T12:00:00Z'), {}), null, 'sem as datas, sem bônus');
 });

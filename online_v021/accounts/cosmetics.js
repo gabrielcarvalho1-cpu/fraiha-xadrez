@@ -18,7 +18,8 @@ const ALL_AVATARS = [...FREE_AVATARS, ...LEGACY_AVATARS, ...Object.keys(LADDER_A
 
 const BADGES = ['', 'fundador', 'club_a', 'club_b', 'club_c'];
 const SHOP_TITLES = ShopCatalog.ofKind('title');        // R116 · comprados com Coroas (para sempre)
-const TITLES = ['', 'fundador', 'lendario', 'club', ...SHOP_TITLES];   // R103 · lendario = Fundador Lendário
+const PASS_TITLES = ShopCatalog.PASS_TITLES.map(t => t.id);   // R178 · títulos do Passe (a conta precisa TER o item)
+const TITLES = ['', 'fundador', 'lendario', 'club', ...SHOP_TITLES, ...PASS_TITLES];   // R103 · lendario = Fundador Lendário
 const SHOP_FRAMES = ShopCatalog.ofKind('frame');        // R116 · molduras da Loja de Coroas
 // R166 · molduras de ELO: liberadas ao alcançar a liga (maior liga já alcançada em qualquer ritmo do Ranked)
 const ELO_FRAMES = ['elo_madeira', 'elo_ferro', 'elo_bronze', 'elo_prata', 'elo_ouro', 'elo_platina', 'elo_esmeralda', 'elo_diamante', 'elo_mestre', 'elo_grande_mestre', 'elo_challenger'];
@@ -27,6 +28,7 @@ const FRAMES = ['liga', 'club', 'fundador', ...ELO_FRAMES, ...SHOP_FRAMES];
 const need = (kind, id) => {
   if (!id || id === 'liga') return '';
   if (ShopCatalog.BY_ID[id] && ShopCatalog.BY_ID[id].kind === kind) return 'shop';
+  if (kind === 'title' && ShopCatalog.PASS_TITLE_BY_ID[id]) return 'shop';   // R178 · ganho no Passe: precisa ter
   if (id === 'lendario') return 'legend';
   if (id === 'fundador') return 'founder';
   if (kind === 'badge' && id.startsWith('club_')) return 'club';
@@ -58,7 +60,7 @@ function validate(m, ent, defeated, owned = [], highest = 0) {
     if (m[field] === undefined) continue;
     const v = String(m[field] || (kind === 'frame' ? 'liga' : ''));
     if (!list.includes(v)) return { error: 'Opção inválida.', code: 'cosmetic_invalid', field };
-    if (need(kind, v) === 'shop' && !has('shop', ent, owned || [], v)) return { error: 'Compre este item na Loja de Coroas.', code: 'cosmetic_locked', field };
+    if (need(kind, v) === 'shop' && !has('shop', ent, owned || [], v)) return { error: ShopCatalog.PASS_TITLE_BY_ID[v] ? 'Ganhe este título no Passe da Temporada.' : 'Compre este item na Loja de Coroas.', code: 'cosmetic_locked', field };
     if (kind === 'frame' && ELO_FRAMES.includes(v) && (Number(highest) || 0) < ELO_FRAMES.indexOf(v)) return { error: 'Moldura liberada ao alcançar essa liga no Ranked.', code: 'cosmetic_locked', field };
     if (!has(need(kind, v), ent, owned || [], v)) return { error: 'Item exclusivo (' + ({ founder: 'Pacote Fundador', legend: 'Fundador Lendário' }[need(kind, v)] || 'Club FRAIHA') + ').', code: 'cosmetic_locked', field };
     out[field] = v;

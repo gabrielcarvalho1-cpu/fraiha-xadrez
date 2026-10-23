@@ -69,6 +69,19 @@ const PASS_EMOTES = [
   { id: 'emote_que_jogada', track: 'club', text: 'QUE JOGADA!' },
   { id: 'emote_eu_vi', track: 'club', text: 'EU VI ESSA!' },
 ];
+// R178 · TÍTULOS que só o PASSE entrega (não estão à venda): nível 5 grátis e 15 Club em rodízio por temporada;
+// nível 30: "Campeão da Temporada" (grátis) e "Lenda da Temporada" (Club) — iguais em toda temporada
+const PASS_TITLES = [
+  { id: 'pt_escudeiro', track: 'free', name: 'Escudeiro do Reino' },
+  { id: 'pt_peao_valente', track: 'free', name: 'Peão Valente' },
+  { id: 'pt_aprendiz_coroa', track: 'free', name: 'Aprendiz da Coroa' },
+  { id: 'pt_conselheiro', track: 'club', name: 'Conselheiro Real' },
+  { id: 'pt_nobre_corte', track: 'club', name: 'Nobre da Corte' },
+  { id: 'pt_estrela_corte', track: 'club', name: 'Estrela da Corte' },
+  { id: 'pt_campeao_temporada', track: 'final', name: 'Campeão da Temporada' },
+  { id: 'pt_lenda_temporada', track: 'final_club', name: 'Lenda da Temporada' },
+];
+const PASS_TITLE_BY_ID = Object.fromEntries(PASS_TITLES.map(t => [t.id, t]));
 const ofKind = kind => ITEMS.filter(i => i.kind === kind).map(i => i.id);
 // R119 · emotes de graça (todo jogador com conta ou convidado)
 const FREE_EMOTES = [
@@ -83,4 +96,4 @@ const FREE_EMOTES = [
 ];
 const emoteText = id => { const f = FREE_EMOTES.find(e => e.id === id) || PASS_EMOTES.find(e => e.id === id); if (f) return f.text; const i = BY_ID[id]; return i && i.kind === 'emote' ? i.name : null; };
 const isFreeEmote = id => FREE_EMOTES.some(e => e.id === id);
-module.exports = { ITEMS, BY_ID, ofKind, FREE_EMOTES, emoteText, isFreeEmote, PASS_AVATARS, PASS_BY_ID, PASS_EMOTES };
+module.exports = { ITEMS, BY_ID, ofKind, FREE_EMOTES, emoteText, isFreeEmote, PASS_AVATARS, PASS_BY_ID, PASS_EMOTES, PASS_TITLES, PASS_TITLE_BY_ID };

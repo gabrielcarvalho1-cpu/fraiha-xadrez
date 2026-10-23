@@ -140,7 +140,7 @@ static func _titles(hub, parent: VBoxContainer, mh):
     option(hub, row, "Title_auto", _glyph("star"), "AUTOMÁTICO", pref == "auto", false, "", func(): mh.set_cosmetic("title", "auto"))
     for id in Cosmetics.TITLES:
         var tid: String = id
-        if Cosmetics.requirement("title", tid) == "shop" and not Cosmetics.allowed("title", tid, false, false): continue   # R116 · da loja: só os comprados
+        if Cosmetics.requirement("title", tid) in ["shop", "pass"] and not Cosmetics.allowed("title", tid, false, false): continue   # R116 · da loja: só os comprados
         var locked := not Cosmetics.allowed("title", tid, mh.is_founder(), mh.club_active(), mh.is_legend())
         var kind := "pawn" if tid.is_empty() else ("crown" if tid == "fundador" else "book")
         option(hub, row, "Title_" + (tid if not tid.is_empty() else "none"), _glyph(kind, Art.MUTED if tid.is_empty() else Art.GOLD), (Cosmetics.title_text(tid) if not tid.is_empty() else "Nenhum").to_upper(), pref == tid, locked, Cosmetics.lock_hint("title", tid), func(): mh.set_cosmetic("title", tid))
