@@ -12,6 +12,7 @@ signal draw_changed                    # R98 · oferta de empate (minha ou do ad
 signal draw_declined                   # R98 · o adversário recusou a minha oferta
 signal rematch_changed(msg: Dictionary)   # R98 · pedidos de revanche depois do fim
 const Rules = preload("res://chess/rules.gd")
+const Notation = preload("res://analysis/notation.gd")
 const ClockState = preload("res://ranked/clock_state.gd")
 var account
 var game
@@ -42,6 +43,8 @@ var requeue_pending := false
 # terminado enquanto o jogador estava fora — o adversário desistiu, o tempo acabou).
 var resync_pending := false
 # R98 · EMPATE e REVANCHE
+var san_log: Array = []      # R176.9 · lances em notação (quadro de LANCES com o chat minimizado)
+var san_base := 0            # meio-lance do 1º item de san_log (reconexão no meio da partida)
 var draw_offer := ""          # "" | "w" | "b" (quem ofereceu)
 var draw_min_ply := 2
 var rematch := {"mine": false, "theirs": false, "closed": false, "message": "", "match_id": ""}
@@ -201,6 +204,8 @@ func _on_message(msg: Dictionary):
             human_color = String(msg.you)
             opponent = msg.get("opponent", {}) if msg.get("opponent") is Dictionary else {}
             status = "starting"
+            san_log.clear()
+            san_base = 0
             draw_offer = ""
             rematch = {"mine": false, "theirs": false, "closed": false, "message": "", "match_id": ""}
             found.emit(msg)
@@ -256,6 +261,28 @@ func _on_message(msg: Dictionary):
         "acct_error":
             if kind == "ranked" and String(msg.get("code", "")) == "auth_required": problem.emit(String(msg.get("message", "")))
 
+## R176.9 · anota o lance novo (SAN) antes de trocar a posição; reconexão recomeça a lista do ponto atual.
+func _log_san(p: Dictionary, last) -> void:
+    var ply := int(p.get("ply", 0))
+    if ply <= 0:
+        san_log.clear()
+        san_base = 0
+        return
+    if ply == san_base + san_log.size(): return   # mesma posição (relógio, empate, etc.)
+    if ply == rules.ply + 1 and rules.ply == san_base + san_log.size() and last is Dictionary and last.get("from") is Array:
+        var fr := Vector2i(int(last.from[0]), int(last.from[1]))
+        var to := Vector2i(int(last.to[0]), int(last.to[1]))
+        var promo := "Q"
+        for item in p.get("board", []):
+            if int(item[0]) == to.x and int(item[1]) == to.y:
+                var code := String(item[2])
+                if code.length() > 1 and code[1] in ["Q", "R", "B", "N"]: promo = code[1]
+        if String(rules.board.get(fr, "")).is_empty(): return
+        san_log.append(Notation.san(rules, {"from": fr, "to": to, "promotion": promo}))
+        return
+    san_log.clear()
+    san_base = ply
+
 func _apply_state(msg: Dictionary):
     pending = false
     status = String(msg.status)
@@ -270,6 +297,7 @@ func _apply_state(msg: Dictionary):
     state_at = Time.get_ticks_msec()
     clock.apply_snapshot(msg.clock)
     var p: Dictionary = msg.position
+    _log_san(p, msg.get("last_move"))
     rules.board.clear()
     for item in p.board: rules.board[Vector2i(int(item[0]), int(item[1]))] = String(item[2])
     rules.turn = String(p.turn)

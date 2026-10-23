@@ -45,7 +45,8 @@ const ModeSound := preload("res://ui_v022/mode_sound.gd")
 ## R55 · painel CONFIGURAÇÕES da partida no PC (arte do dono: tools/ui_ref/config/configuracoes_ref.png)
 const EmotePrefs := preload("res://social/emote_prefs.gd")   # R176
 const CHAT_BOX := preload("res://social/art/chat_box_pc.png")   # R176 · quadro do chat (PC), mesmo lugar da arte
-const CHAT_BOX_BOT := preload("res://social/art/chat_box_pc_bot.png")   # R176 · idem, sem DENUNCIAR (contra o computador)
+const CHAT_BOX_BOT := preload("res://social/art/chat_box_pc_bot.png")
+const CHAT_BOX_EMPTY := preload("res://social/art/chat_box_pc_empty.png")   # R176.9 · moldura vazia (chat minimizado → LANCES)   # R176 · idem, sem DENUNCIAR (contra o computador)
 const SETTINGS_FRAME_PATH := "res://ranked/art/desk_settings_frame.png"   # R55.4 · só no PC (1º uso)
 const SETTINGS_PANEL := Rect2(1359, 86, 309, 333)     # R176 · + linha EMOTES (era 282)     # px da arte do PC (logo abaixo da engrenagem)
 const CREAM := Color("f3ede0")
@@ -459,9 +460,46 @@ func _skin_chat_pc(M: Dictionary) -> void:
     _ov(c.input, "size", "font_size", int(round(20 * k)))
     _ov(c.input, "color", "font_placeholder_color", Color(0.93, 0.89, 0.80, 0.78))
     _ov(c.input, "color", "font_color", Color("f1ece2"))
-    if c.restore_button.visible:
-        c.restore_button.position = R(Rect2(M.title[0] - 8, M.title[1] - 28, 120, 38)).position
-        c.restore_button.size = R(Rect2(0, 0, 120, 38)).size
+    # R176.9 · chat MINIMIZADO (todas as filas e contra o computador): a moldura fica vazia e mostra os LANCES;
+    # um botão CHAT discreto (com as mensagens novas) no canto de cima reabre — nada de caixa azul por cima da arte
+    if c.minimized and c.active():
+        _rec(c.panel, "visible", false)
+        bg.chat_tex = CHAT_BOX_EMPTY
+        bg.queue_redraw()
+        _ensure_bot_moves()
+        bot_moves.show()
+        bot_moves.scroll_following = true
+        bot_moves.position = R(Rect2(M.chat.position.x + 36, M.chat.position.y + 30, M.chat.size.x - 70, M.chat.size.y - 50)).position
+        bot_moves.size = R(Rect2(0, 0, M.chat.size.x - 70, M.chat.size.y - 50)).size
+        _style_bot_moves(21)
+        _skin_restore(M)
+    elif is_instance_valid(bot_moves) and stage.mode != "bot":
+        bot_moves.hide()
+
+## botão CHAT do quadro minimizado: placa de madeira pequena com borda dourada, no canto de cima à direita
+func _skin_restore(M: Dictionary) -> void:
+    var b: Button = stage.match_chat.restore_button
+    _rec(b, "visible", true)
+    var rr := Rect2(M.chat.end.x - 36 - 138, M.chat.position.y + 30, 138, 40)
+    _place(b, rr)
+    var sb := StyleBoxFlat.new()
+    sb.bg_color = Color("2b1b10")
+    sb.border_color = Color("b98a3e")
+    sb.set_border_width_all(maxi(1, int(round(2 * k))))
+    sb.set_corner_radius_all(int(round(5 * k)))
+    sb.content_margin_left = 8 * k
+    sb.content_margin_right = 8 * k
+    var hi: StyleBoxFlat = sb.duplicate()
+    hi.bg_color = Color("3d2716")
+    hi.border_color = Color("f0c870")
+    _ov(b, "style", "normal", sb)
+    for st in ["hover", "pressed", "focus"]: _ov(b, "style", st, hi)
+    _ov(b, "font", "font", FONT_BOLD)
+    _ov(b, "size", "font_size", int(round(17 * k)))
+    var unread: bool = int(stage.match_chat.unread) > 0
+    for cn in ["font_color", "font_hover_color", "font_pressed_color"]: _ov(b, "color", cn, Color("ffe08a") if unread else Color("e9dcc0"))
+    _ov(b, "color", "font_outline_color", Color(0, 0, 0, 0.6))
+    _ov(b, "const", "outline_size", 3)
 
 func _apply_mobile(M: Dictionary) -> void:
     _ghost(stage.home_button, M.home, "home")
@@ -521,6 +559,9 @@ func _apply_bot(M: Dictionary) -> void:
             if is_instance_valid(bot_moves): bot_moves.hide()
             return
         _rec(c.panel, "visible", false)
+        bg.chat_tex = null   # a arte do bot já tem a moldura vazia
+        bg.queue_redraw()
+        return   # LANCES + botão CHAT já postos em _skin_chat_pc
     elif c != null:
         for n in [c.panel, c.restore_button]: _rec(n, "visible", false)
     bg.chat_tex = null   # R176 · quadro de LANCES: a arte do bot já tem a moldura vazia
@@ -565,13 +606,44 @@ func _style_bot_moves(fs: float) -> void:
     bot_moves.add_theme_color_override("default_color", Color("efe6d2"))
     _bot_moves_n = -1
 
-## Texto do quadro de lances (título LANCES + pares numerados).
-func _bot_moves_text(log: Array) -> String:
+## Lances da partida em andamento: [lista SAN, meio-lance do 1º item] (contra o computador ou online).
+func _moves_source() -> Array:
+    if stage.mode == "bot" and stage.bot_controller != null: return [stage.bot_controller.san_log, 0]
+    var ui = match_ui()
+    var ctl = ui.controller if ui != null and ui.get("controller") != null else null
+    if ctl != null and ctl.get("san_log") != null: return [ctl.san_log, int(ctl.san_base)]
+    return [[], 0]
+
+## R176.9 · mantém o quadro de LANCES atualizado (bot e online) e o contador do botão CHAT
+func _keep_moves() -> void:
+    if not is_instance_valid(bot_moves) or not bot_moves.visible: return
+    var src := _moves_source()
+    var log: Array = src[0]
+    var sig := log.size() * 1000 + int(src[1])
+    if sig != _bot_moves_n:
+        _bot_moves_n = sig
+        bot_moves.text = _bot_moves_text(log, int(src[1])) if kind == "pc" else _bot_moves_line(log)
+    var c = stage.match_chat
+    if c != null and c.restore_button.visible and kind == "pc":
+        var unread: bool = int(c.unread) > 0
+        var want := Color("ffe08a") if unread else Color("e9dcc0")
+        if c.restore_button.get_theme_color("font_color") != want:
+            for cn in ["font_color", "font_hover_color", "font_pressed_color"]: c.restore_button.add_theme_color_override(cn, want)
+
+## Texto do quadro de lances (título LANCES + pares numerados). `base`: meio-lance do 1º item (reconexão).
+func _bot_moves_text(log: Array, base := 0) -> String:
     var t := "[b][color=#f3d27e]LANCES[/color][/b]\n"
-    if log.is_empty(): return t + "\n[color=#a8a294]A partida começa com as BRANCAS.[/color]"
+    if log.is_empty() and base == 0: return t + "\n[color=#a8a294]A partida começa com as BRANCAS.[/color]"
     t += "[table=3]"
-    for i in range(0, log.size(), 2):
-        t += "[cell][color=#a8a294]%d.[/color]   [/cell][cell]%s      [/cell][cell]%s[/cell]" % [i / 2 + 1, _esc(String(log[i])), _esc(String(log[i + 1])) if i + 1 < log.size() else ""]
+    var i := 0
+    if base > 0 and log.is_empty(): t += "[cell][color=#a8a294]…[/color][/cell][cell][/cell][cell][/cell]"
+    if base % 2 == 1 and not log.is_empty():   # começou num lance das pretas
+        t += "[cell][color=#a8a294]%d.[/color]   [/cell][cell]…      [/cell][cell]%s[/cell]" % [base / 2 + 1, _esc(String(log[0]))]
+        i = 1
+    while i < log.size():
+        var ply := base + i
+        t += "[cell][color=#a8a294]%d.[/color]   [/cell][cell]%s      [/cell][cell]%s[/cell]" % [ply / 2 + 1, _esc(String(log[i])), _esc(String(log[i + 1])) if i + 1 < log.size() else ""]
+        i += 2
     return t + "[/table]"
 
 ## Celular: uma linha com os últimos lances (os mais novos à direita).
@@ -593,9 +665,6 @@ func _keep_bot() -> void:
     # o HUD antigo da partida contra o bot volta a se mostrar a cada atualização do stage: fica escondido aqui
     for n in [stage.get("match_plaque"), stage.get("desk_person")]:
         if n != null and n.visible: n.visible = false
-    if is_instance_valid(bot_moves) and bot_moves.visible and bc.san_log.size() != _bot_moves_n:
-        _bot_moves_n = bc.san_log.size()
-        bot_moves.text = _bot_moves_text(bc.san_log) if kind == "pc" else _bot_moves_line(bc.san_log)
     # fim da partida: JOGAR DE NOVO e ANALISAR no lugar do DESISTIR (PC; no celular ficam no menu ⋮)
     var over: bool = stage.game.game_over and kind == "pc"
     if over and bot_after.is_empty(): _make_bot_after()
@@ -630,6 +699,7 @@ func _make_bot_after() -> void:
 func _keep() -> void:
     _keep_settings()
     if stage.mode == "bot": _keep_bot()
+    _keep_moves()
     # R51 · o botão antigo ANALISAR PARTIDA (barra de cima) cobria os ícones da arte: com a pele ele não aparece
     # (contra o bot: ANALISAR no lugar do DESISTIR; no Ranked: no painel de resultado; no celular: menu ⋮)
     if kind == "pc" and stage.desk_analyze != null and stage.desk_analyze.visible: stage.desk_analyze.visible = false
