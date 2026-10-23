@@ -39,6 +39,7 @@ const NAV := [
 ]
 const NAV_ART := "res://ui_v022/assets/home_nav5.png"
 const PASS_STRIP := Rect2(146, 1110, 562, 139)   # R178d · botão do PASSE no meio do menu (a arte v9 abriu 44 px ali)
+const WA_STRIP := Rect2(197, 1462, 460, 70)   # R180
 const CLUB_RECT := Rect2(25, 45, 355, 73)
 const SOUND_RECT := Rect2(730, 45, 82, 75)
 const CARD_RECT := Rect2(108, 495, 637, 173)
@@ -206,6 +207,11 @@ func _build_top():
     pass_strip.position = PASS_STRIP.position
     pass_strip.size = PASS_STRIP.size
     top.add_child(pass_strip)
+    # R180 · BETA: WhatsApp do dono embaixo do menu (dúvidas e bugs) — fica acima da barra de baixo até no MIN_H
+    var wa = load("res://ui_kit/whatsapp_button.gd").new()
+    wa.position = WA_STRIP.position
+    wa.size = WA_STRIP.size
+    top.add_child(wa)
     # placa CLUB FRAIHA (a placa e a coroa são da arte; o jogo escreve o estado)
     club_entry = load("res://monetization/club_home_entry.gd").new()
     club_entry.name = "ClubHomeEntryMobile"

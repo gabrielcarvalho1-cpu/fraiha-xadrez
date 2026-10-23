@@ -2995,6 +2995,12 @@ func _layout_wide(dims: Vector2):
         pcard.scale = Vector2.ONE * kl
         pcard.position = Vector2(v.position.x + m, top + 4.0 * kl)
         top += (PASS_CARD_PC.size.y + 12.0) * kl
+    var wab = canvas.get_node_or_null("WhatsAppButton")   # R180 · WhatsApp embaixo do PASSE
+    if wab != null:
+        if not _wide_orig.has(wab): _wide_orig[wab] = [wab.position, wab.scale]
+        wab.scale = Vector2.ONE * kl
+        wab.position = Vector2(v.position.x + m + (PASS_CARD_PC.size.x - WA_PC.size.x) * 0.5 * kl, top)
+        top += (WA_PC.size.y + 10.0) * kl
     var bottom: float = v.end.y - (100.0 + m * 2.0) * kl
     var k2: float = minf(left_w / lsrc.size.x, (bottom - top) / lsrc.size.y)
     var lsz: Vector2 = lsrc.size * maxf(0.2, k2)
@@ -3393,6 +3399,8 @@ func make_top_button(glyph: String, tip: String, action: Callable, side := 62.0)
 ## R122 · COMUNIDADE: botão largo (duas pessoas + "COMUNIDADE") na moldura dos botões do topo; abre o Discord.
 const CommunityLink := preload("res://social/community_link.gd")
 const PassHomeCard := preload("res://economy/pass_home_card.gd")   # R178
+const WhatsAppButton := preload("res://ui_kit/whatsapp_button.gd")   # R180
+const WA_PC := Rect2(30, 188, 314, 50)   # R180 · embaixo do cartão do PASSE
 const PASS_CARD_PC := Rect2(14, 94, 346, 85)   # R178e · proporção da arte do botão (2036x502)   # R178 · embaixo da placa CLUB (topo esquerdo)
 func make_community_button(sz: Vector2, frame: Texture2D, font_px: int) -> Button:
     var b: Button = preload("res://ui_v022/hud_button.gd").make("community", "COMUNIDADE")
@@ -4306,6 +4314,11 @@ func _build_reference_chrome():
     pass_card.position = Vector2(PASS_CARD_PC.position)
     pass_card.size = PASS_CARD_PC.size
     canvas.add_child(pass_card)
+    # R180 · BETA: WhatsApp do dono embaixo do PASSE (dúvidas e bugs)
+    var wa := WhatsAppButton.new()
+    wa.position = WA_PC.position
+    wa.size = WA_PC.size
+    canvas.add_child(wa)
     # R161 · OUTDOOR: a faixa "ESTRATÉGIA PARA IR MAIS LONGE" vira a frase do Admin e abre NOVIDADES
     var ticker := make_news_ticker(19, Color("010612"), Color("030b1c"))
     ticker.position = Vector2(631, 273)
