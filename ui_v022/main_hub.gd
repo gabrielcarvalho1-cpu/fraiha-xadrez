@@ -128,6 +128,8 @@ var profile_tab := "avatars"    # "avatars" | "icons" | "frames" | "emotes"
 var badge_gallery = null        # profile/badge_gallery.gd
 var frame_gallery = null        # R168 · profile/frame_gallery.gd (aba MOLDURAS)
 var emote_gallery = null        # R176.8 · profile/emote_gallery.gd (aba EMOTES)
+var title_gallery = null        # R176.9 · profile/title_gallery.gd (aba TÍTULOS)
+var inspected_title := "auto"
 var inspected_emote := ""
 var inspected_frame := ""
 var profile_tabs := {}
@@ -757,9 +759,25 @@ func _build_pages():
     emote_gallery.setup(self, 4, Vector2(152, 190))
     for c in ["h_separation", "v_separation"]: emote_gallery.add_theme_constant_override(c, 14)
     emote_gallery.inspected.connect(_inspect_emote)
-    gallery_scrolls = {"avatars": gscroll, "icons": bscroll, "frames": fscroll, "emotes": escroll}
-    # barra de rolagem da arte (trilho azul + alça dourada), funcional para as quatro galerias
-    for sc in [gscroll, bscroll, fscroll, escroll]:
+    # R176.9 · TÍTULOS: quinta aba (texto sob o nome, com cor e brilho próprios)
+    var tscroll = ScrollContainer.new()
+    tscroll.name = "TitleGalleryScroll"
+    tscroll.position = gscroll.position
+    tscroll.size = gscroll.size
+    tscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    tscroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+    tscroll.visible = false
+    profile_panel.add_child(tscroll)
+    preload("res://ui_v022/touch_scroll.gd").attach(tscroll)
+    title_gallery = load("res://profile/title_gallery.gd").new()
+    title_gallery.name = "TitleGallery"
+    tscroll.add_child(title_gallery)
+    title_gallery.setup(self, 3, Vector2(208, 150))
+    for c in ["h_separation", "v_separation"]: title_gallery.add_theme_constant_override(c, 14)
+    title_gallery.inspected.connect(_inspect_title)
+    gallery_scrolls = {"avatars": gscroll, "icons": bscroll, "frames": fscroll, "emotes": escroll, "titles": tscroll}
+    # barra de rolagem da arte (trilho azul + alça dourada), funcional para as cinco galerias
+    for sc in [gscroll, bscroll, fscroll, escroll, tscroll]:
         var bar := _art_scrollbar(profile_panel, sc, "perfil_bg", PF_BAR, PF_BAR_GRAB, PF_BAR_TRACK, PF_BAR_UP, PF_BAR_DOWN, 204, "GalleryBar")
         var scr: ScrollContainer = sc
         for n in bar: n.visible = scr.visible
@@ -770,9 +788,9 @@ func _build_pages():
     tabs.mouse_filter = Control.MOUSE_FILTER_IGNORE
     profile_panel.add_child(tabs)
     var ti := 0
-    for pair in [["avatars", "AVATARES", "pf_ico_avatares"], ["icons", "ÍCONES", "pf_ico_icones"], ["frames", "MOLDURAS", ""], ["emotes", "EMOTES", "emote"]]:
+    for pair in [["avatars", "AVATARES", "pf_ico_avatares"], ["icons", "ÍCONES", "pf_ico_icones"], ["frames", "MOLDURAS", ""], ["emotes", "EMOTES", "emote"], ["titles", "TÍTULOS", "title"]]:
         var tab_id: String = pair[0]
-        var tr := Rect2(90, 220 + ti * 92, 228, 80)   # R176.8 · 4 abas (EMOTES entrou)
+        var tr := Rect2(90, 214 + ti * 74, 228, 66)   # R176.9 · 5 abas (TÍTULOS entrou)
         ti += 1
         var tart := NinePatchRect.new()
         tart.name = "TabArt"
@@ -784,12 +802,17 @@ func _build_pages():
         tart.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
         tabs.add_child(tart)
         if pair[2] == "emote":
-            var efx = preload("res://social/emote_fx.gd").make("emote_boa_jogada", 50)
+            var efx = preload("res://social/emote_fx.gd").make("emote_boa_jogada", 44)
             efx.name = "TabEmoteIcon"
             efx.playing = false
-            efx.position = Vector2(tr.position.x + 16, tr.position.y + 15)
+            efx.position = Vector2(tr.position.x + 18, tr.position.y + 11)
             tabs.add_child(efx)
-        elif pair[2] != "": RefPage.image(tabs, RefPage.tex(pair[2]), Rect2(tr.position.x + 18, tr.position.y + 14, 48, 52))
+        elif pair[2] == "title":
+            var tg = preload("res://monetization/premium_art.gd").Glyph.new("scroll", 46, Color("f6d27a"))
+            tg.name = "TabTitleIcon"
+            tg.position = Vector2(tr.position.x + 18, tr.position.y + 10)
+            tabs.add_child(tg)
+        elif pair[2] != "": RefPage.image(tabs, RefPage.tex(pair[2]), Rect2(tr.position.x + 20, tr.position.y + 10, 42, 46))
         else:
             var fi := TextureRect.new()
             fi.name = "TabFrameIcon"
@@ -798,13 +821,13 @@ func _build_pages():
             fi.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
             fi.mouse_filter = Control.MOUSE_FILTER_IGNORE
             fi.texture = load("res://monetization/frames/elo_ouro.png")
-            fi.position = Vector2(tr.position.x + 12, tr.position.y + 8)
-            fi.size = Vector2(60, 68)
+            fi.position = Vector2(tr.position.x + 14, tr.position.y + 6)
+            fi.size = Vector2(54, 54)
             tabs.add_child(fi)
         var tl := RefPage.text(tabs, pair[1], Rect2(tr.position.x + 74, tr.position.y, 146, tr.size.y), 20 if tab_id == "frames" else 23, Color("f1e6c8"), true, HORIZONTAL_ALIGNMENT_LEFT)
         tl.add_theme_font_override("font", FONT_CINZEL)
         var tb := RefPage.hotspot(tabs, tr, func(): set_profile_tab(tab_id), "Tab_" + tab_id)
-        tb.name = {"icons": "ProfileTabIcons", "frames": "ProfileTabFrames", "emotes": "ProfileTabEmotes"}.get(tab_id, "ProfileTabAvatars")
+        tb.name = {"icons": "ProfileTabIcons", "frames": "ProfileTabFrames", "emotes": "ProfileTabEmotes", "titles": "ProfileTabTitles"}.get(tab_id, "ProfileTabAvatars")
         tb.set_meta("art", tart)
         profile_tabs[tab_id] = tb
     for id in avatar_gallery.cards:
@@ -1544,6 +1567,10 @@ func set_profile_tab(tab: String):
         else: tb.modulate = Color.WHITE if k == tab else Color(0.62, 0.66, 0.62)
     if tab == "icons": inspected_badge = cosmetic_pref("badge")
     if tab == "frames": inspected_frame = cosmetic_pref("frame")
+    if tab == "titles" and title_gallery != null:
+        inspected_title = cosmetic_pref("title")
+        title_gallery.focus_id = inspected_title
+        title_gallery.update_states()
     if tab == "emotes" and emote_gallery != null:
         if inspected_emote.is_empty(): inspected_emote = String(emote_gallery.all_ids()[0])
         emote_gallery.focus_id = inspected_emote
@@ -1559,6 +1586,16 @@ func set_profile_tab(tab: String):
 ## R176 · APLICAR com confirmação: "Você deseja mesmo aplicar …?" SIM / NÃO. Bloqueado ou já em uso: sem pergunta
 ## (apply_inspected mostra o motivo / não muda nada).
 func request_apply_inspected():
+    if profile_tab == "titles" and title_gallery != null:   # R176.9
+        var tid := inspected_title
+        var tst: String = title_gallery.state_of(tid)
+        if tst == "locked":
+            if Cosmetics.requirement("title", tid) == "shop": crowns_client().open_store("title")
+            else: open_premium("personalize")
+            return
+        if tst == "selected": return
+        preload("res://ui_kit/confirm_box.gd").ask_change(self, "o título", title_gallery.display_name(tid), func(): apply_inspected())
+        return
     if profile_tab == "emotes":   # R176.8 · emote não se aplica: bloqueado abre a Loja de Coroas
         if emote_gallery != null and emote_gallery.state_of(inspected_emote) == "locked": crowns_client().open_store("emote")
         elif emote_gallery != null and emote_gallery.state_of(inspected_emote) == "pass": crowns_client().open_pass()
@@ -1592,6 +1629,11 @@ func request_apply_inspected():
 ## R32 · botão APLICAR da área de detalhe: aplica o avatar ou o ícone em foco.
 func apply_inspected() -> bool:
     if profile_tab == "emotes": return false
+    if profile_tab == "titles":
+        var ok := set_cosmetic("title", inspected_title)
+        title_gallery.update_states()
+        _refresh_avatar_detail()
+        return ok
     if profile_tab == "icons": return apply_badge(inspected_badge)
     if profile_tab == "frames": return apply_frame(inspected_frame)
     return apply_avatar(inspected_avatar if not inspected_avatar.is_empty() else avatar_id)
@@ -1628,6 +1670,11 @@ func apply_avatar(id: String) -> bool:
 func _refresh_avatar_detail():
     if avatar_detail.is_empty() or avatar_gallery == null: return
     _show_detail_frame("")
+    if profile_tab != "titles":
+        var otag = avatar_detail.pic.get_parent().get_node_or_null("DetailTitleTag")
+        if otag != null:
+            otag.get_parent().remove_child(otag)
+            otag.queue_free()
     if profile_tab != "emotes":
         var efx = avatar_detail.pic.get_parent().get_node_or_null("DetailEmoteFx")
         if efx != null:
@@ -1644,6 +1691,10 @@ func _refresh_avatar_detail():
         return
     if profile_tab == "emotes" and emote_gallery != null:
         _refresh_emote_detail()
+        _fit_detail_title()
+        return
+    if profile_tab == "titles" and title_gallery != null:
+        _refresh_title_detail()
         _fit_detail_title()
         return
     _refresh_avatar_detail_inner()
@@ -1726,6 +1777,49 @@ func _refresh_badge_detail():
     var b: Button = avatar_detail.apply
     b.text = "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR ÍCONE")
     b.disabled = st != "unlocked"
+
+## R176.9 · aba TÍTULOS: o detalhe mostra o SEU NOME com o título embaixo (como os outros vão ver)
+func _inspect_title(id: String):
+    inspected_title = id
+    _refresh_avatar_detail()
+
+func _refresh_title_detail():
+    var TG = preload("res://profile/title_gallery.gd")
+    var id: String = inspected_title
+    var st: String = title_gallery.state_of(id)
+    var shown: String = title_gallery.shown(id)
+    avatar_detail.pic.texture = avatar_texture()
+    _detail_material(st == "locked")
+    avatar_detail.pic.visible = true
+    if avatar_detail.has("ring"): avatar_detail.ring.visible = true
+    var holder: Control = avatar_detail.pic.get_parent()
+    var tag = holder.get_node_or_null("DetailTitleTag")
+    if tag == null:
+        tag = preload("res://profile/title_tag.gd").make(shown, 20, HORIZONTAL_ALIGNMENT_LEFT)
+        tag.name = "DetailTitleTag"
+        holder.add_child(tag)
+    tag.set_title(shown, 20)
+    tag.modulate = Color(0.55, 0.55, 0.55) if st == "locked" else Color.WHITE
+    var tp: Vector2 = avatar_detail.title.get_global_position() - holder.get_global_position()
+    tag.position = Vector2(tp.x - 2, tp.y + 34)
+    tag.size = Vector2(holder.size.x - tp.x - 12, 34)
+    avatar_detail.title.text = String(player_name).to_upper()
+    var origin := "Aparece embaixo do seu nome para todos"
+    if id == "auto": origin = "Usa o melhor título que você tem"
+    elif id == "": origin = "Nenhum título embaixo do nome"
+    elif st == "locked": origin = title_gallery.hint(id)
+    avatar_detail.origin.text = ""
+    avatar_detail.status.text = "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "LIBERADO")
+    avatar_detail.status.add_theme_color_override("font_color", Color("49d17a") if st != "locked" else Color("e89a7a"))
+    avatar_detail.brief.text = origin
+    var b: Button = avatar_detail.apply
+    b.visible = true
+    if st == "locked":
+        b.text = "VER NA LOJA" if Cosmetics.requirement("title", id) == "shop" else "CONHECER"
+        b.disabled = false
+    else:
+        b.text = "EM USO" if st == "selected" else "USAR TÍTULO"
+        b.disabled = st == "selected"
 
 ## R176.8 · aba EMOTES: tocar inspeciona; o detalhe mostra o emote animado e onde conseguir
 func _inspect_emote(id: String):
@@ -1833,6 +1927,9 @@ func _refresh_avatars():
     if frame_gallery != null:
         frame_gallery.update_states()
         if profile_tab == "frames": gallery_count.text = "%d de %d molduras liberadas" % [frame_gallery.count_unlocked(), frame_gallery.cards.size() - 1]
+    if title_gallery != null:
+        title_gallery.update_states()
+        if profile_tab == "titles": gallery_count.text = "%d de %d títulos liberados" % [title_gallery.count_unlocked(), title_gallery.cards.size() - 2]
     if emote_gallery != null:
         emote_gallery.update_states()
         if profile_tab == "emotes": gallery_count.text = "%d de %d emotes liberados" % [emote_gallery.count_unlocked(), emote_gallery.cards.size()]
@@ -3502,6 +3599,10 @@ func refresh_founder():
         founder_sub_label.text = " · ".join(parts)
     if is_instance_valid(ref_title_label):
         ref_title_label.text = Cosmetics.title_text(title) if not title.is_empty() else ""
+        var tc := Cosmetics.title_color(title)   # R176.9 · cor própria do título + brilho da mesma cor
+        ref_title_label.add_theme_color_override("font_color", tc)
+        ref_title_label.add_theme_color_override("font_outline_color", Color(tc.r, tc.g, tc.b, 0.35))
+        ref_title_label.add_theme_constant_override("outline_size", 6)
         ref_title_label.visible = not title.is_empty() and ref_mode
     if is_instance_valid(ref_founder_badge):
         ref_founder_badge.texture = Cosmetics.badge_texture(badge)

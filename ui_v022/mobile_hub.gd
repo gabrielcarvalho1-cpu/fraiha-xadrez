@@ -585,6 +585,39 @@ func _profile(content: VBoxContainer, width := 0.0):
             apply_fr.disabled = true
             _set_btn(apply_fr, "EM USO")
             fdetail.text = frames.display_name(String(chosen.frame)).to_upper() + " · EM USO"))
+    # R176.9 · TÍTULO embaixo do nome (cor e brilho próprios): mesma galeria do PC
+    _text(content, "SEU TÍTULO", 16).name = "TitleTitleMobile"
+    var titles = load("res://profile/title_gallery.gd").new()
+    titles.name = "TitleGalleryMobile"
+    titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    content.add_child(titles)
+    var tcols := 2 if cols <= 3 else 4
+    var tcw := floorf(((width + 40.0 if width > 0.0 else size.x) - 40.0 - 10.0 * (tcols - 1)) / tcols)
+    titles.setup(hub, tcols, Vector2(tcw, 120.0))
+    var tdetail = _text(content, "Aparece embaixo do seu nome: lobby, perfil, CHAT GLOBAL e para o adversário.", 14)
+    tdetail.name = "TitleDetailMobile"
+    var apply_tt = _button(content, "USAR TÍTULO", func(): pass)
+    apply_tt.name = "ApplyTitleMobile"
+    apply_tt.disabled = true
+    chosen["title"] = "auto"
+    titles.inspected.connect(func(id):
+        chosen.title = id
+        var st: String = titles.state_of(id)
+        tdetail.text = titles.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + titles.hint(id) if st == "locked" else ("EM USO" if st == "selected" else "toque em USAR TÍTULO"))
+        apply_tt.disabled = st == "selected"
+        _set_btn(apply_tt, "EM USO" if st == "selected" else ("VER NA LOJA" if st == "locked" else "USAR TÍTULO")))
+    apply_tt.pressed.connect(func():
+        var tid := String(chosen.title)
+        if titles.state_of(tid) == "locked":
+            if preload("res://profile/premium_cosmetics.gd").requirement("title", tid) == "shop": hub.crowns_client().open_store("title")
+            else: hub.open_premium("personalize")
+            return
+        preload("res://ui_kit/confirm_box.gd").ask_change(hub, "o título", titles.display_name(tid), func():
+            if hub.set_cosmetic("title", tid):
+                titles.update_states()
+                apply_tt.disabled = true
+                _set_btn(apply_tt, "EM USO")
+                tdetail.text = titles.display_name(tid).to_upper() + " · EM USO"))
     # R176.8 · EMOTES: a coleção do chat da partida (grátis, comprados e os da Loja de Coroas)
     _text(content, "SEUS EMOTES", 16).name = "EmoteTitleMobile"
     var emotes = load("res://profile/emote_gallery.gd").new()

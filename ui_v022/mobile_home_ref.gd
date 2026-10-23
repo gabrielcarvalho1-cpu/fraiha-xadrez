@@ -411,6 +411,12 @@ func refresh():
     if title_text != null and hub.has_method("current_title"):
         var tt := preload("res://profile/premium_cosmetics.gd").title_text(hub.current_title())
         if title_text.text != tt: title_text.set_text(tt)
+        var tcol := preload("res://profile/premium_cosmetics.gd").title_color(hub.current_title())   # R176.9 · cor do título
+        if title_text.get("color") != null and title_text.color != tcol:
+            title_text.color = tcol
+            title_text.outline = Color(tcol.r, tcol.g, tcol.b, 0.35)
+            title_text.outline_size = 4
+            title_text.queue_redraw()
         title_text.visible = not tt.is_empty()
     portrait.texture = hub.avatar_texture()
     portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if hub.avatar_id == "warrior" else TextureRect.STRETCH_KEEP_ASPECT_COVERED

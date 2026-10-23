@@ -28,6 +28,14 @@ const TITLE_TEXT := {"": "", "fundador": "Fundador do Reino", "lendario": "Funda
 	"estrategista": "Estrategista", "mestre_tatico": "Mestre Tático", "rei_do_blitz": "Rei do Blitz", "guardiao": "Guardião do Reino",
 	"dama_de_ferro": "Dama de Ferro", "cavaleiro": "Cavaleiro da Coroa", "gambito": "Mestre do Gambito", "lenda_xeque": "Lenda do XEQUE",
 	"senhor_marcha": "Senhor da Marcha", "imperador": "Imperador do Tabuleiro"}
+## R176.9 · cada título tem COR PRÓPRIA (e brilho, title_tag.gd): cartão do adversário no início da partida,
+## CHAT GLOBAL, cartão do lobby e a aba TÍTULOS do Perfil.
+const TITLE_COLOR := {"fundador": Color("ffcf5a"), "lendario": Color("ff8a4a"), "club": Color("5fe39a"),
+	"estrategista": Color("7fc8ff"), "mestre_tatico": Color("9ea8ff"), "rei_do_blitz": Color("ffe066"), "guardiao": Color("8ce0c8"),
+	"dama_de_ferro": Color("d7dde8"), "cavaleiro": Color("f2b866"), "gambito": Color("ff9db0"), "lenda_xeque": Color("ff6b6b"),
+	"senhor_marcha": Color("c9a2ff"), "imperador": Color("ffd84a")}
+static func title_color(id: String) -> Color:
+    return TITLE_COLOR.get(id, Color("f6d27a"))
 const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
 ## R116 · itens da Loja de Coroas que esta conta já tem (o servidor manda em store_state; economy/crowns_client.gd guarda).
 static var shop_owned: Array = []

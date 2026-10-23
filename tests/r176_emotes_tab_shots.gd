@@ -5,6 +5,8 @@ func _initialize(): call_deferred("run")
 func check(ok: bool, msg: String):
 	print(("PASS " if ok else "FAIL ") + msg)
 	if not ok: fails += 1
+func frames(n := 3):
+	for i in n: await process_frame
 func shot(name: String):
 	var d := OS.get_environment("SHOT_DIR")
 	if d == "": return
@@ -37,7 +39,27 @@ func run():
 		hub.emote_gallery.cards["emote_uau"].pressed.emit()
 		await shot("perfil_emote_bloqueado")
 		check(hub.avatar_detail.apply.text == "VER NA LOJA", "emote bloqueado: VER NA LOJA")
+		hub.set_cosmetic("title", "auto")   # estado salvo de rodadas anteriores
+		hub.set_profile_tab("titles")
+		check(hub.title_gallery != null and hub.title_gallery.cards.size() == 15, "aba TÍTULOS com 15 opções")
+		await shot("perfil_titulos")
+		hub.title_gallery.cards["estrategista"].pressed.emit()
+		await shot("perfil_titulo_bloqueado")
+		check(hub.avatar_detail.apply.text == "VER NA LOJA", "título da loja bloqueado: VER NA LOJA")
+		await frames(3)
+		preload("res://profile/premium_cosmetics.gd").shop_owned = ["estrategista"]
+		hub._inspect_title("estrategista")
+		check(hub.avatar_detail.apply.text == "USAR TÍTULO", "título comprado: USAR TÍTULO (%s · %s · %s)" % [hub.avatar_detail.apply.text, hub.title_gallery.state_of("estrategista"), str(preload("res://profile/premium_cosmetics.gd").shop_owned)])
+		hub.inspected_title = "estrategista"
+		check(hub.apply_inspected() and hub.cosmetic_pref("title") == "estrategista", "aplica o título")
+		await frames(4)
+		await shot("perfil_titulo_em_uso")
+		hub.show_page("main")
+		await frames(10)
+		await shot("lobby_titulo")
+		hub.set_cosmetic("title", "auto")
 	else:
+		check(root.find_child("TitleGalleryMobile", true, false) != null, "celular: SEU TÍTULO")
 		var g = root.find_child("EmoteGalleryMobile", true, false)
 		check(g != null, "celular: SEUS EMOTES")
 		if g != null:

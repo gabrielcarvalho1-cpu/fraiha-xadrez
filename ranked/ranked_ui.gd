@@ -528,10 +528,13 @@ func _show(which: String):
             ph.add_child(fp)
             box.add_child(ph)
             _label(String(opp.get("nickname", "")), 24, Color("f4edda"), true)
-            var ttl := Cosmetics.title_text(Cosmetics.public_title(opp))
-            if not ttl.is_empty():
-                var tl = _label(ttl, 15, GOLD, true)
+            var tid := Cosmetics.public_title(opp)
+            if not tid.is_empty():
+                # R176.9 · título do adversário com a cor própria e o brilho (destaque de quem comprou/conquistou)
+                var tl = preload("res://profile/title_tag.gd").make(tid, 19)
                 tl.name = "FoundTitle"
+                tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+                box.add_child(tl)
             if rated(): _label(league_line(int(opp.get("league", 0)), int(opp.get("pl", 0))), 16, Color("c4cbbd"), true)
             _label("%s%s · Você joga de %s" % ["" if rated() else "Casual · ", controller.mode_name, "BRANCAS" if controller.human_color == "w" else "PRETAS"], 16, Color("efe3c4"), true)
             found_label = _label("", 16, GOLD, true)
