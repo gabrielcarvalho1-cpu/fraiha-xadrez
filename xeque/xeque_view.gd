@@ -2474,6 +2474,8 @@ func r57_scale(d: Vector2) -> float:
 ## um embaixo do outro. Cada bloco: {src (coords da arte), dst (tela), s (escala)}. Vazio = layout do PC.
 var _pblocks: Array = []
 func _r57_block(p: Vector2):
+    for b in _pblocks:   # R177g · primeiro o bloco que contém o ponto de verdade (os recortes novos se encostam)
+        if (b.src as Rect2).has_point(p): return b
     for b in _pblocks:
         if (b.src as Rect2).grow(2.0).has_point(p): return b
     return null
