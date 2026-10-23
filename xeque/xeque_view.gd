@@ -2507,18 +2507,18 @@ func _fade_edges(r: Rect2, w: float):
 
 ## R177f · em pé: cada peça da arte (título, retrato, classificação e os 3 botões) é um recorte com as bordas
 ## esfumadas (r57_<key>_<peça>.png) sobre a MESMA arte desfocada — sem cantos retos nem "recortes" visíveis.
-const R57_PIECES := [["title", Rect2(330, 8, 1012, 226)], ["portrait", Rect2(278, 232, 436, 516)], ["rank", Rect2(740, 230, 758, 526)],
-    ["b1", Rect2(222, 774, 438, 130)], ["b2", Rect2(662, 786, 368, 116)], ["b3", Rect2(1032, 774, 410, 130)]]
+const R57_PIECES := [["title", Rect2(300, 0, 1072, 250)], ["portrait", Rect2(262, 216, 468, 548)], ["rank", Rect2(726, 216, 786, 554)],
+    ["b1", Rect2(212, 764, 458, 150)], ["b2", Rect2(652, 776, 388, 136)], ["b3", Rect2(1022, 764, 430, 150)]]   # R177g · recortes no contorno do desenho (alfa)
 func _r57_portrait_blocks(area: Rect2) -> Array:
     var d := area.size
     var P := R57_PIECES
     # larguras na tela (design 1080): título 1040, retrato 640, classificação 1060, botões dividem 1060
-    var w_t := 1040.0
-    var w_p := 640.0
-    var w_r := 1060.0
-    var bw_total := 1060.0
+    var w_t := 1150.0
+    var w_p := 680.0
+    var w_r := 1100.0
+    var bw_total := 1050.0
     var bsrc_w: float = P[3][1].size.x + P[4][1].size.x + P[5][1].size.x
-    var bs: float = (bw_total - 2.0 * 10.0) / bsrc_w
+    var bs: float = (bw_total + 2.0 * 6.0) / bsrc_w
     var h_t: float = P[0][1].size.y * w_t / P[0][1].size.x
     var h_p: float = P[1][1].size.y * w_p / P[1][1].size.x
     var h_r: float = P[2][1].size.y * w_r / P[2][1].size.x
@@ -2534,14 +2534,14 @@ func _r57_portrait_blocks(area: Rect2) -> Array:
         var sc: float = w / P[i][1].size.x
         var dst := Rect2((d.x - w) / 2.0, y, w, P[i][1].size.y * sc)
         out.append({"src": P[i][1], "dst": dst, "s": sc, "piece": P[i][0]})
-        y = dst.end.y + gap * (0.35 if i == 0 else 1.0)
+        y = dst.end.y + gap * (0.1 if i == 0 else 0.6)
     var bsc: float = bs * f
-    var x: float = (d.x - (bsrc_w * bsc + 20.0 * f)) / 2.0
+    var x: float = (d.x - (bsrc_w * bsc - 12.0 * f)) / 2.0
     for i in [3, 4, 5]:
         var r: Rect2 = P[i][1]
         var dst := Rect2(x, y + (h_b * f - r.size.y * bsc) / 2.0, r.size.x * bsc, r.size.y * bsc)
         out.append({"src": r, "dst": dst, "s": bsc, "piece": P[i][0]})
-        x = dst.end.x + 10.0 * f
+        x = dst.end.x - 6.0 * f
     return out
 
 ## fontes das referências finais: "name" = Grenze Bold (nomes), "mono" = VT323 (faixa, lugar, legendas),
