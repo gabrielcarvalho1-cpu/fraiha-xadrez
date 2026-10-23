@@ -309,6 +309,7 @@ func close():
     if online:
         if mode == "game" and g != null and g.state != Rules.MATCH_END: _record_history("abandon")
         _online_leave()
+    else: _chat_unbind()
     visible = false
     root.visible = false
     Sound.music_off(stage)
@@ -424,6 +425,7 @@ func start_game():
     particles = []
     slam = {}
     _xeque_hint_new_game()
+    _bind_local_chat()
     _start_countdown()
     _start_intro()
     _begin_turn()
@@ -800,7 +802,7 @@ func _sync_chat_dock():
     var pc = stage.get("party_chat") if stage != null else null
     if pc == null or not pc.has_method("set_dock"): return
     var lay: Dictionary = view.L() if view != null else {}
-    var d: Rect2 = lay.get("chat", Rect2()) if (online and mode == "game" and visible) else Rect2()
+    var d: Rect2 = lay.get("chat", Rect2()) if ((online or bool(pc.get("local"))) and mode == "game" and visible) else Rect2()
     if d.size.x > 0.0 and layout == "portrait":
         # R90 · celular em pé: CHAT no cantinho direito, ao lado das cartas da mão (a mão anda para a esquerda)
         d = view.CHAT_PORTRAIT
@@ -1177,6 +1179,13 @@ func _online_send(action: Dictionary):
         input_locked = false
         _flash("Sem conexão com o servidor. Tente de novo.")
     _redraw()
+
+## R177e · contra os bots: chat/emotes da mesa no aparelho (teste) — a faixa do emote aparece no cartão de quem mandou
+func _bind_local_chat():
+    var pc = stage.get("party_chat") if stage != null else null
+    if pc == null or not pc.has_method("bind_local"): return
+    pc.bind_local("xeque", g.names.map(func(n): return String(n)))
+    pc.set("seat_rect", func(seat: int) -> Rect2: return _seat_screen_rect(seat))
 
 func _chat_unbind():
     var pc = stage.get("party_chat") if stage != null else null

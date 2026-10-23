@@ -257,6 +257,7 @@ func close():
     if online:
         if mode == "game": _record_history("abandon")
         _online_leave()
+    else: _chat_unbind()
     visible = false
     root.visible = false
     Sound.music_off(stage)
@@ -354,6 +355,10 @@ func start_game():
     plays = 0
     recorded = false
     _clear_selection()
+    var pcl = stage.get("party_chat") if stage != null else null
+    if pcl != null and pcl.has_method("bind_local"):   # R177e · chat/emotes da mesa contra os bots (teste)
+        pcl.bind_local("marcha", g.names.duplicate())
+        pcl.set("seat_rect", func(seat: int) -> Rect2: return _seat_screen_rect(seat))
     countdown = Countdown.play(self, stage)
     if countdown != null:
         _redraw()
@@ -1205,7 +1210,7 @@ func chat_dock() -> Rect2:
 func _sync_chat_dock():
     var pc = stage.get("party_chat") if stage != null else null
     if pc == null or not pc.has_method("set_dock"): return
-    var d := chat_dock() if (online and mode == "game" and visible) else Rect2()
+    var d := chat_dock() if ((online or bool(pc.get("local"))) and mode == "game" and visible) else Rect2()
     pc.set_dock(Rect2(origin + d.position * k, d.size * k) if d.size.x > 0.0 else Rect2())
 
 ## R95 · CHAT da mesa escondido enquanto o menu, o tutorial, a tela de VITÓRIA/DERROTA ou o painel de fim

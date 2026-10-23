@@ -28,6 +28,9 @@ var status: Label
 var send_btn: Button
 var close_btn: Button
 var panel_style: StyleBoxFlat
+## R177e · CHAT/EMOTES também contra os bots (XEQUE e MARCHA): mesa local, nada vai ao servidor; os bots respondem
+## de vez em quando com um emote grátis (fase de testes).
+var local := false
 var emote_row: HFlowContainer
 const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
 const EmotePrefs := preload("res://social/emote_prefs.gd")
@@ -170,6 +173,7 @@ func _style(b: Button, bg: Color, border: Color, fs: int, fg := GOLD):
 
 ## Mesa começou (ou reconectou): mostra o botão CHAT e pede o histórico.
 func bind(p_room: String, p_game: String, p_names: Array):
+    local = false
     if p_room != room_id:
         messages = []
         unread = 0
@@ -185,7 +189,36 @@ func bind(p_room: String, p_game: String, p_names: Array):
     _rebuild()
     if account != null: account.send_server({"type": "party_chat_sync", "room_id": room_id})
 
+func bind_local(p_game: String, p_names: Array):
+    local = true
+    room_id = "local:" + p_game
+    messages = []
+    unread = 0
+    game = p_game
+    names = p_names.duplicate()
+    to_row.visible = false
+    to = "all"
+    title.text = "CHAT DA MESA · " + ("MARCHA REAL" if game == "marcha" else "XEQUE") + " (TESTE)"
+    _apply_theme()
+    visible = true
+    _layout()
+    _rebuild()
+
+func _local_post(seat: int, text: String, emote := ""):
+    var m := {"type": "party_chat_msg", "room_id": room_id, "from_seat": seat, "nickname": String(names[seat]) if seat < names.size() else "Bot", "text": text}
+    if not emote.is_empty(): m["emote"] = emote
+    _on_message(m)
+
+func _bot_reply():
+    if not local or names.size() < 2: return
+    await get_tree().create_timer(randf_range(1.0, 1.8)).timeout
+    if not local or room_id.is_empty(): return
+    var free: Array = ShopCatalog.FREE_EMOTES
+    var e: Dictionary = free[randi() % free.size()]
+    _local_post(1 + randi() % mini(3, names.size() - 1), String(e.text), String(e.id))
+
 func unbind():
+    local = false
     dock_rect = Rect2()
     blocked = false
     room_id = ""
@@ -224,6 +257,10 @@ func set_to(v: String):
 func send_current():
     var t := input.text.strip_edges()
     if t.is_empty() or room_id.is_empty(): return
+    if local:
+        _local_post(0, t)
+        input.text = ""
+        return
     if account != null and account.send_server({"type": "party_chat", "room_id": room_id, "text": t, "to": to}):
         input.text = ""
         status.text = ""
@@ -244,6 +281,12 @@ func _fill_emotes():
         emote_row.add_child(b)
 
 func send_emote(id: String):
+    if local:
+        var txt := id
+        for e in ShopCatalog.my_emotes(Cosmetics.shop_owned): if String(e.id) == id: txt = String(e.text)
+        _local_post(0, txt, id)
+        if randf() < 0.75: _bot_reply()
+        return
     if room_id.is_empty() or account == null: return
     if account.send_server({"type": "party_emote", "room_id": room_id, "id": id}): status.text = ""
     else: status.text = "Sem conexão. Tente de novo em instantes."
@@ -308,7 +351,7 @@ func show_emote(m: Dictionary):
     if not a.has_area(): a = Rect2(Vector2(vs.x * 0.5 - 40, vs.y * (0.62 if mine else 0.12)), Vector2(80, 80))
     # faixa por cima do PRÓPRIO cartão de quem mandou (na parte de baixo dele): fica claro de quem é e não cai
     # em cima do tabuleiro, das cartas da mão ou dos botões
-    var h := clampf(minf(a.size.y * 0.55, vs.y * 0.12), 52.0, 64.0)
+    var h := clampf(maxf(minf(a.size.y * 0.55, vs.y * 0.12), vs.y * 0.065), 52.0, 70.0)
     var p: Control = EmoteBanner.make(String(m.get("text", "")), "Você" if mine else String(m.get("nickname", "")), String(m.get("emote", "")), h)
     p.name = nm
     var w := p.size.x
