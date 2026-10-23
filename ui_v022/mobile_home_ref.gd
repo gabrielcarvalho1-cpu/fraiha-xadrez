@@ -11,7 +11,7 @@ const ART_PATH := "res://ui_v022/assets/home_mobile_v9.png"   # R178d · v8 com 
 const DESIGN := Vector2(854, 1842)
 const NAV_TOP := 1655.0        # topo do recorte da barra (inclui a pedra azul de cima)
 const NAV_FADE := 34.0         # fileiras de cima do recorte que se misturam com a cena
-const MIN_H := 1656.0          # altura mínima da composição (menu inteiro + barra sem encostar na moldura), px da arte
+const MIN_H := 1712.0          # altura mínima da composição (menu inteiro + barra sem encostar na moldura), px da arte · R180c: +56 para o botão do WhatsApp caber entre o menu e a barra
 const GROUND := Rect2(0, 1600, 854, 90)   # chão da cena, estendido quando a tela é mais alta
 const RefText := preload("res://ui_v022/ref_text.gd")
 const GLOW := preload("res://ui_v022/home_button_glow.gdshader")
@@ -40,6 +40,7 @@ const NAV := [
 const NAV_ART := "res://ui_v022/assets/home_nav5.png"
 const PASS_STRIP := Rect2(146, 1110, 562, 139)   # R178d · botão do PASSE no meio do menu (a arte v9 abriu 44 px ali)
 const WA_STRIP := Rect2(197, 1462, 460, 70)   # R180
+const WA_MENU_END := 1446.0   # R180c · fim da moldura do menu (o botão nunca sobe por cima dela)
 const CLUB_RECT := Rect2(25, 45, 355, 73)
 const SOUND_RECT := Rect2(730, 45, 82, 75)
 const CARD_RECT := Rect2(108, 495, 637, 173)
@@ -77,6 +78,7 @@ var badge_plate: TextureRect
 var badge_glow: TextureRect
 var seal: TextureRect
 var buttons := {}              # título → Button (área de toque)
+var wa_button: Control         # R180 · WhatsApp (dúvidas/bugs)
 var _shown := ""
 
 func setup(owner_hub, owner_mobile):
@@ -208,7 +210,8 @@ func _build_top():
     pass_strip.size = PASS_STRIP.size
     top.add_child(pass_strip)
     # R180 · BETA: WhatsApp do dono embaixo do menu (dúvidas e bugs) — fica acima da barra de baixo até no MIN_H
-    var wa = load("res://ui_kit/whatsapp_button.gd").new()
+    wa_button = load("res://ui_kit/whatsapp_button.gd").new()
+    var wa = wa_button
     wa.position = WA_STRIP.position
     wa.size = WA_STRIP.size
     top.add_child(wa)
@@ -422,6 +425,11 @@ func layout(box: Rect2, full: Rect2):
     ground.visible = gap_to > NAV_TOP * k + 0.5
     ground.position = Vector2(x0, gap_from)
     ground.size = Vector2(DESIGN.x * k, maxf(0.0, gap_to - gap_from))
+    # R180c · o WhatsApp fica SEMPRE visível entre o menu e a barra de baixo (em tela baixa a barra sobe e
+    # cobria o botão): encosta logo acima da barra, sem subir além do fim do menu
+    if wa_button != null:
+        var above_nav := (nav_y + 26.0 * k) / k - WA_STRIP.size.y
+        wa_button.position.y = clampf(above_nav, WA_MENU_END, WA_STRIP.position.y)
 
 func refresh():
     if hub == null: return
