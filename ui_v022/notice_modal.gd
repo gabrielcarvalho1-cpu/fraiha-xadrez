@@ -113,11 +113,19 @@ func _fit_card():
 	var n := 1 + int(yes_button.visible) + int(alt_button != null and alt_button.visible)
 	# R176.2 · celular com 3 botões: um embaixo do outro (lado a lado não cabiam e o cartão vazava da moldura)
 	var stack := narrow() and n >= 3
+	# R180 · celular: se o texto de um botão não cabe na metade (ex.: ATUALIZAR AGORA), um embaixo do outro —
+	# antes o botão alargava o cartão e ele saía torto da moldura
+	if narrow() and n == 2:
+		var half := (w - 2.0 * m - 12.0) / 2.0
+		for b in [ok_button, yes_button]:
+			var f: Font = b.get_theme_font("font")
+			if f != null and f.get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 28.0 > half: stack = true
 	(ok_button.get_parent() as BoxContainer).vertical = stack
 	var bw: int = (ts(300) if not narrow() else 200) if n == 1 else (ts(240) if not narrow() else (int(w - 2.0 * m) if stack else int((w - 2.0 * m - 12.0 * (n - 1)) / n)))
 	for b in [ok_button, yes_button, alt_button]:
 		b.add_theme_font_size_override("font_size", ts(22) if not narrow() else 14)
 		b.custom_minimum_size = Vector2(bw, ts(58) if not narrow() else 46)
+		b.clip_text = true   # R180 · nunca alarga o cartão para fora da moldura
 	_shrink_to_fit()
 
 ## R177b · o cartão nunca passa da moldura: se não couber na altura (celular com 3 botões), encolhe
