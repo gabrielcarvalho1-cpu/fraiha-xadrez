@@ -66,6 +66,11 @@ func _call(js: String) -> void:
 func _enter_tree():
     set_process(false)
 
+## R180e · baixa a ponte e o SDK da voz no começo da partida (sem pedir microfone)
+func warm() -> void:
+    if unsupported_reason() != "": return
+    _call("window.FraihaVoiceBridge.warm && window.FraihaVoiceBridge.warm()")
+
 func prepare(seq: int) -> void:
     _call("window.FraihaVoiceBridge.prepare(%d)" % seq)
 

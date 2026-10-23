@@ -151,9 +151,7 @@ func setup(service, ranked_controller):
         close_panel()
         play_requested.emit()
         controller.queue(m))
-    promo.back_to_ranked.connect(func():
-        play_requested.emit()
-        _show("modes"))
+    promo.back_to_ranked.connect(func(): _result_back())
     desk_art = DeskArt.new()
     var desk_layer := CanvasLayer.new()   # acima do chat (46) e das marcas da pele (47), junto da promoção
     desk_layer.name = "DeskArtLayer"
@@ -302,6 +300,20 @@ func _strip_hover(strip: Dictionary, entered: bool):
     else: pp.unhover("chess_" + c)
 
 # ---------- Painéis ----------
+## R180e · DESISTIU: o "voltar" do resultado leva direto à TELA INICIAL (antes caía nas filas do Ranked/Casual)
+func i_resigned() -> bool:
+    var r: Dictionary = controller.last_result
+    return String(r.get("reason", "")) == "resign" and String(r.get("outcome", "")) == "loss"
+
+func _result_back() -> void:
+    var home := i_resigned()
+    play_requested.emit()
+    if home:
+        close_panel()
+        back_requested.emit()
+        return
+    _show("modes")
+
 func open_modes():
     _show("modes")
 
@@ -679,10 +691,8 @@ func _desk_art(which: String) -> bool:
                 if stage != null and stage.has_method("open_analysis"): stage.open_analysis(), "DeskAnalyze", 22)
             ab.disabled = stage == null or not stage.has_method("analysis_available") or not stage.analysis_available()
             if stage != null and stage.get("analysis_access") != null: ab.tooltip_text = "Analisar partida · " + stage.analysis_access.status_line()
-            d.label("VOLTAR AO RANKED" if rated() else "VOLTAR AO CASUAL", Rect2(back.position.x + 250, back.position.y + 18, back.size.x - 330, back.size.y - 36), 44, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBackText"
-            d.button(back, func():
-                play_requested.emit()
-                _show("modes"), "DeskBack", 22)
+            d.label("VOLTAR AO INÍCIO" if i_resigned() else ("VOLTAR AO RANKED" if rated() else "VOLTAR AO CASUAL"), Rect2(back.position.x + 250, back.position.y + 18, back.size.x - 330, back.size.y - 36), 44, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBackText"
+            d.button(back, func(): _result_back(), "DeskBack", 22)
             # R98 · REVANCHE: placa verde embaixo da arte (mesmo adversário, cores trocadas)
             # R158 · revanche só na partida CASUAL online (nunca no ranked)
             if not rated():
@@ -841,9 +851,7 @@ func _result(r: Dictionary):
             play_requested.emit()
             controller.queue(String(r.mode)), true)
         _rematch_row()
-        _button(box, "VOLTAR", func():
-            play_requested.emit()
-            _show("modes"))
+        _button(box, "VOLTAR AO INÍCIO" if i_resigned() else "VOLTAR", func(): _result_back())
         return
     var change = int(r.get("pl_change", 0))
     _label(("%+d PL" % change) if change != 0 else "0 PL", 26, color, true)
@@ -880,9 +888,7 @@ func _result(r: Dictionary):
         close_panel()
         play_requested.emit()
         controller.queue(String(r.mode)), true)
-    _button(box, "VOLTAR AO RANKED", func():
-        play_requested.emit()
-        _show("modes"))
+    _button(box, "VOLTAR AO INÍCIO" if i_resigned() else "VOLTAR AO RANKED", func(): _result_back())
 
 ## A tela de ritmos se refaz quando o servidor muda a lista (Admin). O aviso já mostrado (ex.: "modo
 ## temporariamente desativado" para quem foi tirado da fila) continua visível depois de refazer.

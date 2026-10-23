@@ -12,6 +12,7 @@ signal event(data: Dictionary)
 func unsupported_reason() -> String: return "not_implemented"
 ## Suporte + contexto seguro + permissão do microfone + trilha local (antes do token).
 func prepare(_seq: int) -> void: pass
+func warm() -> void: pass   # R180e · pré-carrega o SDK (sem pedir microfone)
 ## cfg = {app_id, channel, token, uid, muted, speaker_muted}. Entra no canal e publica o microfone.
 func join(_seq: int, _cfg: Dictionary) -> void: pass
 ## Sai do canal, para/fecha a trilha, remove listeners. Idempotente.

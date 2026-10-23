@@ -366,7 +366,7 @@ func _skin_strips(M: Dictionary) -> void:
         bgc.position = R(_dy(M.card, dy)).position
         bgc.size = R(_dy(M.card, dy)).size
         _rec(s.plaque, "visible", false)
-        _rec(s.front, "visible", false)
+        # R180e · a camada da FRENTE fica: é ela que desenha o anel verde em volta da foto de quem está falando
         var pt: Control = s.portrait
         _rec(pt, "custom_minimum_size", R(M.avatar).size)   # antes do tamanho (o mínimo antigo prenderia o tamanho)
         _place(pt, _dy(M.avatar, dy))

@@ -357,6 +357,9 @@
     bind: function () { cb = typeof window.FraihaVoiceCb === 'function' ? window.FraihaVoiceCb : null; return cb ? 1 : 0; },
     support: function () { return JSON.stringify(supportInfo()); },
     prepare: function (seq) { prepare(Number(seq)); return 1; },
+    // R180e · carrega o SDK assim que a partida começa (sem pedir microfone): o 1º toque no microfone já pede a
+    // permissão na hora — antes o SDK baixava no toque, o navegador perdia o "toque do usuário" e precisava tocar 2x
+    warm: function () { try { sdk().catch(function () {}); } catch (e) {} return 1; },
     join: function (seq, cfg) { join(Number(seq), String(cfg)); return 1; },
     leave: function (seq, reason) { leave(Number(seq), reason); return 1; },
     setMuted: function (on) { setMuted(!!on); return 1; },

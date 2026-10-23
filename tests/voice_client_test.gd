@@ -232,7 +232,8 @@ func run():
     v2.enter_match("ranked", MID)
     v2.press();
     acc.server_message.emit({"type": "voice_granted", "match_id": MID, "uid": 1, "token": "007x", "channel": "c", "app_id": "a", "participants": []})
-    check(v2.state == "MUTED" and bool(v2.provider.calls[1][2].muted), "entra MUDO quando a preferência é mudo")
+    # R180e · tocar no microfone para ENTRAR = quer falar: 1 toque basta (entra com o microfone ligado e esquece o mudo)
+    check(v2.state == "CONNECTED" and not bool(v2.provider.calls[1][2].muted) and not v2.muted_pref, "1 toque no microfone: entra FALANDO (mesmo se da última vez ficou mudo)")
     var f := FileAccess.open("user://voice.cfg", FileAccess.READ)
     var txt := f.get_as_text() if f != null else ""
     check(not ("007" in txt) and not ("match" in txt) and not ("channel" in txt), "disco: só a preferência (nada de token/partida)")

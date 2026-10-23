@@ -94,6 +94,7 @@ func enter_match(kind: String, match_id: String) -> void:
     var early := _early_peers.filter(func(m): return String(m.get("match_id", "")) == match_id)
     _early_peers.clear()
     for m in early: _on_server(m)
+    if provider != null and provider.has_method("warm"): provider.warm()   # R180e · 1 toque basta no microfone
     _log("match kind=%s match=%s" % [kind, match_id.left(8)])
 
 ## Fim/saída da partida, abandono, voltar à Home, logout: sai da voz e esquece a partida.
@@ -111,7 +112,13 @@ func press() -> void:
     match state:
         "CONNECTED": set_muted(true)
         "MUTED": set_muted(false)
-        "DISCONNECTED", "ERROR": join()
+        "DISCONNECTED", "ERROR":
+            # R180e · tocar no microfone para entrar = quer falar: entra com o microfone LIGADO (antes entrava mudo
+            # se da última vez tinha ficado mudo, e precisava de um 2º toque)
+            if muted_pref:
+                muted_pref = false
+                _save_pref()
+            join()
         _: pass   # pedindo permissão / conectando / reconectando: ignora (sem join duplicado)
 
 func join() -> void:
