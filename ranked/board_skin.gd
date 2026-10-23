@@ -407,6 +407,7 @@ func _apply_pc(M: Dictionary) -> void:
         _ghost(dv.mic, M.mic, "mic")
         _ghost(dv.ear, M.ear, "ear")
         _ghost(dv.off, M.off, "off")
+        _rec(dv, "label_hidden", true)   # R180 · o voice_control reexibia o texto a cada mudança da voz (texto duplicado por cima dos botões)
         _rec(dv.label, "visible", false)
     if stage.desk_mark != null: _rec(stage.desk_mark, "visible", false)   # R54 · MARCAR saiu da partida no PC (a arte não tem mais o ícone)
     _ghost(stage.desk_gear, M.gear, "gear")

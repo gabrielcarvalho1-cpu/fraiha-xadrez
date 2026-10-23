@@ -11,6 +11,7 @@ var off: Button
 var ear: Button     # ÁUDIO RECEBIDO da voz (fone): ouvir / não ouvir os outros, sem sair da sala
 var label: Label
 var compact := false   # celular: estado numa linha embaixo do microfone
+var label_hidden := false   # R180 · a pele do tabuleiro escreve o estado na arte: este texto não aparece (cobria os botões)
 
 func setup(v, mobile := false) -> void:
     voice = v
@@ -44,6 +45,7 @@ func setup(v, mobile := false) -> void:
     row.add_child(ear)
     off = HudButton.make("sound_on")
     off.name = "VoiceLeave"
+    off.set_meta("no_back_pulse", true)   # R180 · ícone pequeno (X): sem a placa "porta + SAIR" por cima, que não cabia e cobria o estado
     off.glyph = ""
     off.icon_only = true
     off.draw.connect(func():
@@ -104,5 +106,5 @@ func _draw_mic():
 func _fit() -> void:
     if label == null: return
     var host = get_parent()
-    var want: bool = not compact or (host is BoxContainer and bool(host.vertical))
+    var want: bool = (not compact or (host is BoxContainer and bool(host.vertical))) and not label_hidden
     if label.visible != want: label.visible = want
