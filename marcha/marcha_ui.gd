@@ -324,6 +324,11 @@ func _redraw():
 
 # ---------------------------------------------------------------- partida
 var _starting := false
+const Countdown := preload("res://ui_kit/countdown.gd")
+var countdown: Node = null   # R176.9 · 3 · 2 · 1 · VAI COMEÇAR antes da partida
+func counting() -> bool:
+    return is_instance_valid(countdown) and countdown.running
+
 func start_game():
     if _starting or mode == "game": return
     _set_view_seat(0)   # R92 · partida contra os bots: você é sempre o Marfim
@@ -349,6 +354,11 @@ func start_game():
     plays = 0
     recorded = false
     _clear_selection()
+    countdown = Countdown.play(self, stage)
+    if countdown != null:
+        _redraw()
+        await countdown.finished
+        if g == null or mode != "game": return
     _begin_turn()
 
 func _begin_turn():
@@ -515,6 +525,9 @@ func _process(delta):
     if not visible: return
     _sync_chat_block()
     t += delta
+    if counting():   # R176.9 · contagem na tela: o relógio da vez espera
+        if mode == "game" and not online: turn_deadline += int(delta * 1000.0)
+        return
     for c in celebs: c.t += delta
     celebs = celebs.filter(func(c): return c.t < CELEB_T)
     if mode == "over" and not overlay_wait: over_t += delta
@@ -3249,6 +3262,8 @@ func start_online(msg: Dictionary):
         plays = 0
         recorded = false
         celebs.clear()
+        countdown = Countdown.play(self, stage)   # R176.9 · o servidor espera a contagem antes da 1ª vez (party.js)
+        if countdown != null: countdown.finished.connect(func(): if not ev_running: _drain_events())
     ev_queue.clear()
     ev_running = false
     waiting_server = false
@@ -3314,7 +3329,7 @@ func on_party_message(msg: Dictionary):
     match String(msg.get("type", "")):
         "party_event":
             ev_queue.append(msg)
-            if not ev_running: _drain_events()
+            if not ev_running and not counting(): _drain_events()   # R176.9 · durante a contagem os eventos esperam
         "party_error":
             waiting_server = false
             if msg.has("snapshot"): _apply_snapshot(msg.snapshot)

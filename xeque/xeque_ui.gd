@@ -387,6 +387,19 @@ func _redraw():
     if view != null: view.queue_redraw()
 
 # ---------------------------------------------------------------- partida
+const Countdown := preload("res://ui_kit/countdown.gd")
+var countdown: Node = null   # R176.9 · 3 · 2 · 1 · VAI COMEÇAR antes da partida (segura a partida enquanto roda)
+func counting() -> bool:
+    return is_instance_valid(countdown) and countdown.running
+
+func _start_countdown():
+    countdown = Countdown.play(self, stage)
+    if countdown != null:
+        countdown.finished.connect(func():
+            if intro_anim >= 0.0: _cue("deck_intro")
+            _drain_events()
+            _redraw())
+
 func start_game():
     if mode == "game" and g != null and g.state != Rules.MATCH_END: return
     online = false
@@ -411,13 +424,14 @@ func start_game():
     particles = []
     slam = {}
     _xeque_hint_new_game()
+    _start_countdown()
     _start_intro()
     _begin_turn()
 
 ## R36 · antes da 1ª rodada: o baralho é apresentado (quantidades lidas de Rules.DECK_COUNTS)
 func _start_intro():
     intro_anim = 0.0
-    _cue("deck_intro")
+    if not counting(): _cue("deck_intro")   # com contagem, o som do baralho toca quando ela termina
 
 ## R34.1: a cada rodada nova a carta da MESA aparece grande no centro e voa para o painel A MESA PEDE.
 const MESA_T := 1.9
@@ -460,6 +474,9 @@ func _process(delta):
     _sync_chat_block()
     t += delta
     _prewarm_step()
+    if counting():   # R176.9 · contagem na tela: a partida (abertura, tempo, bots) espera
+        _redraw()
+        return
     if flash_t > 0.0:
         flash_t -= delta
         if flash_t <= 0.0: flash = ""
@@ -1039,6 +1056,7 @@ func start_online(msg: Dictionary):
         mesa_round = -1
         particles = []
         slam = {}
+        _start_countdown()   # R176.9 · o servidor também espera a contagem (party.js countdownMs)
         if int(msg.get("snapshot", {}).get("round", 1)) <= 1: _start_intro()
         _xeque_hint_new_game()
     mode = "game"
@@ -1113,6 +1131,7 @@ func on_party_message(msg: Dictionary):
 
 ## Aplica os eventos em ordem; durante a apresentação do XEQUE (revelar → relógio) os próximos esperam.
 func _drain_events():
+    if counting(): return   # R176.9 · eventos esperam a contagem terminar
     while not ev_queue.is_empty() and online and phase == "":
         _run_event(ev_queue.pop_front())
 

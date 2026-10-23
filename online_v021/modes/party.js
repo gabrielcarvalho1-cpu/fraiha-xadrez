@@ -28,7 +28,8 @@ const T = {
   cardFlyMs: num(env.FRAIHA_PARTY_CARD_FLY_MS, 450), exitMs: num(env.FRAIHA_PARTY_EXIT_MS, 550), captureMs: num(env.FRAIHA_PARTY_CAPTURE_MS, 1300), crownMs: num(env.FRAIHA_PARTY_CROWN_MS, 1900),             // R37: saída em arco, abatido some, chegada da DAMA (EXIT_TIME/CAPTURE_TIME/CROWN_WAIT)
   swapMs: num(env.FRAIHA_PARTY_SWAP_MS, 3200),           // troca do J (marcha_ui.gd: 0,35 + até 2,4 + 0,35 s)
   mesaMs: num(env.FRAIHA_PARTY_MESA_MS, 4400),           // distribuição (DEAL_T 2,4 s) + carta da MESA (MESA_T 1,9 s) no xeque_ui.gd
-  introMs: num(env.FRAIHA_PARTY_INTRO_MS, 3200),         // apresentação do baralho antes da 1ª rodada (INTRO_T)
+  introMs: num(env.FRAIHA_PARTY_INTRO_MS, 3200),
+  countdownMs: num(env.FRAIHA_PARTY_COUNTDOWN_MS, 3700),  // R176.9 · contagem 3 · 2 · 1 · VAI COMEÇAR no cliente (ui_kit/countdown.gd TOTAL)         // apresentação do baralho antes da 1ª rodada (INTRO_T)
   revealMs: num(env.FRAIHA_PARTY_REVEAL_MS, 3200), clockMs: num(env.FRAIHA_PARTY_CLOCK_MS, 2400),
   safeMs: num(env.FRAIHA_PARTY_SAFE_MS, 2000), mateMs: num(env.FRAIHA_PARTY_MATE_MS, 3800),
   keepEndedMs: 120000,
@@ -78,8 +79,8 @@ class Party {
     this.rooms.set(id, room);
     for (const s of seats) if (s.kind === 'human') this.byUser.set(s.uid, id);
     for (const s of seats) if (s.kind === 'human') this.toUser(s.uid, this.startMsg(room, this.seatOf(room, s.uid)));
-    if (game === 'marcha') this.marchaBegin(room);
-    else this.later(room, T.introMs + T.mesaMs, () => this.xequeBegin(room));     // baralho, distribuição e carta da MESA primeiro
+    if (game === 'marcha') { if (T.countdownMs > 0) this.later(room, T.countdownMs, () => this.marchaBegin(room)); else this.marchaBegin(room); }
+    else this.later(room, T.countdownMs + T.introMs + T.mesaMs, () => this.xequeBegin(room));     // baralho, distribuição e carta da MESA primeiro
     return room;
   }
   startMsg(room, v) {
