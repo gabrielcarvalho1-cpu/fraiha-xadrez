@@ -152,6 +152,7 @@ func _ready():
 	for st in ["normal", "focus", "read_only"]: input.add_theme_stylebox_override(st, StyleBoxEmpty.new())
 	input.text_submitted.connect(func(_t): send_current())
 	root.add_child(input)
+	preload("res://ui_v022/web_text_field.gd").attach(input, true)   # R180e · celular: campo HTML de verdade (sem ele o teclado não abria)
 	for id in ["close", "profile", "channel", "plus", "emoji", "send"]:
 		var b := Button.new()
 		b.name = "DirectChat_" + id
