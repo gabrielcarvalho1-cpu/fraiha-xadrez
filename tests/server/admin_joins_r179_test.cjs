@@ -50,3 +50,23 @@ test('API /admin/api/joins: login, conta nova e convidado aparecem; viewer lê; 
   assert.equal(r.body.online, 3); assert.equal(r.body.guests, 1);
   assert.equal((await get('/admin/api/joins', 'tok-' + A)).status, 403);
 });
+
+test('R180: conta antiga que sai e volta depois do prazo da sessão avisa de novo; recarregar a página não', async t => {
+  let clock = Date.parse('2026-10-23T15:00:00Z');
+  const backend = new Backend({ env: { FRAIHA_DEV_AUTH: '1' }, send: () => {}, now: () => clock, trackTimers: false });
+  backend.auth = { verify: async tok => { const m = /^tok-(.+)$/.exec(tok); return m ? { id: m[1], email: 'x@dev.invalid', provider: 'dev' } : null; } };
+  backend.attachRanked(new Ranked({ send: backend.send })); backend.attachCasual(new Ranked({ send: backend.send, kind: 'casual' }));
+  backend.ranked.stop(); backend.casual.stop(); clearInterval(backend.sweeper); backend.presence.stop(); backend.invites.stop();
+  t.after(() => { backend.party.stop(); backend.track.stop(); });
+  await backend.store.createProfile(A, 'AliceTest', 'warrior');
+  const enter = async () => { const s = { readyState: 1 }; await backend.handle(s, { type: 'acct_auth', access_token: 'tok-' + A }); await flush(); return s; };
+  const s1 = await enter();
+  clock += 5e3; backend.onClose(s1); await flush();
+  clock += 3e3; const s2 = await enter();   // recarregou a página
+  assert.equal(backend.joins.since(0).items.length, 1);
+  clock += 60e3; backend.onClose(s2); await flush();
+  backend.track.finish(backend.track.live.get(A));   // saiu de vez
+  clock += 120e3; await enter();   // voltou 2 min depois: avisa de novo
+  const items = backend.joins.since(0).items;
+  assert.equal(items.length, 2); assert.equal(items[1].kind, 'account');
+});

@@ -32,7 +32,8 @@ const { DirectChat } = require('./support/direct_chat');   // R177 · Chat exclu
 const { SeasonPass } = require('./economy/season_pass');   // R120 · Passe da Temporada
 const { Creators } = require('./social/creators');   // R121 · Apoie um Criador
 const { Window, Gate } = require('./net_guard');
-const { JoinLog } = require('./admin/joins');   // R179 · aviso de entrada no Admin   // R170 · hardening (auditoria Orca R168)
+const { JoinLog } = require('./admin/joins');
+const { Sessions } = require('./admin/sessions');   // R180 · Admin → Sessões   // R179 · aviso de entrada no Admin   // R170 · hardening (auditoria Orca R168)
 
 const GUEST_TTL_MS = 24 * 3600e3;
 // R170 · SEC-002/003/004: limites de entrada (ajustáveis por variável de ambiente; padrões folgados para jogador real)
@@ -112,7 +113,8 @@ class Backend {
     this.news = new News({ backend: this });   // R161
     this.tickets = new Tickets({ backend: this });   // R176.8
     this.dchat = new DirectChat({ backend: this });   // R177
-    this.joins = new JoinLog();   // R179 · "entrou um jogador" (Admin, com som)
+    this.joins = new JoinLog();
+    this.track = new Sessions({ backend: this, now: () => this.now(), timers: opts.trackTimers !== false });   // R180 · tempo, telas e ações de cada visita   // R179 · "entrou um jogador" (Admin, com som)
     this.seasonPass = new SeasonPass({ backend: this, send: (ws, o) => this.send(ws, o) });   // R120
     this.creators = new Creators({ backend: this, send: (ws, o) => this.send(ws, o) });   // R121
     this.chat.ownedEmotes = uid => this.crownStore.owned(uid);   // R119 · emotes comprados na Loja de Coroas
@@ -449,13 +451,22 @@ class Backend {
       const set = this.online.get(identity.id), was = set.size;
       set.add(ws);
       if (!was) this.presenceChanged(identity.id);
-      if (!was && this.joins) this.joins.note({ id: identity.id, nickname: identity.nickname, guest: !!identity.guest, newGuest: !!ws.guestIsNew });   // R179
+      if (!was) {
+        // R180 · aviso do Admin a CADA entrada (conta antiga também). Só não repete quando é a mesma visita
+        // (recarregar a página / cair e voltar em até 90 s = mesma sessão).
+        const fresh = !!(this.joins && this.joins.fresh.has(String(identity.id)));
+        const kind = identity.guest ? (ws.guestIsNew ? 'guest_new' : 'guest') : (fresh ? 'new_account' : 'account');
+        const ts = this.track ? this.track.online(identity, kind) : null;
+        const isNewVisit = !ts || ts.justCreated;
+        const j = this.joins && isNewVisit ? this.joins.note({ id: identity.id, nickname: identity.nickname, guest: !!identity.guest, newGuest: !!ws.guestIsNew, force: true }) : null;   // R179
+        if (j && ts) { j.sid = ts.sid; ts.kind = j.kind; }
+      }
     }
   }
   unlink(ws, uid) {
     const set = this.online.get(uid);
     if (!set || !set.delete(ws)) return;
-    if (!set.size) { this.online.delete(uid); this.presenceChanged(uid); }
+    if (!set.size) { this.online.delete(uid); this.presenceChanged(uid); if (this.track) this.track.offline(uid); }   // R180
   }
   // Resumo da cota de análise (servidor é a autoridade): usado/limite/renovação, ou ilimitado (Club).
   async analysisSummary(uid, ent) {
@@ -547,6 +558,7 @@ class Backend {
   async handle(ws, m) {
     const s = this.session(ws), a = String(m.type || '');
     if (s.closed || ws.dead || (ws.readyState !== undefined && ws.readyState !== 1)) return;
+    if (this.track && this.track.incoming(ws, a, m)) return;   // R180 · ui_screen/ui_hello param aqui; o resto só é anotado
     if (a === 'acct_logout') {
       this.invalidate(ws);
       return this.send(ws, { type: 'acct_logged_out' });

@@ -6,7 +6,7 @@
 // convidado também vê). Sem a tabela (0022): { items: [], banners: [] } e o jogo mostra a frase da arte.
 const missing = e => /42P01|42703|PGRST200|PGRST202|PGRST204|PGRST205|does not exist|Could not find/.test(String(e && e.code) + ' ' + String(e && e.message));
 const KINDS = ['atualizacao', 'noticia', 'campeonato', 'evento', 'banner'];
-const ACTIONS = ['', 'torneios', 'ranking', 'loja', 'premium', 'loja_coroas'];
+const ACTIONS = ['', 'torneios', 'ranking', 'loja', 'premium', 'loja_coroas', 'suporte', 'passe'];   // R180 · + suporte, passe
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CACHE_MS = 30e3;
 

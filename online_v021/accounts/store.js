@@ -117,6 +117,7 @@ class MemoryStore {
     if (this.avatars) this.avatars.delete(userId);
     for (const set of [this.social.requests, this.social.friends, this.social.blocks]) for (const k of [...set]) if (k.split('|').includes(userId)) set.delete(k);
     this.dms = this.dms.filter(d => d.sender_id !== userId && d.recipient_id !== userId);
+    for (const [k, r] of this.playerSessions || []) if (r.user_id === userId) this.playerSessions.delete(k);   // R180
     return { ok: true };
   }
   // ---------- Nome público (0004) ----------
@@ -624,6 +625,14 @@ class MemoryStore {
     return (this.crownLedgerRows || []).filter(r => r.user_id === userId).slice(-limit).reverse().map(({ key, ...r }) => r);
   }
   // ---------- R176.8 · suporte (em memória: desenvolvimento/testes) ----------
+  // ---------- R180 · sessões (memória) ----------
+  async saveSession(row) { this.playerSessions = this.playerSessions || new Map(); this.playerSessions.set(row.session_id, JSON.parse(JSON.stringify(row))); }
+  async listSessions({ limit = 100, q = '' } = {}) {
+    const all = [...(this.playerSessions || new Map()).values()].filter(r => !q || r.user_id === q || r.nickname.toLowerCase().includes(q.toLowerCase()));
+    return all.sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at)).slice(0, limit).map(({ events, ...r }) => r);
+  }
+  async getSession(sid) { const r = (this.playerSessions || new Map()).get(sid); return r ? JSON.parse(JSON.stringify(r)) : null; }
+  async pruneSessions(beforeIso) { for (const [k, r] of this.playerSessions || []) if (r.started_at < beforeIso) this.playerSessions.delete(k); }
   async createTicket(row) {
     this.tickets = this.tickets || [];
     const now = new Date().toISOString();
@@ -779,6 +788,7 @@ class SupabaseStore {
     await del('/direct_messages?or=(sender_id.eq.' + u + ',recipient_id.eq.' + u + ')');
     await del('/analysis_history?user_id=eq.' + u);
     await del('/bot_progress?user_id=eq.' + u);
+    await del('/player_sessions?user_id=eq.' + u);   // R180 · histórico de sessões (Admin) sai junto
     const full = { nickname: anonNick(userId), avatar_id: 'warrior', avatar_url: null, profile_frame: 'madeira', profile_badge: '', profile_title: '', settings: {}, account_status: 'deleted' };
     try { await this.req('/profiles?user_id=eq.' + u, { method: 'PATCH', body: JSON.stringify(full) }); }
     catch (e) {
@@ -1315,6 +1325,23 @@ class SupabaseStore {
   }
   async crownLedger(userId, limit = 20) {
     return this.req('/crown_ledger?user_id=eq.' + encodeURIComponent(userId) + '&select=delta,reason,ref,created_at&order=id.desc&limit=' + Math.max(1, Math.min(100, limit | 0)));
+  }
+  // ---------- R180 · sessões (0030) ----------
+  async saveSession(row) {
+    await this.req('/player_sessions?on_conflict=session_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ ...row, updated_at: new Date().toISOString() }) });
+  }
+  async listSessions({ limit = 100, q = '' } = {}) {
+    const lim = Math.max(1, Math.min(300, limit | 0));
+    const filt = q ? (UUID_RE.test(q) ? 'user_id=eq.' + encodeURIComponent(q) + '&' : 'nickname=ilike.*' + encodeURIComponent(q.replace(/[*,()%]/g, '')) + '*&') : '';
+    return this.req('/player_sessions?' + filt + 'select=session_id,player,user_id,nickname,kind,started_at,ended_at,last_seen_at,duration_s,last_screen,device&order=started_at.desc&limit=' + lim);
+  }
+  async getSession(sid) {
+    if (!UUID_RE.test(String(sid))) return null;
+    const rows = await this.req('/player_sessions?session_id=eq.' + encodeURIComponent(sid) + '&select=*');
+    return rows[0] || null;
+  }
+  async pruneSessions(beforeIso) {
+    await this.req('/player_sessions?started_at=lt.' + encodeURIComponent(beforeIso), { method: 'DELETE' });
   }
   // ---------- R176.8 · suporte (0029) ----------
   async createTicket(row) {

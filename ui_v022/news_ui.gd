@@ -145,7 +145,7 @@ func _card(it: Dictionary) -> Control:
 		row.add_child(go)
 	return card
 
-## Botão do item (Admin): "torneios", "ranking", "loja", "premium", "marcha", "xeque" ou um link https://
+## Botão do item (Admin): "torneios", "ranking", "loja", "premium", "loja_coroas", "suporte", "passe" ou um link https://
 func run_action(act: String):
 	if act.begins_with("https://"):
 		OS.shell_open(act)
@@ -156,6 +156,8 @@ func run_action(act: String):
 		"loja_coroas": hub.crowns_client().open_store()
 		"ranking": hub.open_leaderboard()
 		"loja", "premium": hub.open_premium()
+		"suporte": hub.open_support()   # R180 · beta: reportar bug/problema
+		"passe": hub.crowns_client().open_pass()   # R180
 		_: pass
 
 func _layout():

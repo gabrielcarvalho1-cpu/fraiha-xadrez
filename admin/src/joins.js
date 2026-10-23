@@ -55,8 +55,8 @@ export function startJoinWatcher({ api, alive }) {
 
   const pop = it => {
     const when = new Date(it.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    const card = h('div', { class: 'joinpop ' + it.kind }, h('b', {}, it.nickname || 'Jogador'), ' ', LABEL[it.kind] || 'entrou', h('small', {}, when));
-    card.onclick = () => card.remove();
+    const card = h('div', { class: 'joinpop ' + it.kind }, h('b', {}, it.nickname || 'Jogador'), ' ', LABEL[it.kind] || 'entrou', h('small', {}, when + (it.sid ? ' · clique para ver o que está fazendo' : '')));
+    card.onclick = () => { card.remove(); if (it.sid) location.hash = '#/sessions/' + it.sid; };   // R180 · abre a linha do tempo da visita
     feed.prepend(card);
     while (feed.children.length > 5) feed.lastChild.remove();
     setTimeout(() => card.remove(), 15000);

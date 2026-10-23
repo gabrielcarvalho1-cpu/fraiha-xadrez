@@ -80,6 +80,8 @@ var party_chat                   # R37.3 · social/party_chat.gd
 var party_online                 # R144 · ui_v022/party_online_ui.gd (CONTRA BOTS / JOGAR ONLINE e a fila)
 var profile_popup                # R37 · social/profile_popup.gd (cartão de perfil durante a partida)
 var account_ui
+var screen_tracker   # R180
+var update_watch     # R180
 var account_chip: Button
 var ranked
 var ranked_ui
@@ -510,6 +512,15 @@ func _setup_account():
     voice.setup(account)
     voice.changed.connect(_on_voice_changed)
     hub.bind_account(account)
+    # R180 · tela atual para o Admin (Sessões) + aviso de versão nova no lobby
+    screen_tracker = preload("res://telemetry/screen_tracker.gd").new()
+    screen_tracker.name = "ScreenTracker"
+    add_child(screen_tracker)
+    screen_tracker.setup(self, account)
+    update_watch = preload("res://telemetry/update_watch.gd").new()
+    update_watch.name = "UpdateWatch"
+    add_child(update_watch)
+    update_watch.setup(self, screen_tracker)
     # R177 · CHAT EXCLUSIVO com o administrador (abre na tela quando o dono aciona pelo Admin)
     direct_chat = preload("res://social/direct_chat_ui.gd").new()
     add_child(direct_chat)

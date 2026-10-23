@@ -12,6 +12,7 @@ const ROUTES = [
   { id: 'queues', label: 'Filas', ico: '☰', view: V.queues, every: 3000 },
   { id: 'matches', label: 'Partidas', ico: '♞', view: V.matches, every: 5000 },
   { id: 'players', label: 'Jogadores', ico: '☺', view: V.players, every: 0 },
+  { id: 'sessions', label: 'Sessões', ico: '◷', view: V.sessions, every: 5000 },   // R180
   { id: 'club', label: 'Clube', ico: '◆', view: V.club, every: 15000 },
   { id: 'founder', label: 'Fundador', ico: '♛', view: V.founder, every: 15000 },
   { id: 'sales', label: 'Vendas', ico: '$', view: V.sales, every: 30000 },

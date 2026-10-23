@@ -193,3 +193,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue); }
 .joinpop.new_account { border-color: rgba(230,180,60,.9); } .joinpop.guest, .joinpop.guest_new { border-color: rgba(110,150,240,.7); }
 @keyframes joinin { from { transform: translateX(30px); opacity: 0; } }
 @media (max-width: 760px) { .joinfeed { top: auto; bottom: 16px; left: 16px; right: 16px; max-width: none; } }
+
+/* R180 · Sessões */
+tr.click { cursor: pointer; } tr.click:hover td { background: rgba(255,255,255,.04); }
+.ssbar { display: grid; grid-template-columns: minmax(120px, 34%) 1fr 64px; gap: 10px; align-items: center; margin: 6px 0; font-size: 13px; }
+.ssname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sstrack { height: 10px; border-radius: 6px; background: rgba(255,255,255,.06); overflow: hidden; }
+.ssfill { display: block; height: 100%; background: linear-gradient(90deg, #c99a2e, #f0c860); border-radius: 6px; }
+.sslist { max-height: 70vh; overflow: auto; }
+.ssev { display: grid; grid-template-columns: 74px 64px 18px 1fr; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.ssev.screen .ssico { color: #7fb0ff; } .ssev.act .ssico { color: #f0c860; } .ssev.res .ssico { color: #3fbf7f; } .ssev.sys { color: var(--muted); }

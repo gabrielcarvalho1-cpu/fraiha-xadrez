@@ -1,6 +1,6 @@
 'use strict';
 // R179 · "entrou um jogador": log em memória das entradas no jogo (conta, conta nova, convidado) para o Admin
-// tocar um aviso sonoro. Uma entrada por jogador a cada DEDUP_MS (reconexões/troca de aba não repetem o aviso).
+// tocar um aviso sonoro. R180: o backend avisa a cada VISITA nova (Sessões: recarregar/cair e voltar em 90 s não repete).
 const MAX = 300;
 const DEDUP_MS = 10 * 60e3;
 
@@ -11,12 +11,12 @@ class JoinLog {
   }
   // conta que acabou de criar o perfil: a próxima entrada dela vira "conta nova"
   markNew(uid) { if (uid) this.fresh.add(String(uid)); }
-  note({ id, nickname, guest, newGuest }) {
+  note({ id, nickname, guest, newGuest, force = false }) {
     if (!id) return null;
     const uid = String(id), t = this.now();
     const isNew = this.fresh.delete(uid);
     const prev = this.last.get(uid);
-    if (!isNew && !newGuest && prev && t - prev < this.dedupMs) return null;
+    if (!force && !isNew && !newGuest && prev && t - prev < this.dedupMs) return null;
     this.last.set(uid, t);
     if (this.last.size > 5000) for (const [k, v] of this.last) { if (t - v > this.dedupMs) this.last.delete(k); if (this.last.size <= 4000) break; }
     const kind = guest ? (newGuest ? 'guest_new' : 'guest') : (isNew ? 'new_account' : 'account');
