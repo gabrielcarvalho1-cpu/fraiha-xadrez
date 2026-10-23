@@ -28,12 +28,17 @@ const MENU := [
     ["HISTÓRICO DE PARTIDAS", Rect2(433, 1250, 282, 75), "HISTÓRICO", Rect2(544, 1276, 109, 19), "squeeze", "", Rect2()],
 ]
 ## barra de baixo: [id, retângulo, texto, (x, topo, largura, maiúsculas)]
+## R178 · 5 abas: o PASSE entra no meio (embaixo do losango azul) — arte refeita em assets/home_nav5.png
+## (tools/home_nav5_r178.py). Casas de 159 px a partir de x 30.
 const NAV := [
-    ["inicio", Rect2(22, 1690, 192, 130), "INÍCIO", Rect2(90, 1778, 63, 17)],
-    ["amigos", Rect2(214, 1690, 211, 130), "AMIGOS", Rect2(279, 1776, 82, 19)],
-    ["conta", Rect2(425, 1690, 213, 130), "MINHA CONTA", Rect2(457, 1780, 143, 16)],
-    ["mais", Rect2(638, 1690, 197, 130), "MAIS", Rect2(709, 1779, 48, 16)],
+    ["inicio", Rect2(22, 1690, 167, 130), "INÍCIO", Rect2(30, 1778, 159, 17)],
+    ["amigos", Rect2(189, 1690, 159, 130), "AMIGOS", Rect2(189, 1776, 159, 19)],
+    ["passe", Rect2(348, 1690, 159, 130), "PASSE", Rect2(348, 1776, 159, 19)],
+    ["conta", Rect2(507, 1690, 160, 130), "MINHA CONTA", Rect2(517, 1781, 140, 15)],
+    ["mais", Rect2(667, 1690, 168, 130), "MAIS", Rect2(667, 1779, 159, 16)],
 ]
+const NAV_ART := "res://ui_v022/assets/home_nav5.png"
+const PASS_STRIP := Rect2(150, 676, 554, 56)   # R178 · faixa do PASSE entre o perfil e o JOGAR RANQUEADO
 const CLUB_RECT := Rect2(25, 45, 355, 73)
 const SOUND_RECT := Rect2(730, 45, 82, 75)
 const CARD_RECT := Rect2(108, 495, 637, 173)
@@ -112,7 +117,7 @@ func setup(owner_hub, owner_mobile):
     add_child(nav)
     var nav_art := TextureRect.new()
     nav_art.name = "RefArtNav"
-    nav_art.texture = _region(Rect2(0, NAV_TOP, 854, DESIGN.y - NAV_TOP))
+    nav_art.texture = load(NAV_ART) if ResourceLoader.exists(NAV_ART) else _region(Rect2(0, NAV_TOP, 854, DESIGN.y - NAV_TOP))
     nav_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     nav_art.stretch_mode = TextureRect.STRETCH_SCALE
     nav_art.position = Vector2(0, NAV_TOP)
@@ -194,6 +199,13 @@ func _source(title: String) -> TextureButton:
     return null
 
 func _build_top():
+    # R178 · PASSE DA TEMPORADA: faixa dourada entre o perfil e o JOGAR RANQUEADO
+    var pass_strip = load("res://economy/pass_home_card.gd").new()
+    pass_strip.setup(hub, "strip")
+    pass_strip.name = "PassHomeStrip"
+    pass_strip.position = PASS_STRIP.position
+    pass_strip.size = PASS_STRIP.size
+    top.add_child(pass_strip)
     # placa CLUB FRAIHA (a placa e a coroa são da arte; o jogo escreve o estado)
     club_entry = load("res://monetization/club_home_entry.gd").new()
     club_entry.name = "ClubHomeEntryMobile"
@@ -369,13 +381,14 @@ func _build_nav():
                 var src := _source("AMIGOS")
                 action = func(): if src != null: src.pressed.emit()
             "conta": action = func(): hub.account_requested.emit()
+            "passe": action = func(): if hub.has_method("crowns_client"): hub.crowns_client().open_pass()
             "mais": action = func(): mobile.show_page("mais")
         var b := _hit(nav, item[1], item[2], action)
         b.name = "RefNav_" + id
         buttons[item[2]] = b
         var o: Vector2 = item[1].position
         var tr: Rect2 = item[3]
-        var t = RefText.make(item[2], Rect2(tr.position - o, tr.size), "default", Color("ffd84e") if id == "inicio" else Color("f6f1e4"))
+        var t = RefText.make(item[2], Rect2(tr.position - o, tr.size), "default", Color("ffd84e") if id == "inicio" else (Color("ffe7a0") if id == "passe" else Color("f6f1e4")), true)   # R178 · casas novas: centralizado
         t.name = "RefTitle"
         t.bold = 1
         t.outline_size = 3
