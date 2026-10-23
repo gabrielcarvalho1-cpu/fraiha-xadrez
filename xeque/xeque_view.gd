@@ -132,6 +132,28 @@ func _rect_aa(r: Rect2, col: Color, w: float):
     var ts := t.get_size() / q
     draw_texture_rect(t, Rect2(r.get_center() - ts / 2.0, ts), false, col)
 
+## R176.8c · BRILHO suave em volta da carta (no lugar das molduras grossas): halo desfocado, sem linha dura.
+## A textura é um retângulo arredondado borrado (feita uma vez); desenhada em 9 fatias para não deformar o halo.
+static var _glow_tex: Texture2D = null
+const GLOW_M := 34.0   # margem do halo na textura (px)
+func _glow(r: Rect2, col: Color, spread := 14.0):
+    if _glow_tex == null:
+        var n := 128
+        var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+        var m := GLOW_M
+        for y in n:
+            for x in n:
+                var dx := maxf(0.0, maxf(m - x, x - (n - 1 - m)))
+                var dy := maxf(0.0, maxf(m - y, y - (n - 1 - m)))
+                var d := sqrt(dx * dx + dy * dy)
+                var a := clampf(1.0 - d / m, 0.0, 1.0)
+                a = a * a * (3.0 - 2.0 * a)
+                img.set_pixel(x, y, Color(1, 1, 1, a * (0.85 if d > 0.0 else 0.0)))
+        _glow_tex = ImageTexture.create_from_image(img)
+    var g := r.grow(spread)
+    var sm := spread / GLOW_M * 1.0
+    nine(_glow_tex, g, GLOW_M + 2.0, sm * 1.0, col)
+
 func _init():
     mouse_filter = Control.MOUSE_FILTER_STOP
     # R176.8 · filtro suave: cartas giradas na mesa e o tabuleiro/círculo reduzidos ficavam serrilhados (NEAREST)
@@ -413,7 +435,24 @@ func _draw_scene():
         _draw_tapete_hd(o, s)
         return
     if _scene_soft == null: _scene_soft = load(SCENE_SOFT_PATH)
-    draw_texture_rect(_scene_soft, Rect2(o, Vector2(1672, 941) * s), false)
+    # R176.8c · janela fora de 16:9 (navegador sem tela cheia): a própria cena continua em ESPELHO para os lados
+    # e para cima/baixo, nítida — sem as faixas desfocadas/escuras nas laterais
+    var a := Rect2(o, Vector2(1672, 941) * s)
+    var base := Transform2D(0.0, Vector2(ui.k, ui.k), 0.0, ui.origin)
+    var view := Rect2(-ui.origin / ui.k - Vector2(4, 4), size / ui.k + Vector2(8, 8))
+    for ix in range(-1, 2):
+        for iy in range(-1, 2):
+            if ix == 0 and iy == 0: continue
+            var cell := Rect2(a.position + Vector2(ix * a.size.x, iy * a.size.y), a.size)
+            if not cell.intersects(view): continue
+            var fx := ix != 0
+            var fy := iy != 0
+            var xf := Transform2D(Vector2(-1.0 if fx else 1.0, 0), Vector2(0, -1.0 if fy else 1.0),
+                Vector2(cell.end.x if fx else cell.position.x, cell.end.y if fy else cell.position.y))
+            draw_set_transform_matrix(base * xf)
+            draw_texture_rect(_scene_soft, Rect2(Vector2.ZERO, a.size), false, Color(0.9, 0.88, 0.86))
+    draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+    draw_texture_rect(_scene_soft, a, false)
     _draw_tapete_hd(o, s)
     var d: Vector2 = ui.design
     draw_texture_rect(_vignette(), Rect2(Vector2.ZERO, d), false)
@@ -1219,15 +1258,14 @@ func _draw_hand():
         var sz: Vector2 = tex.get_size() * it.sc
         if i in ui.selected:
             draw_set_transform(ui.origin + Vector2(it.c) * ui.k, it.rot, Vector2(ui.k, ui.k))
-            var a := 0.55 + 0.25 * sin(ui.t * 6.0)
-            for gi in 4: _rect_aa(Rect2(-sz / 2.0, sz).grow(3 + gi * 3), Color(1, 0.85, 0.35, a * (0.5 - gi * 0.11)), 3.0)
-            _rect_aa(Rect2(-sz / 2.0, sz).grow(2), Color("ffd257"), 3.0)
+            var a := 0.8 + 0.2 * sin(ui.t * 3.0)
+            _glow(Rect2(-sz / 2.0, sz), Color(1.0, 0.86, 0.42, a), 16.0)   # R176.8c · escolhida: brilho dourado suave
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         if hand[i] == Rules.JOKER:
             # R36 · Peão = CORINGA: aura verde-dourada pulsando em volta da carta (vale como qualquer peça)
             draw_set_transform(ui.origin + Vector2(it.c) * ui.k, it.rot, Vector2(ui.k, ui.k))
             var pj := 0.5 + 0.5 * sin(ui.t * 5.0 + i)
-            for gj in 4: _rect_aa(Rect2(-sz / 2.0, sz).grow(4 + gj * 4 + pj * 3), Color(0.35, 1.0, 0.55, 0.30 - gj * 0.07), 4.0)
+            _glow(Rect2(-sz / 2.0, sz), Color(0.45, 1.0, 0.6, 0.45 + 0.2 * pj), 14.0)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         var mod := Color.WHITE if my_turn or g.turn != 0 else Color(0.9, 0.9, 0.9)
         var cpos: Vector2 = it.c
@@ -1236,7 +1274,7 @@ func _draw_hand():
             var wv := 0.5 + 0.5 * sin(ui.t * 4.0 - i * 0.7)
             if not (i in ui.selected): cpos = cpos + Vector2(0, -6.0 * wv)
             draw_set_transform(ui.origin + cpos * ui.k, it.rot, Vector2(ui.k, ui.k))
-            for gk in 5: _rect_aa(Rect2(-sz / 2.0, sz).grow(4 + gk * 5), Color(1.0, 0.82, 0.32, (0.16 - gk * 0.03) * (0.55 + 0.45 * wv)), 5.0)
+            _glow(Rect2(-sz / 2.0, sz), Color(1.0, 0.84, 0.4, 0.22 + 0.18 * wv), 12.0)
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
             mod = Color(1.0 + 0.16 * wv, 1.0 + 0.13 * wv, 1.0 + 0.04 * wv)
         tex_center(tex, cpos, it.sc, it.rot, mod)
@@ -1273,7 +1311,7 @@ func _draw_reveal(big: bool):
         draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k * maxf(0.05, wscale), ui.k))
         draw_rect(Rect2(-sz / 2.0, sz).grow(3), Color(0, 0, 0, 0.45))
         var lie: bool = not Rules.is_true_card(cards[i], String(r.target))
-        if flip >= 1.0 and lie: _rect_aa(Rect2(-sz / 2.0, sz).grow(4), Color("e02a36"), 4.0)
+        if flip >= 1.0 and lie: _glow(Rect2(-sz / 2.0, sz), Color(1.0, 0.35, 0.3, 0.9 + 0.1 * sin(ui.t * 3.0)), 22.0)   # R176.8c · mentira: brilho vermelho suave
         if flip >= 0.5 and not ui.cards_clean.is_empty():
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
             card_face(cards[i], c, sz.x, rot, Color.WHITE, maxf(0.05, wscale))   # R123.1 · nítida
@@ -1906,10 +1944,11 @@ func card_face(kind: String, c: Vector2, w: float, rot := 0.0, mod: Color = Colo
     var want: Vector2 = Vector2(w, w * 1.4) * ui.k
     var pad := 3 if absf(rot) > 0.001 else 0   # R176.8b · girada: borda transparente (alisada pelo filtro)
     var t := Crisp.at(tex, want, pad)
-    var px: Vector2 = (t.get_size() - Vector2(pad, pad) * 2.0) if t != tex else want         # 1:1 com a textura reduzida (sem reamostrar)
+    var px: Vector2 = t.get_size() if (t != tex and pad == 0) else want         # 1:1 com a textura reduzida (sem reamostrar)
+    if pad > 0 and t != tex: px = Vector2(roundf(want.x / 4.0) * 4.0, roundf(roundf(want.x / 4.0) * 4.0 * tex.get_size().y / tex.get_size().x))
     var center: Vector2 = ui.origin + c * ui.k
     draw_set_transform(center, rot, Vector2(maxf(0.04, squash), 1.0))
-    var full := Rect2((-px / 2.0).round() - Vector2(pad, pad), px + Vector2(pad, pad) * 2.0)
+    var full := Rect2(-px / 2.0 - Vector2(pad, pad), px + Vector2(pad, pad) * 2.0)
     if pad > 0: draw_texture_rect(t, Rect2(full.position + Vector2(3, 4), full.size), false, Color(0, 0, 0, 0.35))
     else: draw_rect(Rect2(-px / 2.0 + Vector2(3, 4), px), Color(0, 0, 0, 0.35))
     draw_texture_rect(t, full, false, mod)
@@ -2299,13 +2338,12 @@ func _desk_hand():
         var rect := Rect2(c - sz / 2.0, sz)
         if i in ui.selected:
             var a := 0.55 + 0.25 * sin(ui.t * 6.0)
-            for gi in 4: draw_rect(rect.grow(3 + gi * 3), Color(1, 0.85, 0.35, a * (0.5 - gi * 0.11)), false, 3.0)
-            draw_rect(rect.grow(2), Color("ffd257"), false, 3.0)
+            _glow(rect, Color(1.0, 0.86, 0.42, 0.85), 16.0)   # R176.8c · escolhida: brilho dourado suave
         elif my_turn:
-            for gk in 3: draw_rect(rect.grow(3 + gk * 4), Color(1.0, 0.82, 0.32, 0.12 - gk * 0.035), false, 4.0)
+            _glow(rect, Color(1.0, 0.84, 0.4, 0.28), 12.0)
         if hand[i] == Rules.JOKER:
             var pj := 0.5 + 0.5 * sin(ui.t * 5.0 + i)
-            for gj in 3: draw_rect(rect.grow(4 + gj * 4 + pj * 3), Color(0.35, 1.0, 0.55, 0.26 - gj * 0.07), false, 4.0)
+            _glow(rect, Color(0.45, 1.0, 0.6, 0.45 + 0.2 * pj), 14.0)
         var mod := Color.WHITE if my_turn or g.turn != 0 else Color(0.92, 0.92, 0.92)
         card_face(String(hand[i]), c, DESK_CARD_W, 0.0, mod)
         if hand[i] == Rules.JOKER:
@@ -2331,7 +2369,7 @@ func _desk_reveal_cards():
         if flip >= 0.5:
             if flip >= 1.0 and lie:
                 draw_set_transform(ui.origin + c * ui.k, rot, Vector2(ui.k, ui.k))
-                _rect_aa(Rect2(-Vector2(w, w * 1.4) / 2.0, Vector2(w, w * 1.4)).grow(5), Color("e02a36"), 5.0)
+                _glow(Rect2(-Vector2(w, w * 1.4) / 2.0, Vector2(w, w * 1.4)), Color(1.0, 0.35, 0.3, 0.9 + 0.1 * sin(ui.t * 3.0)), 22.0)   # R176.8c
                 draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
             card_face(String(cards[i]), c, w, rot, Color.WHITE, wscale)
         else:

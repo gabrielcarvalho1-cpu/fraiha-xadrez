@@ -34,12 +34,21 @@ static func at(tex: Texture2D, px: Vector2, pad := 0) -> Texture2D:
     var base := source_image(tex)
     if base == null: return tex
     var img := base.duplicate()
-    if img.get_width() != w or img.get_height() != h: img.resize(w, h, Image.INTERPOLATE_LANCZOS)
     if pad > 0:
+        # R176.8c · carta GIRADA: o dobro do tamanho + mipmaps (o filtro faz a média = linhas e bordas inclinadas lisas)
+        # e borda transparente proporcional. Quem desenha usa o tamanho de tela pedido (não o da textura).
+        var w2 := mini(w * 2, int(src.x))
+        var h2 := int(round(w2 * src.y / src.x))
+        var p2 := int(ceil(pad * float(w2) / float(w)))
+        if img.get_width() != w2 or img.get_height() != h2: img.resize(w2, h2, Image.INTERPOLATE_LANCZOS)
         if img.get_format() != Image.FORMAT_RGBA8: img.convert(Image.FORMAT_RGBA8)
-        var big := Image.create(w + pad * 2, h + pad * 2, false, Image.FORMAT_RGBA8)
-        big.blit_rect(img, Rect2i(0, 0, w, h), Vector2i(pad, pad))
+        var big := Image.create(w2 + p2 * 2, h2 + p2 * 2, false, Image.FORMAT_RGBA8)
+        big.blit_rect(img, Rect2i(0, 0, w2, h2), Vector2i(p2, p2))
+        big.generate_mipmaps()
         img = big
+        w = img.get_width()
+        h = img.get_height()
+    elif img.get_width() != w or img.get_height() != h: img.resize(w, h, Image.INTERPOLATE_LANCZOS)
     var out := ImageTexture.create_from_image(img)
     # R89 · limite em BYTES (antes: 160 texturas — até ~140 MB com cartas grandes animando no celular)
     _bytes += w * h * 4

@@ -38,6 +38,7 @@ func run():
 	await frames(4)
 	await shot("x1_mesa")
 	ui.toggle_card(0); ui.toggle_card(1)
+	await shot("x1b_escolhidas")
 	ui.human_play()
 	for i in 6:
 		ui._process(0.3)

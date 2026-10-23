@@ -107,7 +107,7 @@ func _free_info(left: int, limit := FREE_PER_DAY) -> Dictionary:
 ## Atualiza o selo do lobby.
 func refresh():
     if _server_ok():
-        _update({"can_play": false, "label": "VERIFICANDO ACESSO…", "note": ""})
+        _update({"can_play": false, "checking": true, "label": "VERIFICANDO ACESSO…", "note": ""})   # R176.8c · sem botão até saber
         var r := await _ask({"type": "marcha_status"})
         if r.is_empty() or String(r.get("code", "")) == "not_configured": _update(_local_info())
         else: _update(_server_info(r))

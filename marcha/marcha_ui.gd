@@ -2880,6 +2880,9 @@ class TableView extends Control:
                 var br: Rect2 = bt[1]
                 art_button(plate, br, ui.lr(br), bt[0])
                 rtext(bt[2], Vector2(br.position.x + 30, br.position.y + 56), "title", 24.0, Color("f2c75a"), br.size.x - 60, HORIZONTAL_ALIGNMENT_CENTER, -1.0, 3, Color("2a0508"), true)   # mesmo tamanho nas duas
+        elif bool(info.get("checking", false)) or info.is_empty():
+            # R176.8c · enquanto verifica o acesso não aparece nada no lugar (antes piscava CONHECER CLUB FRAIHA)
+            pass
         else:
             draw_texture_rect(ui.r57.botao_jogar_agora_vazio, ui.lr(jr), false)
             rtext("CONHECER CLUB FRAIHA", Vector2(jr.position.x + 70, 634), "title", 34.0, Color("f2c75a"), jr.size.x - 140, HORIZONTAL_ALIGNMENT_CENTER, jr.size.x - 150, 3, Color("2a1a04"), true)
@@ -2924,7 +2927,7 @@ class TableView extends Control:
             if ok:
                 gold_button(Rect2(60, by, 470, 100), "CONTRA BOTS", 40, "lobby_bots")
                 gold_button(Rect2(550, by, 470, 100), "JOGAR ONLINE", 40, "lobby_online")
-            else: gold_button(Rect2(60, by, 960, 100), "CONHECER CLUB FRAIHA", 40, "lobby_club")
+            elif not (bool(info.get("checking", false)) or info.is_empty()): gold_button(Rect2(60, by, 960, 100), "CONHECER CLUB FRAIHA", 40, "lobby_club")
             dark_button(Rect2(60, by + 120, 470, 84), "COMO JOGAR", 32, "lobby_tutorial")
             gold_button(Rect2(550, by + 120, 470, 84), "CONVIDAR AMIGO", 32, "lobby_invite")
             dark_button(Rect2(60, by + 222, 960, 84), "VOLTAR", 34, "lobby_back")
@@ -2933,7 +2936,7 @@ class TableView extends Control:
             if ok:
                 gold_button(Rect2(70, by2, 255, 96), "CONTRA BOTS", 30, "lobby_bots")
                 gold_button(Rect2(335, by2, 255, 96), "JOGAR ONLINE", 30, "lobby_online")
-            else: gold_button(Rect2(70, by2, 520, 96), "CONHECER CLUB FRAIHA", 36, "lobby_club")
+            elif not (bool(info.get("checking", false)) or info.is_empty()): gold_button(Rect2(70, by2, 520, 96), "CONHECER CLUB FRAIHA", 36, "lobby_club")
             dark_button(Rect2(620, by2 + 8, 300, 80), "COMO JOGAR", 30, "lobby_tutorial")
             dark_button(Rect2(950, by2 + 8, 200, 80), "VOLTAR", 30, "lobby_back")
             # R35.1 · jogar com um amigo (vocês em dupla contra 2 bots, mesa online)
