@@ -182,3 +182,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue); }
 .moderow > .btn { grid-area: btn; }
 .moderow .btn.sm { min-width: 82px; }
 .moderow .modestats { grid-area: stats; font-size: 11px; }
+
+/* R179 · aviso "entrou um jogador" */
+.joinbell { font-size: 13px; padding: 6px 10px; } .joinbell.warn { border-color: rgba(230,180,60,.8); color: #f0c860; animation: joinblink 1.2s infinite; }
+@keyframes joinblink { 50% { opacity: .55; } }
+.joincount { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.joinfeed { position: fixed; right: 20px; top: 92px; z-index: 70; display: flex; flex-direction: column; gap: 8px; max-width: 360px; pointer-events: none; }
+.joinpop { pointer-events: auto; cursor: pointer; padding: 10px 14px; border-radius: 10px; background: var(--panel2); border: 1px solid rgba(63,191,127,.7); box-shadow: 0 6px 20px rgba(0,0,0,.35); animation: joinin .25s ease-out; font-size: 14px; }
+.joinpop small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.joinpop.new_account { border-color: rgba(230,180,60,.9); } .joinpop.guest, .joinpop.guest_new { border-color: rgba(110,150,240,.7); }
+@keyframes joinin { from { transform: translateX(30px); opacity: 0; } }
+@media (max-width: 760px) { .joinfeed { top: auto; bottom: 16px; left: 16px; right: 16px; max-width: none; } }

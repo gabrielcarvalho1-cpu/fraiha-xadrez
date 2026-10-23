@@ -31,7 +31,8 @@ const { Tickets } = require('./support/tickets');   // R176.8 · Suporte (ticket
 const { DirectChat } = require('./support/direct_chat');   // R177 · Chat exclusivo (Admin ↔ jogador)
 const { SeasonPass } = require('./economy/season_pass');   // R120 · Passe da Temporada
 const { Creators } = require('./social/creators');   // R121 · Apoie um Criador
-const { Window, Gate } = require('./net_guard');   // R170 · hardening (auditoria Orca R168)
+const { Window, Gate } = require('./net_guard');
+const { JoinLog } = require('./admin/joins');   // R179 · aviso de entrada no Admin   // R170 · hardening (auditoria Orca R168)
 
 const GUEST_TTL_MS = 24 * 3600e3;
 // R170 · SEC-002/003/004: limites de entrada (ajustáveis por variável de ambiente; padrões folgados para jogador real)
@@ -111,6 +112,7 @@ class Backend {
     this.news = new News({ backend: this });   // R161
     this.tickets = new Tickets({ backend: this });   // R176.8
     this.dchat = new DirectChat({ backend: this });   // R177
+    this.joins = new JoinLog();   // R179 · "entrou um jogador" (Admin, com som)
     this.seasonPass = new SeasonPass({ backend: this, send: (ws, o) => this.send(ws, o) });   // R120
     this.creators = new Creators({ backend: this, send: (ws, o) => this.send(ws, o) });   // R121
     this.chat.ownedEmotes = uid => this.crownStore.owned(uid);   // R119 · emotes comprados na Loja de Coroas
@@ -447,6 +449,7 @@ class Backend {
       const set = this.online.get(identity.id), was = set.size;
       set.add(ws);
       if (!was) this.presenceChanged(identity.id);
+      if (!was && this.joins) this.joins.note({ id: identity.id, nickname: identity.nickname, guest: !!identity.guest, newGuest: !!ws.guestIsNew });   // R179
     }
   }
   unlink(ws, uid) {
@@ -507,7 +510,8 @@ class Backend {
       token = crypto.randomBytes(24).toString('hex');
       g = { id: 'guest:' + crypto.randomUUID(), nickname: 'Convidado ' + String(crypto.randomInt(1000, 10000)) };
       this.guests.set(token, g);
-    }
+      ws.guestIsNew = true;   // R179 · convidado novo (Admin avisa "novo convidado")
+    } else ws.guestIsNew = false;
     g.seen = now;
     this.guests.delete(token); this.guests.set(token, g);   // R170 · ordem = uso mais recente (o mais antigo sai primeiro)
     ws.guest = g;
@@ -711,6 +715,7 @@ class Backend {
         const terms = typeof m.terms === 'string' && m.terms.length <= 40 ? { version: m.terms, accepted_at: new Date().toISOString() } : null;
         const r = await op.wait(() => this.store.createProfile(accountId, v.nickname, String(m.avatar_id || 'warrior'), terms));
         if (r.error) return this.fail(ws, r.error, { code: r.code || 'profile_error' });
+        if (this.joins) this.joins.markNew(accountId);   // R179 · Admin avisa "conta nova"
         if (m.ref) await this.referrals.onProfileCreated(accountId, m.ref);   // R105 · conta nova pelo link de convite
         if (m.creator) await this.creators.onProfileCreated(accountId, m.creator);   // R121 · conta nova pelo link de um criador
         if (!(await this.checked(ws, revision, this.state(ws)))) return;

@@ -4,6 +4,7 @@ import { Api, ApiError, login, remoteLogout } from './api.js';
 import { h, toast, closeAllModals } from './ui.js';
 import { startGoogle, consumeGoogleReturn } from './oauth.js';
 import * as V from './views/index.js';
+import { startJoinWatcher } from './joins.js';   // R179
 
 const ROUTES = [
   { id: 'dashboard', label: 'Dashboard', ico: '◧', view: V.dashboard, every: 5000 },
@@ -26,7 +27,7 @@ const ROUTES = [
 ];
 
 // epoch muda a cada login/logout: qualquer callback/promise de uma sessão anterior vira no-op.
-const S = { api: null, session: null, envKey: '', timer: null, fails: 0, lastOk: 0, viewToken: 0, epoch: 0 };
+const S = { joins: null, api: null, session: null, envKey: '', timer: null, fails: 0, lastOk: 0, viewToken: 0, epoch: 0 };
 const root = document.getElementById('app');
 
 function route() {
@@ -40,6 +41,7 @@ function route() {
 function endSession({ remote = false } = {}) {
   S.epoch++; S.viewToken++;
   clearTimeout(S.timer); S.timer = null;
+  if (S.joins) { S.joins.stop(); S.joins = null; }   // R179
   const api = S.api;
   if (api) { const tok = api.token; api.revoke(); if (remote) remoteLogout(api.envKey, tok); }
   closeAllModals();
@@ -136,10 +138,12 @@ function renderShell() {
   const envText = { local: 'LOCAL', dev: 'DEV', staging: 'STAGING', production: 'PRODUCTION — DADOS REAIS' }[envName] || 'AMBIENTE DESCONHECIDO';
   const side = h('nav', { class: 'side', 'aria-label': 'Seções' }, ROUTES.map(r => r.sep ? h('div', { class: 'sep' }) : h('a', { href: '#/' + r.id, dataset: { route: r.id } }, h('span', { class: 'ico' }, r.ico), r.label)));
   const conn = h('span', { class: 'conn' }, h('span', { class: 'dot', id: 'conn-dot' }), h('span', { id: 'conn-text' }, 'conectando…'));
+  if (S.joins) S.joins.stop();
+  { const epoch = S.epoch, api = S.api; S.joins = startJoinWatcher({ api, alive: () => epoch === S.epoch && S.api === api }); }   // R179 · aviso de entrada
   const top = h('header', { class: 'top' },
     h('div', { class: 'brand' }, h('span', { class: 'crest' }, '♜'), 'FRAIHA ', h('small', {}, 'ADMIN')),
     h('span', { class: 'badge ' + (envName === 'production' ? 'off' : 'gold') }, envText),
-    h('div', { class: 'spacer' }), conn,
+    h('div', { class: 'spacer' }), ...S.joins.els, conn,
     h('span', { class: 'who' }, h('b', {}, S.session.admin.name), ' · ', S.session.admin.role),
     h('button', { class: 'btn ghost', onclick: logout }, 'Sair'));
   const main = h('main', { id: 'view' });

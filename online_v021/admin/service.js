@@ -70,6 +70,7 @@ class AdminService {
         if (path === '/admin/api/session') return out(200, { admin: { id: admin.id, name: admin.name, role: admin.role, perms: admin.perms }, env: this.envName });
         if (path === '/admin/api/overview') return need('dashboard.read') && out(200, await this.overview());
         if (path === '/admin/api/live') return need('live.read') && out(200, this.live(url.searchParams.get('range')));
+        if (path === '/admin/api/joins') return need('live.read') && out(200, this.joins(url.searchParams.get('after')));   // R179
         if (path === '/admin/api/queues') return need('queues.read') && out(200, this.queues());
         if (path === '/admin/api/matches') return need('matches.read') && out(200, this.matches());
         if (path === '/admin/api/players') return need('players.read') && out(200, await this.players(url.searchParams.get('q'), url.searchParams.get('limit')));
@@ -434,6 +435,13 @@ class AdminService {
         reconnects_errors: none('PRECISA INSTRUMENTAÇÃO: contadores de reconexão/erro'),
       },
     };
+  }
+  // R179 · entradas no jogo desde `after` (o painel toca um som para cada nova) + quantos estão online agora
+  joins(after) {
+    const j = this.backend.joins ? this.backend.joins.since(after) : { seq: 0, items: [] };
+    let online = 0, guests = 0;
+    for (const [uid, set] of this.backend.online || []) { if (![...set].some(w => w.readyState === undefined || w.readyState === 1)) continue; online++; if (String(uid).startsWith('guest:')) guests++; }
+    return { ...j, online, guests, at: new Date(this.now()).toISOString() };
   }
   live(range) {
     const ms = { '1h': 3600e3, '6h': 6 * 3600e3, '24h': 86400e3 }[range] || 3600e3;

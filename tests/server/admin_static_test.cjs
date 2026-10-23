@@ -146,7 +146,7 @@ test('loadFiles: só .html/.css/.js de admin/, sem ocultos, sem package.json, se
   const { loadFiles } = require('../../online_v021/admin/static');
   const keys = [...loadFiles().keys()].sort();
   assert.deepEqual(keys, ['/admin/', '/admin/assets/admin.css', '/admin/index.html', '/admin/src/api.js', '/admin/src/app.js',
-    '/admin/src/config.js', '/admin/src/oauth.js', '/admin/src/ui.js', '/admin/src/views/index.js']);
+    '/admin/src/config.js', '/admin/src/joins.js', '/admin/src/oauth.js', '/admin/src/ui.js', '/admin/src/views/index.js']);
   const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'fx-static-'));
   try {
     fs.writeFileSync(path.join(tmp, 'index.html'), 'ok'); fs.writeFileSync(path.join(tmp, '.env.js'), 'x'); fs.writeFileSync(path.join(tmp, 'a.json'), '{}');
