@@ -82,8 +82,8 @@ func run():
 	hub.open_global_chat()
 	await frames(4)
 	acc.server_message.emit({"type": "gchat_history", "can_send": true, "online": 12, "messages": [
-		{"id": 1, "user_id": "u1", "nickname": "LadyTorre", "text": "Boa tarde, pessoal! Alguém pra uma Marcha?", "ts": "2026-10-14T18:01:00.000Z"},
-		{"id": 2, "user_id": "u2", "nickname": "Cavalo_Louco", "text": "Bora! Me chama no convite.", "ts": "2026-10-14T18:01:30.000Z"},
+		{"id": 1, "user_id": "u1", "nickname": "LadyTorre", "title": "rei_do_blitz", "text": "Boa tarde, pessoal! Alguém pra uma Marcha?", "ts": "2026-10-14T18:01:00.000Z"},
+		{"id": 2, "user_id": "u2", "nickname": "Cavalo_Louco", "title": "estrategista", "text": "Bora! Me chama no convite.", "ts": "2026-10-14T18:01:30.000Z"},
 		{"id": 3, "user_id": "u-me", "nickname": "Gabriel", "text": "Quem topa XEQUE depois?", "ts": "2026-10-14T18:02:10.000Z"}]})
 	await frames(6)
 	check(hub.global_chat_ui.is_open() and hub.global_chat_ui.list.get_child_count() == 3 and hub.global_chat_ui.input_row.visible, "CHAT GLOBAL abre com histórico e campo para escrever")

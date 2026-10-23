@@ -105,13 +105,17 @@ func run():
 	var board := []
 	for c in rules.board: board.append([c.x, c.y, rules.board[c]])
 	var mid := "00000000-0000-4000-8000-0000000000bb"
-	var opp := {"nickname": "SextoSen1", "avatar_id": "warrior", "league": 0, "pl": 82, "connected": true}
+	var opp := {"nickname": "SextoSen1", "avatar_id": "warrior", "league": 0, "pl": 82, "connected": true, "title": "estrategista"}
 	var me := {"nickname": "Gabriel", "avatar_id": "warrior", "league": 0, "pl": 72, "connected": true}
 	stage._open_ranked()
 	await frames(4)
 	acc.server_message.emit({"type": "ranked_found", "match_id": mid, "mode": "ranked_3min", "mode_name": "Relâmpago", "you": "b", "opponent": opp})
 	await frames(4)
 	check(da.is_open() and da.kind == "found", "Ranked: ADVERSÁRIO ENCONTRADO na arte")
+	check(node(da, "DeskFoundTitle") != null and node(da, "DeskFoundTitle").text == "ESTRATEGISTA", "encontrado: título do adversário com cor e brilho")
+	if OS.get_environment("SHOT_DIR") != "":
+		await frames(20)
+		root.get_texture().get_image().save_png(OS.get_environment("SHOT_DIR").path_join(OS.get_environment("SHOT_TAG") + "encontrado_titulo.png"))
 	check(txt(da, "DeskFoundName") == "SextoSen1" and "82/100 PL" in txt(da, "DeskFoundLeague") and "PRETAS" in txt(da, "DeskFoundMode"), "encontrado: nome, liga/PL e cor")
 	acc.server_message.emit({"type": "ranked_state", "match_id": mid, "mode": "ranked_3min", "mode_name": "Relâmpago", "you": "b", "status": "playing", "revision": 1, "starts_in_ms": 0,
 		"white": opp, "black": me, "position": {"board": board, "turn": "w", "rights": "KQkq", "ep": [-1, -1], "halfmove": 0, "ply": 0},

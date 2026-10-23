@@ -620,7 +620,15 @@ func _desk_art(which: String) -> bool:
                 tex = hub.avatar_texture_for(opp) if hub.has_method("avatar_texture_for") else (hub.avatar_texture(av) if not av.is_empty() else null)
                 if tex == null: tex = hub.avatar_texture("warrior")
             if tex != null: d.image(tex, Rect2(456, 723, 213, 213), true, 0.64).name = "DeskFoundAvatar"
-            d.label(String(opp.get("nickname", "")), Rect2(250, 962, 622, 86), 76, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskFoundName"
+            var dtid := Cosmetics.public_title(opp)
+            d.label(String(opp.get("nickname", "")), Rect2(250, 938 if not dtid.is_empty() else 962, 622, 74 if not dtid.is_empty() else 86), 68 if not dtid.is_empty() else 76, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskFoundName"
+            if not dtid.is_empty():
+                # R176.9 · título do adversário com a cor própria e o brilho, entre o nome e a liga
+                var dt = preload("res://profile/title_tag.gd").make(dtid, 30)
+                dt.fit_height = 0.72
+                dt.custom_minimum_size = Vector2.ZERO
+                dt.name = "DeskFoundTitle"
+                d.add_item(dt, Rect2(250, 1010, 622, 46))
             var line := league_line(int(opp.get("league", 0)), int(opp.get("pl", 0))).to_upper() if rated() else "PARTIDA CASUAL · SEM PL"
             d.label(line, Rect2(250, 1076, 622, 52), 38, DeskArt.MUTED, DeskArt.FONT_MED).name = "DeskFoundLeague"
             d.label("%s · Você joga de %s" % [controller.mode_name, "BRANCAS" if controller.human_color == "w" else "PRETAS"], Rect2(170, 1146, 782, 58), 42, DeskArt.CREAM, DeskArt.FONT_MED).name = "DeskFoundMode"

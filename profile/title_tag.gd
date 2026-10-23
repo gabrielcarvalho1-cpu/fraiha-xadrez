@@ -11,6 +11,7 @@ var align := HORIZONTAL_ALIGNMENT_CENTER
 var glow := true
 var t := 0.0
 var natural_w := 0.0
+var fit_height := 0.0   # > 0: o tamanho da letra acompanha a altura da caixa (modais da arte que escalam com a tela)
 
 static func make(id: String, p_px := 16, p_align := HORIZONTAL_ALIGNMENT_CENTER) -> Control:
 	var n = load("res://profile/title_tag.gd").new()
@@ -23,7 +24,7 @@ func set_title(id: String, p_px := -1):
 	color = Cosmetics.title_color(id)
 	if p_px > 0: px = p_px
 	natural_w = FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x + px * 1.2
-	custom_minimum_size = Vector2(0, FONT.get_height(px) + px * 0.6)   # largura: quem coloca decide (o texto encolhe para caber)
+	custom_minimum_size = Vector2(0, 0.0 if fit_height > 0.0 else FONT.get_height(px) + px * 0.6)   # largura: quem coloca decide (o texto encolhe para caber)
 	visible = not text.is_empty()
 	queue_redraw()
 
@@ -39,6 +40,7 @@ func _draw():
 	if text.is_empty(): return
 	var f := FONT
 	var p := px
+	if fit_height > 0.0: p = maxi(8, int(size.y * fit_height))
 	while p > 8 and f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, p).x > size.x - 4: p -= 1
 	var tw := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, p).x
 	var x := 2.0
@@ -50,6 +52,6 @@ func _draw():
 		var k := 0.75 + 0.25 * sin(t * 2.4)
 		for i in 3:
 			var c := Color(color.r, color.g, color.b, (0.16 - i * 0.045) * k)
-			f.draw_string_outline(get_canvas_item(), pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, p, 4 + i * 4, c)
+			f.draw_string_outline(get_canvas_item(), pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, p, int((4 + i * 4) * maxf(1.0, p / 18.0)), c)
 	f.draw_string_outline(get_canvas_item(), pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, p, maxi(3, int(p * 0.2)), Color(0.05, 0.03, 0.01, 0.9))
 	f.draw_string(get_canvas_item(), pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, p, color.lightened(0.08))
