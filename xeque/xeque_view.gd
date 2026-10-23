@@ -2548,7 +2548,7 @@ func _r57_portrait_blocks(area: Rect2) -> Array:
 
 ## fontes das referências finais: "name" = Grenze Bold (nomes), "mono" = VT323 (faixa, lugar, legendas),
 ## "ui" = Jersey 20 (selo BOT). sp = espaço extra entre letras (px na tela).
-const R57_FONTS := {"name": "res://xeque/art/fontes/Grenze-Bold.woff", "mono": "res://xeque/art/fontes/VT323-Regular.woff"}
+const R57_FONTS := {"name": "res://xeque/art/fontes/Grenze-Bold.woff", "mono": "res://xeque/art/fontes/VT323-Regular.woff", "oswald": "res://marcha/art/fonts/oswald-latin-600-normal.woff"}
 func r57_f(key: String, sp: int) -> Font:
     var id := "%s_%d" % [key, sp]
     if not _r57_font.has(id):
@@ -2589,6 +2589,9 @@ func _draw_result_r57(d: Vector2):
     var plate := r57_tex(key)
     _pblocks = []
     if ui.layout == "portrait":
+        _draw_result_p177(d, key)
+        return
+    if false:
         # fundo: a própria arte cobrindo a tela, escurecida; por cima, os blocos nítidos
         # área VISÍVEL inteira (o celular é mais alto que o design): cenário lateral da arte, bem escuro
         var vis := Rect2(-ui.origin / ui.k, size / ui.k)
@@ -2659,3 +2662,87 @@ func _draw_result_r57(d: Vector2):
             r57_text(d, tag, Vector2(tr.position.x, tr.position.y + 19.5), "ui", 19, Color("10243a"), 1.0, tr.size.x - 6, HORIZONTAL_ALIGNMENT_CENTER, tr.size.x)
         var line := "Último de pé" if i == 0 else ("Xeque-mate final na rodada %d" % g.eliminated_round[s] if i == 1 else "Eliminad%s na rodada %d" % ["a" if s == 1 else "o", g.eliminated_round[s]])
         r57_text(d, line, Vector2(952, y0 + 58), "mono", 27, Color("abb7b1"), 1.0, 300.0, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 0, Color("120a06"), true)
+
+# ---------------------------------------------------------------- R177j · resultado no celular EM PÉ
+## As duas artes do dono (941x1672: vitória azul / derrota vermelha), iguais, ocupando a tela toda.
+## r177p_<key>.png = a arte sem os textos dinâmicos, com o retrato e as miniaturas vazados (o avatar vai por baixo) e
+## P177_EXT px de cenário a mais em cima e embaixo (tools/visual_r177j_cel.py). Coordenadas = px da arte.
+const P177_SIZE := Vector2(941, 1672)
+const P177_EXT := 260.0
+const P177 := {
+    "vitoria": {"portrait": Rect2(298, 344, 342, 300), "name_y": 707.0, "name_x": 469.0, "place": [470.0, 800.0, 48],
+        "banner": [223.0, 968.0], "thumbs": [Rect2(158, 1033, 90, 85), Rect2(158, 1141, 90, 85), Rect2(158, 1249, 90, 85), Rect2(158, 1358, 90, 89)],
+        "nb": [1071.0, 1179.0, 1287.0, 1397.0], "sb": [1104.0, 1213.0, 1322.0, 1432.0], "nfs": 36, "sfs": 32,
+        "c_name": Color8(250, 245, 212), "c_place": Color8(246, 200, 70), "c_banner": Color8(250, 247, 234), "c_row": Color8(247, 246, 227),
+        "buttons": [["again", Rect2(32, 1515, 298, 85)], ["over_tutorial", Rect2(345, 1515, 253, 85)], ["over_menu", Rect2(612, 1515, 293, 85)]]},
+    "derrota": {"portrait": Rect2(311, 336, 315, 300), "name_y": 706.0, "name_x": 468.0, "place": [470.0, 793.0, 45],
+        "banner": [223.0, 972.0], "thumbs": [Rect2(162, 1039, 86, 85), Rect2(162, 1144, 86, 86), Rect2(162, 1248, 86, 86), Rect2(162, 1356, 86, 87)],
+        "nb": [1069.0, 1176.0, 1281.0, 1390.0], "sb": [1102.0, 1210.0, 1315.0, 1424.0], "nfs": 35, "sfs": 31,
+        "c_name": Color8(249, 244, 206), "c_place": Color8(245, 201, 50), "c_banner": Color8(250, 244, 201), "c_row": Color8(247, 242, 211),
+        "buttons": [["again", Rect2(38, 1515, 294, 85)], ["over_tutorial", Rect2(352, 1515, 248, 85)], ["over_menu", Rect2(622, 1515, 280, 85)]]},
+}
+
+func _draw_result_p177(d: Vector2, key: String):
+    var g = ui.g
+    var won: bool = g.winner == 0
+    var S: Dictionary = P177[key]
+    var plate := _p177_tex(key)
+    var vis := Rect2(-ui.origin / ui.k, size / ui.k)
+    # tela mais larga que a arte (tablet): a arte do PC desfocada por trás
+    var blur := r57_tex(key + "_blur")
+    var bsz := blur.get_size()
+    var cov := maxf(vis.size.x / bsz.x, vis.size.y / bsz.y)
+    draw_texture_rect(blur, Rect2(vis.position + (vis.size - bsz * cov) / 2.0, bsz * cov), false, Color(0.55, 0.53, 0.52))
+    var s: float = minf(vis.size.x / P177_SIZE.x, vis.size.y / P177_SIZE.y)
+    var o: Vector2 = vis.position + (vis.size - P177_SIZE * s) / 2.0
+    var big := Rect2(-4000, -4000, 9000, 9000)
+    _pblocks = [{"src": big, "dst": Rect2(o + big.position * s, big.size * s), "s": s, "piece": "p177"}]
+    # avatares por baixo da arte (retrato e miniaturas são vazados)
+    var hero: int = 0 if won else int(g.winner)
+    r57_cover(ui.avatars[hero], r57_r(d, (S.portrait as Rect2).grow(3)))
+    var order := [g.winner]
+    for i in range(g.finish_order.size() - 1, -1, -1): order.append(g.finish_order[i])
+    for i in mini(order.size(), 4):
+        r57_cover(ui.avatars[order[i]], r57_r(d, (S.thumbs[i] as Rect2).grow(2)))
+    draw_texture_rect(plate, Rect2(o - Vector2(0, P177_EXT * s), Vector2(P177_SIZE.x, P177_SIZE.y + 2.0 * P177_EXT) * s), false)
+    # botões da arte: hover = a própria arte um pouco mais clara
+    for b in S.buttons:
+        var br: Rect2 = b[1]
+        if ui.hover_id == String(b[0]):
+            draw_texture_rect_region(plate, r57_r(d, br), Rect2(br.position + Vector2(0, P177_EXT), br.size), Color(1.22, 1.18, 1.1) if ui.pressed_id != String(b[0]) else Color(0.9, 0.88, 0.85))
+        hit(r57_r(d, br), String(b[0]))
+    # nome do vencedor (centralizado na placa) e o lugar
+    var nm: String = "Você" if won else String(g.names[hero])
+    var nfs := 66
+    var fn := r57_f("name", 0)
+    while nfs > 30 and fn.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs).x > 296.0: nfs -= 1
+    var nbase: float = float(S.name_y) + nfs * 0.61 / 2.0 + (3.0 if nm.to_lower() != nm.to_upper() else 0.0)
+    r57_text(d, nm, Vector2(float(S.name_x) - 160.0, nbase), "name", nfs, S.c_name, 0.0, 300.0, HORIZONTAL_ALIGNMENT_CENTER, 320.0, 3)
+    var pl: Array = S.place
+    r57_text(d, "VOCÊ FICOU EM %dº LUGAR" % g.placement(0), Vector2(float(pl[0]) - 240.0, float(pl[1])), "mono", float(pl[2]), S.c_place, 0.0, 450.0, HORIZONTAL_ALIGNMENT_CENTER, 480.0, 2, Color("120a06"), true)
+    # faixa vermelha: xeque-mate final
+    var last_loser := -1
+    if not g.finish_order.is_empty(): last_loser = int(g.finish_order[g.finish_order.size() - 1])
+    var bt := "XEQUE-MATE FINAL EM %s" % String("Você" if last_loser == 0 else g.names[last_loser]).to_upper() if last_loser >= 0 else "FIM DE PARTIDA"
+    var bn: Array = S.banner
+    r57_text(d, bt, Vector2(float(bn[0]), float(bn[1])), "oswald", 38, S.c_banner, 0.0, 615.0, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 2, Color("3a0606"))
+    # classificação: números, coroas e molduras já estão na arte
+    for i in mini(order.size(), 4):
+        var st: int = order[i]
+        var name: String = "Você" if st == 0 else String(g.names[st])
+        var tag: String = "" if st == 0 else String(ui.seat_tag(st))
+        var nb: float = S.nb[i]
+        var nw: float = r57_text(d, name, Vector2(280, nb), "name", float(S.nfs), S.c_row, 0.0, 400.0 - (90.0 if not tag.is_empty() else 0.0), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 2)
+        if not tag.is_empty():
+            var tw0: float = r57_f("ui", 0).get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x + 26.0
+            var tr := Rect2(280 + nw + 18, nb - 27, maxf(62.0, tw0), 31)
+            draw_rect(r57_r(d, tr.grow(1.5)), Color("0c1418"))
+            draw_rect(r57_r(d, tr), Color("8ec7f6"))
+            r57_text(d, tag, Vector2(tr.position.x, tr.position.y + 25.0), "ui", 28, Color("10243a"), 1.5, tr.size.x - 8, HORIZONTAL_ALIGNMENT_CENTER, tr.size.x)
+        var line := "Último de pé" if i == 0 else ("Xeque-mate final na rodada %d" % g.eliminated_round[st] if i == 1 else "Eliminad%s na rodada %d" % ["a" if st == 1 else "o", g.eliminated_round[st]])
+        r57_text(d, line, Vector2(281, S.sb[i]), "mono", float(S.sfs), Color8(179, 206, 209), 0.0, 470.0, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 0, Color("120a06"), true)
+
+func _p177_tex(key: String) -> Texture2D:
+    var id := "p177_" + key
+    if not _r57_tex.has(id): _r57_tex[id] = load("res://xeque/art/telas/r177p_%s.png" % key)
+    return _r57_tex[id]

@@ -1,5 +1,6 @@
 extends SceneTree
 ## R177f · XEQUE: telas de VITÓRIA / DERROTA no celular (em pé e deitado) e no PC.
+var fails := 0
 func _initialize(): call_deferred("run")
 func frames(n := 3):
 	for i in n: await process_frame
@@ -36,4 +37,13 @@ func run():
 		ui.over_t = 3.0
 		await frames(10)
 		await shot("vitoria" if w == 0 else "derrota")
-	quit(0)
+		# R177j · os 3 botões da arte respondem dentro da tela
+		var ids := []
+		var vis := Rect2(-ui.origin / ui.k, Vector2(size) / ui.k)
+		for h in ui.hits:
+			if String(h.id) in ["again", "over_tutorial", "over_menu"] and vis.encloses(h.rect): ids.append(String(h.id))
+		var ok := ids.size() == 3
+		print(("PASS " if ok else "FAIL ") + "botões do resultado %s: %s" % [ui.layout, ids])
+		if not ok: fails += 1
+	print("RESULT ", "OK" if fails == 0 else "FAIL %d" % fails)
+	quit(1 if fails > 0 else 0)
