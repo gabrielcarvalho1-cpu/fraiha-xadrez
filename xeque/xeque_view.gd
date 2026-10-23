@@ -2647,7 +2647,7 @@ func _draw_result_r57(d: Vector2):
             draw_texture_rect(r57_tex(key + "_" + String(b.piece)), b.dst, false)
     else:
         var full := r57_r(d, Rect2(Vector2.ZERO, R57_SIZE))
-        if ui.layout == "landscape":
+        if ui.layout in ["landscape", "desktop"]:   # R178l · PC também (janela mais larga que a arte)
             # R178l · celular deitado (mais largo que a arte): as laterais ESTICAM a beira da própria cena, desfocada
             # (antes era a beira espelhada — parecia a tela duplicada, com botões e painéis repetidos)
             var vis2 := Rect2(-ui.origin / ui.k, size / ui.k)
@@ -2662,7 +2662,7 @@ func _draw_result_r57(d: Vector2):
             if rw > 0.5: draw_texture_rect_region(blur, Rect2(full.end.x - 1.0, full.position.y, rw + 1.0, full.size.y), Rect2(bs.x - col, 0, col, bs.y), dim)
             draw_set_transform_matrix(base)
         draw_texture_rect(plate, full, false)
-        if ui.layout == "landscape" and (full.position.x > -ui.origin.x / ui.k + 0.5):
+        if ui.layout in ["landscape", "desktop"] and (full.position.x > -ui.origin.x / ui.k + 0.5):
             var blur := r57_tex(key + "_blur")
             var bs := blur.get_size()
             var dim := Color(0.8, 0.78, 0.78)
