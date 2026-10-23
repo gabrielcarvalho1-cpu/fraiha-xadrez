@@ -1694,6 +1694,8 @@ func _on_presence(msg: Dictionary):
     if touched.is_empty() or not is_open(): return
     match screen:
         "list": _show("list")      # reorganiza Online / Em partida / Offline na hora
+        "invite_friends":          # R177b · CONVIDAR AMIGO (dentro dos modos) também atualiza na hora
+            if not invite_sending: _show("invite_friends")
         "profile":
             if touched.has(String(profile.get("user_id", ""))) and String(profile.get("relation", "")) == "friend":
                 profile["presence"] = presence_of(String(profile.get("user_id", "")))

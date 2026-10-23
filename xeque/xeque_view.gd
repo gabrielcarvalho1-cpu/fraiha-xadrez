@@ -46,7 +46,7 @@ const LAYOUTS := {
         "mesa": Rect2(40, 404, 384, 206), "como": null,
         "plates": {0: ["h", Rect2(40, 718, 384, 152)], 1: ["v", Vector2(562, 380), 232], 2: ["hc", Rect2(822, 2, 306, 112)], 3: ["v", Vector2(1388, 380), 232]},
         "turn": Rect2(40, 624, 384, 80), "meter": Rect2(1568, 84, 364, 132),   # R176.7 · relógio menor (não encosta na Torre Velha)
-        "chat": Rect2(1568, 380, 364, 84),   # R176.7 · CHAT grande, logo acima da logo XEQUE (partida online)
+        "chat": Rect2(1612, 386, 320, 70),   # R176.7 · CHAT logo acima da logo XEQUE (partida online) · R177b: menor
         "xeque": [Vector2(1716, 622), 1.25], "play": Rect2(1500, 736, 432, 136),
         "hint": [Vector2(1750, 290), 24], "help": Rect2(1798, 4, 64, 64), "menu": Rect2(1868, 4, 64, 64),
         "music": Rect2(1658, 4, 64, 64), "fx": Rect2(1728, 4, 64, 64), "full": Rect2(1588, 4, 64, 64), "voice": Rect2(1518, 4, 64, 64), "voice_ear": Rect2(1448, 4, 64, 64),
@@ -508,7 +508,9 @@ func _draw_scene_full(a: Rect2):
 ## R156 · zoom das colunas laterais no celular deitado largo (1 = normal). Até 35% maiores, conforme a sobra.
 func side_zoom() -> float:
     if ui.layout != "landscape": return 1.0
-    return clampf(1.0 + float(ui.get("wide_extra")) / 1300.0, 1.0, 1.35)
+    # R177b · as colunas já ocupam a altura toda (R176.2 aumentou tudo): ampliar mais empurrava o retrato, o SUA VEZ,
+    # o JOGAR CARTAS e a logo XEQUE para fora da tela (celular bem largo). Quase nada de zoom, centrado na altura.
+    return clampf(1.0 + float(ui.get("wide_extra")) / 6000.0, 1.0, 1.03)
 var _grp_a := Vector2.ZERO
 var _grp_f := 1.0
 var _grp_hits := 0
@@ -548,7 +550,7 @@ func _draw_game():
     var mate: bool = ui.phase in ["mate", "elim"]
     # R156 · celular deitado largo: as colunas da esquerda e da direita ficam MAIORES (sobrava muito cenário)
     var f: float = side_zoom()
-    _group_begin(Vector2(20, 20), f)
+    _group_begin(Vector2(20, 450), f)
     _draw_title()
     _draw_mesa_pede()
     if lay.como != null: _draw_como_jogar(lay.como)
@@ -562,7 +564,7 @@ func _draw_game():
         if mate and s == int(ui.result.loser): continue
         _draw_plate(s)
     _draw_bubble()
-    _group_begin(Vector2(ui.design.x - 10.0, 0), f)
+    _group_begin(Vector2(ui.design.x - 10.0, 450), f)
     _draw_meter()
     _draw_xeque_button(false)
     _draw_play_button()

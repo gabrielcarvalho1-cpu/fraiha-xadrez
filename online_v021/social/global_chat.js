@@ -9,7 +9,7 @@ const { look } = require('../accounts/cosmetics');
 const HISTORY = 80;          // por canal
 // R168 · CANAIS (abas): GERAL, PROCURANDO PARCEIROS (achar gente para jogar) e DÚVIDAS E AJUDA.
 const CHANNELS = ['geral', 'parceiros', 'ajuda'];
-const MIN_GAP_MS = 2500;        // no global, no máximo 1 mensagem a cada 2,5 s por conta
+const MIN_GAP_MS = 1200;        // no global, no máximo 1 mensagem a cada 1,2 s por conta (R177b: antes 2,5 s — parecia que não enviava)
 // R171 · SEC-010: denúncia igual (mesma pessoa + mesma mensagem) vale 1 vez por 24 h; teto 10 por pessoa e 30 por IP a cada 10 min
 const REPORT_DUP_MS = 24 * 3600e3, REPORT_WINDOW_MS = 10 * 60e3, REPORT_MAX = 10, REPORT_MAX_PER_IP = 30;
 const MAX_MEMBERS_PUSH = 5000;  // proteção: não percorre mais que isso por mensagem

@@ -1,5 +1,5 @@
 extends SceneTree
-## R176.2 · XEQUE no celular deitado (iPhone): mão escolhida + vez. Prints para conferir tamanhos.
+## R176.2 · XEQUE no celular deitado (iPhone): mão escolhida + vez. Prints para conferir tamanhos.\n## R177b · também online (botão CHAT da mesa).
 func _initialize(): call_deferred("run")
 func frames(n := 3):
 	for i in n: await process_frame
@@ -38,4 +38,16 @@ func run():
 	ui.toggle_card(0)
 	print("layout ", ui.layout, " k ", ui.k, " extra ", ui.get("wide_extra"))
 	await shot("xeque_deitado")
+	# R177b · online: botão CHAT da mesa no lugar reservado (não pode cobrir nada nem sair da tela)
+	ui.online = true
+	var pc = stage.get("party_chat")
+	if pc != null:
+		pc.bind("room-t", "xeque", ["Gabriel", "Torre Velha", "Dama de Ferro", "SextoSentro"])
+		pc.unread = 2
+	ui._sync_chat_dock()
+	await frames(6)
+	if pc != null:
+		var tr: Rect2 = pc.toggle.get_global_rect()
+		print("chat ", tr, " vs ", Vector2(size))
+	await shot("xeque_deitado_online")
 	quit(0)

@@ -132,13 +132,48 @@ func _apply_can_send(v: bool):
 	input_row.visible = v
 	guest_label.visible = not v
 
+## R177b · ENVIAR na hora (como no WhatsApp): o campo limpa já no toque e a mensagem aparece na lista como
+## "enviando…" até o servidor devolver. O servidor aceita 1 mensagem a cada pouco tempo; em vez de perder o texto
+## (antes: "Calma!" escondido atrás do teclado e a pessoa apertava de novo), o jogo segura a fila e manda sozinho.
+const SEND_GAP_MS := 1300
+var _queue: Array = []      # [{text, channel}] ainda não mandadas
+var _sent: Array = []       # mandadas, esperando o servidor devolver
+var _last_send_ms := -100000
+var _pumping := false
+
 func send_current():
 	var t := input.text.strip_edges()
 	if t.is_empty(): return
-	if account == null or not account.send_server({"type": "gchat_send", "text": t, "channel": channel}):
+	if account == null or not account.has_method("send_server"):
 		status.text = "Sem conexão com o servidor."
 		return
 	input.text = ""
+	_queue.append({"text": t, "channel": channel})
+	_rebuild()
+	_pump()
+
+func _pump():
+	if _pumping or _queue.is_empty(): return
+	_pumping = true
+	var wait := SEND_GAP_MS - (Time.get_ticks_msec() - _last_send_ms)
+	if wait > 0: await get_tree().create_timer(wait / 1000.0).timeout
+	_pumping = false
+	if _queue.is_empty(): return
+	var item: Dictionary = _queue.pop_front()
+	_last_send_ms = Time.get_ticks_msec()
+	if not account.send_server({"type": "gchat_send", "text": item.text, "channel": item.channel}):
+		status.text = "Sem conexão com o servidor. Sua mensagem não foi enviada."
+		_queue.clear()
+		_rebuild()
+		return
+	item["at"] = _last_send_ms
+	_sent.append(item)
+	_pump()
+
+func _pending_rows() -> Array:
+	var out: Array = []
+	for it in _sent + _queue: if String(it.channel) == channel: out.append(it)
+	return out
 
 func _on_message(msg: Dictionary):
 	var ty := String(msg.get("type", ""))
@@ -155,13 +190,26 @@ func _on_message(msg: Dictionary):
 			messages.append(msg)
 			if messages.size() > 240: messages.pop_front()
 			status.text = ""
+			if String(msg.get("user_id", "")) == String(account.get("user_id")):
+				for i in _sent.size():
+					if String(_sent[i].text) == String(msg.get("text", "")):
+						_sent.remove_at(i)
+						break
 			var mc := channel_of(msg)
 			if mc != channel and not unread.has(mc):
 				unread[mc] = true
 				(tab_buttons[mc] as Button).text += "  •"
 			if visible and mc == channel: _rebuild()
 		"gchat_error":
+			if String(msg.get("code", "")) == "rate_limited" and not _sent.is_empty():
+				# rápido demais: a mensagem volta para a fila e sai sozinha daqui a pouco (o texto não se perde)
+				_queue.push_front(_sent.pop_back())
+				_last_send_ms = Time.get_ticks_msec()
+				_pump()
+				return
+			if not _sent.is_empty(): _sent.pop_back()
 			status.text = String(msg.get("message", "Não foi possível enviar."))
+			_rebuild()
 		"gchat_reported":
 			reported[int(msg.get("id", 0))] = true
 			status.text = "Denúncia enviada. Obrigado por ajudar a manter o chat limpo."
@@ -198,6 +246,14 @@ func _rebuild():
 		var uid := String(m.get("user_id", ""))
 		if muted.has(uid): continue
 		list.add_child(_message_row(m, uid == me and me != ""))
+		shown += 1
+	for it in _pending_rows():
+		var pl := label("Você  ·  enviando…", 13, DIM, false)
+		pl.name = "GchatPending"
+		list.add_child(pl)
+		var pt := label(String(it.text), 16, Color(0.93, 0.88, 0.76, 0.6), false)
+		pt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		list.add_child(pt)
 		shown += 1
 	if shown == 0 and status.text.is_empty() or status.text.begins_with("Ninguém escreveu"):
 		status.text = "" if shown > 0 else {"geral": "Ninguém escreveu aqui ainda. Seja o primeiro a dizer olá!", "parceiros": "Ninguém escreveu aqui ainda. Procurando alguém pra jogar? Escreva aqui!", "ajuda": "Ninguém escreveu aqui ainda. Tem alguma dúvida? Pergunte aqui!"}.get(channel, "")

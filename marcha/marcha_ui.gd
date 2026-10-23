@@ -1875,19 +1875,26 @@ class TableView extends Control:
         # sem a faixa preta reta no topo — os painéis ficam "dentro" do salão
         draw_rect(Rect2(Vector2.ZERO, vs), Color(0.03, 0.01, 0.05, 0.42))
         var tb: float = ui.origin.y + 280.0 * ui.k
+        # R177b · degradês contínuos (polígonos com cor por vértice): as faixas de retângulos sobrepostas em 1 px
+        # deixavam listras pretas finas — visíveis embaixo quando a mão fica sem cartas
         var n := 24
         for i in n:
-            var f := float(i) / n
-            draw_rect(Rect2(0, tb * f, vs.x, tb / n + 1.0), Color(0.04, 0.02, 0.06, 0.88 * (1.0 - f * f)))
+            var f0 := float(i) / n
+            var f1 := float(i + 1) / n
+            _vgrad(tb * f0, tb * f1, vs.x, Color(0.04, 0.02, 0.06, 0.88 * (1.0 - f0 * f0)), Color(0.04, 0.02, 0.06, 0.88 * (1.0 - f1 * f1)))
         var bb: float = vs.y * 0.22
         for i in n:
-            var f := float(i) / n
-            draw_rect(Rect2(0, vs.y - bb * (1.0 - f) - bb / n, vs.x, bb / n + 1.0), Color(0.03, 0.01, 0.05, 0.55 * (1.0 - f) * (1.0 - f)))
+            var f0 := float(i) / n
+            var f1 := float(i + 1) / n
+            _vgrad(vs.y - bb + bb * f0, vs.y - bb + bb * f1, vs.x, Color(0.03, 0.01, 0.05, 0.55 * f0 * f0), Color(0.03, 0.01, 0.05, 0.55 * f1 * f1))
         # vinheta nas laterais
         for i in 10:
             var w: float = 6.0 * ui.k * (i + 1)
             draw_rect(Rect2(0, 0, w, vs.y), Color(0, 0, 0, 0.035))
             draw_rect(Rect2(vs.x - w, 0, w, vs.y), Color(0, 0, 0, 0.035))
+
+    func _vgrad(y0: float, y1: float, w: float, c0: Color, c1: Color):
+        draw_polygon(PackedVector2Array([Vector2(0, y0), Vector2(w, y0), Vector2(w, y1), Vector2(0, y1)]), PackedColorArray([c0, c0, c1, c1]))
 
     ## R86 · sombra suave em volta de um bloco (tabuleiro/painel), para ele assentar no cenário em vez de parecer colado
     func _soft_shadow(r: Rect2):
