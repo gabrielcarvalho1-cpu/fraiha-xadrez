@@ -30,6 +30,11 @@ var close_btn: Button
 var panel_style: StyleBoxFlat
 var emote_row: HFlowContainer
 const ShopCatalog := preload("res://economy/crown_store_catalog.gd")
+const EmotePrefs := preload("res://social/emote_prefs.gd")
+const EmoteBanner := preload("res://social/emote_banner.gd")
+## R177b · onde está a foto de cada lugar da mesa (0 = você), em pixels da tela — o modo (XEQUE/MARCHA) informa
+var seat_rect: Callable
+var bubble_layer: Control
 const Cosmetics := preload("res://profile/premium_cosmetics.gd")
 ## R90 · cores da sala (nada de verde): XEQUE vinho + marfim + ouro; MARCHA REAL roxo real + ouro
 const THEMES := {
@@ -250,6 +255,7 @@ func _on_message(msg: Dictionary):
         "party_chat_msg":
             messages.append(msg)
             if messages.size() > 60: messages.pop_front()
+            if msg.has("emote"): show_emote(msg)   # R177b · o emote aparece na mesa (faixa ao lado da foto de quem mandou)
             if not opened and int(msg.get("from_seat", 0)) != 0: unread += 1
             _rebuild()
         "party_chat_history":
@@ -278,6 +284,59 @@ func _rebuild():
         list.add_child(l)
     _layout()
     _scroll_end.call_deferred()
+
+## R177b · faixa do EMOTE na mesa (XEQUE / MARCHA), igual à do xadrez: ao lado da foto de quem mandou, sem cobrir o
+## botão CHAT nem o painel aberto, sempre dentro da tela. Some sozinha.
+func show_emote(m: Dictionary):
+    if not EmotePrefs.enabled(): return
+    if bubble_layer == null:
+        bubble_layer = Control.new()
+        bubble_layer.name = "PartyEmoteBubbles"
+        bubble_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        bubble_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        add_child(bubble_layer)
+    var seat := int(m.get("from_seat", 0))
+    var mine := seat == 0
+    var nm := "PartyEmote_%d" % seat
+    for c in bubble_layer.get_children():
+        if c.name == nm or c.is_queued_for_deletion():
+            bubble_layer.remove_child(c)
+            c.queue_free()
+    var vs := get_viewport().get_visible_rect().size
+    var a := Rect2()
+    if seat_rect.is_valid(): a = seat_rect.call(seat)
+    if not a.has_area(): a = Rect2(Vector2(vs.x * 0.5 - 40, vs.y * (0.62 if mine else 0.12)), Vector2(80, 80))
+    # faixa por cima do PRÓPRIO cartão de quem mandou (na parte de baixo dele): fica claro de quem é e não cai
+    # em cima do tabuleiro, das cartas da mão ou dos botões
+    var h := clampf(minf(a.size.y * 0.55, vs.y * 0.12), 52.0, 64.0)
+    var p: Control = EmoteBanner.make(String(m.get("text", "")), "Você" if mine else String(m.get("nickname", "")), String(m.get("emote", "")), h)
+    p.name = nm
+    var w := p.size.x
+    var x := a.get_center().x - w / 2.0
+    x = clampf(x, 4.0, maxf(4.0, vs.x - w - 4.0))
+    var y := a.end.y - h - 4.0
+    if mine and vs.y > vs.x: y = a.position.y - h - 6.0   # celular em pé: a mão cobre o seu cartão — a faixa fica logo acima
+    y = clampf(y, 4.0, maxf(4.0, vs.y - h - 4.0))
+    # não cobre o botão CHAT nem o painel do chat aberto
+    var avoid: Array = []
+    if toggle != null and toggle.visible: avoid.append(Rect2(toggle.global_position, toggle.size * toggle.scale))
+    if panel != null and panel.visible: avoid.append(Rect2(panel.global_position, panel.size * panel.scale))
+    for r in avoid:
+        if Rect2(x, y, w, h).intersects((r as Rect2).grow(4.0)):
+            var up: float = (r as Rect2).position.y - h - 8.0
+            y = up if up >= 4.0 else clampf((r as Rect2).end.y + 8.0, 4.0, vs.y - h - 4.0)
+    p.position = Vector2(floorf(x), floorf(y))
+    bubble_layer.add_child(p)
+    p.pivot_offset = Vector2(0, h / 2.0)
+    p.modulate.a = 0.0
+    p.scale = Vector2(0.92, 0.92)
+    var tw := create_tween()
+    tw.set_parallel(true)
+    tw.tween_property(p, "modulate:a", 1.0, 0.15)
+    tw.tween_property(p, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    tw.chain().tween_interval(2.3)
+    tw.chain().tween_property(p, "modulate:a", 0.0, 0.4)
+    tw.chain().tween_callback(p.queue_free)
 
 static func _esc(s: String) -> String:
     return s.replace("[", "[lb]")

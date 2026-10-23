@@ -65,6 +65,20 @@ func run():
 	await wait(1.6)
 	check(chat.bubble_layer.get_node_or_null("EmoteBubble_opp") != null, "faixa do emote do computador ao lado da foto dele")
 	await shot("03_bot_faixas")
+	# R177b · com o chat ABERTO (celular), a faixa não cai em cima das mensagens nem do campo de digitar
+	if mobile:
+		chat.set_mobile_open(true)
+		stage._layout()
+		await frames(6)
+		chat.send_emote("emote_parabens")
+		await frames(6)
+		var mb: Control = chat.bubble_layer.get_node_or_null("EmoteBubble_me")
+		var pr := Rect2(chat.panel.global_position, chat.panel.size)
+		check(mb != null and not mb.get_global_rect().intersects(pr), "chat aberto: faixa fora do painel (%s x %s)" % [mb.get_global_rect() if mb != null else Rect2(), pr])
+		await shot("03b_faixa_com_chat_aberto")
+		chat.set_mobile_open(false)
+		stage._layout()
+		await frames(4)
 	# ---- chave EMOTES nas opções da partida
 	if mobile:
 		stage.mobile_hud.open()

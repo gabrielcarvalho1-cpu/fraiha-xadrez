@@ -3252,6 +3252,7 @@ func start_online(msg: Dictionary):
     players = msg.get("players", []) if msg.get("players") is Array else []
     var pc = stage.get("party_chat") if stage != null else null
     if pc != null: pc.bind(room_id, "marcha", names)     # R37.3 · chat da mesa
+    if pc != null: pc.set("seat_rect", func(seat: int) -> Rect2: return _seat_screen_rect(seat))   # R177b · faixa do emote na foto
     names = DEFAULT_NAMES.duplicate()
     for i in mini(4, players.size()):
         if i > 0: names[i] = String(players[i].get("name", names[i]))

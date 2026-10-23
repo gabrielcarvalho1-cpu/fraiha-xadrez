@@ -381,6 +381,18 @@ func show_bubble(text: String, mine: bool, who: String, emote_id := ""):
     x = clampf(x, 4.0, maxf(4.0, vs.x - w - 4.0))
     # alinhada ao topo da foto: cobre o nome do cartão por inteiro (nada aparece "vazando" por cima da faixa)
     var y := clampf(a.position.y + a.size.y * 0.04, 4.0, maxf(4.0, vs.y - h - 4.0))
+    # R177b · com o chat aberto (celular), a foto fica debaixo do painel e a faixa caía em cima das mensagens e do
+    # campo de digitar: ela sobe para logo ACIMA do painel (sua do lado direito, a do adversário do esquerdo)
+    if panel.visible:
+        var pr := Rect2(panel.global_position, panel.size * panel.get_global_transform().get_scale())
+        if Rect2(x, y, w, h).intersects(pr.grow(4.0)):
+            var above := pr.position.y - h - 8.0
+            if above >= 4.0:
+                y = above
+                x = (pr.end.x - w - 6.0) if mine else (pr.position.x + 6.0)
+            else:
+                y = clampf(pr.end.y + 8.0, 4.0, maxf(4.0, vs.y - h - 4.0))
+            x = clampf(x, 4.0, maxf(4.0, vs.x - w - 4.0))
     p.position = Vector2(floorf(x), floorf(y))
     bubble_layer.add_child(p)
     p.pivot_offset = Vector2(0, h / 2.0)

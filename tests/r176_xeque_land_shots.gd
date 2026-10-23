@@ -44,10 +44,23 @@ func run():
 	if pc != null:
 		pc.bind("room-t", "xeque", ["Gabriel", "Torre Velha", "Dama de Ferro", "SextoSentro"])
 		pc.unread = 2
+		pc.seat_rect = func(st: int) -> Rect2: return ui._seat_screen_rect(st)   # (no jogo de verdade: start_online)
 	ui._sync_chat_dock()
 	await frames(6)
 	if pc != null:
 		var tr: Rect2 = pc.toggle.get_global_rect()
 		print("chat ", tr, " vs ", Vector2(size))
 	await shot("xeque_deitado_online")
+	# R177b · EMOTES na mesa: faixa ao lado da foto de quem mandou
+	if pc != null:
+		preload("res://social/emote_prefs.gd").set_enabled(true)
+		pc._on_message({"type": "party_chat_msg", "room_id": "room-t", "from_seat": 3, "nickname": "Torre Velha", "text": "Boa jogada!", "emote": "emote_boa_jogada"})
+		pc._on_message({"type": "party_chat_msg", "room_id": "room-t", "from_seat": 0, "nickname": "Gabriel", "text": "PARABÉNS!", "emote": "emote_parabens"})
+		await frames(20)
+		var n := 0
+		for b in pc.bubble_layer.get_children():
+			n += 1
+			print("emote ", b.name, " ", Rect2(b.position, b.size))
+		print("emotes na mesa: ", n)
+		await shot("xeque_emotes")
 	quit(0)

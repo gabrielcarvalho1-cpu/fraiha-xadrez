@@ -39,7 +39,7 @@ func _build(text: String, who: String, emote_id: String, h: float) -> void:
 		var fx: Control = preload("res://social/emote_fx.gd").make(emote_id, side)
 		fx.position = MEDAL * u - Vector2(side, side) / 2.0
 		add_child(fx)
-	var nw := _label(who.to_upper(), NAME_C * u, 230.0 * u, 23.0 * u, Color("e6eefc"), 2)
+	var nw := _label(who.to_upper(), NAME_C * u, 230.0 * u, 23.0 * u, Color("e6eefc"), 2, false)   # R177b · nome numa linha só
 	# filetes dourados dos dois lados do nome (com losango na ponta) + losango pequeno em cima, como na referência
 	var orn := Control.new()
 	orn.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -70,14 +70,14 @@ static func _diamond(ci: CanvasItem, c: Vector2, r: float, edge: Color, fill: Co
 ## Texto centrado (a fonte encolhe até caber em w). Devolve a largura do texto.
 ## R176.8c · frase longa (XEQUE-MATE CHEGANDO…, JOGAMOS DE NOVO!) numa faixa pequena: se nem com a fonte
 ## bem menor cabe numa linha, quebra em DUAS linhas no espaço do meio — nunca passa da placa.
-func _label(t: String, center: Vector2, w: float, fs: float, col: Color, outline: int) -> float:
+func _label(t: String, center: Vector2, w: float, fs: float, col: Color, outline: int, wrap := true) -> float:
 	var room := w - outline * 2.0
-	var px := maxi(8, int(round(fs)))
-	var lo := maxi(8, int(round(fs * 0.62)))
+	var px := maxi(6, int(round(fs)))
+	var lo := maxi(6 if not wrap else 8, int(round(fs * (0.4 if not wrap else 0.62))))
 	while px > lo and FONT.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > room: px -= 1
 	var shown := t
 	var lines := 1
-	if FONT.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > room and t.contains(" "):
+	if wrap and FONT.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > room and t.contains(" "):
 		var mid := t.length() / 2
 		var best := -1
 		for i in t.length():
