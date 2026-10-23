@@ -2963,9 +2963,11 @@ func _layout_wide(dims: Vector2):
     var right_w: float = v.end.x - WIDE_MENU_X.y - m * 2.0
     var kl: float = clampf(left_w / 356.0, 0.5, 1.0)         # tela menos larga: as laterais encolhem um pouco
     var kr: float = clampf(right_w / 446.0, 0.5, 1.0)
+    # R178f · os 7 ícones (som … suporte) ocupam 490 px na arte: encolhem para caber na coluna (não invadem o menu)
+    var ki: float = minf(kl, left_w / 490.0)
     var place := {
         "club": [v.position + Vector2(m, m), kl],
-        "icons": [v.position + Vector2(m, m + 90.0 * kl), kl],
+        "icons": [v.position + Vector2(m, m + 90.0 * kl), ki],
         "account": [Vector2(v.position.x + m, v.end.y - (100.0 + m) * kl), kl],
         "profile": [Vector2(v.end.x - 446.0 * kr - m, v.position.y + m), kr],
         "community": [Vector2(v.end.x - (262.0 + m) * kr - m * 0.5, v.end.y - (64.0 + m) * kr - m * 0.5), kr],
@@ -2985,7 +2987,7 @@ func _layout_wide(dims: Vector2):
             _wide_patch[key].size = src.size * k
     # logo: no meio do espaço livre da coluna da esquerda (entre os ícones e a conta), do tamanho que couber
     var lsrc: Rect2 = WIDE_PATCHES["logo"][0]
-    var top: float = v.position.y + m + 90.0 * kl + 84.0 * kl
+    var top: float = v.position.y + m + 90.0 * kl + 84.0 * ki
     # R178 · o cartão do PASSE vai embaixo dos ícones, e o logo desce junto
     var pcard = canvas.get_node_or_null("PassHomeCard")
     if pcard != null:
