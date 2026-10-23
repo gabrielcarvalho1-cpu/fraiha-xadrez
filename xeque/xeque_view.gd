@@ -2648,26 +2648,33 @@ func _draw_result_r57(d: Vector2):
     else:
         var full := r57_r(d, Rect2(Vector2.ZERO, R57_SIZE))
         if ui.layout == "landscape":
-            # R177f · celular deitado (mais largo que a arte): as laterais continuam a cena — a borda da própria arte
-            # espelhada, um pouco mais escura — em vez de faixas pretas
+            # R178l · celular deitado (mais largo que a arte): as laterais ESTICAM a beira da própria cena, desfocada
+            # (antes era a beira espelhada — parecia a tela duplicada, com botões e painéis repetidos)
             var vis2 := Rect2(-ui.origin / ui.k, size / ui.k)
             var lw := full.position.x - vis2.position.x
             var rw := vis2.end.x - full.end.x
-            var sc2: float = full.size.y / R57_SIZE.y
+            var blur := r57_tex(key + "_blur")
+            var bs := blur.get_size()
+            var col := 6.0 * bs.x / R57_SIZE.x
+            var dim := Color(0.8, 0.78, 0.78)
             var base := Transform2D(0.0, Vector2(ui.k, ui.k), 0.0, ui.origin)
-            var dim := Color(0.72, 0.7, 0.7)
-            if lw > 0.5:
-                var sw := minf(lw / sc2, R57_SIZE.x * 0.45)
-                var a := full.position.x
-                draw_set_transform_matrix(base * Transform2D(Vector2(-1, 0), Vector2(0, 1), Vector2(2.0 * a, 0)))
-                draw_texture_rect_region(plate, Rect2(a, full.position.y, sw * sc2, full.size.y), Rect2(0, 0, sw, R57_SIZE.y), dim)
-            if rw > 0.5:
-                var sw2 := minf(rw / sc2, R57_SIZE.x * 0.45)
-                var b := full.end.x
-                draw_set_transform_matrix(base * Transform2D(Vector2(-1, 0), Vector2(0, 1), Vector2(2.0 * b, 0)))
-                draw_texture_rect_region(plate, Rect2(b - sw2 * sc2, full.position.y, sw2 * sc2, full.size.y), Rect2(R57_SIZE.x - sw2, 0, sw2, R57_SIZE.y), dim)
+            if lw > 0.5: draw_texture_rect_region(blur, Rect2(vis2.position.x, full.position.y, lw + 1.0, full.size.y), Rect2(0, 0, col, bs.y), dim)
+            if rw > 0.5: draw_texture_rect_region(blur, Rect2(full.end.x - 1.0, full.position.y, rw + 1.0, full.size.y), Rect2(bs.x - col, 0, col, bs.y), dim)
             draw_set_transform_matrix(base)
         draw_texture_rect(plate, full, false)
+        if ui.layout == "landscape" and (full.position.x > -ui.origin.x / ui.k + 0.5):
+            var blur := r57_tex(key + "_blur")
+            var bs := blur.get_size()
+            var dim := Color(0.8, 0.78, 0.78)
+            # emenda suave: a beira da arte nítida desbota para a faixa esticada
+            var fw := 40.0 * full.size.y / R57_SIZE.y
+            for i in 16:
+                var t := float(i) / 16.0
+                var c := Color(dim.r, dim.g, dim.b, 1.0 - t)
+                var wseg := fw / 16.0
+                draw_texture_rect_region(blur, Rect2(full.position.x + i * wseg, full.position.y, wseg + 0.5, full.size.y), Rect2((i * wseg) / full.size.x * bs.x, 0, wseg / full.size.x * bs.x, bs.y), c)
+                draw_texture_rect_region(blur, Rect2(full.end.x - (i + 1) * wseg, full.position.y, wseg + 0.5, full.size.y), Rect2(bs.x - ((i + 1) * wseg) / full.size.x * bs.x, 0, wseg / full.size.x * bs.x, bs.y), c)
+
     # botões da arte: hover = a própria arte um pouco mais clara
     for b in R57_BUTTONS:
         var br: Rect2 = b[1]
