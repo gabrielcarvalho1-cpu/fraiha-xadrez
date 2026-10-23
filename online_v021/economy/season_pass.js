@@ -12,8 +12,12 @@ const LEVELS = 40, MAIN_LEVELS = 30, XP_PER_LEVEL = 150;
 const XP = { win: 30, play: 10, mission: 50, daily: 20 }, GAME_XP_CAP = 300;
 // R178 · XP EM DOBRO (lançamento): janela pelo ambiente do servidor, datas ISO (ex.: 2026-11-01T03:00:00Z)
 //   FRAIHA_PASS_XP2_FROM / FRAIHA_PASS_XP2_UNTIL — sem as duas, sem bônus
+//   ou a janela fixa do lançamento abaixo (LAUNCH_XP2) — o ambiente, quando tem as duas datas, manda
+const LAUNCH_XP2 = null;   // ex.: { from: '2026-11-01T03:00:00Z', until: '2026-11-08T03:00:00Z' } (horário de Brasília = UTC−3)
 function xpBoost(ms, env = process.env) {
-  const a = Date.parse(env.FRAIHA_PASS_XP2_FROM || ''), b = Date.parse(env.FRAIHA_PASS_XP2_UNTIL || '');
+  const useEnv = env.FRAIHA_PASS_XP2_FROM && env.FRAIHA_PASS_XP2_UNTIL;
+  const w = useEnv ? { from: env.FRAIHA_PASS_XP2_FROM, until: env.FRAIHA_PASS_XP2_UNTIL } : (LAUNCH_XP2 || { from: '', until: '' });
+  const a = Date.parse(w.from || ''), b = Date.parse(w.until || '');
   if (!Number.isFinite(a) || !Number.isFinite(b) || ms < a || ms >= b) return null;
   return { mult: 2, until: new Date(b).toISOString(), ends_in_s: Math.max(0, Math.round((b - ms) / 1000)) };
 }
