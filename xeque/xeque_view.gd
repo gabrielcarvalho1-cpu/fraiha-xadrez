@@ -2505,27 +2505,43 @@ func _fade_edges(r: Rect2, w: float):
         draw_rect(Rect2(r.position.x, r.position.y + i * t, r.size.x, t + 0.5), c)
         draw_rect(Rect2(r.position.x, r.end.y - (i + 1) * t, r.size.x, t + 0.5), c)
 
+## R177f · em pé: cada peça da arte (título, retrato, classificação e os 3 botões) é um recorte com as bordas
+## esfumadas (r57_<key>_<peça>.png) sobre a MESMA arte desfocada — sem cantos retos nem "recortes" visíveis.
+const R57_PIECES := [["title", Rect2(330, 8, 1012, 226)], ["portrait", Rect2(278, 232, 436, 516)], ["rank", Rect2(740, 230, 758, 526)],
+    ["b1", Rect2(222, 774, 438, 130)], ["b2", Rect2(662, 786, 368, 116)], ["b3", Rect2(1032, 774, 410, 130)]]
 func _r57_portrait_blocks(area: Rect2) -> Array:
     var d := area.size
-    var srcs := [Rect2(330, 8, 1010, 222), Rect2(280, 226, 440, 520), Rect2(748, 232, 736, 522), Rect2(222, 772, 1222, 132)]
-    var widths := [1000.0, 560.0, 1050.0, 1050.0]
-    var hs := []
-    var total := 0.0
-    for i in 4:
-        var h: float = srcs[i].size.y * widths[i] / srcs[i].size.x
-        hs.append(h)
-        total += h
-    var room: float = d.y - 60.0
-    var f: float = minf(1.0, room / (total + 3.0 * 24.0))
-    var gap: float = clampf((d.y - total * f) / 5.0, 12.0, 80.0)
+    var P := R57_PIECES
+    # larguras na tela (design 1080): título 1040, retrato 640, classificação 1060, botões dividem 1060
+    var w_t := 1040.0
+    var w_p := 640.0
+    var w_r := 1060.0
+    var bw_total := 1060.0
+    var bsrc_w: float = P[3][1].size.x + P[4][1].size.x + P[5][1].size.x
+    var bs: float = (bw_total - 2.0 * 10.0) / bsrc_w
+    var h_t: float = P[0][1].size.y * w_t / P[0][1].size.x
+    var h_p: float = P[1][1].size.y * w_p / P[1][1].size.x
+    var h_r: float = P[2][1].size.y * w_r / P[2][1].size.x
+    var h_b: float = maxf(P[3][1].size.y, P[5][1].size.y) * bs
+    var total := h_t + h_p + h_r + h_b
+    var f: float = minf(1.0, (d.y - 80.0) / total)
+    var gap: float = clampf((d.y - total * f) / 5.0, 6.0, 70.0)
     var y: float = area.position.y + (d.y - total * f - gap * 3.0) / 2.0
     var out := []
-    for i in 4:
-        var w: float = widths[i] * f
-        var sc: float = w / srcs[i].size.x
-        var dst := Rect2((d.x - w) / 2.0, y, w, srcs[i].size.y * sc)
-        out.append({"src": srcs[i], "dst": dst, "s": sc})
-        y = dst.end.y + gap
+    for spec in [[0, w_t, h_t], [1, w_p, h_p], [2, w_r, h_r]]:
+        var i: int = spec[0]
+        var w: float = float(spec[1]) * f
+        var sc: float = w / P[i][1].size.x
+        var dst := Rect2((d.x - w) / 2.0, y, w, P[i][1].size.y * sc)
+        out.append({"src": P[i][1], "dst": dst, "s": sc, "piece": P[i][0]})
+        y = dst.end.y + gap * (0.35 if i == 0 else 1.0)
+    var bsc: float = bs * f
+    var x: float = (d.x - (bsrc_w * bsc + 20.0 * f)) / 2.0
+    for i in [3, 4, 5]:
+        var r: Rect2 = P[i][1]
+        var dst := Rect2(x, y + (h_b * f - r.size.y * bsc) / 2.0, r.size.x * bsc, r.size.y * bsc)
+        out.append({"src": r, "dst": dst, "s": bsc, "piece": P[i][0]})
+        x = dst.end.x + 10.0 * f
     return out
 
 ## fontes das referências finais: "name" = Grenze Bold (nomes), "mono" = VT323 (faixa, lugar, legendas),
@@ -2574,17 +2590,37 @@ func _draw_result_r57(d: Vector2):
         # fundo: a própria arte cobrindo a tela, escurecida; por cima, os blocos nítidos
         # área VISÍVEL inteira (o celular é mais alto que o design): cenário lateral da arte, bem escuro
         var vis := Rect2(-ui.origin / ui.k, size / ui.k)
-        var scene_src := Rect2(0, 110, 300, 720)
-        var cov := maxf(vis.size.x / scene_src.size.x, vis.size.y / scene_src.size.y)
-        var cs := scene_src.size * cov
-        draw_texture_rect_region(plate, Rect2(vis.position + (vis.size - cs) / 2.0, cs), scene_src, Color(0.3, 0.27, 0.27))
+        var blur := r57_tex(key + "_blur")
+        var bsz := blur.get_size()
+        var cov := maxf(vis.size.x / bsz.x, vis.size.y / bsz.y)
+        var cs := bsz * cov
+        draw_texture_rect(blur, Rect2(vis.position + (vis.size - cs) / 2.0, cs), false)
         _pblocks = _r57_portrait_blocks(Rect2(Vector2(0, vis.position.y), Vector2(d.x, vis.size.y)))
-        for i in _pblocks.size():
-            var b = _pblocks[i]
-            draw_texture_rect_region(plate, b.dst, b.src)
-            if i < 2: _fade_edges(b.dst, 46.0)   # título e retrato: bordas somem no fundo (sem recorte)
+        for b in _pblocks:
+            draw_texture_rect(r57_tex(key + "_" + String(b.piece)), b.dst, false)
     else:
-        draw_texture_rect(plate, r57_r(d, Rect2(Vector2.ZERO, R57_SIZE)), false)
+        var full := r57_r(d, Rect2(Vector2.ZERO, R57_SIZE))
+        if ui.layout == "landscape":
+            # R177f · celular deitado (mais largo que a arte): as laterais continuam a cena — a borda da própria arte
+            # espelhada, um pouco mais escura — em vez de faixas pretas
+            var vis2 := Rect2(-ui.origin / ui.k, size / ui.k)
+            var lw := full.position.x - vis2.position.x
+            var rw := vis2.end.x - full.end.x
+            var sc2: float = full.size.y / R57_SIZE.y
+            var base := Transform2D(0.0, Vector2(ui.k, ui.k), 0.0, ui.origin)
+            var dim := Color(0.72, 0.7, 0.7)
+            if lw > 0.5:
+                var sw := minf(lw / sc2, R57_SIZE.x * 0.45)
+                var a := full.position.x
+                draw_set_transform_matrix(base * Transform2D(Vector2(-1, 0), Vector2(0, 1), Vector2(2.0 * a, 0)))
+                draw_texture_rect_region(plate, Rect2(a, full.position.y, sw * sc2, full.size.y), Rect2(0, 0, sw, R57_SIZE.y), dim)
+            if rw > 0.5:
+                var sw2 := minf(rw / sc2, R57_SIZE.x * 0.45)
+                var b := full.end.x
+                draw_set_transform_matrix(base * Transform2D(Vector2(-1, 0), Vector2(0, 1), Vector2(2.0 * b, 0)))
+                draw_texture_rect_region(plate, Rect2(b - sw2 * sc2, full.position.y, sw2 * sc2, full.size.y), Rect2(R57_SIZE.x - sw2, 0, sw2, R57_SIZE.y), dim)
+            draw_set_transform_matrix(base)
+        draw_texture_rect(plate, full, false)
     # botões da arte: hover = a própria arte um pouco mais clara
     for b in R57_BUTTONS:
         var br: Rect2 = b[1]

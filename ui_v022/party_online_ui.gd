@@ -77,23 +77,20 @@ func _build(which: String):
     for c in body.get_children():
         body.remove_child(c)
         c.queue_free()
-    var th: Array = THEME.get(game, THEME["xeque"])
-    var st := StyleBoxFlat.new()
-    st.bg_color = Color(th[0], 0.97)
-    st.border_color = GOLD
-    st.set_border_width_all(3)
-    st.set_corner_radius_all(10)
-    st.shadow_color = Color(0, 0, 0, 0.6)
-    st.shadow_size = 18
-    for side in ["left", "right"]: st.set("content_margin_" + side, 26)
-    for side in ["top", "bottom"]: st.set("content_margin_" + side, 22)
-    panel.add_theme_stylebox_override("panel", st)
     var s := _s()
+    # R177f · moldura ornamentada desenhada (degradê vinho, filete dourado duplo, cantos com joia, brasão no topo)
+    var st := StyleBoxEmpty.new()
+    for side in ["left", "right"]: st.set("content_margin_" + side, 40 * s)
+    st.content_margin_top = 44 * s
+    st.content_margin_bottom = 34 * s
+    panel.add_theme_stylebox_override("panel", st)
+    if not panel.draw.is_connected(_draw_panel): panel.draw.connect(_draw_panel)
     panel.custom_minimum_size = Vector2(_panel_w(), 0)   # largura antes do conteúdo: o texto quebra na largura certa
     panel.size = panel.custom_minimum_size
-    _label(NAMES.get(game, ""), 18, GOLD, FONT_TITLE)
+    _label(NAMES.get(game, ""), 20, GOLD, FONT_TITLE)
     if which == "choose":
-        _label("COMO VOCÊ QUER JOGAR?", 30, CREAM, FONT_TITLE)
+        _label("COMO VOCÊ QUER JOGAR?", 32, CREAM, FONT_TITLE)
+        _divider()
         var row := BoxContainer.new()
         row.vertical = _narrow()
         row.add_theme_constant_override("separation", int(14 * s))
@@ -145,46 +142,164 @@ func _option(parent: Container, icon_path: String, title: String, sub: String, p
     b.focus_mode = Control.FOCUS_NONE
     b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    b.custom_minimum_size = Vector2(0, (150.0 if not _narrow() else 118.0) * s)
-    var th: Array = THEME.get(game, THEME["xeque"])
-    for pair in [["normal", 0.0], ["hover", 0.12], ["pressed", -0.1]]:
-        var st := StyleBoxFlat.new()
-        st.bg_color = Color(th[1]).lightened(maxf(0.0, pair[1])).darkened(maxf(0.0, -pair[1]))
-        st.border_color = GOLD if primary else Color("d9b25c")
-        st.set_border_width_all(3)
-        st.set_corner_radius_all(8)
-        b.add_theme_stylebox_override(pair[0], st)
-    b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+    b.custom_minimum_size = Vector2(0, (150.0 if not _narrow() else 120.0) * s)
+    for st in ["normal", "hover", "pressed", "focus", "disabled"]: b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+    b.set_meta("icon_path", icon_path)
+    b.set_meta("primary", primary)
+    b.draw.connect(func(): _draw_card(b))
+    b.mouse_entered.connect(b.queue_redraw)
+    b.mouse_exited.connect(b.queue_redraw)
+    b.button_down.connect(b.queue_redraw)
+    b.button_up.connect(b.queue_redraw)
     parent.add_child(b)
     var h := HBoxContainer.new()
     h.set_anchors_preset(Control.PRESET_FULL_RECT)
-    h.offset_left = 16 * s
-    h.offset_right = -12 * s
-    h.add_theme_constant_override("separation", int(14 * s))
+    h.offset_left = (26.0 + 92.0 + 16.0) * s   # espaço do medalhão (desenhado no _draw_card)
+    h.offset_right = -16 * s
     h.mouse_filter = Control.MOUSE_FILTER_IGNORE
     b.add_child(h)
-    var ic := TextureRect.new()
-    ic.texture = load(icon_path)
-    ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    ic.custom_minimum_size = Vector2(76, 76) * s
-    ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    h.add_child(ic)
     var col := VBoxContainer.new()
     col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     col.alignment = BoxContainer.ALIGNMENT_CENTER
+    col.add_theme_constant_override("separation", int(4 * s))
     col.mouse_filter = Control.MOUSE_FILTER_IGNORE
     h.add_child(col)
     var t := Label.new()
     t.text = title
-    _style_label(t, 26, GOLD, FONT_TITLE, HORIZONTAL_ALIGNMENT_LEFT, false)
+    _style_label(t, 27, GOLD, FONT_TITLE, HORIZONTAL_ALIGNMENT_LEFT, false)
+    t.add_theme_color_override("font_outline_color", Color(0.12, 0.03, 0.02, 0.95))
+    t.add_theme_constant_override("outline_size", 5)
     col.add_child(t)
     var d := Label.new()
     d.text = sub
     _style_label(d, 17, CREAM, FONT_TEXT, HORIZONTAL_ALIGNMENT_LEFT, false)
+    d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     col.add_child(d)
     return b
+
+# ---------------------------------------------------------------- R177f · desenho ornamentado
+const WINE_TOP := Color("4a0f1a")
+const WINE_BOT := Color("1c050b")
+const GOLD_D := Color("a8792a")
+const GOLD_L := Color("ffe39a")
+
+func _vgrad(ci: CanvasItem, r: Rect2, c0: Color, c1: Color):
+    ci.draw_polygon(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), PackedColorArray([c0, c0, c1, c1]))
+
+func _diamond(ci: CanvasItem, c: Vector2, rr: float, edge: Color, fill: Color):
+    ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -rr), c + Vector2(rr, 0), c + Vector2(0, rr), c + Vector2(-rr, 0)]), edge)
+    var q := rr * 0.55
+    ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -q), c + Vector2(q, 0), c + Vector2(0, q), c + Vector2(-q, 0)]), fill)
+    ci.draw_circle(c + Vector2(-q * 0.25, -q * 0.3), q * 0.22, Color(1, 1, 1, 0.55))
+
+## moldura: sombra, degradê, filete dourado grosso + fino por dentro, cantos com joia
+func _ornate(ci: CanvasItem, r: Rect2, s: float, top: Color, bot: Color, gem: Color, glow := 0.0):
+    for i in 6: ci.draw_rect(r.grow((3 + i * 3) * s), Color(0, 0, 0, 0.10 - i * 0.015), false, 3.0 * s)
+    if glow > 0.0:
+        for i in 5: ci.draw_rect(r.grow((2 + i * 3) * s), Color(1.0, 0.82, 0.4, glow * (0.22 - i * 0.04)), false, 3.0 * s)
+    _vgrad(ci, r, top, bot)
+    # vinheta: bordas por dentro mais escuras
+    for i in 5:
+        ci.draw_rect(r.grow(-(i * 4.0 + 2.0) * s), Color(0, 0, 0, 0.09 - i * 0.016), false, 4.0 * s)
+    var bw := maxf(2.0, 3.0 * s)
+    ci.draw_rect(r, GOLD_D, false, bw + 2.0 * s)
+    ci.draw_rect(r, GOLD, false, bw)
+    ci.draw_rect(r.grow(-1.0 * s), Color(GOLD_L, 0.6), false, maxf(1.0, s))
+    var inner := r.grow(-8.0 * s)
+    ci.draw_rect(inner, Color(GOLD, 0.55), false, maxf(1.0, 1.4 * s))
+    var L := 22.0 * s
+    for c in [inner.position, Vector2(inner.end.x, inner.position.y), inner.end, Vector2(inner.position.x, inner.end.y)]:
+        var sx := 1.0 if c.x < r.get_center().x else -1.0
+        var sy := 1.0 if c.y < r.get_center().y else -1.0
+        ci.draw_line(c + Vector2(0, sy * 3 * s), c + Vector2(sx * L, sy * 3 * s), GOLD, 2.0 * s, true)
+        ci.draw_line(c + Vector2(sx * 3 * s, 0), c + Vector2(sx * 3 * s, sy * L), GOLD, 2.0 * s, true)
+    for c in [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]:
+        _diamond(ci, c, 9.0 * s, GOLD, gem)
+
+func _draw_panel():
+    var s := _s()
+    var r := Rect2(Vector2.ZERO, panel.size).grow(-6.0 * s)
+    _ornate(panel, r, s, WINE_TOP, WINE_BOT, Color("c4161f"))
+    # brasão no topo: losango grande com joia azul e filetes para os lados
+    var c := Vector2(r.get_center().x, r.position.y)
+    panel.draw_line(c + Vector2(-140 * s, 0), c + Vector2(-26 * s, 0), GOLD_L, 2.0 * s, true)
+    panel.draw_line(c + Vector2(26 * s, 0), c + Vector2(140 * s, 0), GOLD_L, 2.0 * s, true)
+    _diamond(panel, c, 20.0 * s, GOLD, Color("2a5fd6"))
+    _diamond(panel, Vector2(r.get_center().x, r.end.y), 13.0 * s, GOLD, Color("c4161f"))
+
+func _divider():
+    var s := _s()
+    var d := Control.new()
+    d.custom_minimum_size = Vector2(0, 18 * s)
+    d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    d.draw.connect(func():
+        var w := d.size.x
+        var y := d.size.y / 2.0
+        var cx := w / 2.0
+        for side in [-1.0, 1.0]:
+            var pts := PackedVector2Array([Vector2(cx + side * 16 * s, y), Vector2(cx + side * w * 0.32, y)])
+            d.draw_polyline(pts, GOLD, 2.0 * s, true)
+            _diamond(d, Vector2(cx + side * w * 0.32, y), 4.0 * s, GOLD, GOLD)
+        _diamond(d, Vector2(cx, y), 8.0 * s, GOLD, Color("c4161f")))
+    body.add_child(d)
+
+## cartão de escolha: moldura do jogo + medalhão dourado com o ícone (foto do bot / pessoas desenhadas)
+func _draw_card(b: Button):
+    var s := _s()
+    var hov := b.is_hovered() or b.button_pressed
+    var down := b.is_pressed()
+    var r := Rect2(Vector2.ZERO, b.size).grow(-4.0 * s)
+    var top := Color("8e1c2c").lightened(0.10 if hov else 0.0)
+    var bot := Color("3d0a14").lightened(0.06 if hov else 0.0)
+    if down: top = top.darkened(0.15)
+    _ornate(b, r, s, top, bot, Color("2a5fd6") if bool(b.get_meta("primary", false)) else Color("c4161f"), 1.0 if hov else 0.0)
+    # medalhão
+    var mr := minf(46.0 * s, r.size.y / 2.0 - 12.0 * s)
+    var mc := Vector2(r.position.x + 22.0 * s + mr, r.get_center().y)
+    for i in 4: b.draw_circle(mc, mr + (6 - i) * s, Color(0, 0, 0, 0.12))
+    b.draw_circle(mc, mr + 3.0 * s, GOLD_D, true, -1.0, true)
+    b.draw_circle(mc, mr + 1.0 * s, GOLD, true, -1.0, true)
+    b.draw_circle(mc, mr - 3.0 * s, Color("120408"), true, -1.0, true)
+    var path := String(b.get_meta("icon_path", ""))
+    if path == ICON_BOTS:
+        var tex: Texture2D = load(path)
+        var px := Vector2(mr * 2.0 - 10.0 * s, mr * 2.0 - 10.0 * s)
+        var t2: Texture2D = preload("res://ui_v022/crisp_tex.gd").at(tex, px)
+        # recorte redondo: desenha a imagem num círculo (polígono com UV)
+        var pts := PackedVector2Array()
+        var uvs := PackedVector2Array()
+        var rad := mr - 5.0 * s
+        for i in 48:
+            var a := TAU * i / 48.0
+            var v := Vector2(cos(a), sin(a))
+            pts.append(mc + v * rad)
+            uvs.append(Vector2(0.5, 0.5) + v * 0.5)
+        b.draw_colored_polygon(pts, Color.WHITE, uvs, t2)
+    else:
+        _people(b, mc, mr * 0.78, s)
+    b.draw_arc(mc, mr - 3.0 * s, 0, TAU, 64, Color(GOLD_L, 0.7), maxf(1.0, 1.5 * s), true)
+
+## três pessoas (vetor, bordas lisas) — antes era um ícone de 61 px ampliado e serrilhado
+func _people(ci: CanvasItem, c: Vector2, r: float, s: float):
+    var col := Color("f5cf6a")
+    var shade := Color("b8872c")
+    for spec in [[-0.62, 0.78, shade], [0.62, 0.78, shade], [0.0, 1.0, col]]:
+        var ox: float = spec[0] * r
+        var k: float = spec[1]
+        var cc: Color = spec[2]
+        var hc := c + Vector2(ox, -0.34 * r * k)
+        ci.draw_circle(hc, 0.27 * r * k, cc, true, -1.0, true)
+        var body_c := c + Vector2(ox, 0.42 * r * k)
+        var w := 0.5 * r * k
+        var pts := PackedVector2Array()
+        for i in 25:
+            var a := PI + PI * i / 24.0
+            pts.append(body_c + Vector2(cos(a) * w, sin(a) * w * 0.95))
+        pts.append(body_c + Vector2(w, 0.18 * r * k))
+        pts.append(body_c + Vector2(-w, 0.18 * r * k))
+        ci.draw_colored_polygon(pts, cc)
+        pts.append(pts[0])
+        ci.draw_polyline(pts, cc, 1.2, true)
 
 func _button(text: String, primary: bool) -> Button:
     var s := _s()
