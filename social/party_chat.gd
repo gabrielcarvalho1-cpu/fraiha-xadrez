@@ -100,11 +100,19 @@ func setup(acc):
     to_all.pressed.connect(func(): set_to("all"))
     to_ally.pressed.connect(func(): set_to("ally"))
     # R119 · EMOTES para a mesa toda (os de graça + os comprados na Loja de Coroas)
+    # R176.8c · com muitos emotes a fileira empurrava a conversa: agora é uma faixa de ~2 linhas que rola
+    var emote_scroll := ScrollContainer.new()
+    emote_scroll.name = "PartyEmoteScroll"
+    emote_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    emote_scroll.custom_minimum_size = Vector2(0, 76)
+    preload("res://ui_v022/touch_scroll.gd").attach(emote_scroll)
+    col.add_child(emote_scroll)
     emote_row = HFlowContainer.new()
     emote_row.name = "PartyEmoteRow"
+    emote_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     emote_row.add_theme_constant_override("h_separation", 6)
     emote_row.add_theme_constant_override("v_separation", 6)
-    col.add_child(emote_row)
+    emote_scroll.add_child(emote_row)
     scroll = ScrollContainer.new()
     scroll.custom_minimum_size = Vector2(0, 180)
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL

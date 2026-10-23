@@ -35,7 +35,8 @@ const Cosmetics := preload("res://profile/premium_cosmetics.gd")
 const EmotePrefs := preload("res://social/emote_prefs.gd")      # R176
 const EmoteBanner := preload("res://social/emote_banner.gd")    # R176
 var emote_button: Button
-var emote_row: HFlowContainer
+var emote_row: ScrollContainer   # R176.8c · rola quando há muitos emotes (antes a fileira vazava por cima do campo)
+var emote_flow: HFlowContainer
 var bubble_layer: Control
 ## R169 · CHAT CONTRA O COMPUTADOR (fase de testes): o mesmo chat e os mesmos EMOTES funcionam na partida contra
 ## o bot, só no aparelho (nada vai ao servidor). O bot responde com um emote de vez em quando.
@@ -105,8 +106,10 @@ func setup(service):
     emote_button.name = "ChatEmotes"
     emote_button.tooltip_text = "Reações rápidas (as da Loja de Coroas aparecem aqui depois de compradas)"
     mute_button = _small(head, "SILENCIAR", _toggle_mute)
+    mute_button.set_meta("alt_texts", ["REATIVAR"])
     mute_button.tooltip_text = "Deixar de ver as mensagens do adversário (só para você)"
     report_button = _small(head, "DENUNCIAR", _report)
+    report_button.set_meta("alt_texts", ["DENUNCIADO"])
     report_button.tooltip_text = "Denunciar o adversário (chat e voz). A equipe recebe as mensagens dele para análise."
     close_button = _small(head, "FECHAR", func(): set_mobile_open(false))
     minimize_button = _small(head, "—", func(): set_minimized(true))
@@ -120,10 +123,17 @@ func setup(service):
     list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     list.add_theme_constant_override("separation", 4)
     scroll.add_child(list)
-    emote_row = HFlowContainer.new()
+    emote_row = ScrollContainer.new()
     emote_row.name = "EmoteRow"
-    emote_row.add_theme_constant_override("h_separation", 6)
-    emote_row.add_theme_constant_override("v_separation", 6)
+    emote_row.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    emote_row.custom_minimum_size.y = 170   # celular (dentro da coluna); no PC o tabuleiro posiciona por cima da lista
+    preload("res://ui_v022/touch_scroll.gd").attach(emote_row)
+    emote_flow = HFlowContainer.new()
+    emote_flow.name = "EmoteFlow"
+    emote_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    emote_flow.add_theme_constant_override("h_separation", 6)
+    emote_flow.add_theme_constant_override("v_separation", 6)
+    emote_row.add_child(emote_flow)
     emote_row.hide()
     col.add_child(emote_row)
     status = Label.new()
@@ -296,13 +306,14 @@ func _toggle_emotes():
     if emote_row.visible: _fill_emotes()
 
 func _fill_emotes():
-    for c in emote_row.get_children(): c.queue_free()
+    for c in emote_flow.get_children(): c.queue_free()
+    emote_row.scroll_vertical = 0
     if emote_row.top_level and not emote_row.has_meta("bg"):   # tabuleiro com arte (PC): abre por cima da lista, com fundo
         emote_row.set_meta("bg", true)
         emote_row.draw.connect(func(): emote_row.draw_rect(Rect2(Vector2(-6, -6), emote_row.size + Vector2(12, 12)), Color(0.03, 0.05, 0.10, 0.95)))
     for e in ShopCatalog.my_emotes(Cosmetics.shop_owned):
         var eid := String(e.id)
-        var b := _small(emote_row, String(e.text), func(): send_emote(eid))
+        var b := _small(emote_flow, String(e.text), func(): send_emote(eid))
         b.name = "Emote_" + eid
         var fxi = preload("res://social/emote_fx.gd").make(eid, 30.0)   # R169 · prévia animada do emote no botão
         fxi.position = Vector2(6, 6)

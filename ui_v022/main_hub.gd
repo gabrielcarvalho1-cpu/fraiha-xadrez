@@ -1629,10 +1629,11 @@ func _refresh_avatar_detail():
     if avatar_detail.is_empty() or avatar_gallery == null: return
     _show_detail_frame("")
     if profile_tab != "emotes":
-        var efx = avatar_detail.pic.get_node_or_null("DetailEmoteFx")
+        var efx = avatar_detail.pic.get_parent().get_node_or_null("DetailEmoteFx")
         if efx != null:
-            avatar_detail.pic.remove_child(efx)
+            efx.get_parent().remove_child(efx)
             efx.queue_free()
+        avatar_detail.apply.visible = true
     if profile_tab == "icons" and badge_gallery != null:
         _refresh_badge_detail()
         _fit_detail_title()
@@ -1737,14 +1738,20 @@ func _refresh_emote_detail():
     var st: String = emote_gallery.state_of(id)
     avatar_detail.pic.texture = null
     _detail_material(false)
-    var old = avatar_detail.pic.get_node_or_null("DetailEmoteFx")
+    # R176.8c · emote sem o círculo dos avatares: o desenho fica solto, no lugar do retrato
+    avatar_detail.pic.visible = false
+    if avatar_detail.has("ring"): avatar_detail.ring.visible = false
+    var holder: Control = avatar_detail.pic.get_parent()
+    var old = holder.get_node_or_null("DetailEmoteFx")
     if old == null or String(old.emote_id) != id:
-        if old != null: old.queue_free()
-        var side: float = minf(avatar_detail.pic.size.x, avatar_detail.pic.size.y) * 0.9
+        if old != null:
+            holder.remove_child(old)
+            old.queue_free()
+        var side: float = minf(avatar_detail.pic.size.x, avatar_detail.pic.size.y) * 0.95
         var fx = preload("res://social/emote_fx.gd").make(id, side)
         fx.name = "DetailEmoteFx"
-        fx.position = (avatar_detail.pic.size - fx.size) / 2.0
-        avatar_detail.pic.add_child(fx)
+        fx.position = avatar_detail.pic.position + (avatar_detail.pic.size - fx.size) / 2.0
+        holder.add_child(fx)
         old = fx
     var lk: bool = st in ["locked", "pass"]
     old.modulate = Color(0.5, 0.5, 0.5, 0.9) if lk else Color.WHITE
@@ -1759,8 +1766,9 @@ func _refresh_emote_detail():
     avatar_detail.status.add_theme_color_override("font_color", Color("e89a7a") if lk else Color("49d17a"))
     avatar_detail.brief.text = "Use no chat da partida (botão EMOTES)."
     var b: Button = avatar_detail.apply
-    b.text = "VER NA LOJA" if st == "locked" else ("VER O PASSE" if st == "pass" else "LIBERADO")
+    b.text = "VER NA LOJA" if st == "locked" else "VER O PASSE"
     b.disabled = not lk
+    b.visible = lk   # R176.8c · liberado: sem botão (o texto ao lado já diz LIBERADO)
 
 ## R168 · detalhe da aba MOLDURAS
 func _refresh_frame_detail():
@@ -2797,7 +2805,7 @@ const WIDE_MIN_RATIO := 1.85
 const WIDE_BAND := Vector2(312, 905)   # y de cima/baixo da faixa do menu na arte (1672x941)
 const WIDE_PATCHES := {   # recorte (mesmos números de tools/home_wide_r153.py) e nós que andam junto
     "club": [Rect2(10, 4, 354, 84), ["ClubHomeEntry"]],
-    "icons": [Rect2(356, 6, 146, 82), ["SoundButton", "FullscreenButton", "TrophyTopButton", "ChatTopButton", "CrownsTopButton", "MailTopButton"]],
+    "icons": [Rect2(356, 6, 146, 82), ["SoundButton", "FullscreenButton", "TrophyTopButton", "ChatTopButton", "CrownsTopButton", "MailTopButton", "SupportTopButton"]],
     "logo": [Rect2(470, 0, 732, 312), ["NewsTicker"]],
     "profile": [Rect2(1210, 18, 446, 232), ["RefProfileButton", "ProfilePanel", "ProfileStack"]],
     "account": [Rect2(20, 832, 354, 100), ["AccountCard", "AccountPanel", "RefAccountAvatar", "RefAccountAvatarFrameHost"]],
@@ -4170,6 +4178,11 @@ func _build_reference_chrome():
     var mail := make_mail_button(62.0)
     mail.position = Vector2(714, 16)
     canvas.add_child(mail)
+    # R176.8c · SUPORTE: fone ao lado do envelope (abre a tela de tickets)
+    var sup := make_top_button("support", "Falar com o suporte", open_support)
+    sup.name = "SupportTopButton"
+    sup.position = Vector2(784, 16)
+    canvas.add_child(sup)
     # R122 · COMUNIDADE (Discord): canto de baixo à direita, espelhando o cartão ENTRAR / CRIAR CONTA
     var community := make_community_button(Vector2(262, 64), TOP_FRAME_PC, 22)
     community.position = Vector2(1388, 856)

@@ -128,6 +128,7 @@ func _form(parent: Control):
 			for k in cat_buttons: style_button(cat_buttons[k], k == category))
 		grid.add_child(b)
 		cat_buttons[id] = b
+		b.resized.connect(_fit_cat)   # R176.8c · texto encolhe até caber (RECLAMAÇÃO cortava)
 	parent.add_child(label("ASSUNTO (opcional)", 13, GOLD))
 	subject = LineEdit.new()
 	subject.name = "SupportSubject"
@@ -170,6 +171,19 @@ func _form(parent: Control):
 	status = _wrap(label("", 14, OK_COL, true))
 	status.name = "SupportStatus"
 	parent.add_child(status)
+
+func _fit_cat(_b = null):
+	# R176.8c · todos os tipos com o MESMO tamanho de letra: o do que precisa ser menor para caber (RECLAMAÇÃO)
+	var px := ts(13)
+	for k in cat_buttons:
+		var b: Button = cat_buttons[k]
+		if not is_instance_valid(b) or b.size.x < 10: return
+		var f: Font = b.get_theme_font("font")
+		var room := b.size.x - (14.0 if narrow() else 26.0)
+		while px > 8 and f.get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > room: px -= 1
+	for k in cat_buttons:
+		var b: Button = cat_buttons[k]
+		if b.get_theme_font_size("font_size") != px: b.add_theme_font_size_override("font_size", px)
 
 func _message_text() -> String:
 	if message_box != null and is_instance_valid(message_box): return message_box.text.strip_edges()

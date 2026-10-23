@@ -350,7 +350,38 @@ static func _make_patch(t: Texture2D, region: Rect2, mask_only := false) -> Arra
 		if not seen.is_empty(): break
 	if seen.is_empty(): return []
 	var m := _fill_holes(seen, w, h)
+	_clip_rows(sub, m, w, h)
 	return _clean_plate(sub, m, w, h)
+
+## R176.8c · a placa termina na 1ª linha dourada acima/abaixo do meio: o vão escuro entre a placa e a moldura
+## da página (embaixo do VOLTAR do DESAFIO DAS LIGAS) não vira vinho. Mediana de várias colunas (letras não contam).
+static func _clip_rows(sub: Image, m: PackedByteArray, w: int, h: int) -> void:
+	var gold := func(c: Color) -> bool: return c.h > 0.05 and c.h < 0.19 and c.s > 0.45 and c.v > 0.5
+	var half := maxi(4, int(w * 0.04))
+	# linha da moldura = faixa HORIZONTAL dourada (letras e a porta pintadas não formam uma faixa contínua)
+	var line := func(x: int, y: int) -> bool:
+		var ok := 0
+		for xx in range(maxi(0, x - half), mini(w, x + half + 1)):
+			if gold.call(sub.get_pixel(xx, y)): ok += 1
+		return ok >= int((half * 2 + 1) * 0.85)
+	var tops: Array = []
+	var bots: Array = []
+	for fx in [0.3, 0.42, 0.55, 0.68, 0.8, 0.9]:
+		var x := int(w * fx)
+		var y := h / 2
+		while y > 0 and not line.call(x, y): y -= 1
+		tops.append(y)
+		y = h / 2
+		while y < h - 1 and not line.call(x, y): y += 1
+		bots.append(y)
+	tops.sort()
+	bots.sort()
+	var top: int = tops[tops.size() / 2]
+	var bot: int = bots[bots.size() / 2]
+	if bot - top < h * 0.35: return   # não achou a moldura: não mexe
+	for y in h:
+		if y >= top and y <= bot: continue
+		for x in w: m[y * w + x] = 0
 
 ## miolo alcançado do centro sem atravessar a moldura (dourado com brilho >= wall_v); vazio se vazar
 static func _flood_center(sub: Image, w: int, h: int, wall_v: float) -> PackedByteArray:
@@ -418,9 +449,37 @@ static func _ink(c: Color) -> float:
 static func _clean_plate(sub: Image, m: PackedByteArray, w: int, h: int) -> Array:
 	var n := w * h
 	# costura: pixel escuro/azul colado no miolo (entre o miolo e a moldura) também vira placa
+	# R176.8c · só costura o que está DENTRO da moldura: o que se alcança da borda do recorte sem cruzar dourado é fora
+	var outside := PackedByteArray()
+	outside.resize(n)
+	var oq: Array[int] = []
+	for x in w:
+		oq.append(x)
+		oq.append((h - 1) * w + x)
+	for y in h:
+		oq.append(y * w)
+		oq.append(y * w + w - 1)
+	var oi := 0
+	while oi < oq.size():
+		var k: int = oq[oi]
+		oi += 1
+		if outside[k] == 1 or m[k] == 1: continue
+		var kc := sub.get_pixel(k % w, k / w)
+		if _gold(kc) or (kc.h > 0.03 and kc.h < 0.2 and kc.s > 0.3 and kc.v > 0.18): continue
+		outside[k] = 1
+		var kx := k % w
+		if kx > 0: oq.append(k - 1)
+		if kx < w - 1: oq.append(k + 1)
+		if k >= w: oq.append(k - w)
+		if k < w * (h - 1): oq.append(k + w)
 	var m2 := m.duplicate()
+	var ys := []
+	for i in n: if m[i] == 1: ys.append(i / w)
+	var ytop: int = ys.min() if not ys.is_empty() else 0
+	var ybot: int = ys.max() if not ys.is_empty() else h - 1
 	for i in n:
-		if m[i] == 1: continue
+		if m[i] == 1 or outside[i] == 1: continue
+		if i / w < ytop - 1 or i / w > ybot + 1: continue
 		var x := i % w
 		var y := i / w
 		var c := sub.get_pixel(x, y)

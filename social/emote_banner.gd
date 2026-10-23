@@ -68,21 +68,47 @@ static func _diamond(ci: CanvasItem, c: Vector2, r: float, edge: Color, fill: Co
 		ci.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -q), c + Vector2(q, 0), c + Vector2(0, q), c + Vector2(-q, 0)]), fill)
 
 ## Texto centrado (a fonte encolhe até caber em w). Devolve a largura do texto.
+## R176.8c · frase longa (XEQUE-MATE CHEGANDO…, JOGAMOS DE NOVO!) numa faixa pequena: se nem com a fonte
+## bem menor cabe numa linha, quebra em DUAS linhas no espaço do meio — nunca passa da placa.
 func _label(t: String, center: Vector2, w: float, fs: float, col: Color, outline: int) -> float:
+	var room := w - outline * 2.0
 	var px := maxi(8, int(round(fs)))
-	while px > 8 and FONT.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > w: px -= 1
+	var lo := maxi(8, int(round(fs * 0.62)))
+	while px > lo and FONT.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > room: px -= 1
+	var shown := t
+	var lines := 1
+	if FONT.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > room and t.contains(" "):
+		var mid := t.length() / 2
+		var best := -1
+		for i in t.length():
+			if t[i] == " " and (best < 0 or absi(i - mid) < absi(best - mid)): best = i
+		shown = t.substr(0, best) + "\n" + t.substr(best + 1)
+		lines = 2
+		px = maxi(8, int(round(fs * 0.62)))
+		var widest := func(q: int) -> float:
+			var m := 0.0
+			for part in shown.split("\n"): m = maxf(m, FONT.get_string_size(part, HORIZONTAL_ALIGNMENT_LEFT, -1, q).x)
+			return m
+		while px > 7 and widest.call(px) > room: px -= 1
+	while px > 6 and lines == 1 and FONT.get_string_size(shown, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > room: px -= 1
 	var l := Label.new()
-	l.text = t
+	l.text = shown
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.add_theme_font_override("font", FONT)
 	l.add_theme_font_size_override("font_size", px)
+	l.add_theme_constant_override("line_spacing", -int(px * 0.15))
 	l.add_theme_color_override("font_color", col)
 	l.add_theme_color_override("font_outline_color", Color(0.08, 0.04, 0.0, 0.9))
 	l.add_theme_constant_override("outline_size", outline)
-	var lh := FONT.get_height(px)
+	var lh := FONT.get_height(px) * lines - (px * 0.15) * (lines - 1)
 	l.position = Vector2(center.x - w / 2.0, center.y - lh / 2.0 - 2.0)
 	l.size = Vector2(w, lh + 4.0)
 	add_child(l)
-	return FONT.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+	var ms := l.get_minimum_size()
+	l.size = Vector2(w, ms.y)
+	l.position.y = center.y - ms.y / 2.0 - 1.0
+	var tw := 0.0
+	for part in shown.split("\n"): tw = maxf(tw, FONT.get_string_size(part, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x)
+	return tw

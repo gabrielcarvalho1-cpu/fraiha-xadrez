@@ -294,8 +294,15 @@ func _text_button(b: Button, r: Rect2, fs: float) -> void:
     for st in ["hover", "pressed"]: _ov(b, "style", st, lit)
     _ov(b, "font", "font", FONT_BOLD)
     var px := int(round(fs * k))
-    while px > 9 and FONT_BOLD.get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > r.size.x * k - 12.0: px -= 1
+    # R176.8c · cabe também o texto que o botão vai mostrar depois (DENUNCIAR → DENUNCIADO, SILENCIAR → REATIVAR)
+    var words: Array = [b.text] + (b.get_meta("alt_texts") if b.has_meta("alt_texts") else [])
+    var widest := func(q: int) -> float:
+        var m := 0.0
+        for t in words: m = maxf(m, FONT_BOLD.get_string_size(String(t), HORIZONTAL_ALIGNMENT_LEFT, -1, q).x)
+        return m
+    while px > 8 and widest.call(px) > r.size.x * k - 16.0: px -= 1
     _ov(b, "size", "font_size", px)
+    b.clip_text = true
     for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: _ov(b, "color", c, Color("f4ead2"))
     _ov(b, "color", "font_outline_color", Color(0, 0, 0, 0.6))
     _ov(b, "const", "outline_size", 3)

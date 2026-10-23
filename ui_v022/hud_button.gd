@@ -226,6 +226,18 @@ func _draw():
             draw_polyline(PackedVector2Array([e.position + Vector2(r * 0.08, r * 0.1), e.get_center() + Vector2(0, r * 0.12), Vector2(e.end.x - r * 0.08, e.position.y + r * 0.1)]), INK, w * 1.1)
             draw_line(e.position + Vector2(r * 0.1, e.size.y - r * 0.12), e.get_center() + Vector2(-r * 0.25, r * 0.02), INK, w * 0.8)
             draw_line(Vector2(e.end.x - r * 0.1, e.end.y - r * 0.12), e.get_center() + Vector2(r * 0.25, r * 0.02), INK, w * 0.8)
+        "support":
+            # R176.8c · SUPORTE: fone de atendimento (arco + conchas + microfone)
+            var c1 := center + Vector2(0, r * 0.05)
+            draw_arc(c1, r * 0.95, PI, TAU, 24, col, w * 1.1, true)
+            for sx in [-1.0, 1.0]:
+                var pad := Rect2(c1 + Vector2(sx * r * 0.95 - r * 0.32, -r * 0.05), Vector2(r * 0.64, r * 0.85))
+                var ps := StyleBoxFlat.new()
+                ps.bg_color = col
+                ps.set_corner_radius_all(int(r * 0.22))
+                draw_style_box(ps, pad)
+            draw_arc(c1 + Vector2(r * 0.35, r * 0.62), r * 0.6, 0.0, PI * 0.55, 12, col, w * 0.8, true)
+            draw_circle(c1 + Vector2(-r * 0.05, r * 1.18), r * 0.2, col)
         "restart":
             draw_arc(center, r * 0.85, deg_to_rad(-70), deg_to_rad(220), 20, col, w)
             var end := center + Vector2(cos(deg_to_rad(-70)), sin(deg_to_rad(-70))) * r * 0.85

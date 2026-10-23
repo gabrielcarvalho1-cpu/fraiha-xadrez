@@ -217,8 +217,8 @@ func _build_top():
     top.add_child(sound_button)
     # R96 · RANKING (troféu) e CHAT GLOBAL (balão) à esquerda do som · R112 COROAS · R162 MENSAGENS (envelope)
     # R162 · cinco botões na fileira de cima: um pouco mais estreitos (74) para caber ao lado do SEJA MEMBRO
-    var bw := 74.0
-    var gap := 6.0
+    var bw := 66.0   # R176.8c · seis botões (+ SUPORTE)
+    var gap := 5.0
     var right := SOUND_RECT.end.x
     var slot := func(i: int) -> Vector2: return Vector2(right - bw - (bw + gap) * i, SOUND_RECT.position.y)
     sound_button.position = slot.call(0)
@@ -238,6 +238,12 @@ func _build_top():
     mail.size = Vector2(bw, SOUND_RECT.size.y)
     mail.position = slot.call(4)
     top.add_child(mail)
+    # R176.8c · SUPORTE: fone ao lado do envelope
+    var sup: Button = hub.make_top_button("support", "Falar com o suporte", hub.open_support, SOUND_RECT.size.y)
+    sup.name = "SupportTopButtonMobile"
+    sup.size = Vector2(bw, SOUND_RECT.size.y)
+    sup.position = slot.call(5)
+    top.add_child(sup)
     # cartão do jogador (toque abre o Perfil)
     var card := _hit(top, CARD_RECT, "PERFIL", func(): hub.show_page("profile"))
     card.name = "RefProfileCard"
