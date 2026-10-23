@@ -218,6 +218,8 @@ class Ranked {
   }
   after(match, now) {
     this.pushState(match, now);
+    // R176.9 · bot de teste responde logo depois do lance (antes esperava o próximo tick de 200 ms)
+    if (this.testBot && match.testBot && match.status === 'playing') this.testBot.maybeMove(match);
     if (match.status === 'finished' && !match.persisting) this.persist(match);
   }
   async persist(match) {

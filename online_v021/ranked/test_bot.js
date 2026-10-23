@@ -18,7 +18,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 // Contas de teste do dono no staging (escolhidas por ele em 21/10/2026): bot = SextoSen1; quem cai contra = SextoSentro.
 const STAGING_PADRAO = { bot: 'e0eb1d64-f4b1-438c-a2e5-fbdfc013abd3', owners: 'f523dc61-26f8-4a5c-9195-2d1e6e766d92' };
-const MADEIRA = { skill: 0, depth: 1, randomChance: 0.35, thinkMs: [350, 1200] };
+const MADEIRA = { skill: 0, depth: 1, randomChance: 0.35, thinkMs: [250, 650] };   // R176.9 · antes 350–1200 ms (parecia travado)
 
 class RankedTestBot {
   constructor(ranked, { env = process.env, engine = null, random = Math.random } = {}) {
