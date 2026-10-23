@@ -2685,6 +2685,7 @@ func _draw_result_r57(d: Vector2):
 ## P177_EXT px de cenário a mais em cima e embaixo (tools/visual_r177j_cel.py). Coordenadas = px da arte.
 const P177_SIZE := Vector2(941, 1672)
 const P177_EXT := 260.0
+const P177_SIDE_CROP := 24.0
 const P177 := {
     "vitoria": {"portrait": Rect2(298, 344, 342, 300), "name_y": 707.0, "name_x": 469.0, "place": [470.0, 800.0, 48],
         "banner": [223.0, 968.0], "thumbs": [Rect2(158, 1033, 90, 85), Rect2(158, 1141, 90, 85), Rect2(158, 1249, 90, 85), Rect2(158, 1358, 90, 89)],
@@ -2709,7 +2710,9 @@ func _draw_result_p177(d: Vector2, key: String):
     var bsz := blur.get_size()
     var cov := maxf(vis.size.x / bsz.x, vis.size.y / bsz.y)
     draw_texture_rect(blur, Rect2(vis.position + (vis.size - bsz * cov) / 2.0, bsz * cov), false, Color(0.55, 0.53, 0.52))
-    var s: float = minf(vis.size.x / P177_SIZE.x, vis.size.y / P177_SIZE.y)
+    # R177l · celular mais alto que a arte: corta até 24 px de cada lateral (só cenário) para a arte crescer
+    # e sobrar menos faixa em cima/embaixo
+    var s: float = minf(vis.size.x / (P177_SIZE.x - 2.0 * P177_SIDE_CROP), vis.size.y / P177_SIZE.y)
     var o: Vector2 = vis.position + (vis.size - P177_SIZE * s) / 2.0
     var big := Rect2(-4000, -4000, 9000, 9000)
     _pblocks = [{"src": big, "dst": Rect2(o + big.position * s, big.size * s), "s": s, "piece": "p177"}]

@@ -118,26 +118,29 @@ def jewel_mask(img, hole, jewels):
 
 
 def extend(rgb):
-    """EXT px acima e abaixo: só o cenário da beira da arte (sem título nem botões), espichado, desfocado e escurecendo."""
+    """EXT px acima e abaixo (R177l): a arte termina num degradê escuro e liso (vinheta) — sem cenário borrado/esticado.
+    Os primeiros px espelham a própria beira da arte (sem emenda) e somem rápido no tom escuro da cena."""
     H, W, _ = rgb.shape
-    def band(strip, flip, dark=0.72):
-        st = strip[::-1] if flip else strip
-        b = cv2.resize(st, (W, EXT), interpolation=cv2.INTER_CUBIC).astype(np.float32)
-        b1 = cv2.GaussianBlur(b, (0, 0), sigmaX=10, sigmaY=8)
-        b2 = cv2.GaussianBlur(b, (0, 0), sigmaX=40, sigmaY=30)
-        out = np.empty_like(b)
+    F = 46   # px de transição espelhada
+    def band(edge_rows, mirror_rows, dark):
+        base = cv2.GaussianBlur(edge_rows.astype(np.float32).mean(0, keepdims=True), (0, 0), sigmaX=60, sigmaY=0.1)[0]
+        lum = base.mean(-1, keepdims=True)
+        tint = base * 0.35 + lum * 0.10                      # o tom da cena, bem escuro
+        out = np.empty((EXT, W, 3), np.float32)
+        mir = mirror_rows.astype(np.float32)
         for i in range(EXT):
-            t = (i + 1) / EXT   # 0 junto da arte → 1 na borda
-            row = b[i] * max(0.0, 1 - 3 * t) + b1[i] * min(1.0, 3 * t) * (1 - t) + b2[i] * t
-            if t < 1 / 3:
-                row = b[i] * (1 - 3 * t) + b1[i] * (3 * t)
-            else:
-                u = (t - 1 / 3) / (2 / 3)
-                row = b1[i] * (1 - u) + b2[i] * u
-            out[i] = row * (1.0 - dark * t ** 1.1)
+            t = i / (EXT - 1)
+            u = min(1.0, i / 120.0)
+            u = u * u * (3 - 2 * u)                          # smoothstep: beira → escuro
+            col = base * (1 - u) + tint * dark * u
+            if i < F:
+                w = 1.0 - i / F
+                w = w * w
+                col = mir[i] * w + col * (1 - w)
+            out[i] = col
         return out
-    top = band(rgb[0:34], True, 0.85)[::-1]            # a beira de cima, espelhada e espichada para cima
-    bot = band(rgb[H - 64:H], True)               # a beira de baixo (chão, abaixo dos botões)
+    top = band(rgb[0:6], rgb[1:F + 1], 0.6)[::-1]
+    bot = band(rgb[H - 6:H], rgb[H - 1 - F:H - 1][::-1], 0.6)
     return np.concatenate([top, rgb.astype(np.float32), bot], 0).clip(0, 255).astype(np.uint8)
 
 
