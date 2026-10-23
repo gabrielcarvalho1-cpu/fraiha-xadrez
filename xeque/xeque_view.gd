@@ -2567,10 +2567,26 @@ func r57_text(d: Vector2, s: String, pos: Vector2, fkey: String, fs: float, col:
         while size > 10 and f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > room * sc: size -= 1
     var p := r57_p(d, pos)
     var w := width * sc if width > 0.0 else -1.0
-    if outline > 0: draw_string_outline(f, p, s, align, w, size, outline, ocol)
-    draw_string(f, p, s, align, w, size, col)
-    if bold: draw_string(f, p + Vector2(1, 0), s, align, w, size, col)      # traço mais grosso (a VT323 é fina)
-    return f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x / sc
+    var adv: float = f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x / sc
+    # R177k · a letra é desenhada já no tamanho final da tela (sem a escala ui.k por cima): a fonte é rasterizada
+    # na resolução certa — nada de letra grande encolhida (serrilhado) no celular
+    var k: float = ui.k
+    var fs2 := maxi(6, int(round(fs * sc * k)))
+    var f2 := r57_f(fkey, int(round(sp * sc * k)))
+    var sp2: Vector2 = (ui.origin + p * k).round()
+    var w2 := w * k if w > 0.0 else -1.0
+    if w2 > 0.0 and align != HORIZONTAL_ALIGNMENT_LEFT:
+        # alinha à mão (com largura fixa o Godot corta o fim se o tamanho arredondado passar 1 px)
+        var tw: float = f2.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x
+        sp2.x = roundf(sp2.x + (w2 - tw) * (0.5 if align == HORIZONTAL_ALIGNMENT_CENTER else 1.0))
+        align = HORIZONTAL_ALIGNMENT_LEFT
+        w2 = -1.0
+    draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+    if outline > 0: draw_string_outline(f2, sp2, s, align, w2, fs2, maxi(1, int(round(outline * maxf(k, 0.5)))), ocol)
+    draw_string(f2, sp2, s, align, w2, fs2, col)
+    if bold: draw_string(f2, sp2 + Vector2(maxf(0.5, k * 0.9), 0), s, align, w2, fs2, col)      # traço mais grosso (a VT323 é fina)
+    draw_set_transform(ui.origin, 0.0, Vector2(k, k))
+    return adv
 
 ## textura cobrindo o retângulo (corta o excesso, sem deformar)
 func r57_cover(tex: Texture2D, dst: Rect2):
