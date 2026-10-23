@@ -828,11 +828,11 @@ func _build_corner() -> void:
 			# ícone do balão + CHAT), não mais o quadradinho no alto
 			var np := NinePatchRect.new()
 			np.name = "Art"
-			np.texture = tex("tile")
-			np.patch_margin_left = 18
-			np.patch_margin_right = 18
-			np.patch_margin_top = 18
-			np.patch_margin_bottom = 18
+			np.texture = tex("chatbtn")   # R177b · moldura dos botões do canto (mesmo azul), fundo transparente fora do recorte
+			np.patch_margin_left = 24
+			np.patch_margin_right = 24
+			np.patch_margin_top = 24
+			np.patch_margin_bottom = 24
 			np.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			np.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 			b.add_child(np)

@@ -563,10 +563,10 @@ func _build_ranking():
 		name_l.name = "LeagueName_" + (id if not classic else "classic")
 		name_l.add_theme_constant_override("line_spacing", int(round(-8 * s)))
 		if classic:
-			var sub := _label(panel, "Cores das casas e das peças", R(284, y + 56, 260, 34), 26, CREAM, Kit.SERIF, HORIZONTAL_ALIGNMENT_LEFT, 0)
-			sub.name = "ClassicPiecesSubMobile"
-			name_l.position.y = (y + 10) * s
-			name_l.size.y = 50 * s
+			# R177b · só "TABULEIRO E PEÇAS", centralizado entre o peão e o ABRIR (sem a frase de baixo)
+			name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			name_l.position = Vector2(250, y + 4) * s
+			name_l.size = Vector2(300, 96) * s
 			_hot(panel, mid, Rect2(86, y, 706, LIGA_ROW_H), y, "TABULEIRO E PEÇAS", func(): hub.open_board_colors())
 			# R139 · o selo da arte diz "DISPONÍVEL": aqui ele vira "ABRIR" (a linha abre a escolha de cores)
 			var cover := ColorRect.new()

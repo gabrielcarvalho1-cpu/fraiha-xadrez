@@ -65,13 +65,14 @@ func run():
 	hub.show_page("ranking")
 	await frames(12)
 	await shot("ligas")
-	var sub = root.find_child("ClassicPiecesSubMobile", true, false)
+	var nmc = root.find_child("LeagueName_classic", true, false)
 	var chip = root.find_child("BoardColorsChip", true, false)
-	if sub != null and chip != null:
-		var sr: Rect2 = sub.get_global_rect()
-		var font: Font = sub.get_theme_font("font")
-		var tw: float = font.get_string_size(sub.text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub.get_theme_font_size("font_size")).x
-		check(sr.position.x + tw < chip.get_global_rect().position.x, "LIGAS: 'Cores das casas e das peças' não passa por baixo do ABRIR")
+	check(root.find_child("ClassicPiecesSubMobile", true, false) == null, "LIGAS: só TABULEIRO E PEÇAS (sem a frase de baixo)")
+	if nmc != null and chip != null:
+		var f3: Font = nmc.get_theme_font("font")
+		var tw3: float = f3.get_string_size(nmc.text, HORIZONTAL_ALIGNMENT_LEFT, -1, nmc.get_theme_font_size("font_size")).x
+		var gr: Rect2 = nmc.get_global_rect()
+		check(gr.get_center().x + tw3 / 2.0 < chip.get_global_rect().position.x, "LIGAS: TABULEIRO E PEÇAS não encosta no ABRIR")
 	hub.show_page("main")
 	await frames(6)
 	# RANQUEADO (lista de ritmos)
