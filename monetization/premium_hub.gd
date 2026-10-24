@@ -132,6 +132,9 @@ func _request_purchases_keep():
 ## R175 · CONTINUAR um pedido aguardando pagamento (o mesmo pedido: mesmo PIX ou o formulário do cartão de novo)
 func resume_payment(item: Dictionary):
     if Catalog.is_mock(): return
+    if OS.has_feature("android"):
+        open_payment(String(item.get("product_id", "")))   # R182 · mesmo aviso: compras ainda não no app
+        return
     purchases_note = ""
     var host := _modal_host()
     var ui = PaymentRealUI.new()
@@ -845,7 +848,7 @@ func close_modal():
 func open_payment(product_id: String):
     if OS.has_feature("android"):
         # Android DEV: nenhuma compra (PIX/cartão/Play Billing) até a missão de pagamentos Android.
-        open_confirm("INDISPONÍVEL NO ANDROID", "Compras ainda não estão disponíveis no app Android.\n\nSeus benefícios continuam valendo na sua conta FRAIHA.", "", "ENTENDI", Callable())
+        open_confirm("EM BREVE NO APP", "As compras pelo app chegam em breve.\n\nTudo o que você já tem na sua conta FRAIHA continua valendo aqui.", "", "ENTENDI", Callable())
         return
     var host := _modal_host()
     var ui = PaymentUI.new() if Catalog.is_mock() else PaymentRealUI.new()

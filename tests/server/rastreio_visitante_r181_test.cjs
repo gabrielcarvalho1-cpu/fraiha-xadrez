@@ -206,3 +206,22 @@ test('Meta Conversions API: desligada sem token; só com consentimento; dedup po
   await bad.send({ name: 'JogoCarregado', id: 'e'.repeat(20), consent: true, ip: '1', ua: 'u' });
   assert.ok(logs.length && !logs.some(l => l.includes('SEGREDO123')), 'token nunca no log');
 });
+
+test('R182 · app Android: sem Origin, com x-fraiha-app=android → aceito, aparelho "APP Android" (versão do Android)', async t => {
+  const h = await fixture(t);
+  const site = await h.post({ sid: hex('33'), vid: hex('34'), e: [] }, { origin: 'https://site-estranho.com', 'x-fraiha-app': 'android' });
+  assert.equal(site.status, 403, 'navegador de outro site não vira "app" só pelo cabeçalho');
+  const ok = await h.post({ sid: hex('35'), vid: hex('36'), st: 100, d: { w: 1080, h: 2400, lang: 'pt', app: 'android', os: '14', v: '' },
+    e: [{ k: 'load', n: 'start', t: 0 }, { k: 'screen', n: 'Entrada / Login', t: 50 }, { k: 'click', n: 'Jogar como convidado', id: 'GuestButton', s: 'Entrada / Login', t: 90 }] },
+    { 'user-agent': 'GodotEngine/4.5.1.stable (Android)', 'x-fraiha-app': 'android' });
+  assert.equal(ok.status, 204);
+  await flush();
+  const l = (await h.get('/admin/api/sessions')).body;
+  const it = l.items.find(i => i.kind === 'visitor');
+  assert.ok(it, 'visita do app aparece');
+  assert.equal(it.device.device, 'Android'); assert.equal(it.device.os, 'Android 14'); assert.equal(it.device.browser, 'APP Android');
+  const d = (await h.get('/admin/api/sessions/' + it.sid)).body;
+  const labels = d.events.map(e => e.k + ':' + e.l);
+  assert.ok(labels.includes('screen:Entrada / Login'), JSON.stringify(labels));
+  assert.ok(labels.includes('click:Jogar como convidado — Entrada / Login'), JSON.stringify(labels));
+});

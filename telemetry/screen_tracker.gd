@@ -76,6 +76,7 @@ var current := ""           # tela atual (mesmo sem servidor)
 var _ready_id := false      # conexão com identidade (acct_state com perfil / guest_state)
 
 func setup(p_stage, p_account):
+	WebTrack.boot()
 	stage = p_stage
 	account = p_account
 	get_tree().node_added.connect(_on_node)
@@ -199,7 +200,7 @@ func _process(delta):
 	if _cand_t < STABLE: return
 	if now != current: WebTrack.screen(now)   # R181 · Web: vai pelo site, com ou sem login
 	current = now
-	if OS.has_feature("web"): return
+	if WebTrack.site_tracking(): return   # R182 · Web e app Android: pelo rastreador da visita (/t)
 	var ready_now: bool = account != null and (bool(account.get("server_ready")) or bool(account.get("guest_ready")))
 	if ready_now and not _ready_id:   # R181 · antes esperava um sinal que nunca vinha
 		_ready_id = true

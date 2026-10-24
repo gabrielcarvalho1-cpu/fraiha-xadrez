@@ -339,6 +339,9 @@ func copy_game_link() -> void:
 
 func sign_in_google(then_open := "", force := false):
     if not configured(): return
+    if OS.has_feature("android"):   # R182 · app: navegador do celular + PKCE, volta pelo servidor do jogo
+        _app_google_start()
+        return
     if not OS.has_feature("web"):
         notice.emit("Entrar com Google está disponível na versão Web do FRAIHA.", true)
         return
@@ -355,6 +358,82 @@ func sign_in_google(then_open := "", force := false):
     if not then_open.is_empty(): JavaScriptBridge.eval("sessionStorage.setItem('fraiha_after_login', " + JSON.stringify(then_open) + ")")
     var url = supabase_url + "/auth/v1/authorize?provider=google&redirect_to=" + site_url.uri_encode()
     JavaScriptBridge.eval("window.location.assign(" + JSON.stringify(url) + ")")
+
+## R182 · LOGIN COM GOOGLE NO APP ANDROID (PKCE). O app abre o Google no navegador do celular; o Supabase devolve
+## o navegador para https://<servidor do jogo>/app-login/done?c=<pareamento>&code=<auth_code>; o app busca o
+## auth_code em /app-login/claim e troca DIRETO com o Supabase usando o code_verifier, que nunca sai do app.
+## Ninguém além do app consegue usar o auth_code (sem o verifier ele não vale nada). Ver online_v021/accounts/app_login.js.
+const APP_GOOGLE_TTL_S := 600.0
+var app_google := {}   # {c, v, until, next, base}
+
+static func pkce_challenge(verifier: String) -> String:
+    var ctx := HashingContext.new()
+    ctx.start(HashingContext.HASH_SHA256)
+    ctx.update(verifier.to_ascii_buffer())
+    return Marshalls.raw_to_base64(ctx.finish()).replace("+", "-").replace("/", "_").replace("=", "")
+
+static func http_base(ws_url: String) -> String:
+    var s := ws_url.strip_edges()
+    if s.begins_with("wss://"): s = "https://" + s.substr(6)
+    elif s.begins_with("ws://"): s = "http://" + s.substr(5)
+    else: return ""
+    var slash := s.find("/", s.find("//") + 2)
+    return s.substr(0, slash) if slash > 0 else s
+
+func _app_google_start():
+    var base := http_base(server_url)
+    if base.is_empty():
+        notice.emit("Sem conexão com o servidor do FRAIHA. Tente de novo em instantes.", true)
+        return
+    var crypto := Crypto.new()
+    var c := crypto.generate_random_bytes(16).hex_encode()
+    var v := crypto.generate_random_bytes(32).hex_encode()
+    var redirect := base + "/app-login/done?c=" + c
+    var url := supabase_url + "/auth/v1/authorize?provider=google&redirect_to=" + redirect.uri_encode() \
+        + "&code_challenge=" + pkce_challenge(v) + "&code_challenge_method=s256"
+    var now := Time.get_unix_time_from_system()
+    app_google = {"c": c, "v": v, "until": now + APP_GOOGLE_TTL_S, "next": now + 3.0, "base": base, "busy": false}
+    WebTrack.login("google", "start")
+    OS.shell_open(url)
+    notice.emit("Abrindo o Google no navegador… Depois de escolher a conta, volte para o app.", false)
+
+func _app_google_poll():
+    if app_google.is_empty() or bool(app_google.get("busy", false)): return
+    var now := Time.get_unix_time_from_system()
+    if now > float(app_google.until):
+        app_google = {}
+        return
+    if now < float(app_google.next): return
+    app_google.busy = true
+    app_google.next = now + 2.0
+    var http := HTTPRequest.new()
+    http.timeout = 10.0
+    add_child(http)
+    var c := String(app_google.c)
+    http.request_completed.connect(func(result, code, _h, data):
+        http.queue_free()
+        if app_google.is_empty() or String(app_google.get("c", "")) != c: return
+        app_google.busy = false
+        if result != HTTPRequest.RESULT_SUCCESS or code != 200: return   # tenta de novo em 2 s
+        var r = JSON.parse_string(data.get_string_from_utf8())
+        if not r is Dictionary or r.has("pending"): return
+        var v := String(app_google.v)
+        app_google = {}
+        if r.has("error"):
+            WebTrack.login("google", "error", String(r.error).left(40))
+            notice.emit("O Google não completou o login. Tente de novo.", true)
+            return
+        _auth_request(HTTPClient.METHOD_POST, "/auth/v1/token?grant_type=pkce", {"auth_code": String(r.get("code", "")), "code_verifier": v}, func(code2, body):
+            if code2 == 200 and body.has("access_token"):
+                WebTrack.login("google", "ok")
+                _adopt_session(body)
+                notice.emit("Pronto! Você entrou com o Google.", false)
+            else:
+                WebTrack.login("google", "error", error_code(code2, body))
+                notice.emit(auth_error_text(code2, body), true)))
+    if http.request(String(app_google.base) + "/app-login/claim?c=" + c) != OK:
+        http.queue_free()
+        app_google.busy = false
 
 func recover(mail: String):
     if busy or not configured(): return
@@ -672,8 +751,10 @@ func _notification(what):
             refresh_in = 0.0
             _refresh_session()
         if socket == null and (signed_in() or guest_wanted): retry_in = 0.05   # reconecta já, sem esperar os 3 s
+        if not app_google.is_empty(): app_google.next = 0.0   # R182 · voltou do navegador: busca o login já
 
 func _process(delta):
+    if not app_google.is_empty(): _app_google_poll()   # R182 · login com Google no app
     if refresh_in > 0.0:
         refresh_in -= delta
         if refresh_in <= 0.0: _refresh_session()

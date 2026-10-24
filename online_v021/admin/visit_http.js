@@ -163,7 +163,9 @@ class VisitHttp {
   // http: (req, res) → trata POST/OPTIONS /t
   handle(req, res, ip) {
     const origin = String(req.headers.origin || '');
-    const ok = this.originOk(origin);
+    // R182 · app Android: não é navegador (sem Origin/CORS) → se identifica pelo cabeçalho x-fraiha-app
+    const app = !origin && String(req.headers['x-fraiha-app'] || '') === 'android';
+    const ok = app || this.originOk(origin);
     const head = { 'content-type': 'text/plain', 'cache-control': 'no-store' };
     if (ok && origin) { head['access-control-allow-origin'] = origin; head.vary = 'Origin'; head['access-control-allow-methods'] = 'POST, OPTIONS'; head['access-control-allow-headers'] = 'content-type'; head['access-control-max-age'] = '86400'; }
     if (req.method === 'OPTIONS') { res.writeHead(ok ? 204 : 403, head); return res.end(); }
@@ -176,11 +178,11 @@ class VisitHttp {
     req.on('end', () => {
       res.writeHead(204, head); res.end();
       if (big) { this.stats.dropped++; return; }
-      try { this.ingest(raw, { ip, ua: req.headers['user-agent'] }); } catch (e) { this.stats.dropped++; }
+      try { this.ingest(raw, { ip, ua: req.headers['user-agent'], app }); } catch (e) { this.stats.dropped++; }
     });
     req.on('error', () => {});
   }
-  ingest(raw, { ip = '?', ua = '' } = {}) {
+  ingest(raw, { ip = '?', ua = '', app = false } = {}) {
     let b; try { b = JSON.parse(raw); } catch { this.stats.dropped++; return false; }
     if (!b || typeof b !== 'object' || Array.isArray(b)) { this.stats.dropped++; return false; }
     const sid = String(b.sid || ''), vid = String(b.vid || '');
@@ -190,7 +192,8 @@ class VisitHttp {
     const evs = Array.isArray(b.e) ? b.e.slice(0, MAX_EVENTS).map(parseEvent).filter(Boolean) : [];
     const known = this.track.hasVisit(sid);
     if (!known && !this.lim.hit('new:' + ip, NEW_PER_IP_HOUR, 3600e3, now)) { this.stats.limited++; return false; }
-    const dev = parseUA(ua);
+    const dev = app ? { device: 'Android', os: 'Android', mobile: true, browser: 'APP Android' } : parseUA(ua);
+    if (app && b.d && /^[0-9]{1,2}$/.test(String(b.d.os || ''))) dev.os = 'Android ' + String(b.d.os);
     if (b.d && typeof b.d === 'object') {
       for (const k of ['w', 'h']) { const v = num(b.d[k], 1, 20000); if (v !== null) dev[k] = Math.round(v); }
       if (/^[A-Za-z-]{2,10}$/.test(String(b.d.lang || ''))) dev.lang = String(b.d.lang);

@@ -54,6 +54,8 @@ func _ready():
     if _web:
         JavaScriptBridge.eval(JS_SETUP)
         _supported = bool(JavaScriptBridge.eval(JS_SUPPORTED))
+    elif OS.has_feature("mobile"):
+        _supported = false   # R182 · app Android/iOS: o app já abre em tela cheia (imersivo); sem botão
     else:
         _supported = true   # desktop: janela <-> tela cheia exclusiva
     _last_on = is_on()
