@@ -62,8 +62,10 @@ function points(me, opp, outcome) {
 const DEMOTE_PL = 75;
 
 // Aplica o resultado a uma cópia das estatísticas (PL, liga e Força).
-function applyResult(stats, opponent, outcome) {
-  const change = points(stats, opponent, outcome);
+// R181 · { vsAI: true } (rival de IA da fila): METADE do PL; Força oculta e placar (partidas/V/D/E) intactos.
+function applyResult(stats, opponent, outcome, { vsAI = false } = {}) {
+  const raw = points(stats, opponent, outcome);
+  const change = vsAI ? Math.sign(raw) * Math.round(Math.abs(raw) / 2) : raw;
   const s = { ...stats };
   let pl = s.pl + change, league = s.league;
   let demoted = false;
@@ -76,9 +78,11 @@ function applyResult(stats, opponent, outcome) {
   if (!demoted && league === stats.league && league >= GM) applied = pl - s.pl;
   const nf = glicko(forcaOf(stats), forcaOf(opponent), outcome === 'win' ? 1 : outcome === 'loss' ? 0 : 0.5);
   s.league = league; s.pl = pl;
-  s.forca = Math.round(nf.f * 10) / 10; s.forca_rd = Math.round(nf.rd * 10) / 10;
-  s.matches += 1;
-  if (outcome === 'win') s.wins += 1; else if (outcome === 'loss') s.losses += 1; else s.draws += 1;
+  if (!vsAI) {
+    s.forca = Math.round(nf.f * 10) / 10; s.forca_rd = Math.round(nf.rd * 10) / 10;
+    s.matches += 1;
+    if (outcome === 'win') s.wins += 1; else if (outcome === 'loss') s.losses += 1; else s.draws += 1;
+  }
   s.highest_league = Math.max(s.highest_league, league);
   return { stats: s, change, applied, promoted: league > stats.league, demoted, challenger_candidate: league === GM && pl >= 100 };
 }

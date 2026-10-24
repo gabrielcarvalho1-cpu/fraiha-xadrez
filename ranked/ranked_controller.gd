@@ -202,7 +202,8 @@ func _on_message(msg: Dictionary):
             mode = String(msg.mode)
             mode_name = String(msg.get("mode_name", ""))
             human_color = String(msg.you)
-            opponent = msg.get("opponent", {}) if msg.get("opponent") is Dictionary else {}
+            opponent = tag_ai(msg.get("opponent", {}) if msg.get("opponent") is Dictionary else {})
+            vs_ai = bool(msg.get("vs_ai", false)) or bool(opponent.get("ai", false))
             status = "starting"
             san_log.clear()
             san_base = 0
@@ -286,8 +287,8 @@ func _log_san(p: Dictionary, last) -> void:
 func _apply_state(msg: Dictionary):
     pending = false
     status = String(msg.status)
-    white = msg.white
-    black = msg.black
+    white = tag_ai(msg.white)
+    black = tag_ai(msg.black)
     starts_in_ms = int(msg.get("starts_in_ms", 0))
     var offer := String(msg.get("draw_offer", ""))
     draw_min_ply = int(msg.get("draw_min_ply", draw_min_ply))
@@ -343,6 +344,15 @@ func _apply_state(msg: Dictionary):
         game.status = check + ("SUA VEZ" if rules.turn == human_color else "VEZ DO ADVERSÁRIO")
     game.queue_redraw()
     state_changed.emit()
+
+## R181 · RIVAL DE IA (fila vazia): o nome sempre leva o selo "· IA" (cartões, tela de encontrado, resultado)
+const AI_TAG := " · IA"
+var vs_ai := false
+static func tag_ai(d: Dictionary) -> Dictionary:
+    if not bool(d.get("ai", false)): return d
+    var n := String(d.get("nickname", ""))
+    if not n.ends_with(AI_TAG): d = d.duplicate(); d["nickname"] = n + AI_TAG
+    return d
 
 func player(color: String) -> Dictionary:
     return white if color == "w" else black

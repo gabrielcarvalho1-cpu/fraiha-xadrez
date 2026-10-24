@@ -72,9 +72,6 @@ const IN = {
 const secsTxt = m => { const v = Math.round(Number(m.secs)); return Number.isFinite(v) && v >= 0 && v < 36000 ? v + 's' : '?'; };
 const botTxt = m => cleanTxt(m.bot, 24).toUpperCase();
 const UI_EVENTS = {
-  queue_bot_offer: m => `Ofereceu bot na fila (${secsTxt(m)}${m.mode ? ' · ' + cleanTxt(m.mode, 30) : ''})`,
-  queue_bot_accept: m => 'Aceitou bot na fila' + (m.bot ? ` (${botTxt(m)})` : ''),
-  queue_bot_decline: m => 'Recusou e continuou esperando' + (m.secs !== undefined ? ` (${secsTxt(m)})` : ''),
   next_challenge: m => 'Clicou no próximo desafio após vitória' + (m.bot ? ` (${botTxt(m)})` : ''),
   first_bot_shown: () => 'Viu o convite do 1º desafio (BOT MADEIRA)',
   first_bot_accept: () => 'Aceitou o 1º desafio (BOT MADEIRA)',
@@ -82,12 +79,14 @@ const UI_EVENTS = {
   bot_result: m => ({ win: 'Venceu', loss: 'Perdeu para', draw: 'Empatou com' }[String(m.outcome)] || 'Terminou contra') + (m.bot ? ' ' + botTxt(m) : ' o bot'),
 };
 
+const aiFound = (k, m) => `Rival IA encontrado após ${Math.round((Number(m.ai_wait_ms) || 0) / 1000)}s (${k})` + (m.opponent && m.opponent.nickname ? ': ' + cleanTxt(m.opponent.nickname, 30) : '');
 // respostas do SERVIDOR que contam a história (mensagens que saem)
 const OUT = {
-  ranked_found: () => 'Partida encontrada (Ranqueado)',
-  casual_found: () => 'Partida encontrada (Casual)',
-  ranked_result: m => 'Fim de partida (Ranqueado): ' + (OUTCOME[m.outcome] || m.outcome || '?') + (m.pl_change ? ` (${m.pl_change > 0 ? '+' : ''}${m.pl_change} PL)` : ''),
-  casual_result: m => 'Fim de partida (Casual): ' + (OUTCOME[m.outcome] || m.outcome || '?'),
+  // R181 · rival de IA: "Rival IA encontrado após 25s: Sir Gambito"
+  ranked_found: m => m.vs_ai ? aiFound('Ranqueado', m) : 'Partida encontrada (Ranqueado)',
+  casual_found: m => m.vs_ai ? aiFound('Casual', m) : 'Partida encontrada (Casual)',
+  ranked_result: m => 'Fim de partida (Ranqueado' + (m.vs_ai ? ', rival IA' : '') + '): ' + (OUTCOME[m.outcome] || m.outcome || '?') + (m.pl_change ? ` (${m.pl_change > 0 ? '+' : ''}${m.pl_change} PL)` : ''),
+  casual_result: m => 'Fim de partida (Casual' + (m.vs_ai ? ', rival IA' : '') + '): ' + (OUTCOME[m.outcome] || m.outcome || '?'),
   payment_update: m => m.charge && m.charge.status === 'approved' ? 'PAGAMENTO APROVADO' + (m.charge.product_id ? ' (' + cleanTxt(m.charge.product_id, 30) + ')' : '') : '',
   acct_suspended: () => 'Conta suspensa: entrada recusada',
 };

@@ -98,6 +98,7 @@ class ChatHub {
       if (match.reports.has(uid)) return this.send(ws, { type: 'chat_report_ok', match_id: match.id, duplicate: true });
       match.reports.add(uid);
       const other = color === 'w' ? 'b' : 'w';
+      if (String(match.players[other].userId || '').startsWith('ai:')) return this.send(ws, { type: 'chat_report_ok', match_id: match.id });   // R181 · rival de IA: não há conta para denunciar
       const msgs = (match.chat || []).filter(e => e.from_color === other).slice(-20).map(e => e.text);
       // R104 · vai para a fila de denúncias do Admin (tabela reports); vale para o chat E a voz da partida
       const row = { reporter: uid, reported: match.players[other].userId, kind: 'match', ref: match.id,

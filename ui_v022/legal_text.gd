@@ -23,7 +23,7 @@ Você pode jogar como convidado ou criar uma conta (e-mail e senha ou Google). V
 É proibido: ofender, ameaçar, assediar ou discriminar outros jogadores; enviar spam, golpes ou links maliciosos; usar programas, engines ou ajuda externa durante partidas contra pessoas; abandonar partidas de propósito para prejudicar outros; explorar falhas do jogo. Mensagens podem ser denunciadas e analisadas. Quem descumprir estas regras pode ter mensagens removidas, a conta suspensa ou excluída.
 
 4. RANKING, LIGAS E PROGRESSO
-Pontos de liga (PL), vitórias, ligas e recompensas existem só dentro do jogo, não têm valor em dinheiro e não podem ser vendidos ou transferidos. Podemos ajustar regras de pontuação, corrigir resultados afetados por falhas ou trapaça e reiniciar temporadas.
+Pontos de liga (PL), vitórias, ligas e recompensas existem só dentro do jogo, não têm valor em dinheiro e não podem ser vendidos ou transferidos. Podemos ajustar regras de pontuação, corrigir resultados afetados por falhas ou trapaça e reiniciar temporadas. Quando a fila está vazia, você pode enfrentar oponentes de IA: eles aparecem sempre com o selo IA, valem metade dos PL e não entram no placar nem no ranking.
 
 5. COMPRAS (FRAIHA PREMIUM)
 • O que se compra: o Pacote Fundador e o Fundador Lendário (pagamento único, vendidos por tempo limitado; quando a oferta é encerrada, deixam de ser vendidos) e o Club FRAIHA por 30 dias ou por 1 ano. Os benefícios de cada um estão descritos na tela de compra. Nada do que é vendido altera PL, pareamento, tempo, regras ou o resultado das partidas.

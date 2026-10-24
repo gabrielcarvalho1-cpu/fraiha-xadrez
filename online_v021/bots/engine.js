@@ -55,9 +55,14 @@ class UciEngine {
     });
   }
   // avaliação da posição para QUEM JOGA: { cp, mate, best }
-  analyse(fen, { depth = 10, movetime = 0, moves = [] } = {}) {
+  // R181 · options: opções UCI aplicadas na MESMA vez da fila (várias partidas dividem um processo só)
+  analyse(fen, { depth = 10, movetime = 0, moves = [], options = null } = {}) {
     return this.run(async () => {
       let last = null;
+      if (options) {
+        for (const [k, v] of Object.entries(options)) this.write(`setoption name ${k} value ${v}`);
+        this.write('isready'); await this.waitFor(l => l === 'readyok');
+      }
       this.write('position fen ' + fen + (moves.length ? ' moves ' + moves.join(' ') : ''));
       this.write(movetime ? `go movetime ${movetime}` : `go depth ${depth}`);
       const best = await this.waitFor(l => l.startsWith('bestmove'), l => { if (l.startsWith('info') && / score /.test(l) && !/ multipv [2-9]/.test(l)) last = l; });

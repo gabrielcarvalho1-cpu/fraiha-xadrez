@@ -9,6 +9,7 @@ const { RankedMatch } = require('./match');
 const { persistRanked } = require('./persist');
 const { ChallengerLadder } = require('./challenger');
 const { RankedTestBot } = require('./test_bot');
+const { QueueAI, isAiId } = require('./queue_ai');
 const RESULT_KEEP_MS = Number(process.env.FRAIHA_RESULT_KEEP_MS || 10 * 60 * 1000);
 
 class Ranked {
@@ -22,6 +23,7 @@ class Ranked {
     this.timer = setInterval(() => this.tick(), cfg.tickMs); this.timer.unref && this.timer.unref();
     this.challenger = this.rated ? new ChallengerLadder(this) : null;   // R143 · vagas do Challenger
     this.testBot = this.rated ? new RankedTestBot(this) : null;   // R174 · bot de teste do dono (desligado sem as variáveis)
+    this.queueAI = new QueueAI(this);   // R181 · rival de IA quando a fila fica vazia (FRAIHA_QUEUE_AI=off desliga)
   }
   // R143 · PL/liga + Força oculta (lidos do servidor, nunca do cliente)
   statsFull(uid) { return this.backend.store.getRankedStats(uid, { forca: true }); }
@@ -34,7 +36,7 @@ class Ranked {
   persistPending(uid) { const m = this.matches.get(this.byUser.get(uid)); return !!(this.rated && m && m.status === 'finished' && m.persisting && m.saved === undefined); }
   matchOf(uid) { return this.matches.get(this.byUser.get(uid)) || null; }
   busyElsewhere(uid) { return this.backend && this.backend.busyElsewhere ? this.backend.busyElsewhere(uid, this) : false; }
-  presence(uid) { if (this.backend && this.backend.presenceChanged) this.backend.presenceChanged(uid); }
+  presence(uid) { if (!isAiId(uid) && this.backend && this.backend.presenceChanged) this.backend.presenceChanged(uid); }
   invalidateQueue(uid) { this.pendingQueues.delete(uid); }
   sessionRevision(ws) {
     if (this.backend && typeof this.backend.session === 'function' && typeof this.backend.current === 'function')
@@ -168,6 +170,7 @@ class Ranked {
     const old = this.matches.get(String(m.match_id || '')), c = old ? old.colorOf(uid) : null;
     const gone = msg => this.send(ws, { type: this.p + 'rematch_status', match_id: String(m.match_id || ''), mine: false, theirs: false, closed: true, message: msg });
     if (this.rated) return gone('Revanche só existe na partida casual.');   // R158 · nunca no ranked
+    if (old && old.aiColor) return gone('O rival de IA não joga revanche. Entre na fila de novo!');   // R181
     if (!old || !c || old.status !== 'finished' || old.rematchId) return gone('A revanche não está mais disponível.');
     const o = c === 'w' ? 'b' : 'w', oppUid = old.players[o].userId;
     if (cancel) {
@@ -220,6 +223,7 @@ class Ranked {
     this.pushState(match, now);
     // R176.9 · bot de teste responde logo depois do lance (antes esperava o próximo tick de 200 ms)
     if (this.testBot && match.testBot && match.status === 'playing') this.testBot.maybeMove(match);
+    if (match.aiColor && match.status === 'playing') this.queueAI.maybeMove(match);   // R181 · rival de IA
     if (match.status === 'finished' && !match.persisting) this.persist(match);
   }
   async persist(match) {
@@ -227,7 +231,8 @@ class Ranked {
     { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('finished', this.kind, match.mode, match.result && match.result.reason); }
     let saved = false;
     if (this.rated && match.result && match.result.early) console.log('ranked precoce', match.id, match.result.reason, 'ply', (match.pos && match.pos.ply) || 0);
-    if (this.rated) {
+    if (this.rated && match.aiColor) saved = await this.persistVsAI(match);   // R181 · só o lado humano, sem RPC/matches
+    else if (this.rated) {
       // H03: novas tentativas seguras; nunca aplica PL duas vezes (ver ranked/persist.js)
       const r = await persistRanked(this.backend.store, match.record());
       saved = r.saved;
@@ -250,18 +255,34 @@ class Ranked {
     const CR = this.backend && this.backend.crowns;
     if (CR && match.result && ((match.pos && match.pos.ply) || 0) >= 10) {
       const w = match.result.winner;
-      for (const c of ['w', 'b']) CR.onGame(String(match.players[c].userId || ''), { kind: this.kind, ref: match.id, result: w === 'draw' ? 'draw' : w === c ? 'win' : 'loss' });
+      for (const c of ['w', 'b']) if (!isAiId(match.players[c].userId)) CR.onGame(String(match.players[c].userId || ''), { kind: this.kind, ref: match.id, result: w === 'draw' ? 'draw' : w === c ? 'win' : 'loss' });
     }
     for (const c of ['w', 'b']) {
       const uid = match.players[c].userId, ws = this.sockets.get(uid);
       // R171 · SEC-004: o histórico de análise só aceita partida online que o servidor viu esta conta terminar
+      if (isAiId(uid)) { if (this.byUser.get(uid) === match.id) this.byUser.delete(uid); continue; }   // R181 · IA: sem conta
       if (match.result && this.backend && this.backend.noteFinishedMatch) this.backend.noteFinishedMatch(uid, match.id, this.kind, match.startsAt);
       if (ws && match.players[c].connected) this.send(ws, match.resultFor(c, saved));
       if (this.byUser.get(uid) === match.id) this.byUser.delete(uid);
       this.presence(uid);
     }
+    this.queueAI.onFinished(match);
     // R53 · a partida encerrada fica guardada um tempo: quem caiu bem na hora do fim recebe o resultado ao voltar
     setTimeout(() => this.matches.delete(match.id), RESULT_KEEP_MS).unref();
+  }
+  // R181 · Ranked contra o rival de IA: grava só liga/PL do humano (troca condicional: só se ainda estiver como lido)
+  async persistVsAI(match) {
+    const h = match.aiColor === 'w' ? 'b' : 'w', uid = match.players[h].userId, r = match.result && match.result[h];
+    if (!r) return false;
+    const before = match.players[h].stats, after = r.stats;
+    if (before.league === after.league && before.pl === after.pl) return true;   // nada a mudar (precoce / 0 PL)
+    const st = this.backend && this.backend.store;
+    if (!st || !st.recordAiRankedResult) return false;
+    for (let i = 0; i < 3; i++) {
+      try { return !!(await st.recordAiRankedResult(uid, match.mode, before, after)); }
+      catch (e) { console.error('[rival IA] gravar PL', match.id, e && e.message); await new Promise(res => { const t = setTimeout(res, 1000 * (i + 1)); t.unref && t.unref(); }); }
+    }
+    return false;
   }
   // R37 · placar do Casual por conta (cartão de perfil). Convidados não têm placar. Falha não atrapalha a partida.
   recordCasual(match) {
@@ -277,24 +298,25 @@ class Ranked {
     }
   }
   // Cria a partida entre duas entradas {userId,nickname,avatar,stats}. Usado pela fila e pelos convites.
-  startMatch(mode, a, b, now = this.now(), aIsWhite = false, { botUid = '' } = {}) {
+  startMatch(mode, a, b, now = this.now(), aIsWhite = false, { botUid = '', ai = false, aiWaitMs = 0 } = {}) {
     if (!this.canStartMatch(a, b, botUid)) {
       const error = new Error('Jogador indisponível para iniciar partida.'); error.code = 'player_unavailable'; throw error;
     }
     // Servidor sorteia as cores. FRAIHA_TEST_FIXED_COLORS=1 (só testes): quem entrou primeiro joga de Brancas.
     const flip = aIsWhite ? true : process.env.FRAIHA_TEST_FIXED_COLORS === '1' ? (a.since || 0) <= (b.since || 0) : Math.random() < 0.5;
     const [w, bl] = flip ? [a, b] : [b, a];
-    const seat = e => ({ userId: e.userId, nickname: e.nickname, avatar: e.avatar, ...publicLook(e), stats: e.stats, connected: true, leftAt: 0 });
+    const seat = e => ({ userId: e.userId, nickname: e.nickname, avatar: e.avatar, ...publicLook(e), stats: e.stats, connected: true, leftAt: 0, ...(e.ai ? { ai: true } : {}) });
     const match = new RankedMatch({ mode, white: seat(w), black: seat(bl), now, cfg: this.cfg, rated: this.rated, prefix: this.kind });
     this.matches.set(match.id, match); this.byUser.set(w.userId, match.id); this.byUser.set(bl.userId, match.id);
     { const am = this.backend && this.backend.adminMetrics; if (am) am.onMatch('started', this.kind, mode); }
     this.invalidateQueue(w.userId); this.invalidateQueue(bl.userId);
-    if (botUid) match.testBot = match.colorOf(botUid);   // R174 · o servidor joga por esta cor
+    if (botUid && ai) match.aiColor = match.colorOf(botUid);   // R181 · rival de IA da fila
+    else if (botUid) match.testBot = match.colorOf(botUid);   // R174 · o servidor joga por esta cor
     for (const c of ['w', 'b']) {
       const me = match.players[c], opp = match.publicPlayer(c === 'w' ? 'b' : 'w');
       if (botUid && me.userId === botUid) { this.presence(me.userId); continue; }   // bot: sempre "conectado"
       const ws = this.sockets.get(me.userId);
-      if (ws) this.send(ws, { type: this.p + 'found', match_id: match.id, mode, mode_name: ALL_MODES[mode].name, you: c, opponent: opp });
+      if (ws) this.send(ws, { type: this.p + 'found', match_id: match.id, mode, mode_name: ALL_MODES[mode].name, you: c, opponent: opp, ...(ai ? { vs_ai: true, ai_wait_ms: Math.round(aiWaitMs) } : {}) });
       if (!ws || ws.readyState !== 1) { me.connected = false; me.leftAt = now; }
       this.presence(me.userId);
     }
@@ -328,6 +350,7 @@ class Ranked {
     for (const q of this.mm.queues.values()) for (const e of [...q]) if (!this.queueEligible(e.userId)) {
       this.mm.cancel(e.userId); this.invalidateQueue(e.userId);
     }
+    this.queueAI.tick(now, open);   // R181 · depois do pareamento entre pessoas (gente de verdade tem prioridade)
     for (const match of this.matches.values()) if (match.status !== 'finished' && match.tick(now)) this.after(match, now);
   }
   onAuthenticated(ws) {
@@ -356,6 +379,6 @@ class Ranked {
       this.pushState(match, this.now());
     }
   }
-  stop() { clearInterval(this.timer); this.pendingQueues.clear(); if (this.challenger) this.challenger.stop(); }
+  stop() { clearInterval(this.timer); this.pendingQueues.clear(); if (this.challenger) this.challenger.stop(); this.queueAI.stop(); }
 }
 module.exports = { Ranked, MatchService: Ranked };

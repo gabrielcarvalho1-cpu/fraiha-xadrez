@@ -107,6 +107,7 @@ class RankedMatch {
     if (this.status === 'finished') return;
     this.clock.stop(now); this.status = 'finished'; this.revision++; this.drawOffer = null;
     if (!this.rated) { this.result = { winner, reason, finishedAt: now }; return; }
+    if (this.aiColor) return this.finishVsAI(winner, reason, now);
     if (SHORT_REASONS.includes(reason) && ((this.pos && this.pos.ply) || 0) < MIN_RATED_PLY) {
       this.result = { winner, reason, finishedAt: now, early: true, ...earlyResult(this.players, winner) };
       return;
@@ -115,6 +116,16 @@ class RankedMatch {
     const w = applyResult(this.players.w.stats, this.players.b.stats, outcome('w'));
     const b = applyResult(this.players.b.stats, this.players.w.stats, outcome('b'));
     this.result = { winner, reason, finishedAt: now, w, b };
+  }
+  // R181 · contra o RIVAL DE IA: só o lado humano conta; metade do PL; precoce = 0 PL; nada de Força/placar.
+  finishVsAI(winner, reason, now) {
+    const h = this.aiColor === 'w' ? 'b' : 'w', ai = this.aiColor;
+    const outcome = c => (winner === 'draw' ? 'draw' : winner === c ? 'win' : 'loss');
+    const early = SHORT_REASONS.includes(reason) && ((this.pos && this.pos.ply) || 0) < MIN_RATED_PLY;
+    const S = this.players[h].stats;
+    const still = st => ({ stats: { ...st }, change: 0, applied: 0, promoted: false, demoted: false, challenger_candidate: false });
+    const hr = early ? still(S) : applyResult(S, this.players[ai].stats, outcome(h), { vsAI: true });
+    this.result = { winner, reason, finishedAt: now, vsAI: true, early, [h]: hr, [ai]: still(this.players[ai].stats) };
   }
   record() {
     const r = this.result, W = this.players.w, B = this.players.b;
@@ -133,6 +144,7 @@ class RankedMatch {
   }
   publicPlayer(c) {
     const p = this.players[c], out = { user_id: /^[0-9a-f-]{36}$/i.test(String(p.userId || '')) ? p.userId : '', nickname: p.nickname, avatar_id: p.avatar, avatar_url: p.avatar_url || null, badge: p.badge || '', title: p.title || '', frame: p.frame || 'liga', founder: !!p.founder, club: !!p.club, connected: p.connected };
+    if (p.ai) out.ai = true;   // R181 · rival de IA: o cliente mostra o selo "IA"
     if (this.rated) { out.league = p.stats.league; out.pl = p.stats.pl; }
     return out;
   }
@@ -150,12 +162,13 @@ class RankedMatch {
     if (!this.rated) {
       return { type: this.prefix + '_result', match_id: this.id, mode: this.mode, mode_name: ALL_MODES[this.mode].name, you: c,
         outcome: r.winner === 'draw' ? 'draw' : r.winner === c ? 'win' : 'loss', reason: r.reason, reason_text: REASONS[r.reason] || r.reason,
-        rated: false, pl_change: 0 };
+        rated: false, pl_change: 0, vs_ai: !!this.aiColor };
     }
     const mine = r[c], before = this.players[c].stats;
     return { type: 'ranked_result', match_id: this.id, mode: this.mode, mode_name: ALL_MODES[this.mode].name, you: c,
       outcome: r.winner === 'draw' ? 'draw' : r.winner === c ? 'win' : 'loss', reason: r.reason, reason_text: REASONS[r.reason] || r.reason,
-      early: !!r.early, early_text: r.early ? 'Partida encerrada antes de 5 lances de cada lado: PL reduzido (o vencedor só recebe o que o outro perdeu), sem Coroas e fora do placar.' : undefined,
+      vs_ai: !!r.vsAI,
+      early: !!r.early, early_text: r.vsAI && r.early ? 'Partida contra rival de IA encerrada antes de 5 lances de cada lado: sem PL.' : r.early ? 'Partida encerrada antes de 5 lances de cada lado: PL reduzido (o vencedor só recebe o que o outro perdeu), sem Coroas e fora do placar.' : undefined,
       pl_change: mine.applied, league_before: before.league, pl_before: before.pl, league_after: mine.stats.league, pl_after: mine.stats.pl,
       promoted: mine.promoted, demoted: !!mine.demoted, stats: publicStats(mine.stats), saved,
       challenger_candidate: !!mine.challenger_candidate, challenger_slots: this.challengerSlots || 0 };

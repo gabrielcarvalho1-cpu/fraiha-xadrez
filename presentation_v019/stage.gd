@@ -547,7 +547,6 @@ func _setup_account():
     ranked_ui.setup(account, ranked)
     ranked_ui.back_requested.connect(open_home)
     ranked_ui.play_requested.connect(_back_to_ranked_lobby)
-    ranked_ui.bot_requested.connect(_start_bot_from_queue)   # R181 · fila vazia → bot da liga
     ranked.found.connect(_ranked_found)
     ranked.finished.connect(_on_online_result)   # R42.1 · fim da partida = resultado OFICIAL do servidor
     casual = preload("res://ranked/ranked_controller.gd").new()
@@ -570,7 +569,6 @@ func _setup_account():
         ranked_ui.close_panel()
         _open_casual())
     casual_ui.play_requested.connect(_back_to_casual_lobby)
-    casual_ui.bot_requested.connect(_start_bot_from_queue)   # R181
     casual.found.connect(_casual_found)
     casual.finished.connect(_on_online_result)
     match_chat = preload("res://social/match_chat.gd").new()
@@ -1069,12 +1067,6 @@ func _first_challenge():
             Ev.send(account, "first_bot_accept")
             _start_bot(FIRST_RIVAL, "w"),
         func(): Ev.send(account, "first_bot_skip"))
-
-## R181 · aceitou o bot oferecido na fila (Ranked/Casual vazios): sai do lobby e abre a partida do Desafio das Ligas
-func _start_bot_from_queue(bot_id: String):
-    if mode == "ranked_lobby": _back_to_ranked_lobby()
-    elif mode == "casual_lobby": _back_to_casual_lobby()
-    _start_bot(bot_id, "w" if randi() % 2 == 0 else "b")
 
 var last_bot_side := "w"
 func _start_bot(difficulty: String, side: String):

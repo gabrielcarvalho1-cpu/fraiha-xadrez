@@ -5,15 +5,6 @@ extends CanvasLayer
 signal invite_requested   # R35.1: CONVIDAR AMIGO (só no JOGAR ONLINE casual; nunca no Ranqueado)
 signal back_requested
 signal play_requested
-signal bot_requested(bot_id: String)   # R181 · aceitou jogar contra o bot enquanto a fila não acha adversário
-## R181 · FILA VAZIA: depois de BOT_OFFER_SECS sem adversário, oferece jogar contra o BOT da liga do jogador
-## (partida do Desafio das Ligas, NÃO vale PL). Recusou: oferece de novo a cada BOT_REOFFER_SECS.
-const BOT_OFFER_SECS := 25.0
-const BOT_REOFFER_SECS := 60.0
-const Events := preload("res://telemetry/events.gd")
-const BotLadder := preload("res://bot/bot_ladder.gd")
-var _offer_at := BOT_OFFER_SECS
-var _offer_open := false
 const Mobile = preload("res://ui_v022/mobile_layout.gd")
 const TouchScroll = preload("res://ui_v022/touch_scroll.gd")
 const ClockView = preload("res://ranked/clock_view.gd")
@@ -294,7 +285,7 @@ func strip_info(color: String) -> Dictionary:
     var me: bool = color == controller.human_color
     var mode: String = String(controller.mode)
     var d := {"user_id": String(info.get("user_id", "")) if not me else (String(account.user_id) if account != null and account.has_profile() else ""),
-        "name": "Você" if me else String(info.get("nickname", "Adversário")), "bot": false,
+        "name": "Você" if me else String(info.get("nickname", "Adversário")), "bot": bool(info.get("ai", false)) and not me,
         "mode": mode if rated() else "casual", "mode_label": ("RANQUEADO · " if rated() else "CASUAL · ") + String(controller.mode_name).to_upper(),
         "subtitle": ("BRANCAS" if color == "w" else "PRETAS")}
     if hub != null and hub.has_method("avatar_texture"): d.avatar = hub.avatar_texture() if me else (hub.avatar_texture_for(info) if hub.has_method("avatar_texture_for") else hub.avatar_texture(String(info.get("avatar_id", ""))))
@@ -379,6 +370,12 @@ func _art_label(font: Font, r: Rect2, px: int, color: Color) -> Label:
     l.add_theme_constant_override("outline_size", 6)
     search_art.add_child(l)
     return l
+
+## R181 · FILA HONESTA: depois de 8 s a linha do ritmo alterna (a cada 4 s) com uma dica amigável.
+## Aos ~25 s sem ninguém, o servidor traz um RIVAL DE IA da liga (com selo IA no cartão).
+static func search_hint(base: String, secs: int) -> String:
+    if secs < 8 or (secs / 4) % 2 == 0: return base
+    return "Procurando alguém do seu nível…" if secs < 18 else "Fila calma? Já já chega um rival de IA"
 
 ## texto do ritmo: diminui a fonte até caber entre as molduras (nada é cortado)
 func _set_search_mode(t: String):
@@ -472,10 +469,6 @@ static func league_line(league: int, pl: int) -> String:
     return "%s — %d/100 PL" % [LEAGUES[clampi(league, 0, 10)].to_upper(), pl]
 
 func _show(which: String):
-    if which != "searching" and _offer_open:   # achou adversário / cancelou com o aviso aberto: some sem contar como recusa
-        _offer_open = false
-        if hub != null and is_instance_valid(hub.get("notice_modal")) and hub.notice_modal.visible: hub.notice_modal.close()
-    if which == "searching": _offer_at = BOT_OFFER_SECS
     screen = which
     _clear()
     notice = null
@@ -932,9 +925,6 @@ func _process(_delta):
     if art_panel.visible:
         dim.size = get_viewport().get_visible_rect().size
         art_panel.layout(get_viewport().get_visible_rect().size)
-    if screen == "searching" and not _offer_open and controller.searching and not controller.requeue_pending:
-        var secs := float(Time.get_ticks_msec() - search_started) / 1000.0
-        if secs >= _offer_at: _offer_bot(secs)
     if screen == "searching" and is_instance_valid(search_label):
         var s = (Time.get_ticks_msec() - search_started) / 1000
         search_label.text = "%d:%02d" % [s / 60, s % 60]
@@ -943,7 +933,7 @@ func _process(_delta):
         if is_instance_valid(search_mode_label) and search_art.visible:
             var mi = _mode_info(controller_mode_or_last())
             var base: String = "%s · %d min" % [mi[1], mi[2]] if rated() else "CASUAL · %s · %d min" % [mi[1], mi[2]]
-            var want: String = "RECONECTANDO…" if controller.requeue_pending else base
+            var want: String = "RECONECTANDO…" if controller.requeue_pending else search_hint(base, int(s))
             if search_mode_label.text != want: _set_search_mode(want)
     if screen == "found" and is_instance_valid(found_label):
         var left = maxi(0, controller.starts_in_ms - (Time.get_ticks_msec() - controller.state_at))
@@ -1240,51 +1230,3 @@ func _show_search_bg(on: bool):
     if bg == null: return
     if on and bg.texture == null: bg.texture = load("res://ui_kit/pages/buscando_bg.png")
     elif not on: bg.texture = null
-
-
-# ---------- R181 · bot enquanto a fila não acha adversário ----------
-func _search_mode() -> String:
-    return controller.queue_mode if not String(controller.queue_mode).is_empty() else controller_mode_or_last()
-
-## Bot da liga do jogador neste ritmo (Madeira → BOT MADEIRA…). Se esse bot ainda está bloqueado no Desafio das
-## Ligas, o próximo que ele pode enfrentar.
-func offer_bot_id() -> String:
-    var ids := BotLadder.ids()
-    var lg := 0
-    var mode := _search_mode()
-    if rated() and account != null and account.ranked is Dictionary and account.ranked.get(mode) is Dictionary:
-        lg = int(account.ranked[mode].get("league", 0))
-    var want := String(ids[clampi(lg, 0, ids.size() - 1)])
-    var bp = hub.get("bot_progress") if hub != null else null
-    if bp != null and not bp.is_unlocked(want):
-        var nb := String(bp.next_bot())
-        if not nb.is_empty(): want = nb
-    return want
-
-func _offer_bot(secs: float) -> void:
-    if hub == null or not hub.has_method("ask"): return
-    _offer_open = true
-    var bid := offer_bot_id()
-    var bname := String(BotLadder.bot(bid).get("name", "BOT"))
-    var mi = _mode_info(_search_mode())
-    var mode_txt := ("Ranqueada" if rated() else "Casual") + " · %s %d min" % [mi[1], mi[2]]
-    Events.send(account, "queue_bot_offer", {"secs": int(secs), "mode": mode_txt})
-    hub.ask("BUSCANDO ADVERSÁRIO", "Ainda não achamos um adversário. Quer jogar contra o %s enquanto isso?\n\nÉ um bot (o computador), não um jogador. A partida não vale PL: conta no Desafio das Ligas." % bname,
-        "JOGAR CONTRA O BOT", "CONTINUAR ESPERANDO", func(): _accept_bot(bid, bname), func(): _decline_bot())
-    var nm = hub.get("notice_modal")
-    if nm != null and nm.has_signal("closed"):   # fechou pelo VOLTAR da moldura: também é "continuar esperando"
-        nm.closed.connect(func(): (func(): if _offer_open: _decline_bot()).call_deferred(), CONNECT_ONE_SHOT)
-
-func _decline_bot() -> void:
-    if not _offer_open: return
-    _offer_open = false
-    var secs := float(Time.get_ticks_msec() - search_started) / 1000.0
-    _offer_at = secs + BOT_REOFFER_SECS
-    Events.send(account, "queue_bot_decline", {"secs": int(secs)})
-
-func _accept_bot(bid: String, bname: String) -> void:
-    _offer_open = false
-    Events.send(account, "queue_bot_accept", {"bot": bname})
-    controller.cancel_queue()
-    close_panel()
-    bot_requested.emit(bid)

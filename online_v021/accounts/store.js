@@ -166,6 +166,15 @@ class MemoryStore {
     }
     return { rows, active };
   }
+  // R181 · Ranked contra o rival de IA: só liga/PL (metade), Força e placar intactos; condicional como setRankedPlace
+  async recordAiRankedResult(userId, mode, from, to) {
+    const all = this.stats.get(userId) || {}; this.stats.set(userId, all);
+    if (!all[mode]) all[mode] = { league: 0, pl: 0, matches: 0, wins: 0, losses: 0, draws: 0, highest_league: 0 };
+    const s = all[mode];
+    if (s.league !== from.league || s.pl !== from.pl) return false;
+    s.league = to.league; s.pl = to.pl; s.highest_league = Math.max(s.highest_league || 0, to.league); s.updated_at = new Date().toISOString();
+    return true;
+  }
   async setRankedPlace(userId, mode, from, to) {
     const s = (this.stats.get(userId) || {})[mode];
     if (!s || s.league !== from.league || s.pl !== from.pl) return false;
@@ -840,6 +849,15 @@ class SupabaseStore {
     const q = '/ranked_stats?user_id=eq.' + encodeURIComponent(userId) + '&mode=eq.' + encodeURIComponent(mode) + '&league=eq.' + (from.league | 0) + '&pl=eq.' + (from.pl | 0);
     const body = { league: to.league, pl: to.pl };
     if (to.league === 10) body.highest_league = 10;
+    const rows = await this.req(q, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
+    return Array.isArray(rows) && rows.length > 0;
+  }
+  // R181 · Ranked contra o rival de IA: PATCH só de liga/PL (+ maior liga), e só se liga/PL ainda estiverem como lidos.
+  // A linha de ranked_stats existe desde a criação do perfil (gatilho da 0001). Sem migration, sem linha em matches.
+  async recordAiRankedResult(userId, mode, from, to) {
+    let q = '/ranked_stats?user_id=eq.' + encodeURIComponent(userId) + '&mode=eq.' + encodeURIComponent(mode) + '&league=eq.' + (from.league | 0) + '&pl=eq.' + (from.pl | 0);
+    const body = { league: to.league | 0, pl: to.pl | 0, updated_at: new Date().toISOString() };
+    if ((to.league | 0) > (from.league | 0)) { body.highest_league = Math.max(from.highest_league | 0, to.league | 0); q += '&highest_league=lte.' + body.highest_league; }
     const rows = await this.req(q, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
     return Array.isArray(rows) && rows.length > 0;
   }

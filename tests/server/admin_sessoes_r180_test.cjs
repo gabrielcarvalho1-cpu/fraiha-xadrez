@@ -86,21 +86,24 @@ test('convidado também tem sessão; flood de ui_screen é cortado', async t => 
   assert.ok(s.events.filter(e => e.k === 'screen').length <= 120);
 });
 
-test('R181: eventos de produto (bot na fila, próximo desafio) entram na linha do tempo; desconhecido é ignorado', async t => {
+test('R181: eventos de produto (primeiro rival, próximo desafio, rival IA) entram na linha do tempo; desconhecido é ignorado', async t => {
   const h = await fixture(t);
   const s = h.sock();
   await h.backend.handle(s, { type: 'acct_auth', access_token: 'tok-' + A }); await flush();
   await h.backend.handle(s, { type: 'ranked_queue', mode: 'ranked_10min' }); await flush();
   h.tick(25e3);
-  await h.backend.handle(s, { type: 'ui_event', name: 'queue_bot_offer', secs: 25, mode: 'Ranqueada · Normal 10 min' });
-  await h.backend.handle(s, { type: 'ui_event', name: 'queue_bot_decline', secs: 31 });
-  await h.backend.handle(s, { type: 'ui_event', name: 'queue_bot_accept', bot: 'BOT MADEIRA' });
+  await h.backend.handle(s, { type: 'ui_event', name: 'first_bot_shown' });
+  await h.backend.handle(s, { type: 'ui_event', name: 'first_bot_accept' });
   await h.backend.handle(s, { type: 'ui_event', name: 'bot_result', outcome: 'win', bot: 'BOT MADEIRA' });
   await h.backend.handle(s, { type: 'ui_event', name: 'next_challenge', bot: 'BOT FERRO' });
   await h.backend.handle(s, { type: 'ui_event', name: 'hack<script>', secs: 1 });
   const sid = h.backend.track.live.get(A).sid;
   const labels = (await h.get('/admin/api/sessions/' + sid)).body.events.map(e => e.l);
-  for (const want of ['Ofereceu bot na fila (25s · Ranqueada · Normal 10 min)', 'Recusou e continuou esperando (31s)', 'Aceitou bot na fila (BOT MADEIRA)',
+  for (const want of ['Aceitou o 1º desafio (BOT MADEIRA)',
     'Venceu BOT MADEIRA', 'Clicou no próximo desafio após vitória (BOT FERRO)']) assert.ok(labels.includes(want), want + ' em ' + JSON.stringify(labels));
   assert.ok(!labels.some(l => l.includes('hack')));
+  const { OUT } = require('../../online_v021/admin/sessions');
+  assert.equal(OUT.ranked_found({ vs_ai: true, ai_wait_ms: 25300, opponent: { nickname: 'Sir Gambito' } }), 'Rival IA encontrado após 25s (Ranqueado): Sir Gambito');
+  assert.equal(OUT.casual_found({}), 'Partida encontrada (Casual)');
+  assert.ok(OUT.ranked_result({ outcome: 'win', vs_ai: true, pl_change: 9 }).includes('rival IA'));
 });
