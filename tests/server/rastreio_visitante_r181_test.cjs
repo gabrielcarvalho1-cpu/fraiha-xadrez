@@ -225,3 +225,13 @@ test('R182 · app Android: sem Origin, com x-fraiha-app=android → aceito, apar
   assert.ok(labels.includes('screen:Entrada / Login'), JSON.stringify(labels));
   assert.ok(labels.includes('click:Jogar como convidado — Entrada / Login'), JSON.stringify(labels));
 });
+
+test('R184 · executável do PC: x-fraiha-app=windows → aparelho "APP PC (Windows)"', async t => {
+  const h = await fixture(t);
+  const ok = await h.post({ sid: hex('45'), vid: hex('46'), st: 100, d: { w: 1920, h: 1080, lang: 'pt', app: 'windows', os: '10' },
+    e: [{ k: 'load', n: 'start', t: 0 }, { k: 'screen', n: 'Entrada / Login', t: 50 }] }, { 'user-agent': 'GodotEngine/4.5.1.stable (Windows)', 'x-fraiha-app': 'windows' });
+  assert.equal(ok.status, 204);
+  await flush();
+  const it = (await h.get('/admin/api/sessions')).body.items.find(i => i.kind === 'visitor');
+  assert.equal(it.device.device, 'PC'); assert.equal(it.device.browser, 'APP PC (Windows)'); assert.equal(it.device.os, 'Windows');
+});

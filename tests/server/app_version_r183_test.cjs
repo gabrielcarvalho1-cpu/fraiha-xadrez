@@ -21,3 +21,10 @@ test('rota', () => {
   assert.ok(!owns({ method: 'POST', url: '/app-version' }));
   assert.ok(!owns({ method: 'GET', url: '/app-versionx' }));
 });
+test('R184 · executável do PC (windows) com padrões próprios e variáveis próprias', () => {
+  const { WIN_DEFAULTS } = require('../../online_v021/accounts/app_version');
+  assert.deepEqual(info({}).windows, { latest: WIN_DEFAULTS.latest, min: WIN_DEFAULTS.min, name: WIN_DEFAULTS.name, url: WIN_DEFAULTS.url });
+  assert.ok(WIN_DEFAULTS.url.endsWith('.exe'));
+  assert.equal(info({ FRAIHA_WINDOWS_MIN_CODE: '4' }).windows.min, 4);
+  assert.equal(info({ FRAIHA_WINDOWS_MIN_CODE: '4' }).android.min, DEFAULTS.min);
+});

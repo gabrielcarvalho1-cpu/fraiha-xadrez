@@ -35,7 +35,8 @@ func _initialize():
 		if sec.ends_with(".options") or not presets.has_section_key(sec, "name"): continue
 		var nm := String(presets.get_value(sec, "name"))
 		var feats := String(presets.get_value(sec, "custom_features", ""))
-		if nm in ["Web Producao", "Windows Desktop"]: check(feats.contains("production"), "preset oficial '%s' marcado como produção" % nm)
+		if nm == "Web Producao": check(feats.contains("production"), "preset oficial '%s' marcado como produção" % nm)
+		elif nm == "Windows Desktop": check(feats.contains("staging") and not feats.contains("production"), "R184 · executável do PC usa o MESMO servidor do site (staging)")
 		else: check(not feats.contains("production"), "preset '%s' NÃO é produção" % nm)
 	check(Endpoint.channel() == "dev", "canal sem feature = dev")
 	print("RESULT ", "OK" if fails == 0 else "FALHAS=%d" % fails)

@@ -6,16 +6,22 @@
 // Configurável no Render sem novo deploy: FRAIHA_ANDROID_LATEST_CODE, FRAIHA_ANDROID_MIN_CODE,
 // FRAIHA_ANDROID_LATEST_NAME, FRAIHA_ANDROID_APK_URL. Sem variável: os padrões abaixo.
 const DEFAULTS = { latest: 2, min: 1, name: '1.0.1', url: 'https://jogar.fraihaxadrez.com/app/FRAIHA-Xadrez.apk' };
+// R184 · executável do PC (Windows): FRAIHA_WINDOWS_LATEST_CODE / _MIN_CODE / _LATEST_NAME / _URL
+const WIN_DEFAULTS = { latest: 2, min: 1, name: '1.0.1', url: 'https://jogar.fraihaxadrez.com/app/FRAIHA-Xadrez-PC.exe' };
 
 function info(env = process.env) {
+  return { ...plat(env, 'ANDROID', DEFAULTS, 'android'), ...plat(env, 'WINDOWS', WIN_DEFAULTS, 'windows') };
+}
+
+function plat(env, P, D, key) {
   const int = (k, d) => { const v = parseInt(String(env[k] || ''), 10); return Number.isFinite(v) && v > 0 && v < 1e9 ? v : d; };
-  const url = String(env.FRAIHA_ANDROID_APK_URL || '').trim();
-  const name = String(env.FRAIHA_ANDROID_LATEST_NAME || '').trim();
-  return { android: {
-    latest: int('FRAIHA_ANDROID_LATEST_CODE', DEFAULTS.latest),
-    min: int('FRAIHA_ANDROID_MIN_CODE', DEFAULTS.min),
-    name: /^[0-9A-Za-z.\- ]{1,30}$/.test(name) ? name : DEFAULTS.name,
-    url: /^https:\/\/[^\s"<>]{4,300}$/.test(url) ? url : DEFAULTS.url,
+  const url = String(env['FRAIHA_' + P + (P === 'ANDROID' ? '_APK_URL' : '_URL')] || '').trim();
+  const name = String(env['FRAIHA_' + P + '_LATEST_NAME'] || '').trim();
+  return { [key]: {
+    latest: int('FRAIHA_' + P + '_LATEST_CODE', D.latest),
+    min: int('FRAIHA_' + P + '_MIN_CODE', D.min),
+    name: /^[0-9A-Za-z.\- ]{1,30}$/.test(name) ? name : D.name,
+    url: /^https:\/\/[^\s"<>]{4,300}$/.test(url) ? url : D.url,
   } };
 }
 
@@ -26,4 +32,4 @@ function handle(req, res, env = process.env) {
   res.end(JSON.stringify(info(env)));
 }
 
-module.exports = { info, owns, handle, DEFAULTS };
+module.exports = { info, owns, handle, DEFAULTS, WIN_DEFAULTS };

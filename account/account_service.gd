@@ -339,7 +339,7 @@ func copy_game_link() -> void:
 
 func sign_in_google(then_open := "", force := false):
     if not configured(): return
-    if OS.has_feature("android"):   # R182 · app: navegador do celular + PKCE, volta pelo servidor do jogo
+    if not preload("res://telemetry/app_track.gd").platform().is_empty():   # R182/R184 · app Android e executável do PC: navegador + PKCE
         _app_google_start()
         return
     if not OS.has_feature("web"):

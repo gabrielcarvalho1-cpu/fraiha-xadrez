@@ -1,6 +1,6 @@
 extends Button
-## R183 · "BAIXAR O APP": aparece SÓ para quem abre o jogo no navegador de um celular ANDROID (no app, no PC e no
-## iPhone não aparece). Abre a página de download https://jogar.fraihaxadrez.com/app/ (botão + passo a passo).
+## R183/R184 · "BAIXAR O APP": no site (celular e PC; não no iPhone nem dentro do app). Abre a página de download
+## https://jogar.fraihaxadrez.com/app/ (Android + Windows, com o passo a passo).
 ## Mesmo estilo do botão do WhatsApp (placa azul-noite com borda dourada), com selo dourado de download.
 
 const URL := "https://jogar.fraihaxadrez.com/app/"
@@ -11,15 +11,15 @@ const CREAM := Color8(246, 236, 207)
 
 static var _show_cache := -1
 
-## navegador de celular Android (não o app). Teste: --app-banner-test
+## R184 · aparece no SITE para todo mundo (celular e PC), menos iPhone/iPad (ainda sem app) e menos dentro do
+## próprio app/executável. Teste: --app-banner-test
 static func should_show() -> bool:
 	if "--app-banner-test" in OS.get_cmdline_user_args(): return true
 	if not OS.has_feature("web"): return false
 	if _show_cache < 0:
-		_show_cache = 1 if OS.has_feature("web_android") else 0
-		if _show_cache == 0:
-			var r = JavaScriptBridge.eval("/Android/i.test(navigator.userAgent) ? 1 : 0")
-			_show_cache = 1 if ((r is bool and r) or ((r is int or r is float) and int(r) == 1)) else 0
+		var r = JavaScriptBridge.eval("/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 1 : 0")
+		var ios: bool = (r is bool and r) or ((r is int or r is float) and int(r) == 1)
+		_show_cache = 0 if ios else 1
 	return _show_cache == 1
 
 func _ready():
@@ -64,7 +64,7 @@ func _draw():
 	draw_line(c + Vector2(-cr * 0.42, cr * 0.5), c + Vector2(cr * 0.42, cr * 0.5), dark, lw, true)
 	var x0 := h * 1.1
 	var w := size.x - x0 - h * 0.55
-	var t1 := "NOVO: APP PARA ANDROID"
+	var t1 := "NOVO: APP PARA CELULAR E PC"
 	var t2 := "BAIXAR O APP"
 	var s1 := _fit(F_INFO, t1, int(h * 0.30), w)
 	var s2 := _fit(F_TITLE, t2, int(h * 0.34), w)

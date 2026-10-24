@@ -3001,6 +3001,12 @@ func _layout_wide(dims: Vector2):
         wab.scale = Vector2.ONE * kl
         wab.position = Vector2(v.position.x + m + (PASS_CARD_PC.size.x - WA_PC.size.x) * 0.5 * kl, top)
         top += (WA_PC.size.y + 10.0) * kl
+    var adb = canvas.get_node_or_null("AppDownloadButton")   # R184 · BAIXAR O APP embaixo do WhatsApp
+    if adb != null:
+        if not _wide_orig.has(adb): _wide_orig[adb] = [adb.position, adb.scale]
+        adb.scale = Vector2.ONE * kl
+        adb.position = Vector2(v.position.x + m + (PASS_CARD_PC.size.x - WA_PC.size.x) * 0.5 * kl, top)
+        top += (44.0 + 10.0) * kl
     var bottom: float = v.end.y - (100.0 + m * 2.0) * kl
     var k2: float = minf(left_w / lsrc.size.x, (bottom - top) / lsrc.size.y)
     var lsz: Vector2 = lsrc.size * maxf(0.2, k2)
@@ -4319,6 +4325,14 @@ func _build_reference_chrome():
     wa.position = WA_PC.position
     wa.size = WA_PC.size
     canvas.add_child(wa)
+    # R184 · BAIXAR O APP (site no PC): logo abaixo do WhatsApp, mesmo tamanho
+    var AppBtn = load("res://ui_kit/app_download_button.gd")
+    if AppBtn.should_show():
+        var ab: Button = AppBtn.new()
+        ab.name = "AppDownloadButton"
+        ab.position = WA_PC.position + Vector2(0, WA_PC.size.y + 6)
+        ab.size = Vector2(WA_PC.size.x, 44)   # um pouco mais baixo: não cobre a faixa FOCO/ESTRATÉGIA
+        canvas.add_child(ab)
     # R161 · OUTDOOR: a faixa "ESTRATÉGIA PARA IR MAIS LONGE" vira a frase do Admin e abre NOVIDADES
     var ticker := make_news_ticker(19, Color("010612"), Color("030b1c"))
     ticker.position = Vector2(631, 273)

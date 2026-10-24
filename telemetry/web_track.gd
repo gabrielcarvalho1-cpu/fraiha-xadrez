@@ -7,14 +7,14 @@ const AppTrack := preload("res://telemetry/app_track.gd")   # R182 · app Androi
 
 ## R182 · telas/cliques vão pelo rastreador da visita (site: script do <head>; app Android: AppTrack)
 static func site_tracking() -> bool:
-	return OS.has_feature("web") or OS.has_feature("android")
+	return OS.has_feature("web") or not AppTrack.platform().is_empty()
 
 ## R182 · app Android: começa a registrar a visita já na abertura (antes de qualquer tela)
 static func boot() -> void:
-	if OS.has_feature("android"): AppTrack.get_instance()
+	if not AppTrack.platform().is_empty(): AppTrack.get_instance()
 
 static func push(ev: Dictionary) -> void:
-	if OS.has_feature("android"):
+	if not AppTrack.platform().is_empty():
 		var a = AppTrack.get_instance()
 		if a != null: a.push(ev)
 		return
@@ -42,7 +42,7 @@ static func match_end(mode: String, result: String, bot := "") -> void:
 
 ## jogo carregou (fim do carregamento): tempo desde que a página abriu
 static func loaded() -> void:
-	if OS.has_feature("android"):
+	if not AppTrack.platform().is_empty():
 		var a = AppTrack.get_instance()
 		if a != null: a.done()
 		return
@@ -56,7 +56,7 @@ static func pixel(name: String, params := {}, standard := false) -> void:
 
 ## sid/vid desta aba (para ligar a conexão do jogo à visita): "" fora da Web ou sem o script
 static func ids() -> Dictionary:
-	if OS.has_feature("android"):
+	if not AppTrack.platform().is_empty():
 		var a = AppTrack.get_instance()
 		return a.ids() if a != null else {}
 	if not OS.has_feature("web"): return {}

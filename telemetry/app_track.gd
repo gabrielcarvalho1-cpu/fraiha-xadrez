@@ -14,6 +14,13 @@ const MAX_PER_SEND := 40
 
 static var _inst: Node = null
 
+## R184 · app instalado (não navegador): "android" (APK) ou "windows" (executável do PC). "" = Web/editor/testes.
+static func platform() -> String:
+	if OS.has_feature("editor") or OS.has_feature("web"): return ""
+	if OS.has_feature("android"): return "android"
+	if OS.has_feature("windows") and OS.has_feature("template"): return "windows"
+	return ""
+
 var url := ""
 var vid := ""
 var sid := ""
@@ -32,7 +39,7 @@ var _hb := 0.0
 
 ## o rastreador do app (cria na 1ª chamada). null fora do Android.
 static func get_instance() -> Node:
-	if not OS.has_feature("android"): return null
+	if platform().is_empty(): return null
 	if _inst != null and is_instance_valid(_inst): return _inst
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null: return null
@@ -118,7 +125,7 @@ func body() -> String:
 	if not sent_first:
 		var size := DisplayServer.window_get_size()
 		b["u"] = {"s": "", "c": "", "m": "", "fb": false}
-		b["d"] = {"w": size.x, "h": size.y, "lang": OS.get_locale_language(), "app": "android",
+		b["d"] = {"w": size.x, "h": size.y, "lang": OS.get_locale_language(), "app": platform(),
 			"os": OS.get_version().get_slice(".", 0), "v": String(ProjectSettings.get_setting("application/config/version", ""))}
 	return JSON.stringify(b)
 
@@ -127,7 +134,7 @@ func send() -> void:
 	var data := body()
 	sent_first = true
 	_busy = true
-	var err := _http.request(url, PackedStringArray(["content-type: text/plain", "x-fraiha-app: android"]), HTTPClient.METHOD_POST, data)
+	var err := _http.request(url, PackedStringArray(["content-type: text/plain", "x-fraiha-app: " + platform()]), HTTPClient.METHOD_POST, data)
 	if err != OK: _busy = false
 
 func _process(delta: float) -> void:

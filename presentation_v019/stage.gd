@@ -110,7 +110,7 @@ func _ready():
     add_child(bot_controller)
     voice = preload("res://voice/fraiha_voice.gd").new()
     add_child(voice)
-    if OS.has_feature("android"):   # R183 · app: aviso de versão nova do APK
+    if not preload("res://telemetry/app_track.gd").platform().is_empty():   # R183/R184 · app (Android/PC): aviso de versão nova
         var upd = preload("res://ui_v022/app_update.gd").new()
         upd.stage = self
         add_child(upd)

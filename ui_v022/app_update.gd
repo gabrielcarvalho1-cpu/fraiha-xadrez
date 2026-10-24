@@ -20,7 +20,7 @@ var _required := false
 
 func _ready():
 	name = "AppUpdate"
-	if not OS.has_feature("android"):
+	if preload("res://telemetry/app_track.gd").platform().is_empty():
 		return
 	_http = HTTPRequest.new()
 	_http.timeout = 12.0
@@ -52,8 +52,9 @@ func _notification(what: int) -> void:
 func _on_reply(result: int, code: int, _h, body: PackedByteArray) -> void:
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200: return
 	var r = JSON.parse_string(body.get_string_from_utf8())
-	if not r is Dictionary or not r.get("android") is Dictionary: return
-	info = r.android
+	var plat := String(preload("res://telemetry/app_track.gd").platform())
+	if not r is Dictionary or not r.get(plat) is Dictionary: return
+	info = r[plat]
 	var d := decide(APP_CODE, info)
 	if d == "": return
 	_required = d == "required"

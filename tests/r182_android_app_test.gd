@@ -29,7 +29,7 @@ func run():
 	check(b is Dictionary and b.sid == t.sid and b.vid == t.vid, "lote com sid/vid")
 	check(b.e.size() == 2, "tela repetida não duplica (%d eventos)" % b.e.size())
 	check(String(b.e[1].s) == "Entrada / Login", "clique leva a tela atual")
-	check(b.has("d") and String(b.d.app) == "android", "1º lote informa o app")
+	check(b.has("d") and b.d.has("app") and String(b.d.app) == AppTrack.platform(), "1º lote informa o app (android/windows)")
 	t.sent_first = true
 	t.push({"k": "hb"})
 	var b2 = JSON.parse_string(t.body())

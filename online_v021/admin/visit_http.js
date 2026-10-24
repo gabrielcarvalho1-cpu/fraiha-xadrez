@@ -164,7 +164,9 @@ class VisitHttp {
   handle(req, res, ip) {
     const origin = String(req.headers.origin || '');
     // R182 · app Android: não é navegador (sem Origin/CORS) → se identifica pelo cabeçalho x-fraiha-app
-    const app = !origin && String(req.headers['x-fraiha-app'] || '') === 'android';
+    // R184 · executável do PC (Windows) também
+    const appHdr = String(req.headers['x-fraiha-app'] || '');
+    const app = !origin && (appHdr === 'android' || appHdr === 'windows') ? appHdr : '';
     const ok = app || this.originOk(origin);
     const head = { 'content-type': 'text/plain', 'cache-control': 'no-store' };
     if (ok && origin) { head['access-control-allow-origin'] = origin; head.vary = 'Origin'; head['access-control-allow-methods'] = 'POST, OPTIONS'; head['access-control-allow-headers'] = 'content-type'; head['access-control-max-age'] = '86400'; }
@@ -182,7 +184,7 @@ class VisitHttp {
     });
     req.on('error', () => {});
   }
-  ingest(raw, { ip = '?', ua = '', app = false } = {}) {
+  ingest(raw, { ip = '?', ua = '', app = '' } = {}) {
     let b; try { b = JSON.parse(raw); } catch { this.stats.dropped++; return false; }
     if (!b || typeof b !== 'object' || Array.isArray(b)) { this.stats.dropped++; return false; }
     const sid = String(b.sid || ''), vid = String(b.vid || '');
@@ -192,8 +194,9 @@ class VisitHttp {
     const evs = Array.isArray(b.e) ? b.e.slice(0, MAX_EVENTS).map(parseEvent).filter(Boolean) : [];
     const known = this.track.hasVisit(sid);
     if (!known && !this.lim.hit('new:' + ip, NEW_PER_IP_HOUR, 3600e3, now)) { this.stats.limited++; return false; }
-    const dev = app ? { device: 'Android', os: 'Android', mobile: true, browser: 'APP Android' } : parseUA(ua);
-    if (app && b.d && /^[0-9]{1,2}$/.test(String(b.d.os || ''))) dev.os = 'Android ' + String(b.d.os);
+    const dev = app === 'android' ? { device: 'Android', os: 'Android', mobile: true, browser: 'APP Android' }
+      : app === 'windows' ? { device: 'PC', os: 'Windows', mobile: false, browser: 'APP PC (Windows)' } : parseUA(ua);
+    if (app === 'android' && b.d && /^[0-9]{1,2}$/.test(String(b.d.os || ''))) dev.os = 'Android ' + String(b.d.os);
     if (b.d && typeof b.d === 'object') {
       for (const k of ['w', 'h']) { const v = num(b.d[k], 1, 20000); if (v !== null) dev[k] = Math.round(v); }
       if (/^[A-Za-z-]{2,10}$/.test(String(b.d.lang || ''))) dev.lang = String(b.d.lang);
