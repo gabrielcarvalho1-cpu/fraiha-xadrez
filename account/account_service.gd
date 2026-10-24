@@ -395,7 +395,7 @@ func _app_google_start():
     app_google = {"c": c, "v": v, "until": now + APP_GOOGLE_TTL_S, "next": now + 3.0, "base": base, "busy": false}
     WebTrack.login("google", "start")
     OS.shell_open(url)
-    notice.emit("Abrindo o Google no navegador… Depois de escolher a conta, volte para o app.", false)
+    notice.emit("Entre com o Google no navegador e volte para o app.", false)
 
 func _app_google_poll():
     if app_google.is_empty() or bool(app_google.get("busy", false)): return

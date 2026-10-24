@@ -58,12 +58,9 @@ func _preset():
     if sec.is_empty():
         return
     var o := sec + ".options"
-    verify(String(cfg.get_value(o, "package/unique_name", "")) == "com.fraiha.xadrez.dev", "package ID DEV temporário")
+    verify(String(cfg.get_value(o, "package/unique_name", "")) == "com.fraihaxadrez.app", "package ID do app (R182)")
     verify(bool(cfg.get_value(o, "architectures/arm64-v8a", false)), "ARM64 incluído")
-    var other_abi := false
-    for abi in ["armeabi-v7a", "x86", "x86_64"]:
-        other_abi = other_abi or bool(cfg.get_value(o, "architectures/" + abi, false))
-    verify(not other_abi, "nenhum ABI extra sem pedido")
+    verify(not bool(cfg.get_value(o, "architectures/x86", false)), "sem x86 32 bits")
     verify(not bool(cfg.get_value(o, "gradle_build/use_gradle_build", false)), "sem custom build Gradle (pasta android/ fora do Git)")
     var perms := []
     for k in cfg.get_section_keys(o):

@@ -1306,9 +1306,7 @@ func _input(event):
         toggle_fullscreen()   # atalho de desktop (sem botão e sem preferência salva)
         get_viewport().set_input_as_handled()
     elif event.keycode == KEY_ESCAPE:
-        if is_instance_valid(account_ui) and account_ui.is_open():
-            account_ui.close()
-        elif navigation_dialog.visible:
+        if navigation_dialog.visible:
             _cancel_navigation()
         else:
             return_to_home()
@@ -1321,6 +1319,21 @@ func _notification(what):
         # Voltar do Android (quit_on_go_back=false): mesmo caminho do Esc — fecha modal/página,
         # volta à Home e, em partida, pede confirmação. Nunca sai nem desiste em silêncio.
         android_back()
+        reimmerse()
+    elif what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED:
+        reimmerse()
+
+## R182 · app Android: o Voltar / voltar de outro app mostra as barras do sistema; o jogo volta para tela cheia
+## (imersivo) sozinho depois de um instante.
+var _reimmerse_t: SceneTreeTimer
+func reimmerse():
+    if not OS.has_feature("android") or not is_inside_tree(): return
+    _reimmerse_t = get_tree().create_timer(1.6)
+    var t := _reimmerse_t
+    t.timeout.connect(func():
+        if t != _reimmerse_t: return
+        DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+        DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN))
 
 func android_back():
     for pressed in [true, false]:
