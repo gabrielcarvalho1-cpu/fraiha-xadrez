@@ -40,6 +40,8 @@ const NAV := [
 const NAV_ART := "res://ui_v022/assets/home_nav5.png"
 const PASS_STRIP := Rect2(146, 1110, 562, 139)   # R178d · botão do PASSE no meio do menu (a arte v9 abriu 44 px ali)
 const WA_STRIP := Rect2(197, 1462, 460, 70)   # R180
+const WA_SIDE_L := Rect2(22, 1462, 398, 70)    # R184c · WhatsApp à esquerda quando tem o BAIXAR O APP
+const WA_SIDE_R := Rect2(434, 1462, 398, 70)   # R184c · BAIXAR O APP à direita
 const WA_MENU_END := 1446.0   # R180c · fim da moldura do menu (o botão nunca sobe por cima dela)
 const CLUB_RECT := Rect2(25, 45, 355, 73)
 const SOUND_RECT := Rect2(730, 45, 82, 75)
@@ -79,6 +81,7 @@ var badge_glow: TextureRect
 var seal: TextureRect
 var buttons := {}              # título → Button (área de toque)
 var wa_button: Control         # R180 · WhatsApp (dúvidas/bugs)
+var app_button: Control        # R184c · BAIXAR O APP (ao lado do WhatsApp)
 var _shown := ""
 
 func setup(owner_hub, owner_mobile):
@@ -215,6 +218,16 @@ func _build_top():
     wa.position = WA_STRIP.position
     wa.size = WA_STRIP.size
     top.add_child(wa)
+    # R184c · BAIXAR O APP bem visível na Home do celular (site, menos iPhone): ao lado do WhatsApp, as duas
+    # placas lado a lado no mesmo lugar (cabe até na tela mais baixa). Sem o app (iPhone), o WhatsApp fica como era.
+    var AppBtn = load("res://ui_kit/app_download_button.gd")
+    if AppBtn.should_show():
+        wa.position.x = WA_SIDE_L.position.x
+        wa.size = WA_SIDE_L.size
+        app_button = AppBtn.new()
+        app_button.position = WA_SIDE_R.position
+        app_button.size = WA_SIDE_R.size
+        top.add_child(app_button)
     # placa CLUB FRAIHA (a placa e a coroa são da arte; o jogo escreve o estado)
     club_entry = load("res://monetization/club_home_entry.gd").new()
     club_entry.name = "ClubHomeEntryMobile"
@@ -430,6 +443,7 @@ func layout(box: Rect2, full: Rect2):
     if wa_button != null:
         var above_nav := (nav_y + 26.0 * k) / k - WA_STRIP.size.y
         wa_button.position.y = clampf(above_nav, WA_MENU_END, WA_STRIP.position.y)
+        if app_button != null: app_button.position.y = wa_button.position.y
 
 func refresh():
     if hub == null: return
