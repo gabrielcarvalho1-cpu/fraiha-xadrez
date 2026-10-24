@@ -49,3 +49,7 @@ driver/output_latency.web=60
 
 timers/tooltip_delay_sec=3600.0
 theme/default_font_multichannel_signed_distance_field=true
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/fraiha_voice_android/plugin.cfg")

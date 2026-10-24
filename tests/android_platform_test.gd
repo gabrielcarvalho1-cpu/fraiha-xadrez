@@ -61,12 +61,13 @@ func _preset():
     verify(String(cfg.get_value(o, "package/unique_name", "")) == "com.fraihaxadrez.app", "package ID do app (R182)")
     verify(bool(cfg.get_value(o, "architectures/arm64-v8a", false)), "ARM64 incluído")
     verify(not bool(cfg.get_value(o, "architectures/x86", false)), "sem x86 32 bits")
-    verify(not bool(cfg.get_value(o, "gradle_build/use_gradle_build", false)), "sem custom build Gradle (pasta android/ fora do Git)")
+    verify(bool(cfg.get_value(o, "gradle_build/use_gradle_build", false)), "R183 · build Gradle (voz nativa da Agora); pasta android/ fora do Git")
     var perms := []
     for k in cfg.get_section_keys(o):
         if k.begins_with("permissions/") and k != "permissions/custom_permissions" and bool(cfg.get_value(o, k, false)):
             perms.append(k)
-    verify(perms == ["permissions/internet"], "só a permissão INTERNET (sem microfone, câmera, localização, armazenamento)")
+    perms.sort()
+    verify(perms == ["permissions/internet", "permissions/modify_audio_settings", "permissions/record_audio"], "R183 · INTERNET + microfone da voz (sem câmera, localização, armazenamento)")
     var leaked := []
     for k in cfg.get_section_keys(o):
         if ("password" in k or "keystore" in k or "_pass" in k) and not String(cfg.get_value(o, k, "")).is_empty():

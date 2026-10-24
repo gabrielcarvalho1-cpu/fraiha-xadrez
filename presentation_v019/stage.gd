@@ -110,6 +110,10 @@ func _ready():
     add_child(bot_controller)
     voice = preload("res://voice/fraiha_voice.gd").new()
     add_child(voice)
+    if OS.has_feature("android"):   # R183 · app: aviso de versão nova do APK
+        var upd = preload("res://ui_v022/app_update.gd").new()
+        upd.stage = self
+        add_child(upd)
     _build_backdrop()
     _build_navigation()
     _sleep_scenery.call_deferred()   # R89

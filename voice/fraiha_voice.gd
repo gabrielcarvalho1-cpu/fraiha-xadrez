@@ -50,7 +50,9 @@ func _ready():
     name = "FraihaVoice"
     _load_pref()
     if provider == null:
-        provider = preload("res://voice/agora_voice_provider.gd").new()
+        # R183 · app Android: Agora nativa (plugin); Web: Agora do navegador
+        if OS.has_feature("android"): provider = load("res://voice/agora_native_provider.gd").new()
+        else: provider = preload("res://voice/agora_voice_provider.gd").new()
     if provider.get_parent() == null: add_child(provider)
     provider.event.connect(_on_provider)
 
@@ -139,7 +141,7 @@ func join() -> void:
     remote.clear()
     speaking.clear()
     autoplay_blocked = false
-    _to("REQUESTING_PERMISSION", "Permita o microfone no navegador.", T_PERMISSION)
+    _to("REQUESTING_PERMISSION", "Permita o microfone." if OS.has_feature("android") else "Permita o microfone no navegador.", T_PERMISSION)
     _log("join requested seq=%d" % _seq)
     provider.prepare(_seq)
 
@@ -220,13 +222,16 @@ static func _names(list: Array) -> String:
 static func _support_text(why: String) -> String:
     match why:
         "not_web": return "Voz disponível só no navegador."
+        "no_native": return "Voz indisponível nesta versão do app. Atualize o app."
         "insecure": return "Voz precisa de conexão segura (https)."
         "no_media", "no_webrtc": return "Este navegador não suporta voz."
     return "Voz indisponível neste aparelho."
 
 static func error_text(code: String) -> String:
     match code:
-        "PERMISSION_DENIED": return "Microfone bloqueado. Libere no cadeado da barra de endereço."
+        "PERMISSION_DENIED":
+            if OS.has_feature("android"): return "Microfone bloqueado. Libere em Configurações > Apps > FRAIHA Xadrez > Permissões."
+            return "Microfone bloqueado. Libere no cadeado da barra de endereço."
         "DEVICE_NOT_FOUND": return "Nenhum microfone encontrado."
         "NOT_SUPPORTED": return "Microfone indisponível ou bloqueado neste navegador."
         "NOT_READABLE": return "Microfone em uso por outro programa."
