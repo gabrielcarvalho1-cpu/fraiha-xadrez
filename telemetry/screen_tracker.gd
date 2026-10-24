@@ -49,7 +49,7 @@ const MODES := { "bot": "Partida contra o computador", "local": "Partida local (
 	"casual_lobby": "Casual (fila)" }
 const MATCH_MODES := ["bot", "local", "online", "ranked", "casual"]
 const PAGES := { "main": "Início", "profile": "Perfil", "settings": "Configurações", "bot": "Escolher bot", "bot_side": "Escolher bot (lado)",
-	"history": "Histórico", "ranking": "Ligas", "about": "Sobre" }
+	"history": "Histórico", "ranking": "Ligas", "about": "Conheça o FRAIHA" }
 
 var stage
 var account

@@ -512,6 +512,7 @@ func _setup_account():
     voice.setup(account)
     voice.changed.connect(_on_voice_changed)
     hub.bind_account(account)
+    account.profile_created.connect(_first_challenge)   # R181 · conta nova → 1º desafio contra o BOT MADEIRA
     # R180 · tela atual para o Admin (Sessões) + aviso de versão nova no lobby
     screen_tracker = preload("res://telemetry/screen_tracker.gd").new()
     screen_tracker.name = "ScreenTracker"
@@ -1052,6 +1053,23 @@ func _open_online():
     _clear_selection()
     _refresh_input()
 
+## R181 · CONTA NOVA (acabou de escolher o apelido): o primeiro passo é uma partida do Desafio das Ligas contra o
+## BOT MADEIRA. Dá para pular (vai para o menu). Quem já venceu o BOT MADEIRA (progresso de convidado) não vê.
+const FIRST_RIVAL := "madeira"
+func _first_challenge():
+    if hub.bot_progress != null and hub.bot_progress.is_defeated(FIRST_RIVAL): return
+    if mode != "home": return
+    await get_tree().create_timer(0.6).timeout   # a tela do apelido fecha antes
+    if mode != "home": return
+    var Ev := preload("res://telemetry/events.gd")
+    Ev.send(account, "first_bot_shown")
+    hub.ask("SEU PRIMEIRO RIVAL", "Todo mundo começa na Madeira.\nVença seu primeiro rival: o BOT MADEIRA!",
+        "DESAFIAR O BOT MADEIRA", "PULAR, IR PARA O MENU",
+        func():
+            Ev.send(account, "first_bot_accept")
+            _start_bot(FIRST_RIVAL, "w"),
+        func(): Ev.send(account, "first_bot_skip"))
+
 ## R181 · aceitou o bot oferecido na fila (Ranked/Casual vazios): sai do lobby e abre a partida do Desafio das Ligas
 func _start_bot_from_queue(bot_id: String):
     if mode == "ranked_lobby": _back_to_ranked_lobby()
@@ -1581,7 +1599,9 @@ func _setup_analysis():
     reward_modal.name = "BotRewardModal"
     reward_modal.avatar_for = func(id): return hub.avatar_texture(id)
     add_child(reward_modal)
-    reward_modal.advance_requested.connect(func(next_id): _start_bot(next_id, last_bot_side))
+    reward_modal.advance_requested.connect(func(next_id):
+        preload("res://telemetry/events.gd").send(account, "next_challenge", {"bot": String(preload("res://bot/bot_ladder.gd").bot(next_id).get("name", next_id))})   # R181
+        _start_bot(next_id, last_bot_side))
     reward_modal.replay_requested.connect(func(bid): _start_bot(bid, last_bot_side))
     reward_modal.home_requested.connect(open_home)
     reward_modal.analyze_requested.connect(open_analysis)
@@ -1662,6 +1682,8 @@ func _on_match_finished(record):
     end_pause_done.emit()
     if secs > 0.0 and recorder != null and not is_same(recorder.current(), record) and record is Object: return   # já começou outra partida durante a pausa
     var res := String(record.result)
+    if String(record.mode) == "bot" and res in ["win", "loss", "draw"]:   # R181 · linha do tempo do Admin
+        preload("res://telemetry/events.gd").send(account, "bot_result", {"outcome": res, "bot": bot_level_name})
     if res == "win": result_overlay.show_result("victory")
     elif res == "loss": result_overlay.show_result("defeat")
     elif res == "draw": result_overlay.show_result("draw")   # R124 · EMPATE também tem tela

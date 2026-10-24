@@ -3,6 +3,7 @@ extends Node
 ## Senhas vão direto para o Supabase e nunca são guardadas. Só o refresh token
 ## da sessão fica no navegador (como qualquer login web) para evitar novo login.
 signal changed
+signal profile_created   # R181 · conta NOVA acabou de escolher o apelido (perfil criado agora)
 const InviteLink := preload("res://social/invite_link.gd")
 var invite_code := ""   # R105 · código do link de convite guardado neste aparelho (vazio = nenhum)
 signal notice(text: String, is_error: bool)
@@ -38,6 +39,7 @@ var provider := ""
 var profile: Dictionary = {}
 var ranked: Dictionary = {}
 var needs_nickname := false
+var _creating_profile := false   # R181
 var persistent_backend := false
 var server_ready := false
 var pending_nickname := ""
@@ -236,7 +238,6 @@ func sign_up(mail: String, password: String, wanted_nickname: String):
     _auth_request(HTTPClient.METHOD_POST, "/auth/v1/signup" + redirect, {"email": mail.strip_edges(), "password": password}, func(code, body):
         busy = false
         if code >= 200 and code < 300:
-            preload("res://ui_v022/meta_pixel.gd").track("CompleteRegistration")   # Meta Pixel (só Web, só com cookies aceitos)
             if body.has("access_token"): _adopt_session(body)
             else: notice.emit("Conta criada! Confirme pelo link enviado para %s e depois entre." % mail.strip_edges(), false)
         else:
@@ -427,6 +428,7 @@ func create_profile(nick: String, avatar := "warrior"):
         notice.emit(err, true)
         return
     var msg := {"type": "acct_create_profile", "nickname": nick.strip_edges(), "avatar_id": avatar}
+    _creating_profile = true
     if terms_accepted: msg["terms"] = preload("res://ui_v022/legal_text.gd").ATUALIZADO   # versão aceita (data dos Termos)
     var ref := InviteLink.stored_code()   # R105 · conta criada pelo link de convite de um amigo
     if not ref.is_empty(): msg["ref"] = ref
@@ -613,7 +615,13 @@ func _receive(msg: Dictionary):
             var nick = pending_nickname
             pending_nickname = ""
             create_profile(nick)
+        var just_created: bool = _creating_profile and not profile.is_empty() and not needs_nickname
+        if just_created: _creating_profile = false
         changed.emit()
+        if just_created:
+            # R181 · cadastro completo (e-mail OU Google) = perfil criado: o pixel conta aqui, uma vez
+            preload("res://ui_v022/meta_pixel.gd").track("CompleteRegistration")
+            profile_created.emit()
     elif type == "acct_error":
         var code = String(msg.get("code", ""))
         _log("acct_error: " + code)

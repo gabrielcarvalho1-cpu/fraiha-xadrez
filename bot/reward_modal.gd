@@ -116,12 +116,14 @@ func show_progress(bot_id: String, reward: Dictionary, fresh := true):
         row.add_child(arrow)
         var nb := Ladder.bot(next_bot)
         _tex(row, ThemeCatalog.badge_texture(String(nb.get("league", next_bot))), bs, 1.0)
-        var lead := "Próximo adversário desbloqueado:" if fresh else "Próximo adversário:"
+        var lead := "Seu próximo rival:"
+        var prize := next_prize(next_bot)
         if short:
-            _lab(box, lead + " " + String(nb.get("name", "")), 16, EMERALD)
+            _lab(box, lead + " " + String(nb.get("name", "")) + ("  ·  " + prize if not prize.is_empty() else ""), 15, EMERALD)
         else:
             _lab(box, lead, 15, MUTED)
             _lab(box, String(nb.get("name", "")), 22, EMERALD)
+            if not prize.is_empty(): _lab(box, prize, 15, GOLD)
     else:
         _lab(box, "Você venceu todos os bots, do MADEIRA ao CHALLENGER.", 15, MUTED)
     # recompensa
@@ -155,7 +157,7 @@ func show_progress(bot_id: String, reward: Dictionary, fresh := true):
         box.add_child(actions)
     if not final:
         var nb_name := String(Ladder.bot(next_bot).get("name", ""))
-        buttons["advance"] = _button(actions, ("AVANÇAR PARA O " + nb_name) if fresh else ("JOGAR PRÓXIMO BOT · " + nb_name), true, func():
+        buttons["advance"] = _button(actions, challenge_text(next_bot), true, func():
             var target := next_bot
             close()
             advance_requested.emit(target))
@@ -174,6 +176,16 @@ func show_progress(bot_id: String, reward: Dictionary, fresh := true):
     tw.tween_property(panel, "scale", Vector2.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     tw.tween_property(panel, "modulate:a", 1.0, 0.22)
 
+## R181 · o próximo bot DESAFIA o jogador (botão principal grande) + o prêmio da 1ª vitória contra ele
+static func challenge_text(next_id: String) -> String:
+    return String(Ladder.bot(next_id).get("name", "BOT")) + " TE DESAFIOU! JOGAR AGORA"
+
+static func next_prize(next_id: String) -> String:
+    var r: Dictionary = Ladder.reward(next_id)
+    var aid := String(r.get("id", ""))
+    if String(r.get("type", "")) == "avatar" and not aid.is_empty(): return "Vença e ganhe: Avatar " + Catalog.display_name(aid)
+    return ""
+
 func _desktop() -> bool:
     return get_viewport() != null and not MobileLayout.active(get_viewport())
 
@@ -189,7 +201,9 @@ func _desk(tex: Texture2D) -> Control:
 func _desk_buttons(d, main_text: String, main_action: Callable, key: String):
     buttons.clear()
     d.image(load(ART_CROWN_PATH), Rect2(278, 874, 60, 58)).name = "DeskBotCrown"
-    d.label(main_text, Rect2(350, 869, 620, 60), 40, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskBotMainText"
+    var mpx := 40.0
+    while mpx > 22.0 and DeskArt.FONT_TITLE.get_string_size(main_text, HORIZONTAL_ALIGNMENT_LEFT, -1, int(mpx)).x > 620.0: mpx -= 1.0   # R181 · texto maior cabe na placa
+    d.label(main_text, Rect2(350, 869, 620, 60), mpx, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskBotMainText"
     buttons[key] = d.button(Rect2(150, 853, 960, 94), main_action, "DeskBotMain", 16)   # advance / replay (mesmas chaves do painel antigo)
     buttons["analyze"] = d.button(Rect2(165, 963, 925, 84), func():
         close()
@@ -214,8 +228,10 @@ func _desk_victory(bot_id: String, bot: Dictionary, reward: Dictionary, fresh: b
         var nb := Ladder.bot(next_bot)
         d.image(left, Rect2(382, 360, 204, 200)).name = "DeskBotShield"
         d.image(ThemeCatalog.badge_texture(String(nb.get("league", next_bot))), Rect2(666, 360, 204, 200)).name = "DeskBotNextShield"
-        d.label("Próximo adversário desbloqueado:" if fresh else "Próximo adversário:", Rect2(250, 556, 755, 42), 36, Color("efd9a6"), DeskArt.FONT_BODY).name = "DeskBotNextLead"
-        d.label(String(nb.get("name", "")), Rect2(250, 596, 755, 56), 58, DeskArt.EMERALD, DeskArt.FONT_TITLE).name = "DeskBotNext"
+        d.label("Seu próximo rival:", Rect2(250, 556, 755, 42), 36, Color("efd9a6"), DeskArt.FONT_BODY).name = "DeskBotNextLead"
+        d.label(String(nb.get("name", "")), Rect2(250, 582, 755, 50), 48, DeskArt.EMERALD, DeskArt.FONT_TITLE).name = "DeskBotNext"
+        var prize := next_prize(next_bot)
+        if not prize.is_empty(): d.label(prize, Rect2(250, 632, 755, 32), 26, Color("e8c37a"), DeskArt.FONT_BODY).name = "DeskBotNextPrize"
     # recompensa (avatar da liga do bot)
     var aid := String(reward.get("id", ""))
     if String(reward.get("type", "")) == "avatar" and not aid.is_empty():
@@ -234,7 +250,7 @@ func _desk_victory(bot_id: String, bot: Dictionary, reward: Dictionary, fresh: b
             replay_requested.emit(target), "replay")
     else:
         var nb_name := String(Ladder.bot(next_bot).get("name", ""))
-        _desk_buttons(d, ("AVANÇAR PARA O " + nb_name) if fresh else ("JOGAR PRÓXIMO BOT · " + nb_name), func():
+        _desk_buttons(d, challenge_text(next_bot), func():
             var target := next_bot
             close()
             advance_requested.emit(target), "advance")
