@@ -3,7 +3,7 @@
 Aprovado pelo dono (23–24/10/2026): caminho do meio, honesto.
 
 ## Regras
-- Quem espera **25 s** (FRAIHA_QUEUE_AI_WAIT_MS) na fila sem ninguém recebe um **rival de IA da mesma liga**.
+- Quem espera **15 s** (FRAIHA_QUEUE_AI_WAIT_MS, padrão desde a R184) na fila sem ninguém recebe um **rival de IA da mesma liga**.
   Pessoas sempre têm prioridade: o pareamento normal roda antes, a cada tick.
 - A IA tem nome de personagem (Sir Gambito, Dama de Ferro…), avatar grátis, pensa num tempo parecido com o de uma
   pessoa (rápido na abertura, ~1/32 do relógio que sobra depois, às vezes demora mais) e manda emote de vez em quando

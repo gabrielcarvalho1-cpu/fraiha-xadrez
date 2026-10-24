@@ -36,5 +36,7 @@ func run():
 	check(not b2.has("d"), "lotes seguintes sem dados do aparelho")
 	t.free()
 	check(AppTrack.get_instance() == null, "fora do Android não cria rastreador")
+	var src := FileAccess.get_file_as_string("res://account/account_service.gd")
+	check(src.count("provider=google&prompt=select_account&") == 2, "R184: Google sempre mostra a escolha de conta (site e app)")
 	print("R182_ANDROID FAILS=%d" % failures)
 	quit(1 if failures > 0 else 0)

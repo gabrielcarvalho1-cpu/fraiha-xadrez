@@ -15,10 +15,15 @@ async function login(port, name) {
   // padrão e leitura a cada verificação (sem build/restart)
   const env = {};
   const q = new QueueAI({ rated: true }, { env });
-  check(q.waitMs === 30000, 'padrão: 30 s de busca por pessoa antes da IA');
+  check(q.waitMs === 15000, 'padrão (R184): 15 s de busca por pessoa antes da IA');
   env.FRAIHA_QUEUE_AI_WAIT_MS = '45000';
   check(q.waitMs === 45000, 'FRAIHA_QUEUE_AI_WAIT_MS muda o tempo na hora (lido a cada verificação)');
   // mesa (Xeque/Marcha): sozinho → bots depois do tempo
+  { const old = process.env.FRAIHA_QUEUE_AI_WAIT_MS; delete process.env.FRAIHA_QUEUE_AI_WAIT_MS;
+    const { PartyQueue: PQ } = require('../../online_v021/modes/party_queue'); const p0 = Object.create(PQ.prototype);
+    const s0 = [{ id: 'g0', game: 'xeque', members: [{ user_id: 'z' }], since: 0 }];
+    check(p0.pick(s0, 14000) === null && Array.isArray(p0.pick(s0, 15000)), 'padrão (R184): mesa sozinho começa com bots aos 15 s');
+    if (old !== undefined) process.env.FRAIHA_QUEUE_AI_WAIT_MS = old; }
   process.env.FRAIHA_QUEUE_AI_WAIT_MS = '30000';
   const { PartyQueue } = require('../../online_v021/modes/party_queue');
   const pq = Object.create(PartyQueue.prototype);

@@ -1,6 +1,6 @@
 'use strict';
 // R181 · RIVAL DE IA NA FILA (aprovado pelo dono: "vamos por essa linha", caminho do meio, honesto).
-// Quem fica FRAIHA_QUEUE_AI_WAIT_MS (padrão 30 s) na fila do Ranked ou do Casual sem achar ninguém de verdade
+// Quem fica FRAIHA_QUEUE_AI_WAIT_MS (padrão 15 s desde R184; antes 30 s) na fila do Ranked ou do Casual sem achar ninguém de verdade
 // recebe automaticamente um RIVAL DE IA da mesma liga:
 //   • nome de personagem (Sir Gambito, Dama de Ferro…), avatar, tempo de pensar parecido com o de uma pessoa
 //     (pelo relógio), emote de vez em quando;
@@ -98,7 +98,7 @@ class QueueAI {
   }
   enabled() { return this.on; }
   // R181 · lido a cada verificação (variável do servidor; o dono aumenta quando a base crescer, sem build novo)
-  get waitMs() { return Math.max(0, Number(this.env.FRAIHA_QUEUE_AI_WAIT_MS || 30000)); }
+  get waitMs() { return Math.max(0, Number(this.env.FRAIHA_QUEUE_AI_WAIT_MS || 15000)); }
 
   // Chamado a cada tick do serviço, DEPOIS do pareamento normal (gente de verdade sempre tem prioridade).
   tick(now, open = true) {

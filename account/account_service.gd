@@ -356,7 +356,8 @@ func sign_in_google(then_open := "", force := false):
     WebTrack.login("google", "start")
     # Fluxo de redirecionamento (sem popup): volta ao jogo com a sessão no endereço.
     if not then_open.is_empty(): JavaScriptBridge.eval("sessionStorage.setItem('fraiha_after_login', " + JSON.stringify(then_open) + ")")
-    var url = supabase_url + "/auth/v1/authorize?provider=google&redirect_to=" + site_url.uri_encode()
+    # R184 · prompt=select_account: o Google sempre mostra a lista de contas (sair do FRAIHA não sai do Google).
+    var url = supabase_url + "/auth/v1/authorize?provider=google&prompt=select_account&redirect_to=" + site_url.uri_encode()
     JavaScriptBridge.eval("window.location.assign(" + JSON.stringify(url) + ")")
 
 ## R182 · LOGIN COM GOOGLE NO APP ANDROID (PKCE). O app abre o Google no navegador do celular; o Supabase devolve
@@ -389,7 +390,7 @@ func _app_google_start():
     var c := crypto.generate_random_bytes(16).hex_encode()
     var v := crypto.generate_random_bytes(32).hex_encode()
     var redirect := base + "/app-login/done?c=" + c
-    var url := supabase_url + "/auth/v1/authorize?provider=google&redirect_to=" + redirect.uri_encode() \
+    var url := supabase_url + "/auth/v1/authorize?provider=google&prompt=select_account&redirect_to=" + redirect.uri_encode() \
         + "&code_challenge=" + pkce_challenge(v) + "&code_challenge_method=s256"
     var now := Time.get_unix_time_from_system()
     app_google = {"c": c, "v": v, "until": now + APP_GOOGLE_TTL_S, "next": now + 3.0, "base": base, "busy": false}
