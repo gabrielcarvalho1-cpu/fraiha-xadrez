@@ -73,6 +73,12 @@ const secsTxt = m => { const v = Math.round(Number(m.secs)); return Number.isFin
 const botTxt = m => cleanTxt(m.bot, 24).toUpperCase();
 const UI_EVENTS = {
   next_challenge: m => 'Clicou no próximo desafio após vitória' + (m.bot ? ` (${botTxt(m)})` : ''),
+  // R181 · login com Google dentro do Instagram/Facebook/TikTok
+  google_inapp: m => 'Tentou entrar com Google dentro do ' + (cleanTxt(m.app, 20) || 'app') + ': mostrou "Abra no navegador"',
+  google_inapp_force: m => 'Tentou Google dentro do ' + (cleanTxt(m.app, 20) || 'app') + ' mesmo assim',
+  google_open_browser: m => 'Tocou em abrir no navegador' + (m.os ? ' (' + cleanTxt(m.os, 10) + ')' : ''),
+  google_state_retry: () => 'Login Google voltou com erro de "state": tentando de novo sozinho',
+  google_state_failed: m => 'Login Google falhou de novo (erro de "state")' + (m.app ? ' no ' + cleanTxt(m.app, 20) : ''),
   first_bot_shown: () => 'Viu o convite do 1º desafio (BOT MADEIRA)',
   first_bot_accept: () => 'Aceitou o 1º desafio (BOT MADEIRA)',
   first_bot_skip: () => 'Pulou o 1º desafio e foi para o menu',

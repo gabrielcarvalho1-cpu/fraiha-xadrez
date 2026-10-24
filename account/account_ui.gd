@@ -24,7 +24,7 @@ const SLOT_EMAIL := Rect2(196, 445, 738, 120)
 const SLOT_PASSWORD := Rect2(196, 560, 738, 120)
 const SLOT_ENTER := Rect2(196, 688, 738, 150)
 const SLOT_GOOGLE := Rect2(196, 846, 738, 104)
-const SLOT_LINKS := [Rect2(290, 993, 550, 72), Rect2(290, 1065, 550, 72), Rect2(290, 1138, 550, 72)]
+const SLOT_LINKS := [Rect2(232, 993, 640, 72), Rect2(232, 1065, 640, 72), Rect2(232, 1138, 640, 72)]   # R181 · mais largos (texto maior); setas pintadas em x≈802
 const SLOT_STATUS := Rect2(230, 1212, 662, 40)
 
 var account
@@ -103,6 +103,7 @@ func setup(service):
     account.changed.connect(_on_account_changed)
     account.notice.connect(_on_notice)
     account.recovery_started.connect(func(): open("new_password"))
+    account.google_blocked.connect(func(app, os_name): inapp_app = app; inapp_os = os_name; open("inapp"))   # R181
     get_viewport().size_changed.connect(_layout)
     hide_ui()
 
@@ -349,13 +350,15 @@ func _save_password():
         if fields.has(k): fields[k].text = ""
     account.update_password(pwd, confirm)
 
+var inapp_app := ""
+var inapp_os := ""
 func _show(target: String):
     page = target
     _clear()
     links_box = null
     var titles := {"login":"ENTRAR NO FRAIHA", "signup":"CRIAR CONTA", "recover":"RECUPERAR SENHA",
         "new_password":"NOVA SENHA", "set_password":"SENHA DA CONTA", "nickname":"ESCOLHA SEU NOME", "account":"SUA CONTA",
-        "waiting":"CONECTANDO…", "unavailable":"CONTAS"}
+        "waiting":"CONECTANDO…", "unavailable":"CONTAS", "inapp":"QUASE LÁ!"}
     var baked := target == "login"
     art.texture = load(ART_FULL_PATH if baked else ART_BLANK_PATH)
     title_label.text = String(titles.get(target, "CONTA"))
@@ -426,6 +429,21 @@ func _show(target: String):
             _button("DEFINIR SENHA" if account.provider != "email" else "ALTERAR SENHA", func(): _show("set_password"))
             _button("SAIR DA CONTA", account.sign_out)
             _link("Termos, privacidade e excluir conta", func(): if open_legal.is_valid(): open_legal.call("termos"))
+        "inapp":   # R181 · Google dentro do Instagram/Facebook/TikTok: o Google não deixa terminar o login aqui
+            var app_name := inapp_app if not inapp_app.is_empty() else "este app"
+            _label("O %s não deixa entrar com Google aqui dentro. Abra o FRAIHA no navegador do celular e entre com Google por lá — leva 5 segundos." % app_name, 16)
+            if inapp_os == "ios":
+                _button("ABRIR NO SAFARI", account.open_external_browser, true)
+                _label("Se não abrir: toque em ⋯ (no canto de cima) e escolha \"Abrir no navegador externo\".", 14, Color("f0d9a0"))
+            else:
+                _button("ABRIR NO CHROME" if inapp_os == "android" else "ABRIR NO NAVEGADOR", account.open_external_browser, true)
+                _label("Se não abrir: toque em ⋮ (no canto de cima) e escolha \"Abrir no Chrome\" ou \"Abrir no navegador\".", 14, Color("f0d9a0"))
+            _button("COPIAR LINK DO JOGO", account.copy_game_link)
+            _button("CRIAR CONTA COM E-MAIL", func(): _show("signup"))
+            _divider()
+            _link("Já tenho conta com e-mail — Entrar", func(): _show("login"))
+            _link("Tentar com Google aqui mesmo assim", func(): account.sign_in_google(account.google_then, true))
+            _link("Jogar como convidado", close)
         "waiting":
             _label("Conectando sua conta ao servidor FRAIHA…", 16)
             _divider()

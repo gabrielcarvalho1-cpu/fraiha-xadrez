@@ -8,6 +8,7 @@ const InviteLink := preload("res://social/invite_link.gd")
 var invite_code := ""   # R105 · código do link de convite guardado neste aparelho (vazio = nenhum)
 signal notice(text: String, is_error: bool)
 signal recovery_started
+signal google_blocked(app: String, os_name: String)   # R181 · Google dentro do navegador do Instagram/Facebook/TikTok
 signal password_saved                         # senha definida/alterada no Supabase (mesmo usuário)
 signal server_message(msg: Dictionary)
 signal nickname_checked(nickname: String, available: bool, error: String)
@@ -255,11 +256,80 @@ func sign_in(mail: String, password: String):
         if code == 200 and body.has("access_token"): _adopt_session(body)
         else: notice.emit(auth_error_text(code, body), true))
 
-func sign_in_google(then_open := ""):
+## R181 · LOGIN COM GOOGLE DENTRO DO INSTAGRAM (bug real: "OAuth state not found or expired" 3x em 8 min).
+## O Google não deixa entrar dentro do navegador embutido dos apps (Instagram, Facebook, TikTok…): o login começa
+## lá e termina em outro navegador (Chrome/Safari) — o "state" do Supabase não confere e o login falha. Agora:
+##   1. dentro de um desses apps, ANTES de ir ao Google, a tela de conta oferece abrir o jogo no navegador
+##      (Android: Chrome direto; iPhone: Safari + instrução do menu ⋯), entrar com e-mail, ou tentar mesmo assim;
+##   2. se o Google voltar com erro de "state" (já fora do app), o jogo tenta de novo SOZINHO uma vez, agora
+##      começando e terminando no mesmo navegador; se falhar de novo, explica o que fazer.
+var google_then := ""
+var _ui_pending: Array = []   # eventos de produto esperando a conexão (Admin → Sessões)
+
+static func in_app_browser(ua: String) -> String:
+    if ua.contains("Instagram"): return "Instagram"
+    if ua.contains("FBAN") or ua.contains("FBAV") or ua.contains("FB_IAB") or ua.contains("FBIOS"): return "Facebook"
+    if ua.contains("Barcelona"): return "Threads"
+    if ua.contains("TikTok") or ua.contains("musical_ly") or ua.contains("BytedanceWebview"): return "TikTok"
+    if ua.contains("Line/"): return "Line"
+    return ""
+
+static func mobile_os(ua: String) -> String:
+    if ua.contains("iPhone") or ua.contains("iPad") or ua.contains("iPod"): return "ios"
+    if ua.contains("Android"): return "android"
+    return ""
+
+func user_agent() -> String:
+    if not OS.has_feature("web"): return ""
+    var ua = JavaScriptBridge.eval("navigator.userAgent || ''", true)
+    return String(ua) if ua != null else ""
+
+## evento de produto para a linha do tempo do Admin (enviado assim que houver conexão com identidade)
+func ui_event(name: String, extra := {}) -> void:
+    var m := {"type": "ui_event", "name": name}
+    m.merge(extra)
+    if socket_open and (signed_in() or guest_ready) and _send(m): return
+    _ui_pending.append(m)
+    if _ui_pending.size() > 10: _ui_pending.pop_front()
+
+## endereço do jogo (sem tokens) para abrir fora do app
+func game_url() -> String:
+    if not OS.has_feature("web"): return site_url
+    return str(JavaScriptBridge.eval("window.location.origin + window.location.pathname + window.location.search"))
+
+## abre o jogo no navegador de verdade (fora do Instagram/Facebook)
+func open_external_browser() -> void:
+    if not OS.has_feature("web"): return
+    var url := game_url()
+    var os_name := mobile_os(user_agent())
+    ui_event("google_open_browser", {"os": os_name})
+    var target := url
+    if os_name == "android":
+        var rest := url.trim_prefix("https://").trim_prefix("http://")
+        target = "intent://" + rest + "#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=" + url.uri_encode() + ";end"
+    elif os_name == "ios":
+        target = "x-safari-" + url   # iOS 17+: abre no Safari; versões antigas ignoram (a tela explica o menu ⋯)
+    JavaScriptBridge.eval("window.location.href = " + JSON.stringify(target))
+
+func copy_game_link() -> void:
+    var url := game_url()
+    DisplayServer.clipboard_set(url)
+    if OS.has_feature("web"): JavaScriptBridge.eval("try { navigator.clipboard && navigator.clipboard.writeText(" + JSON.stringify(url) + ") } catch (e) {}")
+    notice.emit("Link copiado! Cole no Chrome ou no Safari para abrir o FRAIHA.", false)
+
+func sign_in_google(then_open := "", force := false):
     if not configured(): return
     if not OS.has_feature("web"):
         notice.emit("Entrar com Google está disponível na versão Web do FRAIHA.", true)
         return
+    google_then = then_open
+    var ua := user_agent()
+    var app := in_app_browser(ua)
+    if not app.is_empty() and not force:
+        ui_event("google_inapp", {"app": app})
+        google_blocked.emit(app, mobile_os(ua))
+        return
+    if not app.is_empty(): ui_event("google_inapp_force", {"app": app})
     # Fluxo de redirecionamento (sem popup): volta ao jogo com a sessão no endereço.
     if not then_open.is_empty(): JavaScriptBridge.eval("sessionStorage.setItem('fraiha_after_login', " + JSON.stringify(then_open) + ")")
     var url = supabase_url + "/auth/v1/authorize?provider=google&redirect_to=" + site_url.uri_encode()
@@ -369,8 +439,42 @@ func _clear_session():
     if guest_wanted and socket_open: _send_guest_auth.call_deferred()
     changed.emit()
 
+## R181 · erro do Google na volta ao jogo. "state" (começou num navegador, terminou em outro / demorou demais):
+## tenta de novo sozinho UMA vez (a cada 10 min) neste navegador; senão, explica com calma o que fazer.
+const OAUTH_RETRY_KEY := "fraiha_oauth_retry_at"
+static func is_state_error(desc: String, code := "") -> bool:
+    return code == "bad_oauth_state" or desc.to_lower().contains("state")
+
+func _oauth_error(desc: String, code := "") -> void:
+    if not is_state_error(desc, code):
+        notice.emit.call_deferred("Login não concluído: " + desc, true)
+        return
+    var app := in_app_browser(user_agent())
+    var last := float(str(JavaScriptBridge.eval("sessionStorage.getItem('" + OAUTH_RETRY_KEY + "') || localStorage.getItem('" + OAUTH_RETRY_KEY + "') || '0'")))
+    var now := Time.get_unix_time_from_system()
+    if app.is_empty() and now - last > 600.0:
+        JavaScriptBridge.eval("try { sessionStorage.setItem('%s', '%d'); localStorage.setItem('%s', '%d') } catch (e) {}" % [OAUTH_RETRY_KEY, int(now), OAUTH_RETRY_KEY, int(now)])
+        ui_event("google_state_retry")
+        notice.emit.call_deferred("Quase lá! Continuando o login com Google…", false)
+        (func(): sign_in_google(after_login, true)).call_deferred()
+        return
+    ui_event("google_state_failed", {"app": app})
+    if not app.is_empty():
+        (func(): google_blocked.emit(app, mobile_os(user_agent()))).call_deferred()
+        return
+    notice.emit.call_deferred("O login com Google não terminou (ele começou em outro navegador, como o do Instagram). Toque em CONTINUAR COM GOOGLE de novo aqui ou entre com e-mail e senha.", true)
+
 func _adopt_redirect_session() -> bool:
     if not OS.has_feature("web"): return false
+    var query = str(JavaScriptBridge.eval("window.location.search || ''"))
+    if query.contains("error_description="):   # alguns erros do Supabase voltam na query (?error=…)
+        var qp := {}
+        for pair in query.substr(1).split("&"):
+            var kv = pair.split("=", true, 1)
+            if kv.size() == 2: qp[kv[0]] = kv[1].uri_decode()
+        JavaScriptBridge.eval("history.replaceState(null, '', window.location.pathname + window.location.hash)")
+        _oauth_error(String(qp.get("error_description", "")).replace("+", " "), String(qp.get("error_code", "")))
+        return false
     var hash = str(JavaScriptBridge.eval("window.location.hash || ''"))
     if hash.length() < 2: return false
     var params = {}
@@ -381,7 +485,7 @@ func _adopt_redirect_session() -> bool:
     # Remove os tokens da barra de endereço imediatamente.
     JavaScriptBridge.eval("history.replaceState(null, '', window.location.pathname + window.location.search)")
     if params.has("error_description"):
-        notice.emit.call_deferred("Login não concluído: " + String(params.error_description).replace("+", " "), true)
+        _oauth_error(String(params.error_description).replace("+", " "), String(params.get("error_code", "")))
         return false
     redirect_pending = true
     _adopt_session.call_deferred({"access_token": params.access_token, "refresh_token": params.get("refresh_token", ""), "expires_in": params.get("expires_in", "3600")})
@@ -586,6 +690,10 @@ func _link_lost():
 
 func _receive(msg: Dictionary):
     var type = String(msg.get("type", ""))
+    if (type == "acct_state" or type == "guest_state") and not _ui_pending.is_empty():
+        var pend := _ui_pending.duplicate()
+        _ui_pending.clear()
+        for m in pend: (func(): _send(m)).call_deferred()
     if type == "leagues_preview":
         if _set_leagues_preview(msg.get("enabled", false)): changed.emit()
         return

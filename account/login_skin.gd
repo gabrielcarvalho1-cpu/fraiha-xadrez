@@ -49,7 +49,7 @@ class Field extends Control:
         line.offset_bottom = -22
         var flat := StyleBoxEmpty.new()
         for s in ["normal", "focus", "read_only"]: line.add_theme_stylebox_override(s, flat)
-        line.add_theme_font_size_override("font_size", 32)
+        line.add_theme_font_size_override("font_size", 38)   # R181 · letra maior (era 32)
         line.add_theme_font_override("font", field_font())
         line.add_theme_color_override("font_color", CREAM)
         line.add_theme_color_override("font_placeholder_color", PLACEHOLDER)
@@ -126,6 +126,8 @@ class SkinButton extends Button:
 
 # ---------------------------------------------------------------- link (linha com ícone, texto e seta)
 class SkinLink extends Button:
+    const TEXT_X := 78.0       # onde o texto começa (antes 125)
+    const CHEVRON_W := 100.0    # espaço da seta pintada na arte, à direita (seta em x≈795–810 da arte)
     var icon_kind := ""
     var baked := false
     func _init():
@@ -141,16 +143,17 @@ class SkinLink extends Button:
     func _draw():
         var lit := is_hovered()
         if not baked: draw_style_box(LoginSkinRef.nine_row(), Rect2(Vector2.ZERO, size))
-        var ic := Rect2(Vector2(50, 6), Vector2(46, 46))
+        # R181 · ícone mais à esquerda e texto MAIOR (mesmo tamanho nos três), sem mexer na arte (linhas/setas pintadas)
+        var ic := Rect2(Vector2(10, 4), Vector2(52, 52))
         var col := Color("ffe9b0") if lit else GOLD
         match icon_kind:
             "": pass
             "person": LoginSkinRef.person_icon(self, ic, col)
             _: Art.icon(self, icon_kind, ic, col)
         var f: Font = Art.FONT_SEMI
-        var fs := 33
-        while fs > 16 and f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > size.x - 130.0 - 60.0: fs -= 1
-        var base := Vector2(125, 31 + f.get_ascent(fs) * 0.36)
+        var fs := LoginSkinRef.link_font_size(f, size.x)
+        while fs > 16 and f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > size.x - TEXT_X - CHEVRON_W: fs -= 1
+        var base := Vector2(TEXT_X, 30 + f.get_ascent(fs) * 0.36)
         # O painel inteiro é reduzido (scale k): o texto é rasterizado no tamanho FINAL em pixels
         # (fonte fs*k desenhada com transform 1/k) para ficar nítido, sem bordas grossas/serrilhadas.
         var gk: float = maxf(0.05, get_global_transform().get_scale().x)
@@ -199,6 +202,13 @@ class LoginSkinRef:
         sb.texture_margin_top = my
         sb.texture_margin_bottom = my
         return sb
+    ## R181 · tamanho único dos links da tela de entrar: o maior em que o texto mais longo cabe (até 42; antes 33)
+    const LINK_TEXTS := ["Criar conta", "Esqueci minha senha", "Jogar como convidado"]
+    static func link_font_size(f: Font, w: float) -> int:
+        var fs := 42
+        for t in LINK_TEXTS:
+            while fs > 16 and f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > w - SkinLink.TEXT_X - SkinLink.CHEVRON_W: fs -= 1
+        return fs
     static func gold_text(ci: CanvasItem, font: Font, pos: Vector2, text: String, fs: int, lit := false):
         ci.draw_string(font, pos + Vector2(0, 3), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.55))
         ci.draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0.22, 0.12, 0.02, 0.9))
