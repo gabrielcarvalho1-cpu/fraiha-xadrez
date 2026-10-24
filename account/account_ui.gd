@@ -6,6 +6,7 @@ extends CanvasLayer
 ## ficam exatamente sobre os elementos pintados. As outras páginas usam a mesma moldura sem o
 ## interior (login_art_blank.png) com os componentes recortados da arte (login_skin.gd).
 signal closed
+signal guest_chosen   # R181 · tocou em JOGAR COMO CONVIDADO
 signal ready_for_ranked
 const Mobile = preload("res://ui_v022/mobile_layout.gd")
 const GOLD = Color("f4ce7f")
@@ -24,7 +25,12 @@ const SLOT_EMAIL := Rect2(196, 445, 738, 120)
 const SLOT_PASSWORD := Rect2(196, 560, 738, 120)
 const SLOT_ENTER := Rect2(196, 688, 738, 150)
 const SLOT_GOOGLE := Rect2(196, 846, 738, 104)
-const SLOT_LINKS := [Rect2(232, 993, 640, 72), Rect2(232, 1065, 640, 72), Rect2(232, 1138, 640, 72)]   # R181 · mais largos (texto maior); setas pintadas em x≈802
+const SLOT_LINKS := [Rect2(290, 993, 550, 72), Rect2(290, 1065, 550, 72), Rect2(290, 1138, 550, 72)]   # PC (congelado)
+## R181 · JOGAR COMO CONVIDADO é o botão PRINCIPAL (7 de 13 pessoas do anúncio saíram nesta tela sem tocar em nada):
+## placa azul do próprio jogo (a mesma do ENTRAR) com brilho dourado, por cima das 2 primeiras linhas de links;
+## "Criar conta" e "Esqueci minha senha" ficam menores, lado a lado, na última linha. A arte não muda.
+const SLOT_GUEST := Rect2(196, 986, 738, 144)
+const SLOT_SMALL := [Rect2(228, 1140, 268, 66), Rect2(500, 1140, 272, 66)]   # seta pintada em x≈795
 const SLOT_STATUS := Rect2(230, 1212, 662, 40)
 
 var account
@@ -134,6 +140,20 @@ func hide_ui():
     dim.hide(); scroll.hide()
     if is_instance_valid(art): art.texture = null   # R87 · solta a arte do login
 
+## R181 · convidado: conecta ao servidor JÁ no clique (antes só conectava ao abrir o Online Casual, e o convidado
+## que jogava contra bots nunca aparecia no Admin → Sessões).
+## R181 · REGRA DO DONO: mudança de visual/letra/botão só no celular (web mobile e app). PC congelado.
+func _mobile() -> bool:
+    return is_inside_tree() and Mobile.active(get_viewport())
+
+func play_as_guest():
+    preload("res://telemetry/web_track.gd").login("guest", "start")
+    preload("res://telemetry/web_track.gd").pixel("EntrouConvidado")
+    if account != null:
+        account.ensure_online(true)
+    guest_chosen.emit()
+    close()
+
 func close():
     hide_ui()
     closed.emit()
@@ -231,6 +251,7 @@ func _label(text: String, size := 16, color := Color("e8e0c8")) -> Label:
 func _input_field(key: String, placeholder: String, secret := false, slot := Rect2()) -> LineEdit:
     var holder = LoginSkin.Field.new()
     holder.name = "Field_" + key
+    holder.big = _mobile()   # R181 · letra maior só no celular
     holder.baked = slot.size.x > 0.0
     holder.setup("lock" if secret else ("mail" if key == "email" else "person_add"), secret)
     var e: LineEdit = holder.line
@@ -259,6 +280,7 @@ const LINK_ICONS = {"Criar conta": "person", "Esqueci minha senha": "key", "Joga
 func _link(text: String, action: Callable, slot := Rect2()) -> Button:
     var b = LoginSkin.SkinLink.new()
     b.text = text
+    b.big = _mobile() and slot.size.x > 0.0   # R181 · texto maior só no celular, na tela de entrar (arte com as linhas)
     b.icon_kind = LINK_ICONS.get(text, "")
     b.baked = slot.size.x > 0.0
     b.pressed.connect(action)
@@ -271,7 +293,21 @@ func _link(text: String, action: Callable, slot := Rect2()) -> Button:
             links_box.add_theme_constant_override("separation", 0)
             center.add_child(links_box)
         links_box.add_child(b)
+        if _mobile():   # R181 · celular: linha mais larga e texto maior e igual para todos (o rodapé da linha estica)
+            b.custom_minimum_size = Vector2(700, 76)
+            _fit_box_links()
     return b
+
+## R181 · celular: o maior tamanho em que TODOS os links da tela cabem antes da seta da linha
+func _fit_box_links() -> void:
+    if links_box == null: return
+    var f: Font = preload("res://account/login_art.gd").FONT_SEMI
+    var fs := 42
+    for l in links_box.get_children():
+        while fs > 18 and f.get_string_size(String(l.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > l.custom_minimum_size.x - 130.0 - 70.0: fs -= 1
+    for l in links_box.get_children():
+        l.fixed_fs = fs
+        l.queue_redraw()
 
 var links_box: VBoxContainer = null
 
@@ -374,9 +410,28 @@ func _show(target: String):
             _input_field("password", "Senha", true, SLOT_PASSWORD).text_submitted.connect(func(_t): account.sign_in(_value("email"), _value("password")))
             _button("ENTRAR", func(): account.sign_in(_value("email"), _value("password")), true, SLOT_ENTER)
             _button("CONTINUAR COM GOOGLE", func(): account.sign_in_google("ranked" if return_to_ranked else ""), false, SLOT_GOOGLE)
-            _link("Criar conta", func(): _show("signup"), SLOT_LINKS[0])
-            _link("Esqueci minha senha", func(): _show("recover"), SLOT_LINKS[1])
-            _link("Jogar como convidado", close, SLOT_LINKS[2])
+            if not _mobile():   # PC congelado: exatamente o layout original (só o clique do convidado agora conecta ao servidor)
+                _link("Criar conta", func(): _show("signup"), SLOT_LINKS[0])
+                _link("Esqueci minha senha", func(): _show("recover"), SLOT_LINKS[1])
+                _link("Jogar como convidado", play_as_guest, SLOT_LINKS[2]).name = "GuestButton"
+            else:   # R181 · celular: JOGAR COMO CONVIDADO é o botão PRINCIPAL; os outros dois menores, lado a lado
+                var guest = _button("Jogar como convidado", play_as_guest, true, SLOT_GUEST)   # minúsculas = versalete, como o "Entrar" da arte
+                guest.name = "GuestButton"
+                guest.baked = false   # a placa é desenhada (a arte tem só as linhas dos links aqui)
+                guest.glow = true
+                guest.entrar_style = true
+                guest.veil = true
+                guest.font_size = 58
+                guest.side = 300.0
+                var sl = _link("Criar conta", func(): _show("signup"), SLOT_SMALL[0])
+                sl.small = true
+                sl.halo = true
+                sl.custom_minimum_size = Vector2.ZERO
+                sl.size = SLOT_SMALL[0].size
+                var sr = _link("Esqueci minha senha", func(): _show("recover"), SLOT_SMALL[1])
+                sr.small = true
+                sr.custom_minimum_size = Vector2.ZERO
+                sr.size = SLOT_SMALL[1].size
             if not message.is_empty():
                 status_label.text = message
                 status_label.add_theme_color_override("font_color", Color("f0d9a0"))
@@ -433,16 +488,16 @@ func _show(target: String):
             var app_name := inapp_app if not inapp_app.is_empty() else "este app"
             _label("O %s não deixa entrar com Google aqui dentro. Abra o FRAIHA no navegador do celular e entre com Google por lá — leva 5 segundos." % app_name, 16)
             if inapp_os == "ios":
-                _button("ABRIR NO SAFARI", account.open_external_browser, true)
+                _button("ABRIR NO SAFARI", account.open_external_browser, true).side = 340.0
                 _label("Se não abrir: toque em ⋯ (no canto de cima) e escolha \"Abrir no navegador externo\".", 14, Color("f0d9a0"))
             else:
-                _button("ABRIR NO CHROME" if inapp_os == "android" else "ABRIR NO NAVEGADOR", account.open_external_browser, true)
+                _button("ABRIR NO CHROME" if inapp_os == "android" else "ABRIR NO NAVEGADOR", account.open_external_browser, true).side = 340.0
                 _label("Se não abrir: toque em ⋮ (no canto de cima) e escolha \"Abrir no Chrome\" ou \"Abrir no navegador\".", 14, Color("f0d9a0"))
             _button("COPIAR LINK DO JOGO", account.copy_game_link)
             _button("CRIAR CONTA COM E-MAIL", func(): _show("signup"))
             _divider()
-            _link("Já tenho conta com e-mail — Entrar", func(): _show("login"))
-            _link("Tentar com Google aqui mesmo assim", func(): account.sign_in_google(account.google_then, true))
+            _link("Já tenho conta: entrar", func(): _show("login"))
+            _link("Tentar Google aqui mesmo", func(): account.sign_in_google(account.google_then, true))
             _link("Jogar como convidado", close)
         "waiting":
             _label("Conectando sua conta ao servidor FRAIHA…", 16)

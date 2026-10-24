@@ -101,6 +101,7 @@ var hits := []               # [Button, Rect2 de tela, id] → brilho de hover +
 var _orig := {}              # registro do que foi alterado (desfeito em restore)
 var _art_src_set: Array = []  # R176.1 · botões com a arte de baixo marcada (destaque de saída)
 var _circle: ShaderMaterial
+const AVATAR_GROW := 6.0   # R181 · retrato quadrado cobre o anel redondo pintado no cartão
 var _bare_clocks := []
 # celular: botões próprios (som, opções, mais, barra do chat) e o menu de opções
 var mob_buttons := {}
@@ -368,11 +369,13 @@ func _skin_strips(M: Dictionary) -> void:
         _rec(s.plaque, "visible", false)
         # R180e · a camada da FRENTE fica: é ela que desenha o anel verde em volta da foto de quem está falando
         var pt: Control = s.portrait
-        _rec(pt, "custom_minimum_size", R(M.avatar).size)   # antes do tamanho (o mínimo antigo prenderia o tamanho)
-        _place(pt, _dy(M.avatar, dy))
-        var pbg = pt.get_node_or_null("PortraitBg")
-        if pbg != null: _rec(pbg, "visible", false)
-        if pt.avatar_rect != null: _rec(pt.avatar_rect, "material", _circle)
+        # R181 · retrato QUADRADO com moldura (antes: recorte redondo). Um pouco maior que o anel pintado na arte,
+        # para a moldura não ficar comendo as bordas nem deixar o anel aparecer.
+        var av_r: Rect2 = _dy(M.avatar, dy).grow(AVATAR_GROW)
+        _rec(pt, "custom_minimum_size", R(av_r).size)   # antes do tamanho (o mínimo antigo prenderia o tamanho)
+        _place(pt, av_r)
+        if pt.avatar_rect != null: _rec(pt.avatar_rect, "material", null)
+        if pt.has_method("square_frame"): pt.square_frame()
         _text(s.name, [M.name[0], M.name[1] + dy, M.name[2], M.name[3]], FONT_BOLD, Color("f6f1e6"), 4)
         _text(s.sub, [M.sub[0], M.sub[1] + dy, M.sub[2], M.sub[3]], FONT_SEMI, Color("f3e3bd"), 3)
         _rec(s.emblem, "custom_minimum_size", R(M.emblem).size)

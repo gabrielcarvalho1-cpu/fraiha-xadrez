@@ -33,7 +33,9 @@ const { SeasonPass } = require('./economy/season_pass');   // R120 · Passe da T
 const { Creators } = require('./social/creators');   // R121 · Apoie um Criador
 const { Window, Gate } = require('./net_guard');
 const { JoinLog } = require('./admin/joins');
-const { Sessions } = require('./admin/sessions');   // R180 · Admin → Sessões   // R179 · aviso de entrada no Admin   // R170 · hardening (auditoria Orca R168)
+const { Sessions } = require('./admin/sessions');
+const { VisitHttp } = require('./admin/visit_http');   // R181 · rastreamento sem login (POST /t)
+const { MetaCapi } = require('./admin/meta_capi');   // R181 · Meta Conversions API (token só em env)   // R180 · Admin → Sessões   // R179 · aviso de entrada no Admin   // R170 · hardening (auditoria Orca R168)
 
 const GUEST_TTL_MS = 24 * 3600e3;
 // R170 · SEC-002/003/004: limites de entrada (ajustáveis por variável de ambiente; padrões folgados para jogador real)
@@ -114,7 +116,9 @@ class Backend {
     this.tickets = new Tickets({ backend: this });   // R176.8
     this.dchat = new DirectChat({ backend: this });   // R177
     this.joins = new JoinLog();
-    this.track = new Sessions({ backend: this, now: () => this.now(), timers: opts.trackTimers !== false });   // R180 · tempo, telas e ações de cada visita   // R179 · "entrou um jogador" (Admin, com som)
+    this.track = new Sessions({ backend: this, now: () => this.now(), timers: opts.trackTimers !== false });
+    this.capi = new MetaCapi({ env: opts.env || process.env, now: () => this.now() });
+    this.visitHttp = new VisitHttp({ track: this.track, env: opts.env || process.env, now: () => this.now(), capi: this.capi });   // R180 · tempo, telas e ações de cada visita   // R179 · "entrou um jogador" (Admin, com som)
     this.seasonPass = new SeasonPass({ backend: this, send: (ws, o) => this.send(ws, o) });   // R120
     this.creators = new Creators({ backend: this, send: (ws, o) => this.send(ws, o) });   // R121
     this.chat.ownedEmotes = uid => this.crownStore.owned(uid);   // R119 · emotes comprados na Loja de Coroas
@@ -456,7 +460,7 @@ class Backend {
         // (recarregar a página / cair e voltar em até 90 s = mesma sessão).
         const fresh = !!(this.joins && this.joins.fresh.has(String(identity.id)));
         const kind = identity.guest ? (ws.guestIsNew ? 'guest_new' : 'guest') : (fresh ? 'new_account' : 'account');
-        const ts = this.track ? this.track.online(identity, kind) : null;
+        const ts = this.track ? this.track.online(identity, kind, ws) : null;
         const isNewVisit = !ts || ts.justCreated;
         const j = this.joins && isNewVisit ? this.joins.note({ id: identity.id, nickname: identity.nickname, guest: !!identity.guest, newGuest: !!ws.guestIsNew, force: true }) : null;   // R179
         if (j && ts) { j.sid = ts.sid; ts.kind = j.kind; }

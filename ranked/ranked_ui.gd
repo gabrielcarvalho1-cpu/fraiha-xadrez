@@ -263,8 +263,13 @@ func _make_strip() -> Dictionary:
     var front = Plaque.new()      # camada da frente: indicador de voz por cima do retrato
     front.front = true
     bg.add_child(front)
+    var ai_badge = preload("res://ranked/ai_badge.gd").new()   # R181 · celular: ícone do rival de IA ao lado do nome
+    ai_badge.name = "AiBadge"
+    ai_badge.top_level = true
+    ai_badge.visible = false
+    bg.add_child(ai_badge)
     hud.add_child(bg)
-    var strip := {"front": front, "bg": bg, "name": name, "clock": clock, "style": style, "seal": seal, "seal_id": "", "color": "", "portrait": portrait, "plaque": plaque, "sub": sub, "emblem": emblem}
+    var strip := {"front": front, "bg": bg, "name": name, "clock": clock, "style": style, "seal": seal, "seal_id": "", "color": "", "portrait": portrait, "plaque": plaque, "sub": sub, "emblem": emblem, "ai": ai_badge}
     # R37 · passar o mouse (ou tocar) na faixa do jogador abre o cartão de perfil com o placar deste modo
     bg.mouse_filter = Control.MOUSE_FILTER_PASS
     bg.mouse_entered.connect(func(): _strip_hover(strip, true))
@@ -371,11 +376,10 @@ func _art_label(font: Font, r: Rect2, px: int, color: Color) -> Label:
     search_art.add_child(l)
     return l
 
-## R181 · FILA HONESTA: depois de 8 s a linha do ritmo alterna (a cada 4 s) com uma dica amigável.
-## Aos ~25 s sem ninguém, o servidor traz um RIVAL DE IA da liga (com selo IA no cartão).
+## R181 · FILA (só no CELULAR; PC congelado): depois de 8 s a linha do ritmo alterna (a cada 4 s) com um texto neutro.
 static func search_hint(base: String, secs: int) -> String:
     if secs < 8 or (secs / 4) % 2 == 0: return base
-    return "Procurando alguém do seu nível…" if secs < 18 else "Fila calma? Já já chega um rival de IA"
+    return "Procurando adversário da sua liga…"
 
 ## texto do ritmo: diminui a fonte até caber entre as molduras (nada é cortado)
 func _set_search_mode(t: String):
@@ -933,7 +937,7 @@ func _process(_delta):
         if is_instance_valid(search_mode_label) and search_art.visible:
             var mi = _mode_info(controller_mode_or_last())
             var base: String = "%s · %d min" % [mi[1], mi[2]] if rated() else "CASUAL · %s · %d min" % [mi[1], mi[2]]
-            var want: String = "RECONECTANDO…" if controller.requeue_pending else search_hint(base, int(s))
+            var want: String = "RECONECTANDO…" if controller.requeue_pending else (search_hint(base, int(s)) if Mobile.active(get_viewport()) else base)
             if search_mode_label.text != want: _set_search_mode(want)
     if screen == "found" and is_instance_valid(found_label):
         var left = maxi(0, controller.starts_in_ms - (Time.get_ticks_msec() - controller.state_at))
@@ -961,7 +965,11 @@ func _refresh_strips():
         var who = "Você" if pair[1] == me else String(info.get("nickname", "Adversário"))
         if pair[1] != me and not bool(info.get("connected", true)): who += " (reconectando…)"
         var lg := clampi(int(info.get("league", 0)), 0, 10)
+        # R181 · rival de IA: no CELULAR o " · IA" vira um ícone ao lado do nome (tocar mostra "IA"); no PC fica o texto
+        var ai_icon: bool = pair[1] != me and bool(info.get("ai", false)) and Mobile.active(get_viewport()) and strip.has("ai")
+        if ai_icon: who = who.trim_suffix(controller.AI_TAG)
         strip.name.text = who
+        if strip.has("ai"): _place_ai_badge(strip, ai_icon and strip.bg.is_visible_in_tree())
         var ttl := Cosmetics.title_text(Cosmetics.public_title(info if pair[1] != me else PlayerPortrait.self_info(hub)))
         if info.has("sub"):
             strip.sub.text = String(info.sub)
@@ -1025,6 +1033,16 @@ func _refresh_strips():
 func _hud_owns_strips() -> bool:
     var st = get_parent()
     return st != null and st.has_method("mobile_hud_on") and bool(st.mobile_hud_on())
+
+## selo no canto de baixo à direita do RETRATO do adversário (no celular não sobra espaço entre o nome e o relógio)
+func _place_ai_badge(strip: Dictionary, on: bool) -> void:
+    var b: Control = strip.ai
+    b.visible = on
+    if not on: return
+    var pr: Rect2 = (strip.portrait as Control).get_global_rect()
+    var sz := clampf(pr.size.x * 0.58, 20.0, 34.0)
+    b.size = Vector2(sz, sz)
+    b.global_position = pr.end - Vector2(sz * 0.78, sz * 0.86)
 
 # Posiciona as faixas dos jogadores em volta do tabuleiro (retângulo em pixels de tela).
 const PLAQUE_H := 98.0

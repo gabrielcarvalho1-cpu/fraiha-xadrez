@@ -4,7 +4,7 @@ extends RefCounted
 ## R103 · contato = e-mail do responsável; compras com direito de arrependimento e sem renovação automática.
 ## ATUALIZADO também é a versão dos Termos aceita no cadastro (máx. 40 caracteres).
 const CONTATO := "contato@fraihaxadrez.com"   # R176 · e-mail oficial do jogo
-const ATUALIZADO := "14 de outubro de 2026 · versão 2"
+const ATUALIZADO := "24 de outubro de 2026 · versão 3"   # R181 · navegação, Pixel/API de Conversões, IA na fila
 
 static func contato() -> String:
 	return ("E-mail: " + CONTATO + "\nRespondemos em até 5 dias úteis. Pedidos sobre compras, reembolso ou dados pessoais: informe o nome de jogador e o e-mail da conta.") if not CONTATO.is_empty() else "(canal de contato em breve — use o CHAT GLOBAL ou fale com a equipe FRAIHA)"
@@ -62,7 +62,9 @@ Esta Política explica, de forma simples, quais dados o FRAIHA Xadrez usa e por 
 • Social: lista de amigos, pedidos, bloqueios e mensagens privadas.
 • Chats e voz: mensagens do chat da partida, da mesa e do CHAT GLOBAL. A voz é transmitida ao vivo e NÃO é gravada.
 • Pagamentos: registro da compra (produto, valor, forma de pagamento, data e situação). Os dados do cartão e o CPF pedido no pagamento ficam com o Mercado Pago; o FRAIHA não os recebe.
-• Técnicos: dados de conexão necessários para o jogo funcionar (como o endereço IP, usado para segurança e contra abuso) e estatísticas de acesso sem cookies e sem identificar você.
+• Técnicos: dados de conexão necessários para o jogo funcionar (como o endereço IP, usado para segurança e contra abuso), tipo de aparelho e navegador.
+• Navegação no jogo: quais telas você abre e quais botões toca, com horário, tempo de carregamento e erros, e um código aleatório guardado no seu navegador para contar visitas e retornos. Nunca o que você digita (e-mail, senha, mensagens). Se você chegou por um link de anúncio, guardamos o nome da campanha do link.
+• Cookies e Pixel da Meta: SÓ se você tocar em ACEITAR no aviso de cookies, o Pixel da Meta e a API de Conversões da Meta recebem alguns eventos do jogo (jogo carregado, entrou como convidado, criou conta, primeira partida, partida concluída), com o endereço IP e o navegador, para medirmos nossos anúncios. Se recusar, nada disso é enviado e o jogo funciona igual.
 Convidados jogam sem cadastro: usamos apenas um apelido temporário.
 
 2. PARA QUE USAMOS
@@ -72,10 +74,10 @@ Para criar e manter sua conta, montar partidas e rankings, mostrar seu perfil pa
 Seu nome de jogador, avatar/foto, moldura e selos, liga, placar e status. Seu e-mail NUNCA é mostrado.
 
 4. COM QUEM COMPARTILHAMOS
-Apenas com os serviços que fazem o jogo funcionar: hospedagem do servidor (Render) e do site (Cloudflare), banco de dados e login (Supabase), login com Google, voz (Agora) e pagamentos (Mercado Pago). Alguns desses serviços ficam fora do Brasil; nesses casos os dados são transferidos com as proteções exigidas pela LGPD. Não vendemos seus dados e não usamos seus dados para publicidade.
+Apenas com os serviços que fazem o jogo funcionar: hospedagem do servidor (Render) e do site (Cloudflare), banco de dados e login (Supabase), login com Google, voz (Agora), pagamentos (Mercado Pago) e, só com o seu aceite de cookies, a Meta (medição de anúncios). Alguns desses serviços ficam fora do Brasil; nesses casos os dados são transferidos com as proteções exigidas pela LGPD. Não vendemos seus dados. Só usamos dados para medir nossos anúncios se você aceitar os cookies.
 
 5. POR QUANTO TEMPO
-Enquanto sua conta existir. Mensagens do CHAT GLOBAL ficam só na memória do servidor e somem quando ele reinicia. Registros de pagamento são guardados pelo prazo exigido por lei.
+Enquanto sua conta existir. Mensagens do CHAT GLOBAL ficam só na memória do servidor e somem quando ele reinicia. Registros de navegação (telas e botões) são apagados depois de 30 dias. Registros de pagamento são guardados pelo prazo exigido por lei.
 
 6. SEUS DIREITOS
 Você pode ver e corrigir seus dados no próprio jogo (perfil e conta) e EXCLUIR A SUA CONTA a qualquer momento em TERMOS E PRIVACIDADE > EXCLUIR CONTA. Pelo contato abaixo você também pode pedir: confirmação de que tratamos seus dados, uma cópia deles, correção, informação sobre com quem são compartilhados, e reclamar à Autoridade Nacional de Proteção de Dados (ANPD).

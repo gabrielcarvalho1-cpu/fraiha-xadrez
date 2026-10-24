@@ -4,21 +4,26 @@ extends RefCounted
 ##
 ## AMBIENTE da build (feature de export, ver export_presets.cfg):
 ##   - "staging"    → preset "Web Alpha" (QA/testes): usa online.cfg [staging] server_url.
-##   - "production" → preset "Web Producao": usa online.cfg [online] server_url e NUNCA a seção [staging].
-##   - nenhuma      → editor/desktop/testes: [online], com os ajustes de depuração abaixo.
+##   - "production" → presets oficiais ("Web Producao", "Windows Desktop"): usa online.cfg [online] server_url.
+##   - nenhuma      → editor / testes / builds locais: SEM servidor por padrão (R181).
 ## Ordem (a última que existir vence):
-##   1. online.cfg [online] server_url ............ servidor oficial (produção)
+##   1. online.cfg [online] server_url ............ só em builds com a feature "production"
 ##   2. online.cfg [staging] server_url ........... só em builds com a feature "staging"
 ##   3. online.local.cfg (fora do Git) ............. só no editor (F5)
 ##   4. online.cfg ao lado do executável ........... só desktop exportado
 ##   5. variável de ambiente FRAIHA_SERVER_URL ..... testes/depuração
 ## Fail-closed: build marcada como produção que acabe apontando para o servidor de staging (ou marcada como
 ## staging E produção ao mesmo tempo) fica SEM servidor ("") em vez de jogar online no ambiente errado.
+## R181 · TRAVA INVERSA (incidente de 24/10: um teste local entrou na fila Casual de PRODUÇÃO): build SEM a feature
+## "production" nunca usa o servidor de produção, nem por variável/arquivo, a não ser com FRAIHA_ALLOW_PRODUCTION=1
+## (ação consciente). Sem configuração = sem online.
 static func server_url() -> String:
     var url := ""
+    var prod_url := ""
     var config = ConfigFile.new()
     if config.load("res://online.cfg") == OK:
-        url = String(config.get_value("online", "server_url", ""))
+        prod_url = String(config.get_value("online", "server_url", ""))
+        if OS.has_feature("production"): url = prod_url
         if OS.has_feature("staging"):
             url = String(config.get_value("staging", "server_url", url))
     if OS.has_feature("editor"):
@@ -35,6 +40,18 @@ static func server_url() -> String:
         if config.load("res://online.cfg") == OK:
             staging_url = String(config.get_value("staging", "server_url", ""))
         url = production_guard(url, staging_url, OS.has_feature("staging"))
+    else:
+        url = non_production_guard(url, prod_url, OS.get_environment("FRAIHA_ALLOW_PRODUCTION") == "1")
+    return url
+
+## R181 · build que NÃO é a oficial de produção: o servidor de produção fica bloqueado (vira "" = sem online).
+static func non_production_guard(url: String, prod_url: String, allow: bool) -> String:
+    if allow or url.is_empty(): return url
+    var u := url.to_lower().trim_suffix("/")
+    var p := prod_url.to_lower().trim_suffix("/")
+    if (not p.is_empty() and u == p) or u.contains("fraiha-xadrez.onrender.com"):
+        push_warning("FRAIHA: build de teste/local apontando para o servidor de PRODUÇÃO (%s): bloqueado, online desligado." % url)
+        return ""
     return url
 
 ## Trava da build de PRODUÇÃO (separada para ser testada): servidor de staging, ausente ou build marcada

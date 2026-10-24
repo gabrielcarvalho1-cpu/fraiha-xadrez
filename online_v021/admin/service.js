@@ -71,7 +71,10 @@ class AdminService {
         if (path === '/admin/api/overview') return need('dashboard.read') && out(200, await this.overview());
         if (path === '/admin/api/live') return need('live.read') && out(200, this.live(url.searchParams.get('range')));
         if (path === '/admin/api/joins') return need('live.read') && out(200, this.joins(url.searchParams.get('after')));   // R179
-        if (path === '/admin/api/sessions') return need('players.read') && out(200, await this.backend.track.list({ q: url.searchParams.get('q') || '', limit: url.searchParams.get('limit') }));   // R180
+        if (path === '/admin/api/sessions') return need('players.read') && out(200, await this.backend.track.list({ q: url.searchParams.get('q') || '', limit: url.searchParams.get('limit'),
+          ads: url.searchParams.get('ads') === '1', hideTest: url.searchParams.get('hide_test') === '1' }));   // R180 · R181 filtros
+        if (path === '/admin/api/funnel') return need('players.read') && out(200, await this.backend.track.funnel({ days: url.searchParams.get('days'),
+          ads: url.searchParams.get('ads') === '1', hideTest: url.searchParams.get('hide_test') !== '0' }));   // R181 · funil por dia
         const sm = /^\/admin\/api\/sessions\/([0-9a-fA-F-]{36})$/.exec(path);
         if (sm) { if (!need('players.read')) return; const d = await this.backend.track.get(sm[1].toLowerCase()); return d ? out(200, d) : out(404, { error: 'not_found' }); }
         if (path === '/admin/api/queues') return need('queues.read') && out(200, this.queues());

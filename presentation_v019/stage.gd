@@ -100,6 +100,7 @@ func _enter_tree():
 
 func _ready():
     preload("res://ui_v022/fonts_msdf.gd").apply()   # R124 · letras nítidas em qualquer escala
+    (func(): preload("res://telemetry/web_track.gd").loaded()).call_deferred()   # R181 · "carregou 100%" (Admin) + pixel JogoCarregado
     preload("res://ui_kit/back_pulse.gd").watch(get_tree())   # R176 · VOLTAR/SAIR/DESISTIR avermelhados, respirando
     add_child(preload("res://ui_kit/tooltip_host.gd").new())   # R176.9 · dicas dos botões no visual do jogo
     get_tree().auto_accept_quit = false
@@ -1660,6 +1661,8 @@ func _on_online_result(msg: Dictionary):
 ## nunca só "brancas"/"pretas"). Partida local (dois humanos) não abre a tela; empate abre a tela de EMPATE (R124).
 func _on_match_finished(record):
     if match_history != null: match_history.add(record)
+    if record != null and String(record.result) in ["win", "loss", "draw"]:   # R181 · Admin + pixel (PartidaConcluida)
+        preload("res://telemetry/web_track.gd").match_end(String(record.mode), String(record.result), String(bot_controller.bot_id) if String(record.mode) == "bot" else "")
     if record == null or result_overlay == null: return
     if String(record.human_color).is_empty(): return
     # R176 · antes da animação de VITÓRIA/DERROTA/EMPATE: alguns segundos para ver a posição final (o mate),

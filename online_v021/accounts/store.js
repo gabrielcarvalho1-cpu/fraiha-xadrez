@@ -640,6 +640,11 @@ class MemoryStore {
     const all = [...(this.playerSessions || new Map()).values()].filter(r => !q || r.user_id === q || r.nickname.toLowerCase().includes(q.toLowerCase()));
     return all.sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at)).slice(0, limit).map(({ events, ...r }) => r);
   }
+  // R181 · funil: sessões desde uma data (sem a linha do tempo)
+  async sessionsSince(sinceIso, limit = 20000) {
+    return [...(this.playerSessions || new Map()).values()].filter(r => r.started_at >= sinceIso)
+      .sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at)).slice(0, limit).map(({ events, ...r }) => JSON.parse(JSON.stringify(r)));
+  }
   async getSession(sid) { const r = (this.playerSessions || new Map()).get(sid); return r ? JSON.parse(JSON.stringify(r)) : null; }
   async pruneSessions(beforeIso) { for (const [k, r] of this.playerSessions || []) if (r.started_at < beforeIso) this.playerSessions.delete(k); }
   async createTicket(row) {
@@ -1345,13 +1350,35 @@ class SupabaseStore {
     return this.req('/crown_ledger?user_id=eq.' + encodeURIComponent(userId) + '&select=delta,reason,ref,created_at&order=id.desc&limit=' + Math.max(1, Math.min(100, limit | 0)));
   }
   // ---------- R180 · sessões (0030) ----------
+  // R181 · banco sem a 0031: grava sem vid/utm/flags e com o visitante como 'guest' (nada se perde do resto)
   async saveSession(row) {
-    await this.req('/player_sessions?on_conflict=session_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ ...row, updated_at: new Date().toISOString() }) });
+    const put = r => this.req('/player_sessions?on_conflict=session_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ ...r, updated_at: new Date().toISOString() }) });
+    if (this.sessionsV2 !== false) {
+      try { await put(row); this.sessionsV2 = true; return; }
+      catch (e) {
+        const t = String(e && e.code) + ' ' + String(e && e.message);
+        if (!/PGRST204|42703|23514|column|check constraint/i.test(t)) throw e;
+        this.sessionsV2 = false; console.log('[sessoes] banco sem a migração 0031: gravando sem vid/utm/flags');
+      }
+    }
+    const { vid, utm, flags, ...old } = row;
+    if (old.kind === 'visitor') old.kind = 'guest';
+    await put(old);
+  }
+  async sessionsSince(sinceIso, limit = 20000) {
+    const lim = Math.max(1, Math.min(20000, limit | 0)), base = '/player_sessions?started_at=gte.' + encodeURIComponent(sinceIso) + '&order=started_at.asc&limit=' + lim + '&select=session_id,player,user_id,nickname,kind,started_at,last_screen';
+    try { return await this.req(base + ',vid,utm,flags'); }
+    catch (e) { if (!/PGRST204|42703|column/i.test(String(e && e.code) + ' ' + String(e && e.message))) throw e; return this.req(base); }
   }
   async listSessions({ limit = 100, q = '' } = {}) {
     const lim = Math.max(1, Math.min(300, limit | 0));
     const filt = q ? (UUID_RE.test(q) ? 'user_id=eq.' + encodeURIComponent(q) + '&' : 'nickname=ilike.*' + encodeURIComponent(q.replace(/[*,()%]/g, '')) + '*&') : '';
-    return this.req('/player_sessions?' + filt + 'select=session_id,player,user_id,nickname,kind,started_at,ended_at,last_seen_at,duration_s,last_screen,device&order=started_at.desc&limit=' + lim);
+    const base = '/player_sessions?' + filt + 'select=session_id,player,user_id,nickname,kind,started_at,ended_at,last_seen_at,duration_s,last_screen,device';
+    if (this.sessionsV2 !== false) {
+      try { return await this.req(base + ',vid,utm,flags&order=started_at.desc&limit=' + lim); }
+      catch (e) { if (!/PGRST204|42703|column/i.test(String(e && e.code) + ' ' + String(e && e.message))) throw e; }
+    }
+    return this.req(base + '&order=started_at.desc&limit=' + lim);
   }
   async getSession(sid) {
     if (!UUID_RE.test(String(sid))) return null;

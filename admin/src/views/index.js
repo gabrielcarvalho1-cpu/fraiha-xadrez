@@ -1002,28 +1002,38 @@ export function news(ctx) {
 // ---------------------------------------------------------------- R180 · SESSÕES
 // Cada visita ao jogo: quanto tempo ficou, por quais telas passou e o que tentou fazer (fila, convite, compra, chat…).
 // Em andamento = memória do servidor (ao vivo); terminadas ficam no banco por 30 dias (migração 0030).
-const SS_KIND = { account: ['conta', 'on'], new_account: ['CONTA NOVA', 'gold'], guest: ['convidado', 'blue'], guest_new: ['novo convidado', 'blue'] };
+const SS_KIND = { account: ['conta', 'on'], new_account: ['CONTA NOVA', 'gold'], guest: ['convidado', 'blue'], guest_new: ['novo convidado', 'blue'], visitor: ['visitante (sem login)', 'off'] };
 const SS_STATE = { online: ['● online', 'on'], away: ['saindo…', 'gold'], ended: ['saiu', 'off'] };
-const SS_EV = { sys: '•', screen: '▸', act: '★', res: '◆' };
+const SS_EV = { sys: '•', screen: '▸', click: '★', act: '✓', res: '◆' };
 const fmtClock = ms => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
-const devTxt = d => d ? [d.device, d.browser, d.mobile === undefined ? '' : d.mobile ? 'celular' : 'computador'].filter(x => x && x !== '?').join(' · ') : '';
+const devTxt = d => d ? [d.device, d.os && d.os !== d.device ? d.os : '', d.browser, d.mobile === undefined ? '' : d.mobile ? 'celular' : 'computador'].filter(x => x && x !== '?').join(' · ') : '';
+const utmTxt = u => u && u.ad ? 'anúncio' + (u.source ? ' · ' + u.source : '') + (u.campaign ? ' · ' + u.campaign : '') : (u && u.source ? u.source : '');
+const pct = (n, d) => d ? Math.round(100 * n / d) + '%' : '—';
 export function sessions(ctx) {
   if (ctx.arg) return sessionDetail(ctx, ctx.arg);
   const f = frame(ctx, 'Sessões', 'Cada visita ao jogo: quanto tempo a pessoa ficou, por quais telas passou e o que tentou fazer. Clique numa linha para ver a linha do tempo. (Sem texto de mensagens nem posição de clique.)');
   let q = '';
   const search = h('input', { type: 'search', placeholder: 'buscar pelo apelido', style: 'max-width:260px', onkeydown: e => { if (e.key === 'Enter') { q = search.value.trim(); ctx.refresh(); } } });
+  // R181 · filtros: só quem veio do anúncio · esconder apelidos de teste do dono
+  const adsBox = h('input', { type: 'checkbox', onchange: () => ctx.refresh() });
+  const testBox = h('input', { type: 'checkbox', checked: true, onchange: () => ctx.refresh() });
   return {
     error: f.error,
     async load() {
-      const d = await ctx.api.get('/admin/api/sessions?limit=150' + (q ? '&q=' + encodeURIComponent(q) : ''));
+      const flt = (adsBox.checked ? '&ads=1' : '') + (testBox.checked ? '&hide_test=1' : '&hide_test=0');
+      const [d, fun] = await Promise.all([ctx.api.get('/admin/api/sessions?limit=150' + (q ? '&q=' + encodeURIComponent(q) : '') + flt),
+        ctx.api.get('/admin/api/funnel?days=14' + flt).catch(() => null)]);
       if (!ctx.alive()) return;
+      const funRows = fun && fun.days ? fun.days.map(x => h('tr', {},
+        h('td', { class: 'mono' }, x.day.split('-').reverse().join('/')), h('td', { class: 'mono' }, String(x.opened)),
+        ...[x.loaded, x.passed, x.played, x.returned].map(n => h('td', { class: 'mono' }, `${n} `, h('span', { class: 'dim' }, pct(n, x.opened)))))) : [];
       const rows = d.items.map(s => h('tr', { class: 'click', onclick: () => { location.hash = '#/sessions/' + s.sid; } },
         h('td', {}, h('b', {}, s.nickname || '?'), ' ', h('span', { class: 'badge ' + (SS_KIND[s.kind] || ['', ''])[1] }, (SS_KIND[s.kind] || [s.kind])[0])),
         h('td', {}, h('span', { class: 'badge ' + (SS_STATE[s.state] || ['', ''])[1] }, (SS_STATE[s.state] || [s.state])[0])),
         h('td', {}, fmtDate(s.started_at)), h('td', { class: 'mono' }, fmtClock(s.duration_ms)),
         h('td', {}, s.screen || h('span', { class: 'dim' }, '—')),
-        h('td', { class: 'mono' }, String(s.screens_count || 0)), h('td', { class: 'mono' }, String(s.actions_count || 0)),
-        h('td', { class: 'dim' }, devTxt(s.device))));
+        h('td', { class: 'mono' }, String(s.screens_count || 0)), h('td', { class: 'mono' }, String((s.clicks_count || 0) + (s.actions_count || 0))),
+        h('td', { class: 'dim' }, devTxt(s.device)), h('td', { class: 'dim' }, utmTxt(s.utm))));
       f.show(
         h('div', { class: 'grid' },
           card('Online agora', { value: d.online, status: 'real', note: 'com o jogo aberto' }),
@@ -1031,9 +1041,15 @@ export function sessions(ctx) {
           card('Tempo médio hoje', { value: d.today.sessions ? d.today.avg_ms : null, status: d.persistent ? 'real' : 'partial', note: 'por visita' }, { fmt: fmtClock })),
         d.persistent ? '' : h('div', { class: 'banner warn' }, 'Banco sem a migração 0030: as sessões ficam só na memória e somem quando o servidor reinicia.'),
         h('div', { class: 'panel' },
+          h('div', { style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:8px' }, h('h2', { style: 'margin:0' }, 'Funil por dia (14 dias)'),
+            h('label', {}, adsBox, ' só quem veio do anúncio'), h('label', {}, testBox, ' esconder meus testes (' + ((d.test_nicks || []).join(', ') || '—') + ')')),
+          h('p', { class: 'muted', style: 'margin-top:0' }, 'Pessoas = navegadores. Abriu o jogo → carregou → passou da tela de entrada (convidado ou conta) → jogou 1 partida → voltou outro dia. Visitante sem login conta a partir da R181.'),
+          funRows.length ? h('div', { class: 'tablewrap' }, h('table', {}, h('thead', {}, h('tr', {}, ['Dia', 'Abriram', 'Carregou', 'Passou da entrada', 'Jogou 1 partida', 'Voltou outro dia'].map(t => h('th', {}, t)))), h('tbody', {}, funRows)))
+            : stateBox('empty', 'Sem dados de funil ainda.')),
+        h('div', { class: 'panel' },
           h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px' }, h('h2', { style: 'margin:0' }, `Visitas (${d.items.length})`), h('div', { class: 'spacer', style: 'flex:1' }), search,
             h('button', { class: 'btn', onclick: () => { q = search.value.trim(); ctx.refresh(); } }, 'Buscar')),
-          d.items.length ? h('div', { class: 'tablewrap' }, h('table', {}, h('thead', {}, h('tr', {}, ['Jogador', 'Agora', 'Entrou', 'Tempo', 'Tela atual / onde saiu', 'Telas', 'Ações', 'Aparelho'].map(t => h('th', {}, t)))), h('tbody', {}, rows)))
+          d.items.length ? h('div', { class: 'tablewrap' }, h('table', {}, h('thead', {}, h('tr', {}, ['Jogador', 'Agora', 'Entrou', 'Tempo', 'Tela atual / onde saiu', 'Telas', 'Cliques/ações', 'Aparelho', 'Origem'].map(t => h('th', {}, t)))), h('tbody', {}, rows)))
             : stateBox('empty', q ? 'Ninguém com esse apelido.' : 'Nenhuma visita registrada ainda.')));
       if (document.activeElement !== search) search.value = q;
     },
@@ -1062,12 +1078,12 @@ function sessionDetail(ctx, sid) {
             h('h2', { style: 'margin:0' }, d.nickname || '?'), h('span', { class: 'badge ' + (SS_KIND[d.kind] || ['', ''])[1] }, (SS_KIND[d.kind] || [d.kind])[0]),
             h('span', { class: 'badge ' + (SS_STATE[d.state] || ['', ''])[1] }, (SS_STATE[d.state] || [d.state])[0]),
             d.user_id ? h('a', { href: '#/players/' + d.user_id }, 'ver jogador') : ''),
-          h('p', { class: 'muted' }, `Entrou ${fmtDate(d.started_at)} · ficou ${fmtClock(d.duration_ms)}` + (d.ended_at ? ` · saiu ${fmtDate(d.ended_at)}` : '') + (devTxt(d.device) ? ' · ' + devTxt(d.device) : '') +
+          h('p', { class: 'muted' }, `Entrou ${fmtDate(d.started_at)} · ficou ${fmtClock(d.duration_ms)}` + (d.ended_at ? ` · saiu ${fmtDate(d.ended_at)}` : '') + (devTxt(d.device) ? ' · ' + devTxt(d.device) : '') + (utmTxt(d.utm) ? ' · origem: ' + utmTxt(d.utm) : '') +
             (d.device && d.device.w ? ` · tela ${d.device.w}x${d.device.h}` : '') + (d.device && d.device.version ? ` · jogo v${d.device.version}` : ''))),
         h('div', { class: 'split' },
           h('div', { class: 'panel' }, h('h2', {}, 'Tempo em cada tela'), bars.length ? h('div', {}, bars) : stateBox('empty', 'O jogo desta pessoa ainda não mandou as telas (versão antiga do site?).')),
           h('div', { class: 'panel' }, h('h2', {}, 'Linha do tempo'),
-            h('p', { class: 'muted', style: 'margin-top:0' }, '▸ tela   ★ ação do jogador   ◆ resposta do jogo   • entrada/saída'),
+            h('p', { class: 'muted', style: 'margin-top:0' }, '▸ tela   ★ clique (botão — tela)   ✓ ação (login, partida, fila…)   ◆ resposta do jogo   • entrada/carregamento/saída'),
             h('div', { class: 'sslist' }, evs))));
     },
   };

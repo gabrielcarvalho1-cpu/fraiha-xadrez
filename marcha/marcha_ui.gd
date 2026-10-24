@@ -342,7 +342,7 @@ func start_game():
         _redraw()
         return
     online = false
-    preload("res://ui_v022/meta_pixel.gd").track_once("PrimeiraPartida")   # Meta Pixel: 1ª partida neste navegador
+    preload("res://telemetry/web_track.gd").match_start("marcha")   # R181 · Admin + pixel (PrimeiraPartida)
     names = DEFAULT_NAMES.duplicate()
     pile = []
     g = Rules.new()

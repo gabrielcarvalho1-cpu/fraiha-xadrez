@@ -3,11 +3,24 @@ extends Node
 ## nada de texto digitado nem posição de clique. Manda quando a tela muda e fica pelo menos 0,6 s nela.
 ## Também manda uma vez por conexão o aparelho (celular/computador, sistema, navegador, tamanho da tela, versão).
 ## in_game(): verdadeiro em partida (xadrez, XEQUE, MARCHA, sala online) — o aviso de atualização usa para não atrapalhar.
+## R181 · CORREÇÃO: na R180 o envio nunca começava (esperava acct_state/guest_state pelo sinal server_message, que o
+## serviço de conta não repassa) → nenhuma tela chegava ao painel. Agora, na Web, telas e CLIQUES vão pelo script do
+## site (web/telemetry/fraiha-track.js → POST /t), desde o carregamento e SEM login. Fora da Web: conexão do jogo.
+## Cliques: todo botão tocado (nome do botão + tela). Nome = texto do botão; sem texto, a dica ou o nome do nó.
+## Nunca o texto digitado (campos de texto não são botões) — e o servidor só aceita nomes que existem no jogo.
 
 const POLL := 0.4
 const STABLE := 0.6
 const HOME_MODAL := "res://ui_v022/home_modal.gd"
 const MOBILE_PAGE := "res://ui_v022/mobile_ref_page.gd"
+const ACCOUNT_UI := "res://account/account_ui.gd"
+const RESULT_OVERLAY := "res://presentation_v019/game_result_overlay.gd"
+const WebTrack := preload("res://telemetry/web_track.gd")
+## R181 · telas da conta (pela página aberta)
+const ACCOUNT_PAGES := { "login": "Entrada / Login", "signup": "Criar conta", "recover": "Recuperar senha", "new_password": "Nova senha",
+	"set_password": "Senha da conta", "nickname": "Escolher apelido", "account": "Sua conta", "waiting": "Conectando conta",
+	"unavailable": "Contas indisponíveis", "inapp": "Quase lá (Google no Instagram)" }
+const RESULT_NAMES := { "victory": "Vitória", "defeat": "Derrota", "draw": "Empate" }
 ## telas por script (o caminho do .gd); GAME = é jogo (não interromper)
 const LABELS := {
 	"res://account/account_ui.gd": "Login / Conta",
@@ -48,7 +61,7 @@ const MODES := { "bot": "Partida contra o computador", "local": "Partida local (
 	"online_menu": "Jogar online (sala)", "ranked": "Partida Ranqueada", "ranked_lobby": "Ranqueado (fila)", "casual": "Partida Casual",
 	"casual_lobby": "Casual (fila)" }
 const MATCH_MODES := ["bot", "local", "online", "ranked", "casual"]
-const PAGES := { "main": "Início", "profile": "Perfil", "settings": "Configurações", "bot": "Escolher bot", "bot_side": "Escolher bot (lado)",
+const PAGES := { "main": "Home (Início)", "profile": "Perfil", "settings": "Configurações", "bot": "Escolher bot", "bot_side": "Escolher bot (lado)",
 	"history": "Histórico", "ranking": "Ligas", "about": "Conheça o FRAIHA" }
 
 var stage
@@ -86,9 +99,12 @@ func _is_modal(n: Node) -> bool:
 	return false
 
 func _on_node(n: Node):
+	if n is BaseButton and not n.has_meta("fx_track"):   # R181 · cliques
+		n.set_meta("fx_track", true)
+		(n as BaseButton).pressed.connect(_on_click.bind(weakref(n)))
 	var p := _script_path(n)
 	if p.is_empty(): return
-	if LABELS.has(p) or p == MOBILE_PAGE or _is_modal(n):
+	if LABELS.has(p) or p == MOBILE_PAGE or p == ACCOUNT_UI or p == RESULT_OVERLAY or _is_modal(n):
 		_order += 1
 		_nodes.append([weakref(n), _order])
 
@@ -119,6 +135,8 @@ func _layer(n: Node) -> int:
 
 func _label_of(n: Node) -> String:
 	var p := _script_path(n)
+	if p == ACCOUNT_UI: return ACCOUNT_PAGES.get(String(n.get("page")), "Login / Conta")
+	if p == RESULT_OVERLAY: return RESULT_NAMES.get(String(n.get("result")), "Resultado da partida")
 	if LABELS.has(p): return LABELS[p]
 	if p == MOBILE_PAGE:
 		var id := String(n.get("page_id"))
@@ -179,9 +197,36 @@ func _process(delta):
 		return
 	_cand_t += dt
 	if _cand_t < STABLE: return
+	if now != current: WebTrack.screen(now)   # R181 · Web: vai pelo site, com ou sem login
 	current = now
+	if OS.has_feature("web"): return
+	var ready_now: bool = account != null and (bool(account.get("server_ready")) or bool(account.get("guest_ready")))
+	if ready_now and not _ready_id:   # R181 · antes esperava um sinal que nunca vinha
+		_ready_id = true
+		_sent = ""
+		account.send_server(device_info())
+	elif not ready_now: _ready_id = false
 	if _ready_id and now != _sent:
 		if account != null and account.send_server({"type": "ui_screen", "name": now}): _sent = now
+
+## R181 · nome do botão tocado (texto; sem texto, a dica; sem dica, o nome do nó). Nunca campo de texto.
+static func button_label(b: Node) -> String:
+	var t := ""
+	if b is Button: t = String((b as Button).text)
+	t = t.replace("\n", " ").strip_edges()
+	if t.is_empty() and b is Control: t = String((b as Control).tooltip_text).strip_edges()
+	return t.left(60)
+
+var last_button := ""
+func _on_click(ref: WeakRef):
+	var b = ref.get_ref()
+	if b == null or not is_instance_valid(b): return
+	var label := button_label(b)
+	var id := String(b.name)
+	if id.begins_with("@"): id = ""
+	if label.is_empty() and id.is_empty(): return
+	last_button = label if not label.is_empty() else id
+	WebTrack.click(label, id, current if not current.is_empty() else compute())
 
 func _on_server(msg: Dictionary):
 	var t := String(msg.get("type", ""))

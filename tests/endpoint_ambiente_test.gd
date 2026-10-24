@@ -21,9 +21,22 @@ func _initialize():
 	check(cfg.load("res://online.cfg") == OK, "online.cfg carrega")
 	check(String(cfg.get_value("online", "server_url", "")) == prod, "online.cfg [online] = produção oficial")
 	check(String(cfg.get_value("staging", "server_url", "")) == stg, "online.cfg [staging] = servidor de testes")
-	# sem feature de ambiente (este teste): servidor = [online], canal "dev"
+	# R181 · sem feature de ambiente (este teste = build local/de teste): NUNCA o servidor de produção
 	if not OS.has_environment("FRAIHA_SERVER_URL"):
-		check(Endpoint.server_url() == prod, "sem feature de ambiente usa [online]")
+		check(Endpoint.server_url() == "", "sem feature de ambiente: sem servidor (produção bloqueada por padrão)")
+	check(Endpoint.non_production_guard(prod, prod, false) == "", "build de teste apontando para produção: bloqueado")
+	check(Endpoint.non_production_guard(prod + "/", prod, false) == "", "…mesmo com barra no fim")
+	check(Endpoint.non_production_guard(prod, prod, true) == prod, "FRAIHA_ALLOW_PRODUCTION=1: liberado (ação consciente)")
+	check(Endpoint.non_production_guard(stg, prod, false) == stg, "build de teste com staging: ok")
+	check(Endpoint.non_production_guard("ws://127.0.0.1:8799", prod, false) == "ws://127.0.0.1:8799", "servidor local: ok")
+	var presets := ConfigFile.new()
+	presets.load("res://export_presets.cfg")
+	for sec in presets.get_sections():
+		if sec.ends_with(".options") or not presets.has_section_key(sec, "name"): continue
+		var nm := String(presets.get_value(sec, "name"))
+		var feats := String(presets.get_value(sec, "custom_features", ""))
+		if nm in ["Web Producao", "Windows Desktop"]: check(feats.contains("production"), "preset oficial '%s' marcado como produção" % nm)
+		else: check(not feats.contains("production"), "preset '%s' NÃO é produção" % nm)
 	check(Endpoint.channel() == "dev", "canal sem feature = dev")
 	print("RESULT ", "OK" if fails == 0 else "FALHAS=%d" % fails)
 	quit(1 if fails else 0)

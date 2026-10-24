@@ -4,11 +4,14 @@
 //   · Entrada = GRUPO: sozinho (1) ou com um amigo (2, pelo convite "JOGAR ONLINE"). Na MARCHA o grupo é
 //     uma DUPLA (lugares 0+2 ou 1+3); no XEQUE cada um joga por si.
 //   · 4 pessoas → começa na hora. 2 ou 3 pessoas → começa depois de FILL_MS esperando (bots completam).
-//   · Sozinho: continua esperando (o cliente oferece JOGAR CONTRA BOTS depois de um tempo).
+//   · Sozinho: R181 · depois de FRAIHA_QUEUE_AI_WAIT_MS (30 s) a mesa começa com bots nos lugares vazios.
 //   · Nunca junta quem já está em partida, em outra fila ou com convite sendo aceito.
 const env = process.env;
 const num = (v, d) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : d);
 const FILL_MS = num(env.FRAIHA_PARTY_QUEUE_FILL_MS, 20000);
+// R181 · TODAS as filas: sozinho (ou só a sua dupla) por FRAIHA_QUEUE_AI_WAIT_MS (padrão 30 s, o mesmo do Ranked/Casual)
+// → a mesa começa com bots nos lugares vazios. Lido a cada verificação: muda no Render sem build novo.
+const soloMs = () => num(process.env.FRAIHA_QUEUE_AI_WAIT_MS, 30000);
 const TICK_MS = num(env.FRAIHA_PARTY_QUEUE_TICK_MS, 1000);
 const GAMES = ['marcha', 'xeque'];
 
@@ -112,6 +115,7 @@ class PartyQueue {
       if (n === 4) return chosen;
     }
     if (n >= 2 && chosen.length >= 2 && now - chosen[0].since >= FILL_MS) return chosen;   // 2–3 pessoas (de grupos diferentes) + bots
+    if (n >= 1 && chosen.length >= 1 && now - chosen[0].since >= soloMs()) return chosen;   // R181 · ninguém veio: bots completam
     return null;
   }
   startTable(game, groups) {

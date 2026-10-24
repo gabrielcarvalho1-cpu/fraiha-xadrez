@@ -1,4 +1,7 @@
 'use strict';
+// R181 · estes testes avançam o relógio 60 s+ com jogadores sozinhos na fila: o rival de IA (30 s) entraria e
+// mudaria o que se mede aqui (reconciliação de sessão). Desligado só neste arquivo; a IA tem testes próprios.
+process.env.FRAIHA_QUEUE_AI = 'off';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Backend } = require('../../online_v021/backend');

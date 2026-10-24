@@ -35,7 +35,7 @@ func run():
 	acc.send_hook = func(m): sent.append(m)
 	await settle()
 	check(screens().is_empty(), "sem identidade: nada de tela enviada")
-	acc.server_message.emit({"type": "guest_state", "token": "x", "nickname": "Convidado 1"})
+	acc._receive({"type": "guest_state", "token": "x", "nickname": "Convidado 1"})
 	await settle()
 	var hello := sent.filter(func(m): return m.get("type") == "ui_hello")
 	check(hello.size() == 1 and String(hello[0].get("version", "")) != "", "ui_hello com versão: %s" % [hello])
@@ -47,7 +47,7 @@ func run():
 	hub.show_page("main")
 	await settle()
 	for v in stage.screen_tracker.debug_visible(): print("VIS ", v)
-	check(screens().back() == "Início", "Início: %s" % [screens().back()])
+	check(screens().back() == "Home (Início)", "Início: %s" % [screens().back()])
 	hub.crowns_client().open_pass()
 	await settle()
 	check(screens().back() == "Passe da Temporada", "Passe: %s" % [screens().back()])
@@ -62,7 +62,7 @@ func run():
 	check(screens().back() == "Suporte", "Suporte: %s" % [screens().back()])
 	hub.support_ui.close()
 	await settle()
-	check(screens().back() == "Início", "voltou ao Início: %s" % [screens().back()])
+	check(screens().back() == "Home (Início)", "voltou ao Início: %s" % [screens().back()])
 	var extra := [["open_leaderboard", "Ranking"], ["open_premium", "Seja Membro (Premium)"], ["open_xeque", "Xeque"], ["open_marcha", "Marcha Real"]]
 	for e in extra:
 		hub.call(e[0])

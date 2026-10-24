@@ -1,6 +1,6 @@
 'use strict';
 // R181 · RIVAL DE IA NA FILA (aprovado pelo dono: "vamos por essa linha", caminho do meio, honesto).
-// Quem fica FRAIHA_QUEUE_AI_WAIT_MS (padrão 25 s) na fila do Ranked ou do Casual sem achar ninguém de verdade
+// Quem fica FRAIHA_QUEUE_AI_WAIT_MS (padrão 30 s) na fila do Ranked ou do Casual sem achar ninguém de verdade
 // recebe automaticamente um RIVAL DE IA da mesma liga:
 //   • nome de personagem (Sir Gambito, Dama de Ferro…), avatar, tempo de pensar parecido com o de uma pessoa
 //     (pelo relógio), emote de vez em quando;
@@ -33,14 +33,13 @@ const LEVELS = [
   { name: 'Grande Mestre', approx: 2450, elo: 2450, movetime: 400 },
   { name: 'Challenger', approx: 2600, elo: 2600, movetime: 450 },
 ];
-// Personagens (nunca nome de pessoa real). Avatares grátis do jogo.
-const PERSONAS = [
-  ['Sir Gambito', 'warrior'], ['Dama de Ferro', 'av_principe_dourado'], ['Barão do Roque', 'av_torre_marmore'],
-  ['Bispo Errante', 'av_bispo_marmore'], ['Cavaleiro Veloz', 'av_cavalo_marmore'], ['Peão Audaz', 'peao_branco'],
-  ['Duquesa da Diagonal', 'archer'], ['Capitão Xeque', 'av_heroi'], ['Mestre Zugzwang', 'peao_negro'],
-  ['Lady Fianchetto', 'av_peao_dourado'], ['Conde En Passant', 'av_tab_mogno'], ['Torre de Vigia', 'av_tab_torneio_pixel'],
-  ['Dom Siciliano', 'av_tab_salao_pixel'], ['Rainha do Centro', 'av_tab_oficina_pixel'],
-];
+// Personagens (nunca nome de pessoa real). R181 · avatar = o retrato do BOT da mesma liga (bot/bot_ladder.json), nunca
+// um avatar de jogador (antes usava os grátis e podia ficar igual ao do próprio jogador).
+const PERSONAS = ['Sir Gambito', 'Dama de Ferro', 'Barão do Roque', 'Bispo Errante', 'Cavaleiro Veloz', 'Peão Audaz',
+  'Duquesa da Diagonal', 'Capitão Xeque', 'Mestre Zugzwang', 'Lady Fianchetto', 'Conde En Passant', 'Torre de Vigia',
+  'Dom Siciliano', 'Rainha do Centro'];
+const LADDER = require('../../bot/bot_ladder.json');
+const botAvatar = league => { const b = LADDER.bots[Math.max(0, Math.min(LADDER.bots.length - 1, league | 0))]; return (b && b.reward && b.reward.id) || 'madeira_reward'; };
 const AI_PREFIX = 'ai:';
 const isAiId = uid => String(uid || '').startsWith(AI_PREFIX);
 const OFF = /^(0|off|nao|não|false)$/i;
@@ -93,11 +92,13 @@ class QueueAI {
   constructor(service, { env = process.env, engine = null, random = Math.random } = {}) {
     this.svc = service; this.random = random;
     this.on = !OFF.test(String(env.FRAIHA_QUEUE_AI || '').trim());
-    this.waitMs = Math.max(0, Number(env.FRAIHA_QUEUE_AI_WAIT_MS || 25000));
+    this.env = env;
     this.engine = engine; this.engineFailed = false;
     this.starting = new Set(); this.thinking = new Set();
   }
   enabled() { return this.on; }
+  // R181 · lido a cada verificação (variável do servidor; o dono aumenta quando a base crescer, sem build novo)
+  get waitMs() { return Math.max(0, Number(this.env.FRAIHA_QUEUE_AI_WAIT_MS || 30000)); }
 
   // Chamado a cada tick do serviço, DEPOIS do pareamento normal (gente de verdade sempre tem prioridade).
   tick(now, open = true) {
@@ -130,7 +131,7 @@ class QueueAI {
       const league = await this.leagueOf(human, mode);
       const q = S.mm.queues.get(mode);
       if (!q || !q.includes(human) || !S.queueEligible(human.userId)) return;   // saiu da fila / já pareou
-      const [nickname, avatar] = PERSONAS[Math.floor(this.random() * PERSONAS.length)];
+      const nickname = PERSONAS[Math.floor(this.random() * PERSONAS.length)], avatar = botAvatar(league);
       const ai = { userId: AI_PREFIX + crypto.randomUUID(), nickname, avatar, ai: true, frame: 'liga',
         stats: S.rated ? aiStats(league) : null, since: S.now(), aiLevel: Math.max(0, Math.min(LEVELS.length - 1, league)) };
       S.mm.cancel(human.userId);
@@ -217,4 +218,4 @@ class QueueAI {
   stop() { try { this.engine && this.engine.stop(); } catch {} this.engine = null; }
 }
 
-module.exports = { QueueAI, LEVELS, PERSONAS, pickMove, thinkMs, aiStats, isAiId, AI_PREFIX };
+module.exports = { QueueAI, LEVELS, PERSONAS, botAvatar, pickMove, thinkMs, aiStats, isAiId, AI_PREFIX };

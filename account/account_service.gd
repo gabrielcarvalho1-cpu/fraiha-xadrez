@@ -1,4 +1,5 @@
 extends Node
+const WebTrack := preload("res://telemetry/web_track.gd")   # R181
 ## Conta FRAIHA: Supabase Auth (senha e Google) + conexão autenticada com o servidor.
 ## Senhas vão direto para o Supabase e nunca são guardadas. Só o refresh token
 ## da sessão fica no navegador (como qualquer login web) para evitar novo login.
@@ -171,9 +172,9 @@ func display_name() -> String:
     return nickname() if has_profile() else guest_nickname
 
 ## Garante conexão com o servidor. Sem conta, entra como convidado (apenas Online Casual).
-func ensure_online():
+func ensure_online(quiet := false):
     if server_url.is_empty():
-        notice.emit("Servidor FRAIHA não configurado.", true)
+        if not quiet: notice.emit("Servidor FRAIHA não configurado.", true)
         return
     if signed_in():
         if socket == null: _connect()
@@ -234,15 +235,18 @@ func sign_up(mail: String, password: String, wanted_nickname: String):
         notice.emit(nick_error, true)
         return
     busy = true
+    WebTrack.login("signup", "start")
     pending_nickname = wanted_nickname.strip_edges()
     var redirect = ("?redirect_to=" + site_url.uri_encode()) if not site_url.is_empty() else ""
     _auth_request(HTTPClient.METHOD_POST, "/auth/v1/signup" + redirect, {"email": mail.strip_edges(), "password": password}, func(code, body):
         busy = false
         if code >= 200 and code < 300:
+            WebTrack.login("signup", "ok")
             if body.has("access_token"): _adopt_session(body)
             else: notice.emit("Conta criada! Confirme pelo link enviado para %s e depois entre." % mail.strip_edges(), false)
         else:
             pending_nickname = ""
+            WebTrack.login("signup", "error", error_code(code, body))
             notice.emit(auth_error_text(code, body), true))
 
 func sign_in(mail: String, password: String):
@@ -251,10 +255,24 @@ func sign_in(mail: String, password: String):
         notice.emit("Digite e-mail e senha.", true)
         return
     busy = true
+    WebTrack.login("email", "start")
     _auth_request(HTTPClient.METHOD_POST, "/auth/v1/token?grant_type=password", {"email": mail.strip_edges(), "password": password}, func(code, body):
         busy = false
-        if code == 200 and body.has("access_token"): _adopt_session(body)
-        else: notice.emit(auth_error_text(code, body), true))
+        if code == 200 and body.has("access_token"):
+            WebTrack.login("email", "ok")
+            _adopt_session(body)
+        else:
+            WebTrack.login("email", "error", error_code(code, body))
+            notice.emit(auth_error_text(code, body), true))
+
+## R181 · código curto do erro de login (para o Admin): só o código do Supabase / status HTTP, nunca e-mail/senha
+static func error_code(code: int, body) -> String:
+    var c := ""
+    if body is Dictionary: c = String(body.get("error_code", body.get("code", body.get("error", ""))))
+    c = c.strip_edges()
+    var re := RegEx.create_from_string("[^A-Za-z0-9_]")
+    c = re.sub(c, "_", true).left(40)
+    return (c + " " if not c.is_empty() else "") + "http_%d" % code
 
 ## R181 · LOGIN COM GOOGLE DENTRO DO INSTAGRAM (bug real: "OAuth state not found or expired" 3x em 8 min).
 ## O Google não deixa entrar dentro do navegador embutido dos apps (Instagram, Facebook, TikTok…): o login começa
@@ -330,6 +348,7 @@ func sign_in_google(then_open := "", force := false):
         google_blocked.emit(app, mobile_os(ua))
         return
     if not app.is_empty(): ui_event("google_inapp_force", {"app": app})
+    WebTrack.login("google", "start")
     # Fluxo de redirecionamento (sem popup): volta ao jogo com a sessão no endereço.
     if not then_open.is_empty(): JavaScriptBridge.eval("sessionStorage.setItem('fraiha_after_login', " + JSON.stringify(then_open) + ")")
     var url = supabase_url + "/auth/v1/authorize?provider=google&redirect_to=" + site_url.uri_encode()
@@ -446,6 +465,8 @@ static func is_state_error(desc: String, code := "") -> bool:
     return code == "bad_oauth_state" or desc.to_lower().contains("state")
 
 func _oauth_error(desc: String, code := "") -> void:
+    var short := code if not code.is_empty() else ("bad_oauth_state" if is_state_error(desc, code) else "erro")
+    WebTrack.login("google", "error", short + (" " + desc.left(40) if is_state_error(desc, code) else ""))
     if not is_state_error(desc, code):
         notice.emit.call_deferred("Login não concluído: " + desc, true)
         return
@@ -488,6 +509,7 @@ func _adopt_redirect_session() -> bool:
         _oauth_error(String(params.error_description).replace("+", " "), String(params.get("error_code", "")))
         return false
     redirect_pending = true
+    if params.get("type", "") != "recovery": WebTrack.login("google", "ok")
     _adopt_session.call_deferred({"access_token": params.access_token, "refresh_token": params.get("refresh_token", ""), "expires_in": params.get("expires_in", "3600")})
     if params.get("type", "") == "recovery": recovery_started.emit.call_deferred()
     return true
@@ -655,6 +677,8 @@ func _process(delta):
             socket_open = true
             retry_step = 0
             rx_at = Time.get_ticks_msec()
+            var ids := WebTrack.ids()   # R181 · esta conexão é da visita já registrada pelo site (Admin: mesma sessão)
+            if not ids.is_empty(): _send({"type": "ui_link", "sid": ids.sid})
             if signed_in():
                 _log("acct_auth enviado")
                 _send({"type": "acct_auth", "access_token": access_token})
@@ -728,7 +752,7 @@ func _receive(msg: Dictionary):
         changed.emit()
         if just_created:
             # R181 · cadastro completo (e-mail OU Google) = perfil criado: o pixel conta aqui, uma vez
-            preload("res://ui_v022/meta_pixel.gd").track("CompleteRegistration")
+            WebTrack.pixel("CompleteRegistration", {}, true)   # R181 · pixel + Conversions API (mesmo event_id)
             profile_created.emit()
     elif type == "acct_error":
         var code = String(msg.get("code", ""))
@@ -793,6 +817,7 @@ func _receive(msg: Dictionary):
     elif type == "guest_state":
         if msg.has("casual_modes"): _set_casual_modes(msg.get("casual_modes"))
         if not bool(msg.get("account", false)):
+            if not guest_ready: WebTrack.login("guest", "ok")
             guest_ready = true
             guest_nickname = String(msg.get("nickname", "Convidado"))
             var tok = String(msg.get("token", ""))

@@ -29,6 +29,9 @@ const P_BOARD := Rect2(123.5, 250.5, 687.5, 667.0)
 const P_BLOCK := Vector2(50.0, 1085.0)        # do cartão do adversário ao fim do cartão do jogador
 const P_NAV_Y := 1480.0                       # topo do recorte da barra de baixo
 const P_NAV_BUTTONS := 160.0                  # da borda do recorte ao pé dos botões
+const AVATAR_GROW_K := 0.09   # R181 · retrato quadrado um pouco maior que o anel da arte
+const NAV_MIN_TOUCH := 48.0   # R181 · celular: altura mínima da área de toque de INÍCIO/AÇÕES/CHAT
+const NAV_MIN_FONT := 16      # R181 · celular: tamanho mínimo do rótulo
 const P_NAV := {"home": Rect2(208, 1503, 164, 125), "actions": Rect2(392, 1490, 164, 150), "chat": Rect2(570, 1503, 164, 125)}
 const P_CARD := {
 	"top": {"card": Rect2(128, 64, 714, 118), "avatar": Rect2(167, 88, 76, 76), "round": true,
@@ -361,11 +364,15 @@ func _layout_portrait(vs: Vector2, safe: Rect2) -> Rect2:
 		var r: Rect2 = P_NAV[id]
 		b.position = Vector2(r.position.x, r.position.y - P_NAV_Y) * k
 		b.size = r.size * k
+		if b.size.y < NAV_MIN_TOUCH:   # R181 · área de toque de pelo menos 48 px (o botão é invisível: a arte não muda)
+			b.position.y -= (NAV_MIN_TOUCH - b.size.y) / 2.0
+			b.size.y = NAV_MIN_TOUCH
 		_fit_nav_button(b)
 	for id in corner: corner[id].hide()
 	var third: Button = nav_buttons.chat
 	var bot_mode: bool = stage.mode == "bot"
 	(third.get_node("Caption") as Label).text = "LANCES" if bot_mode else "CHAT"
+	_fit_nav_button(third)   # R181 · a largura do rótulo depende do texto
 	(third.get_node("Icon") as TextureRect).texture = tex("ico_mark" if bot_mode else "ico_chat")
 	third.tooltip_text = "Lances da partida" if bot_mode else "Chat da partida"
 	var br := R(P_BOARD)
@@ -587,11 +594,12 @@ func _skin_strip(key: String, card: Rect2, avatar: Rect2, round: bool, name_r: R
 	_rec(s.plaque, "visible", false)
 	var pt: Control = s.portrait
 	_rec(pt, "top_level", true)
+	avatar = avatar.grow(avatar.size.x * AVATAR_GROW_K)   # R181 · quadrado cobre o anel redondo pintado no cartão
 	_rec(pt, "custom_minimum_size", avatar.size)
 	_set_rect(pt, avatar)
-	var pbg = pt.get_node_or_null("PortraitBg")
-	if pbg != null: _rec(pbg, "visible", not round)
-	if pt.avatar_rect != null: _rec(pt.avatar_rect, "material", stage.board_skin._circle if round else null)
+	# R181 · retrato QUADRADO com moldura (antes recortado em círculo no celular também)
+	if pt.avatar_rect != null: _rec(pt.avatar_rect, "material", null)
+	if pt.has_method("square_frame"): pt.square_frame()
 	for pair in [[s.name, name_r, name_fs, FONT_TITLE, Color("f6f1e6"), 4], [s.sub, sub_r, sub_fs, SkinRef.FONT_SEMI, Color("f3d27e"), 3]]:
 		var l: Label = pair[0]
 		_rec(l, "top_level", true)
@@ -812,10 +820,13 @@ func _fit_nav_button(b: Button) -> void:
 	var oy: float = (full - h) / 2.0
 	ic.position = Vector2(0, oy + h * 0.14)
 	ic.size = Vector2(b.size.x, h * 0.42)
-	l.position = Vector2(0, oy + h * 0.58)
-	l.size = Vector2(b.size.x, h * 0.3)
+	# R181 · rótulo com no mínimo 16 px (antes ~10 px no celular); pode passar um pouco da largura do botão
+	var fs := maxi(NAV_MIN_FONT, int(round(h * 0.2)))
+	var lw := maxf(b.size.x, (l.get_theme_font("font") as Font).get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 4.0)
+	l.position = Vector2((b.size.x - lw) / 2.0, oy + h * 0.56)
+	l.size = Vector2(lw, maxf(h * 0.3, fs * 1.15))
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.add_theme_font_size_override("font_size", maxi(10, int(round(h * 0.2))))
+	l.add_theme_font_size_override("font_size", fs)
 	var badge: Label = b.get_node("Badge")
 	badge.add_theme_font_size_override("font_size", maxi(9, int(round(h * 0.15))))
 	badge.size = Vector2(h * 0.28, h * 0.28)

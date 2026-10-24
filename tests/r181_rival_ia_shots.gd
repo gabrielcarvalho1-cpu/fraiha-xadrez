@@ -42,8 +42,8 @@ func run():
 	acc.ranked = {"ranked_5min": {"league": 0, "pl": 40, "wins": 3, "losses": 1, "draws": 0, "matches": 4}}
 	var RUI = load("res://ranked/ranked_ui.gd")
 	check(RUI.search_hint("RÁPIDA · 5 min", 3) == "RÁPIDA · 5 min", "busca: primeiros segundos mostram só o ritmo")
-	check(RUI.search_hint("RÁPIDA · 5 min", 13).begins_with("Procurando"), "busca 13 s: 'Procurando alguém do seu nível…'")
-	check(RUI.search_hint("RÁPIDA · 5 min", 21).contains("rival de IA"), "busca 21 s: avisa que chega um rival de IA")
+	check(RUI.search_hint("RÁPIDA · 5 min", 13) == "Procurando adversário da sua liga…", "busca 13 s: texto neutro")
+	check(not RUI.search_hint("RÁPIDA · 5 min", 21).contains("IA"), "busca: nada de 'rival de IA' na tela de busca")
 	var ui = stage.ranked_ui
 	ui.controller.set("mode", "ranked_5min")
 	ui.last_mode = "ranked_5min"
@@ -51,7 +51,8 @@ func run():
 	ui.search_started = Time.get_ticks_msec() - 21500
 	await frames(12)
 	check(ui.search_time_label.text.begins_with("0:2"), "tempo de fila visível (%s)" % ui.search_time_label.text)
-	check(ui.search_mode_label.text.contains("rival de IA"), "dica na tela de busca: " + ui.search_mode_label.text)
+	var mob: bool = load("res://ui_v022/mobile_layout.gd").active(root)
+	check(not ui.search_mode_label.text.contains("IA"), "tela de busca sem 'IA': " + ui.search_mode_label.text)
 	await shot("busca_21s")
 	ui.close_panel()
 	# rival de IA encontrado
@@ -59,7 +60,7 @@ func run():
 	var rules = Rules.new()
 	rules.reset()
 	var mid := "00000000-0000-4000-8000-0000000000ab"
-	var opp := {"user_id": "", "nickname": "Sir Gambito", "avatar_id": "warrior", "league": 0, "pl": 50, "connected": true, "ai": true}
+	var opp := {"user_id": "", "nickname": "Sir Gambito", "avatar_id": "madeira_reward", "league": 0, "pl": 50, "connected": true, "ai": true}
 	var me := {"user_id": "u1", "nickname": "Gabriel", "avatar_id": "warrior", "league": 0, "pl": 40, "connected": true}
 	stage._open_ranked()
 	await frames(4)
@@ -70,8 +71,17 @@ func run():
 	await shot("encontrado_ia")
 	acc.server_message.emit(state(mid, rules, me, opp))
 	await frames(14)
-	check(String(ctl.player("b").nickname) == "Sir Gambito · IA", "na partida: cartão do adversário com selo IA")
+	check(String(ctl.player("b").nickname) == "Sir Gambito · IA", "na partida: dado do adversário com selo IA")
+	var strip = ui.strips["top"]
+	if mob: check(strip.name.text == "Sir Gambito" and strip.ai.visible, "celular: nome + ÍCONE de IA (%s, ícone=%s)" % [strip.name.text, strip.ai.visible])
+	else: check(strip.name.text == "Sir Gambito · IA" and not strip.ai.visible, "PC: texto ' · IA' (congelado)")
 	check(bool(ui.strip_info("b").get("bot", false)), "cartão de perfil da IA: sem 'adicionar amigo' (bot)")
 	await shot("partida_ia")
+	if mob and stage.mobile_hud != null and stage.mobile_hud.on and stage.mobile_hud.nav.visible:
+		for id in stage.mobile_hud.nav_buttons:
+			var b: Button = stage.mobile_hud.nav_buttons[id]
+			var cap: Label = b.get_node("Caption")
+			var fs := cap.get_theme_font_size("font_size")
+			check(b.size.y >= 48.0 and fs >= 16, "celular: %s toque %.0f px (≥48), letra %d px (≥16)" % [cap.text, b.size.y, fs])
 	print("R181_RIVAL_IA FAILS=", fails)
 	quit(1 if fails else 0)

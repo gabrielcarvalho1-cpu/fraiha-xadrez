@@ -8,6 +8,13 @@
 const crypto = require('crypto');
 
 const GRACE_MS = 90e3;
+const VISIT_IDLE_MS = 4 * 60e3;     // R181 · visitante sem login: sem nenhum sinal por 4 min = saiu
+const MAX_VISITS = 5000;            // visitas sem login abertas na memória (acima disso, a mais velha fecha)
+const TEST_NICKS_RAW = (process.env.FRAIHA_TEST_NICKS || 'SextoSentro,DaSilva').split(',').map(s => s.trim()).filter(Boolean);   // apelidos de teste do dono
+const TEST_NICKS = TEST_NICKS_RAW.map(s => s.toLowerCase());
+const hexToUuid = h => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+// dia em Brasília (UTC−3) de um instante → 'AAAA-MM-DD'
+const dayBR = t => new Date(t - 3 * 3600e3).toISOString().slice(0, 10);
 const MAX_EVENTS = 500;
 const RECENT = 300;
 const KEEP_DAYS = 30;
@@ -101,22 +108,37 @@ class Sessions {
   constructor({ backend, now = () => Date.now(), timers = true }) {
     this.backend = backend; this.now = now;
     this.live = new Map();     // player id -> sessão aberta
+    this.visits = new Map();   // R181 · sid -> sessão aberta que começou SEM login (rota /t); sai daqui ao terminar
     this.bySid = new Map();    // sid -> sessão (aberta ou recente)
     this.recent = [];          // sessões terminadas (memória), mais nova no fim
     this.db = null;            // null = ainda não sei; true/false depois da 1ª gravação
     if (timers) {
       this.flushTimer = setInterval(() => this.flush().catch(() => {}), FLUSH_MS); if (this.flushTimer.unref) this.flushTimer.unref();
       this.pruneTimer = setInterval(() => this.prune().catch(() => {}), 3600e3); if (this.pruneTimer.unref) this.pruneTimer.unref();
+      this.visitTimer = setInterval(() => this.sweepVisits(), 20e3); if (this.visitTimer.unref) this.visitTimer.unref();
     }
   }
   get store() { return this.backend.store; }
-  stop() { clearInterval(this.flushTimer); clearInterval(this.pruneTimer); for (const s of this.live.values()) clearTimeout(s.endTimer); }
+  stop() { clearInterval(this.flushTimer); clearInterval(this.pruneTimer); clearInterval(this.visitTimer); for (const s of this.live.values()) clearTimeout(s.endTimer); }
 
   // ---------- ciclo da sessão ----------
   // a identidade ficou online (1ª aba). Volta dentro do GRACE = mesma sessão.
-  online(identity, kind) {
+  online(identity, kind, ws = null) {
     const id = String(identity.id), t = this.now();
     let s = this.live.get(id);
+    // R181 · a aba já vinha sendo registrada como VISITANTE (rota /t): a visita vira a sessão desta conta/convidado
+    const v = ws && ws.trackSid ? this.bySid.get(ws.trackSid) : null;
+    if (v && !v.ended && v !== s && (v.kind === 'visitor' || v.player === id)) {
+      if (s) { this.mergeInto(v, s); }
+      else {
+        v.player = id; v.user_id = identity.guest ? null : id; v.nickname = cleanTxt(identity.nickname, 40); v.guest = !!identity.guest;
+        v.kind = kind || (identity.guest ? 'guest' : 'account'); v.linked = true; v.justCreated = true; v.flags.passed = true;
+        v.offlineAt = 0; v.exitAt = 0;
+        this.visits.delete(v.sid); this.live.set(id, v);
+        this.add(v, 'sys', { account: 'Entrou na conta', new_account: 'Entrou (CONTA NOVA)', guest: 'Entrou como convidado', guest_new: 'Entrou como NOVO convidado' }[v.kind] || 'Entrou no jogo', t);
+        return v;
+      }
+    }
     if (s) {
       clearTimeout(s.endTimer); s.endTimer = null;
       s.justCreated = false;
@@ -125,7 +147,8 @@ class Sessions {
       return s;
     }
     s = { sid: crypto.randomUUID(), player: id, user_id: identity.guest ? null : id, nickname: cleanTxt(identity.nickname, 40), guest: !!identity.guest,
-      kind: kind || (identity.guest ? 'guest' : 'account'), started: t, last: t, offlineAt: 0, ended: 0, screen: '', screenAt: t, device: {}, events: [], dirty: true, saved: false, justCreated: true };
+      kind: kind || (identity.guest ? 'guest' : 'account'), started: t, last: t, offlineAt: 0, ended: 0, screen: '', screenAt: t, device: {}, events: [], dirty: true, saved: false, justCreated: true,
+      vid: null, utm: {}, flags: { passed: true } };
     this.live.set(id, s); this.bySid.set(s.sid, s);
     this.add(s, 'sys', { account: 'Entrou no jogo', new_account: 'Entrou (CONTA NOVA)', guest: 'Entrou como convidado', guest_new: 'Entrou como NOVO convidado' }[s.kind] || 'Entrou no jogo');
     return s;
@@ -139,24 +162,120 @@ class Sessions {
   finish(s) {
     if (s.ended || this.live.get(s.player) !== s || !s.offlineAt) return;
     s.ended = s.offlineAt; s.last = s.offlineAt;
-    this.add(s, 'sys', 'Saiu do jogo' + (s.screen ? ' (estava em: ' + s.screen + ')' : ''), s.offlineAt);
+    const lastEv = s.events[s.events.length - 1];   // R181 · o site já avisou a saída (com tela e botão): não repete
+    if (!lastEv || !/^Saiu/.test(lastEv.l)) this.add(s, 'sys', 'Saiu do jogo' + (s.screen ? ' (estava em: ' + s.screen + ')' : ''), s.offlineAt);
     this.live.delete(s.player);
     this.recent.push(s);
     while (this.recent.length > RECENT) { const old = this.recent.shift(); if (!this.live.has(old.player) || this.live.get(old.player) !== old) this.bySid.delete(old.sid); }
     this.save(s).catch(() => {});
+  }
+  // ---------- R181 · visitante sem login (rota HTTP /t) ----------
+  hasVisit(sidHex) { return this.bySid.has(hexToUuid(sidHex)); }
+  // abre (ou continua) a visita desta aba. start = ms desde que a página abriu, no momento do envio
+  visit(sidHex, vid, { utm = {}, device = {}, start = null } = {}) {
+    const sid = hexToUuid(sidHex), t = this.now();
+    let s = this.bySid.get(sid);
+    if (s && s.vid && s.vid !== vid) return null;   // sid de outro navegador: ignora
+    if (!s) {
+      if (this.visits.size >= MAX_VISITS) { const oldest = this.visits.values().next().value; if (oldest) this.finishVisit(oldest); }
+      const st = start !== null ? t - start : t;
+      s = { sid, player: 'visitor:' + vid, user_id: null, nickname: 'Visitante ' + vid.slice(0, 4).toUpperCase(), guest: true, kind: 'visitor',
+        started: st, last: t, offlineAt: 0, ended: 0, exitAt: 0, screen: '', screenAt: st, lastButton: '', device: {}, events: [], dirty: true, saved: false,
+        vid, utm: utm || {}, flags: {}, linked: false };
+      this.visits.set(sid, s); this.bySid.set(sid, s);
+      this.add(s, 'sys', 'Abriu o jogo' + (utm && utm.ad ? ' (veio do ANÚNCIO' + (utm.source ? ': ' + utm.source : '') + (utm.campaign ? ' · ' + utm.campaign : '') + ')' : ''), st);
+    } else if (s.ended && !s.linked) {
+      s.ended = 0; s.offlineAt = 0; s.exitAt = 0; this.visits.set(s.sid, s); this.add(s, 'sys', 'Voltou para o jogo', t);
+    }
+    if (!s.vid) s.vid = vid;
+    if (utm && utm.ad && !(s.utm && s.utm.ad)) s.utm = utm;
+    if (device && Object.keys(device).length) {
+      const first = !s.device || !s.device.device;
+      s.device = { ...(s.device || {}), ...device }; s.dirty = true;
+      if (first) this.add(s, 'sys', [device.device, device.os, device.browser, device.w && device.h ? device.w + 'x' + device.h : '', device.version ? 'v' + device.version : ''].filter(Boolean).join(' · '), s.started);
+    }
+    s._base = start !== null ? t - start : t;   // horário do evento = _base + e.t
+    s.last = Math.max(s.last, t);
+    return s;
+  }
+  visitEvent(s, e) {
+    const t = Math.max(s.started, Math.min(this.now(), (s._base || this.now()) + e.t));
+    if (e.k === 'hb') { s.last = Math.max(s.last, t); return; }
+    if (e.k === 'screen') {
+      if (e.screen === s.screen) return;
+      s.screen = e.screen; s.screenAt = t; this.add(s, 'screen', e.screen, t); return;
+    }
+    if (e.k === 'click') {
+      s.lastButton = e.button;
+      this.add(s, 'click', e.button + ' — ' + (e.screen || s.screen || '?'), t); return;
+    }
+    if (e.loaded) s.flags.loaded = true;
+    if (e.passed) s.flags.passed = true;
+    if (e.played) s.flags.played = true;
+    if (e.exit) { s.exitAt = t; }
+    if (e.k === 'back') s.exitAt = 0;
+    if (e.label) this.add(s, e.k === 'login' || e.k === 'match' ? 'act' : 'sys', e.label, t);
+    s.dirty = true;
+  }
+  // duas sessões da mesma pessoa (abriu outra aba / recarregou): a visita entra na sessão que já estava aberta
+  mergeInto(v, s) {
+    const off = v.started - s.started;
+    for (const e of v.events) s.events.push({ ...e, t: Math.max(0, e.t + off) });
+    s.events.sort((a, b) => a.t - b.t);
+    if (s.events.length > MAX_EVENTS) s.events.length = MAX_EVENTS;
+    s.flags = { ...(v.flags || {}), ...(s.flags || {}), passed: true };
+    if (!s.vid) s.vid = v.vid;
+    if (v.utm && v.utm.ad && !(s.utm && s.utm.ad)) s.utm = v.utm;
+    if (v.device && v.device.device && !(s.device && s.device.device)) s.device = v.device;
+    s.dirty = true;
+    this.visits.delete(v.sid); this.bySid.set(v.sid, s);   // eventos HTTP desta aba continuam caindo na sessão da pessoa
+    v.ended = this.now(); v.mergedInto = s.sid;
+  }
+  // ws mandou ui_link depois de já ter identidade
+  linkLate(ws) {
+    const id = ws && ws.identity && String(ws.identity.id); if (!id) return;
+    const s = this.live.get(id), v = this.bySid.get(ws.trackSid);
+    if (s && v && v !== s && !v.ended && v.kind === 'visitor') this.mergeInto(v, s);
+  }
+  finishVisit(s) {
+    if (s.ended || s.linked) return;
+    const end = s.exitAt || s.last;
+    s.ended = end; s.offlineAt = end;
+    const lastEv = s.events[s.events.length - 1];
+    if (!lastEv || !/^Saiu/.test(lastEv.l)) this.add(s, 'sys', 'Saiu do jogo' + (s.screen ? ' (estava em: ' + s.screen + ')' : '') + (s.lastButton ? ' · último botão: ' + s.lastButton : ''), end);
+    this.visits.delete(s.sid);
+    this.recent.push(s);
+    while (this.recent.length > RECENT) { const old = this.recent.shift(); if (!this.live.has(old.player) || this.live.get(old.player) !== old) this.bySid.delete(old.sid); }
+    this.save(s).catch(() => {});
+  }
+  sweepVisits() {
+    const t = this.now();
+    for (const s of [...this.visits.values()]) {
+      if (s.linked) { this.visits.delete(s.sid); continue; }
+      if ((s.exitAt && t - s.exitAt > GRACE_MS) || t - s.last > VISIT_IDLE_MS) this.finishVisit(s);
+    }
   }
   add(s, k, l, t = this.now()) {
     if (!l) return;
     const last = s.events[s.events.length - 1];
     if (last && last.k === k && last.l === l && t - (s.started + last.t) < 3000) return;   // repetido em seguida: uma vez só
     if (s.events.length >= MAX_EVENTS) { if (s.events.length === MAX_EVENTS) s.events.push({ t: t - s.started, k: 'sys', l: '(limite de eventos desta sessão atingido)' }); return; }
-    s.events.push({ t: Math.max(0, t - s.started), k, l: cleanTxt(l, 120) });
+    const ev = { t: Math.max(0, t - s.started), k, l: cleanTxt(l, 120) };
+    // R181 · eventos chegam por dois caminhos (site /t e conexão do jogo): mantém a ordem pelo horário
+    let i = s.events.length;
+    while (i > 0 && s.events[i - 1].t > ev.t) i--;
+    s.events.splice(i, 0, ev);
     s.last = Math.max(s.last, t); s.dirty = true;
   }
   of(ws) { const id = ws && ws.identity && ws.identity.id; return id ? this.live.get(String(id)) || null : null; }
 
   // ---------- mensagens ----------
   incoming(ws, a, m) {
+    if (a === 'ui_link') {   // R181 · esta conexão é da aba que já está sendo registrada como visitante (rota /t)
+      const sid = String(m && m.sid || '');
+      if (/^[0-9a-f]{32}$/.test(sid)) { ws.trackSid = hexToUuid(sid); if (ws.identity) this.linkLate(ws); }
+      return true;
+    }
     if (a === 'ui_screen' || a === 'ui_hello' || a === 'ui_event') { this.uiMessage(ws, a, m); return true; }
     const s = this.of(ws); if (!s) return false;
     const f = IN[a]; if (f) { try { this.add(s, 'act', f(m || {})); } catch { /* só registro */ } }
@@ -205,8 +324,9 @@ class Sessions {
     if (prev) screens[prev.l] = (screens[prev.l] || 0) + Math.max(0, end - s.started - prev.t);
     const out = { sid: s.sid, player: s.player, user_id: s.user_id, nickname: s.nickname, guest: s.guest, kind: s.kind,
       started_at: new Date(s.started).toISOString(), ended_at: s.ended ? new Date(s.ended).toISOString() : null,
-      state: s.ended ? 'ended' : s.offlineAt ? 'away' : 'online', duration_ms: Math.max(0, end - s.started),
-      screen: s.screen, screens_count: Object.keys(screens).length, actions_count: s.events.filter(e => e.k === 'act').length, device: s.device };
+      state: s.ended ? 'ended' : (s.offlineAt || s.exitAt) ? 'away' : 'online', duration_ms: Math.max(0, end - s.started),
+      screen: s.screen, screens_count: Object.keys(screens).length, actions_count: s.events.filter(e => e.k === 'act').length,
+      clicks_count: s.events.filter(e => e.k === 'click').length, device: s.device, vid: s.vid || null, utm: s.utm || {}, flags: s.flags || {} };
     if (full) { out.events = s.events; out.time_by_screen = Object.entries(screens).sort((a, b) => b[1] - a[1]).map(([l, ms]) => ({ screen: l, ms })); }
     return out;
   }
@@ -215,15 +335,19 @@ class Sessions {
     const started = Date.parse(r.started_at), ended = r.ended_at ? Date.parse(r.ended_at) : 0;
     return { sid: r.session_id, player: r.player, user_id: r.user_id || null, nickname: r.nickname || '', guest: String(r.player || '').startsWith('guest:'), kind: r.kind || 'account',
       started, last: Date.parse(r.last_seen_at) || started, offlineAt: ended || Date.parse(r.last_seen_at) || started, ended: ended || Date.parse(r.last_seen_at) || started,
-      screen: r.last_screen || '', device: r.device || {}, events: Array.isArray(r.events) ? r.events : [] };
+      screen: r.last_screen || '', device: r.device || {}, events: Array.isArray(r.events) ? r.events : [],
+      vid: r.vid || null, utm: r.utm || {}, flags: r.flags || {} };
   }
-  async list({ q = '', limit = 100 } = {}) {
+  async list({ q = '', limit = 100, ads = false, hideTest = false } = {}) {
     const lim = Math.max(1, Math.min(300, Number(limit) || 100));
     const needle = cleanTxt(q, 40).toLowerCase();
-    const match = s => !needle || s.nickname.toLowerCase().includes(needle) || String(s.player).toLowerCase() === needle;
+    const testVids = hideTest ? this.testVids() : new Set();
+    const match = s => (!needle || s.nickname.toLowerCase().includes(needle) || String(s.player).toLowerCase() === needle)
+      && (!ads || (s.utm && s.utm.ad)) && (!hideTest || (!TEST_NICKS.includes(String(s.nickname || '').toLowerCase()) && !(s.vid && testVids.has(s.vid))));
     const seen = new Set(), items = [];
     const push = s => { if (seen.has(s.sid) || !match(s)) return; seen.add(s.sid); items.push(this.view(s)); };
     for (const s of this.live.values()) push(s);
+    for (const s of this.visits.values()) push(s);
     for (let i = this.recent.length - 1; i >= 0; i--) push(this.recent[i]);
     let stored = this.db !== false && !!(this.store && this.store.listSessions);
     if (stored) {
@@ -233,7 +357,7 @@ class Sessions {
     items.sort((a, b) => (a.state === 'ended') - (b.state === 'ended') || Date.parse(b.started_at) - Date.parse(a.started_at));
     const today = new Date(this.now()); today.setUTCHours(3, 0, 0, 0); if (today.getTime() > this.now()) today.setUTCDate(today.getUTCDate() - 1);   // meia-noite de Brasília
     const todays = items.filter(i => Date.parse(i.started_at) >= today.getTime());
-    return { items: items.slice(0, lim), online: [...this.live.values()].filter(s => !s.offlineAt).length, persistent: stored, keep_days: KEEP_DAYS,
+    return { items: items.slice(0, lim), online: [...this.live.values()].filter(s => !s.offlineAt).length + [...this.visits.values()].filter(s => !s.exitAt).length, persistent: stored, keep_days: KEEP_DAYS, test_nicks: TEST_NICKS_RAW,
       today: { sessions: todays.length, avg_ms: todays.length ? Math.round(todays.reduce((n, i) => n + i.duration_ms, 0) / todays.length) : 0 } };
   }
   async get(sid) {
@@ -248,7 +372,8 @@ class Sessions {
     const t = this.now(), end = s.ended || s.offlineAt || t;
     return { session_id: s.sid, player: s.player, user_id: s.user_id, nickname: s.nickname, kind: s.kind,
       started_at: new Date(s.started).toISOString(), ended_at: s.ended ? new Date(s.ended).toISOString() : null, last_seen_at: new Date(Math.max(s.last, end)).toISOString(),
-      duration_s: Math.round(Math.max(0, end - s.started) / 1000), last_screen: s.screen, device: s.device, events: s.events };
+      duration_s: Math.round(Math.max(0, end - s.started) / 1000), last_screen: s.screen, device: s.device, events: s.events,
+      vid: s.vid || null, utm: s.utm || {}, flags: s.flags || {} };
   }
   async save(s) {
     if (this.db === false || !this.store || !this.store.saveSession) return;
@@ -256,7 +381,59 @@ class Sessions {
     try { await this.store.saveSession(this.row(s)); this.db = true; s.saved = true; }
     catch (e) { s.dirty = true; if (missing(e)) { if (this.db !== false) console.log('[sessoes] banco sem a migração 0030: sessões só na memória'); this.db = false; } else console.error('[sessoes] gravar', e && e.message); }
   }
-  async flush() { for (const s of [...this.live.values()]) if (s.dirty) await this.save(s); }
+  async flush() { for (const s of [...this.live.values(), ...this.visits.values()]) if (s.dirty) await this.save(s); }
+  // vids de quem já usou um apelido de teste (SextoSentro, DaSilva…): some do painel com "esconder testes"
+  testVids(rows = []) {
+    const out = new Set();
+    const all = [...this.live.values(), ...this.visits.values(), ...this.recent, ...rows];
+    for (const s of all) if (s.vid && TEST_NICKS.includes(String(s.nickname || '').toLowerCase())) out.add(s.vid);
+    return out;
+  }
+
+  // ---------- R181 · FUNIL POR DIA ----------
+  // abriu o jogo → carregou → passou da tela de entrada → jogou 1 partida → voltou outro dia (pessoas = navegadores, vid)
+  async funnel({ days = 14, ads = false, hideTest = true } = {}) {
+    const D = Math.max(1, Math.min(30, Number(days) || 14)), t = this.now();
+    const since = new Date(t - D * 86400e3).toISOString();
+    let rows = [], stored = false;
+    if (this.db !== false && this.store && this.store.sessionsSince) {
+      try { rows = await this.store.sessionsSince(since); stored = true; } catch (e) { if (missing(e)) this.db = false; else console.error('[sessoes] funil', e && e.message); }
+    }
+    const bySid = new Map(rows.map(r => [r.session_id, { sid: r.session_id, vid: r.vid || null, player: r.player, nickname: r.nickname || '', kind: r.kind,
+      started: Date.parse(r.started_at), utm: r.utm || {}, flags: r.flags || {} }]));
+    for (const s of [...this.live.values(), ...this.visits.values(), ...this.recent]) if (s.started >= Date.parse(since)) bySid.set(s.sid, s);
+    const list = [...bySid.values()];
+    const testVids = hideTest ? this.testVids(list) : new Set();
+    const keyOf = s => s.vid || ('p:' + s.player);
+    const isTest = s => hideTest && (TEST_NICKS.includes(String(s.nickname || '').toLowerCase()) || (s.vid && testVids.has(s.vid)));
+    const adKeys = new Set(list.filter(s => s.utm && s.utm.ad).map(keyOf));
+    const perDay = new Map();   // dia -> Map(key -> {loaded, passed, played})
+    const daysOf = new Map();   // key -> Set(dias)
+    for (const s of list) {
+      if (isTest(s)) continue;
+      const k = keyOf(s);
+      if (ads && !adKeys.has(k)) continue;
+      const d = dayBR(s.started);
+      if (!perDay.has(d)) perDay.set(d, new Map());
+      const m = perDay.get(d), cur = m.get(k) || { loaded: false, passed: false, played: false };
+      const f = s.flags || {}, old = s.kind !== 'visitor' && !s.vid;   // sessão de antes da R181 (sem rota /t): já tinha passado da entrada
+      cur.loaded = cur.loaded || !!f.loaded || s.kind !== 'visitor';
+      cur.passed = cur.passed || !!f.passed || old;
+      cur.played = cur.played || !!f.played;
+      m.set(k, cur);
+      if (!daysOf.has(k)) daysOf.set(k, new Set());
+      daysOf.get(k).add(d);
+    }
+    const out = [...perDay.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([d, m]) => {
+      let opened = 0, loaded = 0, passed = 0, played = 0, returned = 0;
+      for (const [k, c] of m) {
+        opened++; if (c.loaded) loaded++; if (c.passed) passed++; if (c.played) played++;
+        if ([...daysOf.get(k)].some(x => x > d)) returned++;
+      }
+      return { day: d, opened, loaded, passed, played, returned };
+    });
+    return { days: out, persistent: stored, ads: !!ads, hide_test: !!hideTest, test_nicks: TEST_NICKS_RAW, window_days: D };
+  }
   async prune() {
     if (this.db === false || !this.store || !this.store.pruneSessions) return;
     try { await this.store.pruneSessions(new Date(this.now() - KEEP_DAYS * 86400e3).toISOString()); } catch (e) { if (missing(e)) this.db = false; }

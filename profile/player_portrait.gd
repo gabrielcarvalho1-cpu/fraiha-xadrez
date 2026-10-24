@@ -105,6 +105,24 @@ func _on_peer_avatar(uid: String):
     _key = ""
     set_info(info)
 
+## R181 · cartões da PARTIDA (PC e celular): retrato QUADRADO com moldura dourada simples (a moldura escolhida —
+## Club, Fundador, Loja — continua por cima). Antes era recortado em círculo.
+func square_frame() -> void:
+    var bg: Panel = get_node_or_null("PortraitBg")
+    if bg == null: return
+    var sb := StyleBoxFlat.new()
+    sb.bg_color = Color("111620")
+    sb.border_color = Color8(214, 168, 76)
+    sb.set_border_width_all(maxi(2, int(round(maxf(size.x, custom_minimum_size.x) * 0.035))))
+    sb.set_corner_radius_all(3)
+    bg.add_theme_stylebox_override("panel", sb)
+    bg.visible = true
+    var inset := float(sb.border_width_left)
+    avatar_rect.material = null
+    avatar_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    avatar_rect.offset_left = inset; avatar_rect.offset_top = inset
+    avatar_rect.offset_right = -inset; avatar_rect.offset_bottom = -inset
+
 func public_frame() -> String:
     return Cosmetics.public_frame(info)
 

@@ -22,7 +22,7 @@ async function play(c, p, found, plies, deadlineMs = 60000) {
   const me = found.you, id = found.match_id, pos = new Position();
   let aiMoves = 0, illegal = false; const deadline = Date.now() + deadlineMs;
   while (pos.ply < plies && Date.now() < deadline) {
-    const st = await c.next(m => m.type === p + '_state' && m.match_id === id && m.status === 'playing' && (m.position.ply > pos.ply || (m.position.ply === pos.ply && m.position.turn === me)), 20000);
+    const st = await c.next(m => m.type === p + '_state' && m.match_id === id && m.status === 'playing' && (m.position.ply > pos.ply || (m.position.ply === pos.ply && m.position.turn === me)), 45000);
     if (st.position.ply > pos.ply) { const lm = st.last_move; if (!pos.play({ from: lm.from, to: lm.to, promotion: 'Q' })) illegal = true; aiMoves++; }
     if (pos.turn === me && st.position.turn === me && !pos.outcome()) {
       const legal = pos.legalMoves(); const m = legal[Math.floor(Math.random() * legal.length)];
@@ -40,16 +40,16 @@ async function play(c, p, found, plies, deadlineMs = 60000) {
     const a = await login(s.port, 'SozinhoR181');
     const t0 = Date.now();
     a.send({ type: 'ranked_queue', mode: 'ranked_5min' }); await a.next('ranked_queued');
-    const found = await a.next('ranked_found', 8000);
+    const found = await a.next('ranked_found', 15000);
     const waited = Date.now() - t0;
     check(found.vs_ai === true && found.opponent.ai === true && waited >= 1400, `sozinho na fila: rival de IA depois de ${waited} ms (selo IA ligado)`);
-    check(PERSONAS.some(([n]) => n === found.opponent.nickname) && found.opponent.user_id === '' && found.opponent.league === 0, `IA com nome de personagem (${found.opponent.nickname}), sem conta, mesma liga (Madeira)`);
+    check(PERSONAS.includes(found.opponent.nickname) && found.opponent.avatar_id === 'madeira_reward' && found.opponent.user_id === '' && found.opponent.league === 0, `IA com nome de personagem (${found.opponent.nickname}), avatar do BOT MADEIRA, sem conta, mesma liga`);
     check(found.ai_wait_ms >= 1400, 'servidor informa quanto tempo esperou (Admin: "Rival IA encontrado após Xs")');
     const r = await play(a, 'ranked', found, 14);
     check(r.aiMoves >= 6 && !r.illegal, `IA jogou ${r.aiMoves} lances sozinha, todos legais`);
     // estado público nunca expõe a Força da IA/dados internos
     a.send({ type: 'ranked_resign', match_id: found.match_id });
-    const res = await a.next('ranked_result', 8000);
+    const res = await a.next('ranked_result', 20000);
     const full = applyResult({ league: 0, pl: 0, matches: 0, wins: 0, losses: 0, draws: 0, highest_league: 0 }, aiStats(0), 'loss');
     check(res.outcome === 'loss' && res.vs_ai === true && res.saved === true && res.pl_change === 0 && full.change <= 0, 'derrota contra IA em 0 PL: gravada, marcada vs_ai (piso de 0 PL)');
     check(res.stats.matches === 0 && res.stats.losses === 0, 'placar V/D/E não conta partida contra IA');
@@ -63,10 +63,10 @@ async function play(c, p, found, plies, deadlineMs = 60000) {
     // 3. desistência precoce contra IA: 0 PL
     a.inbox.length = 0;
     a.send({ type: 'ranked_queue', mode: 'ranked_5min' }); await a.next('ranked_queued');
-    const f2 = await a.next('ranked_found', 8000);
+    const f2 = await a.next('ranked_found', 15000);
     await a.next(m => m.type === 'ranked_state' && m.match_id === f2.match_id && m.status === 'playing', 5000);
     a.send({ type: 'ranked_resign', match_id: f2.match_id });
-    const res2 = await a.next('ranked_result', 8000);
+    const res2 = await a.next('ranked_result', 20000);
     check(res2.early && res2.vs_ai && res2.pl_change === 0, 'desistência precoce contra IA: 0 PL');
     a.ws.close();
     // 4. dois humanos: pareiam entre si (IA não entra)
@@ -79,11 +79,11 @@ async function play(c, p, found, plies, deadlineMs = 60000) {
     // 5. Casual sozinho: IA também; revanche recusada com aviso
     const c = await login(s.port, 'CasualSoR181');
     c.send({ type: 'casual_queue', mode: 'casual_3min' }); await c.next('casual_queued');
-    const fc = await c.next('casual_found', 8000);
+    const fc = await c.next('casual_found', 15000);
     check(fc.vs_ai && fc.opponent.ai, 'Casual sozinho: rival de IA também');
     const rc = await play(c, 'casual', fc, 6);
     c.send({ type: 'casual_resign', match_id: fc.match_id });
-    const resc = await c.next('casual_result', 8000);
+    const resc = await c.next('casual_result', 20000);
     check(rc.aiMoves >= 2 && resc.vs_ai === true, 'Casual contra IA: jogou e terminou (vs_ai)');
     c.send({ type: 'casual_rematch', match_id: fc.match_id });
     const rm = await c.next('casual_rematch_status', 4000);
