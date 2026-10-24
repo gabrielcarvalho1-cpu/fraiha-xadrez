@@ -85,3 +85,22 @@ test('convidado também tem sessão; flood de ui_screen é cortado', async t => 
   for (let i = 0; i < 200; i++) await h.backend.handle(g, { type: 'ui_screen', name: 'Tela ' + i });
   assert.ok(s.events.filter(e => e.k === 'screen').length <= 120);
 });
+
+test('R181: eventos de produto (bot na fila, próximo desafio) entram na linha do tempo; desconhecido é ignorado', async t => {
+  const h = await fixture(t);
+  const s = h.sock();
+  await h.backend.handle(s, { type: 'acct_auth', access_token: 'tok-' + A }); await flush();
+  await h.backend.handle(s, { type: 'ranked_queue', mode: 'ranked_10min' }); await flush();
+  h.tick(25e3);
+  await h.backend.handle(s, { type: 'ui_event', name: 'queue_bot_offer', secs: 25, mode: 'Ranqueada · Normal 10 min' });
+  await h.backend.handle(s, { type: 'ui_event', name: 'queue_bot_decline', secs: 31 });
+  await h.backend.handle(s, { type: 'ui_event', name: 'queue_bot_accept', bot: 'BOT MADEIRA' });
+  await h.backend.handle(s, { type: 'ui_event', name: 'bot_result', outcome: 'win', bot: 'BOT MADEIRA' });
+  await h.backend.handle(s, { type: 'ui_event', name: 'next_challenge', bot: 'BOT FERRO' });
+  await h.backend.handle(s, { type: 'ui_event', name: 'hack<script>', secs: 1 });
+  const sid = h.backend.track.live.get(A).sid;
+  const labels = (await h.get('/admin/api/sessions/' + sid)).body.events.map(e => e.l);
+  for (const want of ['Ofereceu bot na fila (25s · Ranqueada · Normal 10 min)', 'Recusou e continuou esperando (31s)', 'Aceitou bot na fila (BOT MADEIRA)',
+    'Venceu BOT MADEIRA', 'Clicou no próximo desafio após vitória (BOT FERRO)']) assert.ok(labels.includes(want), want + ' em ' + JSON.stringify(labels));
+  assert.ok(!labels.some(l => l.includes('hack')));
+});

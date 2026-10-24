@@ -68,6 +68,20 @@ const IN = {
   bot_victory: m => 'Venceu um bot' + (m.bot_id ? ' (' + cleanTxt(m.bot_id, 20) + ')' : ''),
   voice_join: () => 'Entrou no chat de voz',
 };
+// R181 · eventos de PRODUTO que o jogo manda (ui_event): só os da lista entram na linha do tempo
+const secsTxt = m => { const v = Math.round(Number(m.secs)); return Number.isFinite(v) && v >= 0 && v < 36000 ? v + 's' : '?'; };
+const botTxt = m => cleanTxt(m.bot, 24).toUpperCase();
+const UI_EVENTS = {
+  queue_bot_offer: m => `Ofereceu bot na fila (${secsTxt(m)}${m.mode ? ' · ' + cleanTxt(m.mode, 30) : ''})`,
+  queue_bot_accept: m => 'Aceitou bot na fila' + (m.bot ? ` (${botTxt(m)})` : ''),
+  queue_bot_decline: m => 'Recusou e continuou esperando' + (m.secs !== undefined ? ` (${secsTxt(m)})` : ''),
+  next_challenge: m => 'Clicou no próximo desafio após vitória' + (m.bot ? ` (${botTxt(m)})` : ''),
+  first_bot_shown: () => 'Viu o convite do 1º desafio (BOT MADEIRA)',
+  first_bot_accept: () => 'Aceitou o 1º desafio (BOT MADEIRA)',
+  first_bot_skip: () => 'Pulou o 1º desafio e foi para o menu',
+  bot_result: m => ({ win: 'Venceu', loss: 'Perdeu para', draw: 'Empatou com' }[String(m.outcome)] || 'Terminou contra') + (m.bot ? ' ' + botTxt(m) : ' o bot'),
+};
+
 // respostas do SERVIDOR que contam a história (mensagens que saem)
 const OUT = {
   ranked_found: () => 'Partida encontrada (Ranqueado)',
@@ -138,7 +152,7 @@ class Sessions {
 
   // ---------- mensagens ----------
   incoming(ws, a, m) {
-    if (a === 'ui_screen' || a === 'ui_hello') { this.uiMessage(ws, a, m); return true; }
+    if (a === 'ui_screen' || a === 'ui_hello' || a === 'ui_event') { this.uiMessage(ws, a, m); return true; }
     const s = this.of(ws); if (!s) return false;
     const f = IN[a]; if (f) { try { this.add(s, 'act', f(m || {})); } catch { /* só registro */ } }
     return false;
@@ -153,6 +167,11 @@ class Sessions {
     const t = this.now();
     ws.uiCount = ws.uiCount && t - ws.uiAt < 60e3 ? ws.uiCount + 1 : 1; if (ws.uiCount === 1) ws.uiAt = t;
     if (ws.uiCount > 120) return;   // no máximo 120 trocas de tela por minuto por aba
+    if (a === 'ui_event') {   // R181 · só eventos conhecidos; desconhecido é ignorado
+      const f = UI_EVENTS[String(m && m.name || '')];
+      if (f) { try { this.add(s, 'act', f(m || {}), t); } catch { /* só registro */ } }
+      return;
+    }
     if (a === 'ui_hello') {
       const d = {};
       for (const k of ['platform', 'device', 'browser', 'version', 'lang']) if (m[k] !== undefined) d[k] = cleanTxt(m[k], 40);
@@ -238,4 +257,4 @@ class Sessions {
     try { await this.store.pruneSessions(new Date(this.now() - KEEP_DAYS * 86400e3).toISOString()); } catch (e) { if (missing(e)) this.db = false; }
   }
 }
-module.exports = { Sessions, IN, OUT, GRACE_MS, KEEP_DAYS };
+module.exports = { Sessions, IN, OUT, UI_EVENTS, GRACE_MS, KEEP_DAYS };

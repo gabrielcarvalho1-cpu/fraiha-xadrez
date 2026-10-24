@@ -7,6 +7,7 @@ var card: PanelContainer
 var ok_button: Button
 var yes_button: Button      # R124 · pergunta com SIM / NÃO (ex.: ir para o Discord)
 var _yes_action: Callable
+var _no_action: Callable   # R181 · ação do botão de recusa (ex.: CONTINUAR ESPERANDO)
 var alt_button: Button      # R176.2 · 2ª ação (COMUNIDADE: DISCORD ou INSTAGRAM)
 var _alt_action: Callable
 
@@ -42,7 +43,11 @@ func setup(p_hub, title: String):
 	ok_button = button("ENTENDI", 22, true)
 	ok_button.name = "NoticeOk"
 	ok_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	ok_button.pressed.connect(close)
+	ok_button.pressed.connect(func():
+		var na := _no_action
+		_no_action = Callable()
+		close()
+		if na.is_valid(): na.call())
 	var row := BoxContainer.new()   # R176.2 · BoxContainer: vira coluna no celular com 3 botões
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 12)
@@ -65,6 +70,7 @@ func setup(p_hub, title: String):
 	yes_button.hide()
 
 func show_notice(title: String, text: String):
+	_no_action = Callable()
 	title_label.text = title
 	text_label.text = text
 	yes_button.hide()
@@ -75,7 +81,8 @@ func show_notice(title: String, text: String):
 	_fit_card()
 
 ## R124 · pergunta: botão principal (yes_text) faz a ação; o outro só fecha.
-func ask(title: String, text: String, yes_text: String, no_text: String, action: Callable):
+func ask(title: String, text: String, yes_text: String, no_text: String, action: Callable, no_action := Callable()):
+	_no_action = no_action
 	title_label.text = title
 	text_label.text = text
 	_yes_action = action

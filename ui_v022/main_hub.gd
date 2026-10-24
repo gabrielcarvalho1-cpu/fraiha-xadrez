@@ -3497,12 +3497,12 @@ func show_notice(title: String, text: String):
     notice_modal.show_notice(title, text)
 
 ## R124 · pergunta antes de sair do jogo (ex.: COMUNIDADE abre o Discord numa aba nova)
-func ask(title: String, text: String, yes_text: String, no_text: String, action: Callable):
+func ask(title: String, text: String, yes_text: String, no_text: String, action: Callable, no_action := Callable()):
     if not is_instance_valid(notice_modal):
         notice_modal = load("res://ui_v022/notice_modal.gd").new()
         add_child(notice_modal)
         notice_modal.setup(self, title)
-    notice_modal.ask(title, text, yes_text, no_text, action)
+    notice_modal.ask(title, text, yes_text, no_text, action, no_action)
 
 func open_community():
     # R176.2 · COMUNIDADE reúne o Discord e o Instagram (o Instagram saiu da tela do jogo)
