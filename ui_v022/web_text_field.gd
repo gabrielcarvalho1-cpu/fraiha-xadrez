@@ -84,6 +84,9 @@ func _ready():
                     '.fraiha-chat-bar{position:fixed;left:0;right:0;z-index:30;display:none;gap:8px;align-items:center;' +
                     'padding:8px 10px;box-sizing:border-box;background:rgba(14,10,8,.97);border-top:2px solid #c99a45;' +
                     'box-shadow:0 -4px 14px rgba(0,0,0,.55)}' +
+                    // R184 · iPhone: entre a barra e o teclado o Safari põe a barra de endereço e as setas (translúcidas);
+                    // sem fundo ali o tabuleiro aparecia por baixo e a barra parecia solta no meio da tela. Fundo escuro até o fim.
+                    '.fraiha-chat-bar::after{content:"";position:absolute;left:0;right:0;top:100%%;height:100vh;background:rgba(14,10,8,.97);pointer-events:none}' +
                     '.fraiha-chat-bar button{flex:0 0 auto;height:46px;padding:0 16px;border-radius:8px;border:2px solid #7a5512;' +
                     'background:#e9b23a;color:#2a1a04;font:bold 16px Georgia,serif;letter-spacing:1px;touch-action:manipulation}' +
                     '.fraiha-chat-bar button:active{background:#ffd56a}' +
