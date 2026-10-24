@@ -349,6 +349,16 @@ func _build_mais():
 			var src = mobile._source_button(title)
 			action = func(): if src != null: src.pressed.emit()
 		_hot(panel, art, r, 0.0, title, action)
+	# R183 · celular ANDROID no navegador: botão "BAIXAR O APP" logo abaixo do painel (app, PC e iPhone: não aparece)
+	var AppBtn = load("res://ui_kit/app_download_button.gd")
+	if AppBtn.should_show():
+		var ab: Button = AppBtn.new()
+		var bw := _w * 0.86
+		var bh := bw * 0.2
+		ab.size = Vector2(bw, bh)
+		ab.position = Vector2((_w - bw) / 2.0, art.size.y + bh * 0.25)
+		panel.add_child(ab)
+		panel.size.y = ab.position.y + bh
 
 # ------------------------------------------------------------------ CONHEÇA O FRAIHA (ref4)
 const ABOUT_Y0 := 40.0
