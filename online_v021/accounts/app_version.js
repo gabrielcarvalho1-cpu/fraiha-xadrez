@@ -6,7 +6,8 @@
 // Configurável no Render sem novo deploy: FRAIHA_ANDROID_LATEST_CODE, FRAIHA_ANDROID_MIN_CODE,
 // FRAIHA_ANDROID_LATEST_NAME, FRAIHA_ANDROID_APK_URL. Sem variável: os padrões abaixo.
 // R184d · 3 = Android 1.0.2 (volta sozinho para o app depois do login com Google)
-const DEFAULTS = { latest: 3, min: 1, name: '1.0.2', url: 'https://jogar.fraihaxadrez.com/app/FRAIHA-Xadrez.apk' };
+// R184e · 4 = 1.0.3 (voz, foto, telas novas)
+const DEFAULTS = { latest: 4, min: 1, name: '1.0.3', url: 'https://jogar.fraihaxadrez.com/app/FRAIHA-Xadrez.apk' };
 // R184 · executável do PC (Windows): FRAIHA_WINDOWS_LATEST_CODE / _MIN_CODE / _LATEST_NAME / _URL
 const WIN_DEFAULTS = { latest: 2, min: 1, name: '1.0.1', url: 'https://jogar.fraihaxadrez.com/app/FRAIHA-Xadrez-PC.exe' };
 
