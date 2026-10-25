@@ -27,7 +27,8 @@ func _android_native() -> bool:
     if not OS.has_feature("android"): return false
     if _native == null and Engine.has_singleton("FraihaVoice"):
         var n = Engine.get_singleton("FraihaVoice")
-        if n.has_method("pickImage") and n.has_signal("image_picked"):
+        # (o singleton Java não lista os métodos em has_method; o sinal novo prova que o plugin tem pickImage)
+        if n.has_signal("image_picked"):
             _native = n
             _native.connect("image_picked", _on_native_image)
     return _native != null
