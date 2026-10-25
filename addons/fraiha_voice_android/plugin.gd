@@ -26,3 +26,10 @@ class VoiceExport extends EditorExportPlugin:
 
 	func _get_android_manifest_application_element_contents(_platform: EditorExportPlatform, _debug: bool) -> String:
 		return '<meta-data android:name="org.godotengine.plugin.v2.FraihaVoice" android:value="com.fraiha.voice.FraihaVoicePlugin"/>'
+
+	## R184d · fraihaxadrez://login abre o app (a página /app-login/done do servidor manda o navegador de volta
+	## para o app depois do login com Google; o app já busca o login ao voltar para a frente).
+	func _get_android_manifest_activity_element_contents(_platform: EditorExportPlatform, _debug: bool) -> String:
+		return APP_LINK
+
+const APP_LINK := '<intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="fraihaxadrez" android:host="login"/></intent-filter>'

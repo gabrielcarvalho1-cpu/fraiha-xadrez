@@ -23,6 +23,15 @@ const HEX32 = /^[0-9a-f]{32}$/;
 const AUTH_CODE = /^[A-Za-z0-9_-]{8,200}$/;   // uuid do Supabase (com hífens) ou formatos parecidos
 const ERR_CODE = /^[a-z_]{2,60}$/;
 
+// R184d · Android: depois do Google o navegador volta SOZINHO para o app (fraihaxadrez://login, intent-filter no APK
+// 1.0.2+). Se o app não abrir (APK antigo, outro navegador), o Chrome cai em /app-login/pronto, que mostra o aviso
+// e um botão VOLTAR PARA O APP. PC (Windows) e outros: a página de sempre.
+const APP_PACKAGE = 'com.fraihaxadrez.app';
+const isAndroid = req => /Android/i.test(String((req.headers && req.headers['user-agent']) || ''));
+const hostOf = req => { const h = String((req.headers && (req.headers['x-forwarded-host'] || req.headers.host)) || '').split(',')[0].trim(); return /^[a-z0-9.-]+(:\d+)?$/i.test(h) ? h : ''; };
+const intentUrl = fallback => 'intent://login#Intent;scheme=fraihaxadrez;package=' + APP_PACKAGE + ';' + (fallback ? 'S.browser_fallback_url=' + encodeURIComponent(fallback) + ';' : '') + 'end';
+const BACK_BTN = `<p style="margin-top:22px"><a href="${intentUrl('')}" style="display:inline-block;padding:14px 22px;border-radius:10px;background:#e9b23a;color:#2a1a04;font-weight:bold;text-decoration:none;letter-spacing:1px">VOLTAR PARA O APP</a></p>`;
+
 const PAGE = (title, text) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <title>FRAIHA Xadrez</title><style>
@@ -41,7 +50,7 @@ class AppLogin {
   }
   owns(req) {
     const u = String(req.url || '');
-    return req.method === 'GET' && (u.startsWith('/app-login/done') || u.startsWith('/app-login/claim'));
+    return req.method === 'GET' && (u.startsWith('/app-login/done') || u.startsWith('/app-login/claim') || u.startsWith('/app-login/pronto'));
   }
   prune(t = this.now()) {
     for (const [k, v] of this.map) if (t - v.at > TTL_MS) this.map.delete(k);
@@ -81,9 +90,18 @@ class AppLogin {
       res.writeHead(r.error === 'bad_request' ? 400 : 200, { ...head, 'content-type': 'application/json' });
       return res.end(JSON.stringify(r));
     }
+    if (String(req.url).startsWith('/app-login/pronto')) {
+      res.writeHead(200, { ...head, 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" });
+      return res.end(PAGE('PRONTO!', 'Login com Google feito.<br><br><b>Volte para o app FRAIHA Xadrez</b> — ele entra sozinho na sua conta.' + BACK_BTN));
+    }
     const code = String(q.get('code') || '');
     const err = String(q.get('error') || '');
     const ok = this.store(c, code, code ? '' : (err || 'sem_codigo'));
+    const host = hostOf(req);
+    if (ok && code && isAndroid(req) && host) {
+      res.writeHead(302, { ...head, location: intentUrl('https://' + host + '/app-login/pronto') });
+      return res.end();
+    }
     res.writeHead(200, { ...head, 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" });
     if (ok && code) return res.end(PAGE('PRONTO!', 'Login com Google feito.<br><br><b>Volte para o app FRAIHA Xadrez</b> — ele entra sozinho na sua conta.'));
     if (ok) return res.end(PAGE('NÃO DEU CERTO', 'O Google não completou o login.<br><br>Volte para o app FRAIHA Xadrez e tente de novo.'));
@@ -91,4 +109,4 @@ class AppLogin {
   }
 }
 
-module.exports = { AppLogin, TTL_MS };
+module.exports = { AppLogin, TTL_MS, intentUrl };

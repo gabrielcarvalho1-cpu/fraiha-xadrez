@@ -46,3 +46,25 @@ test('erro do Google vira erro no app; limite por IP', async t => {
   let last = 200; for (let i = 0; i < 40; i++) last = (await h.get('/app-login/claim?c=' + C)).status;
   assert.equal(last, 429);
 });
+
+test('R184d · Android: done volta sozinho para o app (intent) com fallback /app-login/pronto; PC continua a página', async t => {
+  let clock = 1e12; const a = new AppLogin({ now: () => clock });
+  const s = http.createServer((req, res) => a.owns(req) ? a.handle(req, res, '10.0.0.2') : (res.writeHead(404), res.end()));
+  await new Promise(r => s.listen(0, '127.0.0.1', r)); t.after(() => s.close());
+  const base = `http://127.0.0.1:${s.address().port}`;
+  const UA = 'Mozilla/5.0 (Linux; Android 14; SM-A145M) AppleWebKit/537.36 Chrome/129.0 Mobile Safari/537.36';
+  const C3 = '34'.repeat(16);
+  const r = await fetch(`${base}/app-login/done?c=${C3}&code=codigo_android`, { headers: { 'user-agent': UA }, redirect: 'manual' });
+  assert.equal(r.status, 302);
+  const loc = r.headers.get('location');
+  assert.match(loc, /^intent:\/\/login#Intent;scheme=fraihaxadrez;package=com\.fraihaxadrez\.app;S\.browser_fallback_url=/);
+  assert.ok(decodeURIComponent(loc).includes('/app-login/pronto'));
+  assert.equal(JSON.parse(await (await fetch(`${base}/app-login/claim?c=${C3}`)).text()).code, 'codigo_android', 'o código foi guardado antes de voltar');
+  const p = await fetch(`${base}/app-login/pronto`); const pt = await p.text();
+  assert.equal(p.status, 200); assert.match(pt, /VOLTAR PARA O APP/); assert.match(pt, /intent:\/\/login/);
+  const C4 = '56'.repeat(16);
+  const pc = await fetch(`${base}/app-login/done?c=${C4}&code=codigo_pc`, { redirect: 'manual' });
+  assert.equal(pc.status, 200); assert.match(await pc.text(), /Volte para o app/);
+  const bad = await fetch(`${base}/app-login/done?c=${'78'.repeat(16)}&error=access_denied`, { headers: { 'user-agent': UA }, redirect: 'manual' });
+  assert.equal(bad.status, 200, 'erro do Google não redireciona');
+});
