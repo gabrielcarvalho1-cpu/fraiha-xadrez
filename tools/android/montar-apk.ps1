@@ -21,8 +21,8 @@ $env:GRADLE_USER_HOME = 'C:\Android\gradle-home'
 $env:TEMP = 'C:\Android\tmp'; $env:TMP = 'C:\Android\tmp'
 "sdk.dir=C\:\\Android\\Sdk" | Out-File "$dst\build\local.properties" -Encoding ascii
 Set-Location "$dst\build"
-$props = @{ addons_directory = "$dst\addons_vazio"; export_package_name = 'com.fraihaxadrez.app'; export_version_code = '4';
-  export_version_name = '1.0.3-teste'; export_version_min_sdk = '24'; export_version_target_sdk = '35';
+$props = @{ addons_directory = "$dst\addons_vazio"; export_package_name = 'com.fraihaxadrez.app'; export_version_code = '5';
+  export_version_name = '1.0.4-teste'; export_version_min_sdk = '24'; export_version_target_sdk = '35';
   export_enabled_abis = 'armeabi-v7a|arm64-v8a'; plugins_local_binaries = ''; plugins_remote_binaries = 'io.agora.rtc:voice-sdk:4.5.2';
   plugins_maven_repos = ''; perform_zipalign = 'true'; perform_signing = 'true'; compress_native_libraries = 'true';
   release_keystore_file = $key; release_keystore_alias = 'fraihateste'; release_keystore_password = $pw }

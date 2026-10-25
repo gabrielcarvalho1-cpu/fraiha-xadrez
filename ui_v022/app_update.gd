@@ -6,7 +6,7 @@ extends Node
 ## ATUALIZAR abre o link do APK novo no navegador do celular. Só no Android (Web e PC: nada).
 ## APP_CODE = version/code do preset "Android" (tests/r183_app_update_test.gd confere).
 
-const APP_CODE := 4   # R184d (Android 1.0.2: volta sozinho para o app depois do login com Google)
+const APP_CODE := 5   # R184d (Android 1.0.2: volta sozinho para o app depois do login com Google)
 const CHECK_EVERY_S := 6 * 3600
 const NAG_FILE := "user://app_update.cfg"
 const Endpoint := preload("res://online_v020/endpoint.gd")

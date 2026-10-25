@@ -14,6 +14,7 @@ config/name="FRAIHA Xadrez V0.30 - En Passant Temas e Perfil"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="FRAIHA Xadrez Musicas V026 Teste"
 run/main_scene="res://presentation_v019/stage.tscn"
+run/main_scene.android="res://app_boot/boot.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.5", "GL Compatibility")
 boot_splash/bg_color=Color(0.03, 0.02, 0.015, 1)
