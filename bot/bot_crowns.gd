@@ -1,8 +1,7 @@
 extends RefCounted
 ## R184e · COROAS da 1ª vitória contra cada bot do Desafio das Ligas (proposta: Madeira 50, +25 por bot, Challenger 300).
 ## O SERVIDOR é quem paga (online_v021/bots/service.js, mesma tabela); aqui é só para mostrar na tela.
-## Enquanto o dono não aprovar, ENABLED = false: nada aparece e nada é pago.
-const ENABLED := false
+const ENABLED := true   # R184e · aprovado pelo dono
 const BASE := 50
 const STEP := 25
 

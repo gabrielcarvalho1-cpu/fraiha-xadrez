@@ -89,6 +89,10 @@ class BotService {
       throw e;
     }
     if (fresh && hash) { if (this.games.size > 50000) this.games.clear(); this.games.set(hash, op.uid); }
+    if (fresh && this.backend && this.backend.crowns && this.backend.crowns.onBotWin) {   // R184e · coroas da 1ª vitória
+      const b = LADDER.bots[idx] || {};
+      try { await op.wait(() => this.backend.crowns.onBotWin(op.uid, v.id, idx, b.name || '')); } catch (e) { console.error('[bots] coroas', e && e.message); }
+    }
     const after = await op.wait(() => this.summary(op.uid));
     return this.send(ws, { type: 'bot_progress', ...after, new_bot: fresh ? v.id : null });
   }
