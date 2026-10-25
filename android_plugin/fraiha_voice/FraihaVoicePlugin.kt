@@ -5,7 +5,17 @@
 // Copiado para android/build/src pelo tools/android/montar_build_gradle.py (a pasta android/ é gerada).
 package com.fraiha.voice
 
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import android.util.Base64
 import android.util.Log
+import java.io.ByteArrayOutputStream
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
@@ -31,7 +41,9 @@ class FraihaVoicePlugin(godot: Godot) : GodotPlugin(godot) {
 
     override fun getPluginName() = "FraihaVoice"
 
-    override fun getPluginSignals(): Set<SignalInfo> = setOf(SignalInfo("voice_event", String::class.java))
+    override fun getPluginSignals(): Set<SignalInfo> = setOf(
+        SignalInfo("voice_event", String::class.java),
+        SignalInfo("image_picked", String::class.java, String::class.java))
 
     private fun emit(ev: String, data: JSONObject = JSONObject(), withSeq: Boolean = true) {
         data.put("ev", ev)
@@ -109,6 +121,11 @@ class FraihaVoicePlugin(godot: Godot) : GodotPlugin(godot) {
 
         override fun onRequestToken() { emit("expired") }
 
+        // R185 · auditoria: estado REAL de publicação do microfone no logcat (0 ocioso, 1 não publicado, 2 publicando, 3 publicado)
+        override fun onAudioPublishStateChanged(channel: String?, oldState: Int, newState: Int, elapseSinceLastState: Int) {
+            Log.i("FraihaVoice", "publish $oldState->$newState muted=$muted")
+        }
+
         override fun onLocalAudioStateChanged(state: Int, reason: Int) {
             if (state == Constants.LOCAL_AUDIO_STREAM_STATE_FAILED) {
                 emit("mic_lost", JSONObject().put("code", "MIC_$reason"), false)
@@ -161,12 +178,15 @@ class FraihaVoicePlugin(godot: Godot) : GodotPlugin(godot) {
             val e = ensureEngine(appId)
             if (e == null) { emit("error", JSONObject().put("stage", "sdk").put("code", "SDK_LOAD")); return }
             e.leaveChannel()
-            e.muteLocalAudioStream(muted)
+            // R185 · mudo = NÃO publicar o microfone + volume de captura 0 (um único mecanismo; antes o
+            // muteLocalAudioStream chamado antes de entrar era desfeito pelo publishMicrophoneTrack=true do join e o
+            // estado ficava invertido: "mudo" falando, "ligado" sem som)
+            e.adjustRecordingSignalVolume(if (muted) 0 else 100)
             e.muteAllRemoteAudioStreams(speakerMuted)
             val o = ChannelMediaOptions()
             o.clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
             o.channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
-            o.publishMicrophoneTrack = true
+            o.publishMicrophoneTrack = !muted
             o.autoSubscribeAudio = true
             val r = e.joinChannel(token, channel, uid, o)
             if (r < 0) emit("error", JSONObject().put("stage", "join").put("code", "JOIN_$r"))
@@ -189,7 +209,17 @@ class FraihaVoicePlugin(godot: Godot) : GodotPlugin(godot) {
     @UsedByGodot
     fun setMuted(on: Boolean) {
         muted = on
-        val r = engine?.muteLocalAudioStream(on) ?: 0
+        val e = engine
+        var r = 0
+        if (e != null) {
+            e.adjustRecordingSignalVolume(if (on) 0 else 100)
+            if (joined) {
+                val o = ChannelMediaOptions()
+                o.publishMicrophoneTrack = !on
+                r = e.updateChannelMediaOptions(o)
+            }
+        }
+        Log.i("FraihaVoice", "setMuted on=$on joined=$joined r=$r")
         if (r < 0) emit("error", JSONObject().put("stage", "mute").put("code", "MUTE_FAILED").put("soft", true), false)
         emit("muted", JSONObject().put("muted", muted), false)
     }
@@ -222,5 +252,77 @@ class FraihaVoicePlugin(godot: Godot) : GodotPlugin(godot) {
         try { engine?.leaveChannel(); RtcEngine.destroy() } catch (_: Throwable) {}
         engine = null
         super.onMainDestroy()
+    }
+
+    // ---------------------------------------------------------------- R185 · FOTO DE PERFIL no app
+    // O FileDialog nativo do Godot devolvia um caminho que o app não consegue ler (armazenamento restrito do
+    // Android 10+) e a foto nunca mudava. Aqui: abre a galeria do Android, lê pelo ContentResolver (permissão
+    // temporária do próprio seletor, sem pedir acesso às fotos), decodifica qualquer formato que o celular
+    // abre (JPG, PNG, WebP, HEIC), aplica a rotação da câmera, reduz para no máximo 1600 px e devolve JPEG em
+    // base64 pelo sinal image_picked(tipo, dados): tipo = "ok" | "cancel" | "error".
+    private val PICK_REQ = 7311
+
+    private fun emitImage(kind: String, data: String) {
+        runOnRenderThread { emitSignal("image_picked", kind, data) }
+    }
+
+    @UsedByGodot
+    fun pickImage() {
+        val act = activity
+        if (act == null) { emitImage("error", "NO_ACTIVITY"); return }
+        act.runOnUiThread {
+            try {
+                val i = if (Build.VERSION.SDK_INT >= 33) Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*")
+                    else Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
+                act.startActivityForResult(i, PICK_REQ)
+            } catch (t: Throwable) {
+                try {
+                    act.startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), PICK_REQ)
+                } catch (t2: Throwable) {
+                    Log.w("FraihaVoice", "pickImage: ${t2.javaClass.simpleName}")
+                    emitImage("error", "NO_PICKER")
+                }
+            }
+        }
+    }
+
+    override fun onMainActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onMainActivityResult(requestCode, resultCode, data)
+        if (requestCode != PICK_REQ) return
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) { emitImage("cancel", ""); return }
+        val act = activity ?: run { emitImage("error", "NO_ACTIVITY"); return }
+        Thread {
+            try {
+                val bmp = decode(act, uri)
+                if (bmp == null) { emitImage("error", "DECODE"); return@Thread }
+                val out = ByteArrayOutputStream()
+                bmp.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                Log.i("FraihaVoice", "image picked ${bmp.width}x${bmp.height} ${out.size()} bytes")
+                emitImage("ok", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP))
+            } catch (t: Throwable) {
+                Log.w("FraihaVoice", "image read failed: ${t.javaClass.simpleName}")
+                emitImage("error", "READ")
+            }
+        }.start()
+    }
+
+    private fun decode(act: Activity, uri: Uri): Bitmap? {
+        val maxSide = 1600
+        if (Build.VERSION.SDK_INT >= 28) {
+            val src = ImageDecoder.createSource(act.contentResolver, uri)
+            return ImageDecoder.decodeBitmap(src) { dec, info, _ ->
+                val w = info.size.width; val h = info.size.height
+                val big = maxOf(w, h)
+                if (big > maxSide) dec.setTargetSize(maxOf(1, w * maxSide / big), maxOf(1, h * maxSide / big))
+                dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        act.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        return act.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
     }
 }

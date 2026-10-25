@@ -536,6 +536,7 @@ func _setup_account():
     add_child(profile_popup)
     profile_popup.bind(account)
     # R37.3 · chat das mesas com amigo (XEQUE e MARCHA REAL online)
+    if preload("res://ui_kit/keyboard_lift.gd").wanted(): add_child(preload("res://ui_kit/keyboard_lift.gd").new())   # R185 · app: campo acima do teclado
     party_chat = preload("res://social/party_chat.gd").new()
     add_child(party_chat)
     party_chat.setup(account)

@@ -11,11 +11,39 @@ const EXTENSIONS := ["png", "jpg", "jpeg", "webp"]
 var dialog: FileDialog
 var _web_cb: JavaScriptObject
 
+var _native = null
+
 func open():
     if OS.has_feature("web"):
         _open_web()
+    elif _android_native():
+        _native.pickImage()
     else:
         _open_desktop()
+
+## R185 · app Android: galeria nativa pelo plugin (lê pelo ContentResolver e devolve JPEG pronto).
+## O FileDialog do Godot devolvia um caminho ilegível no Android 10+ e a foto nunca mudava.
+func _android_native() -> bool:
+    if not OS.has_feature("android"): return false
+    if _native == null and Engine.has_singleton("FraihaVoice"):
+        var n = Engine.get_singleton("FraihaVoice")
+        if n.has_method("pickImage") and n.has_signal("image_picked"):
+            _native = n
+            _native.connect("image_picked", _on_native_image)
+    return _native != null
+
+func _on_native_image(kind: String, data: String):
+    match kind:
+        "ok":
+            var bytes := Marshalls.base64_to_raw(data)
+            if bytes.is_empty() or sniff(bytes) == "":
+                failed.emit("Não foi possível ler a foto.")
+                return
+            picked.emit(bytes, "foto.jpg")
+        "cancel":
+            pass
+        _:
+            failed.emit("Não foi possível abrir essa foto. Tente outra.")
 
 func _open_desktop():
     if dialog == null:
