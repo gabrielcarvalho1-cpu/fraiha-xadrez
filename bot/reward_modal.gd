@@ -61,6 +61,11 @@ func show_progress(bot_id: String, reward: Dictionary, fresh := true):
     if _desktop():
         _desk_victory(bot_id, bot, reward, fresh)
         return
+    # R184e · celular/app: a MESMA arte de vitória do PC (padrão do dono para telas de resultado), com letras maiores,
+    # luz girando atrás, faíscas, o avatar ganho "saltando" e as coroas contando (antes: caixinha azul simples).
+    if true:
+        _desk_victory(bot_id, bot, reward, fresh, true)
+        return
     var vp := get_viewport().get_visible_rect().size if get_viewport() != null else Vector2(1600, 900)
     var narrow := vp.x < 700.0
     var short := vp.y < 520.0
@@ -198,10 +203,11 @@ func _desk(tex: Texture2D) -> Control:
     root = d
     return d
 
-func _desk_buttons(d, main_text: String, main_action: Callable, key: String):
+func _desk_buttons(d, main_text: String, main_action: Callable, key: String, mob := false):
     buttons.clear()
-    d.image(load(ART_CROWN_PATH), Rect2(278, 874, 60, 58)).name = "DeskBotCrown"
-    d.label(main_text, Rect2(350, 869, 620, 60), 40, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskBotMainText"   # PC congelado (R181)
+    d.image(load(ART_CROWN_PATH), Rect2(278, 874, 60, 58) if not mob else Rect2(196, 872, 64, 62)).name = "DeskBotCrown"
+    if not mob: d.label(main_text, Rect2(350, 869, 620, 60), 40, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskBotMainText"   # PC congelado (R181)
+    else: d.label(main_text, Rect2(266, 862, 820, 74), 54, DeskArt.CREAM, DeskArt.FONT_TITLE).name = "DeskBotMainText"
     buttons[key] = d.button(Rect2(150, 853, 960, 94), main_action, "DeskBotMain", 16)   # advance / replay (mesmas chaves do painel antigo)
     buttons["analyze"] = d.button(Rect2(165, 963, 925, 84), func():
         close()
@@ -212,11 +218,12 @@ func _desk_buttons(d, main_text: String, main_action: Callable, key: String):
         home_requested.emit(), "DeskBotHome", 14)
 
 ## R54 · PC: VITÓRIA contra o bot na arte de referência (brasões, próximo adversário, recompensa e 3 ações).
-func _desk_victory(bot_id: String, bot: Dictionary, reward: Dictionary, fresh: bool):
+func _desk_victory(bot_id: String, bot: Dictionary, reward: Dictionary, fresh: bool, mob := false):
     var d = _desk(load(ART_WIN_PATH))
     var final := next_bot.is_empty()
     var bname := String(bot.get("name", "BOT"))
-    d.label(bname + (" DERROTADO" if fresh else " DERROTADO NOVAMENTE"), Rect2(250, 322, 755, 52), 42, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBotSub"
+    var F := 1.3 if mob else 1.0   # R184e · celular: letras maiores
+    d.label(bname + (" DERROTADO" if fresh else " DERROTADO NOVAMENTE"), Rect2(220, 316, 815, 60) if mob else Rect2(250, 322, 755, 52), 42 * F, DeskArt.CREAM, DeskArt.FONT_BODY).name = "DeskBotSub"
     var left: Texture2D = ThemeCatalog.badge_texture(String(bot.get("league", bot_id)))
     if final:
         d.image(left, Rect2(522, 358, 210, 206)).name = "DeskBotShield"
@@ -226,31 +233,77 @@ func _desk_victory(bot_id: String, bot: Dictionary, reward: Dictionary, fresh: b
         var nb := Ladder.bot(next_bot)
         d.image(left, Rect2(382, 360, 204, 200)).name = "DeskBotShield"
         d.image(ThemeCatalog.badge_texture(String(nb.get("league", next_bot))), Rect2(666, 360, 204, 200)).name = "DeskBotNextShield"
-        d.label("Próximo adversário desbloqueado:" if fresh else "Próximo adversário:", Rect2(250, 556, 755, 42), 36, Color("efd9a6"), DeskArt.FONT_BODY).name = "DeskBotNextLead"
-        d.label(String(nb.get("name", "")), Rect2(250, 596, 755, 56), 58, DeskArt.EMERALD, DeskArt.FONT_TITLE).name = "DeskBotNext"
+        d.label("Próximo adversário desbloqueado:" if fresh else "Próximo adversário:", Rect2(220, 552, 815, 46) if mob else Rect2(250, 556, 755, 42), 36 * F, Color("efd9a6"), DeskArt.FONT_BODY).name = "DeskBotNextLead"
+        d.label(String(nb.get("name", "")), Rect2(220, 590, 815, 56) if mob else Rect2(250, 596, 755, 56), 58, DeskArt.EMERALD, DeskArt.FONT_TITLE).name = "DeskBotNext"
     # recompensa (avatar da liga do bot)
     var aid := String(reward.get("id", ""))
     if String(reward.get("type", "")) == "avatar" and not aid.is_empty():
         var tex: Texture2D = avatar_for.call(aid) if avatar_for.is_valid() and Catalog.has_art(aid) else null
         if tex != null: d.image(tex, Rect2(215, 679, 145, 132)).name = "DeskBotRewardArt"
-        d.label("Recompensa desbloqueada!" if fresh else "Recompensa já conquistada", Rect2(388, 694, 650, 42), 32, Color("e8c37a"), DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardTitle"
+        var crowns: int = preload("res://bot/bot_crowns.gd").for_bot(bot_id) if (mob and fresh) else 0
+        if mob and fresh and crowns_preview > 0: crowns = crowns_preview
+        var ty := 0.0 if crowns <= 0 else -18.0
         var what := "Avatar " + Catalog.display_name(aid)
-        what += (" desbloqueado" + ("" if Catalog.has_art(aid) else " (arte em breve)")) if fresh else " · sem recompensa nova"
-        d.label(what, Rect2(388, 734, 650, 52), 36, DeskArt.CREAM, DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardText"
+        if not mob:
+            d.label("Recompensa desbloqueada!" if fresh else "Recompensa já conquistada", Rect2(388, 694, 650, 42), 32, Color("e8c37a"), DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardTitle"
+            what += (" desbloqueado" + ("" if Catalog.has_art(aid) else " (arte em breve)")) if fresh else " · sem recompensa nova"
+            d.label(what, Rect2(388, 734, 650, 52), 36, DeskArt.CREAM, DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardText"
+        else:
+            d.label("Recompensa desbloqueada!" if fresh else "Recompensa já conquistada", Rect2(388, 690 + ty, 650, 42), 32 * F, Color("e8c37a"), DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardTitle"
+            if not fresh: what += " · já é seu"
+            d.label(what, Rect2(388, 730 + ty, 650, 52), 36 * F, DeskArt.CREAM, DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardText"
+            if crowns > 0:
+                var cl0: Label = d.label("+ %d COROAS" % crowns, Rect2(388, 776 + ty, 650, 52), 40 * F, Color("ffe08a"), DeskArt.FONT_TITLE, HORIZONTAL_ALIGNMENT_LEFT)
+                cl0.name = "DeskBotCrowns"
+                cl0.set_meta("n", crowns)
     else:
         d.label("Sem recompensa nesta partida", Rect2(388, 714, 650, 52), 34, DeskArt.MUTED, DeskArt.FONT_BODY, HORIZONTAL_ALIGNMENT_LEFT).name = "DeskBotRewardText"
     if final:
         _desk_buttons(d, "JOGAR NOVAMENTE", func():
             var target := shown_bot
             close()
-            replay_requested.emit(target), "replay")
+            replay_requested.emit(target), "replay", mob)
     else:
         var nb_name := String(Ladder.bot(next_bot).get("name", ""))
-        _desk_buttons(d, ("AVANÇAR PARA O " + nb_name) if fresh else ("JOGAR PRÓXIMO BOT · " + nb_name), func():   # PC congelado (R181)
+        var main := (("AVANÇAR PARA O " + nb_name) if fresh else ("JOGAR PRÓXIMO BOT · " + nb_name)) if not mob else ("DESAFIAR O " + nb_name)
+        _desk_buttons(d, main, func():   # PC congelado (R181)
             var target := next_bot
             close()
-            advance_requested.emit(target), "advance")
+            advance_requested.emit(target), "advance", mob)
     d.show_modal()
+    if mob: _mob_fx(d, fresh)
+
+var crowns_preview := 0   # só para a prévia (tests/r184_bot_victory_shots.gd)
+
+## R184e · celular: luz girando atrás da moldura, faíscas, avatar ganho saltando e coroas contando
+func _mob_fx(d, fresh: bool):
+    var ar: Rect2 = d.art_rect()
+    var k: float = d.scale_k()
+    var fx = preload("res://ui_kit/reward_fx.gd").new()
+    fx.name = "VictoryFx"
+    fx.position = Vector2.ZERO
+    fx.size = d.get_viewport_rect().size
+    fx.center = ar.position + Vector2(627, 230) * k
+    fx.radius = ar.size.x * 0.95
+    fx.rays = 16
+    fx.ray_color = Color(1.0, 0.84, 0.40, 0.20 if fresh else 0.10)
+    fx.sparkle_area = Rect2(ar.position + Vector2(160, 160) * k, Vector2(934, 760) * k) if fresh else Rect2()
+    d.add_child(fx)
+    d.move_child(fx, 1)   # entre o escuro de fundo e a arte
+    var av = d.get_node_or_null("DeskBotRewardArt")
+    if av != null and fresh:
+        av.pivot_offset = av.size * 0.5
+        av.scale = Vector2(0.2, 0.2)
+        var tw = av.create_tween()
+        tw.tween_interval(0.35)
+        tw.tween_property(av, "scale", Vector2(1.18, 1.18), 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        tw.tween_property(av, "scale", Vector2.ONE, 0.18)
+    var cl = d.get_node_or_null("DeskBotCrowns")
+    if cl != null:
+        var total := int(cl.get_meta("n", 0))
+        var tw2 = cl.create_tween()
+        tw2.tween_interval(0.6)
+        tw2.tween_method(func(v: float): cl.text = "+ %d COROAS" % int(round(v)), 0.0, float(total), 0.9).set_ease(Tween.EASE_OUT)
 
 ## R54 · DERROTA contra o bot (PC): tela de resultado útil — revanche, analisar ou voltar ao início.
 ## O bot que venceu aparece com o brasão da liga; nada é desbloqueado.

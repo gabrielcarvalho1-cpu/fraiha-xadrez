@@ -32,7 +32,10 @@ func _open_desktop():
     dialog.popup_centered()
 
 func _on_file(path: String):
-    if path.get_extension().to_lower() not in EXTENSIONS:
+    # R184e · app Android: a galeria devolve content://… (sem extensão no nome) — o formato é conferido pelos
+    # primeiros bytes do arquivo (antes recusava toda foto em silêncio e a foto nunca mudava)
+    var ext := path.get_extension().to_lower()
+    if ext != "" and ext not in EXTENSIONS and not path.begins_with("content://"):
         failed.emit("Formato não aceito. Use PNG, JPG ou WebP.")
         return
     var bytes := FileAccess.get_file_as_bytes(path)
@@ -42,7 +45,20 @@ func _on_file(path: String):
     if bytes.size() > MAX_FILE:
         failed.emit("Arquivo grande demais (máximo 12 MB).")
         return
-    picked.emit(bytes, path.get_file())
+    var kind := sniff(bytes)
+    if kind == "":
+        failed.emit("Formato não aceito. Use PNG, JPG ou WebP.")
+        return
+    var fname := path.get_file()
+    if fname.get_extension().to_lower() not in EXTENSIONS: fname = "foto." + kind
+    picked.emit(bytes, fname)
+
+## "png" | "jpg" | "webp" | "" pelos primeiros bytes
+static func sniff(b: PackedByteArray) -> String:
+    if b.size() >= 8 and b[0] == 0x89 and b[1] == 0x50 and b[2] == 0x4E and b[3] == 0x47: return "png"
+    if b.size() >= 3 and b[0] == 0xFF and b[1] == 0xD8 and b[2] == 0xFF: return "jpg"
+    if b.size() >= 12 and b.slice(0, 4).get_string_from_ascii() == "RIFF" and b.slice(8, 12).get_string_from_ascii() == "WEBP": return "webp"
+    return ""
 
 func _open_web():
     if _web_cb == null:

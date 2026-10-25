@@ -18,7 +18,7 @@ config/quit_on_go_back=false
 config/features=PackedStringArray("4.5", "GL Compatibility")
 boot_splash/bg_color=Color(0.03, 0.02, 0.015, 1)
 boot_splash/image="res://branding/fraiha_loading_splash_r63.png"
-boot_splash/image.android="res://branding/android/splash_portrait.png"
+boot_splash/image.android="res://branding/android/splash_portrait_tall.png"
 boot_splash/minimum_display_time=1200
 
 [display]

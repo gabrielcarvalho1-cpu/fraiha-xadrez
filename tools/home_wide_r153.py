@@ -12,6 +12,7 @@ PATCHES = {   # nome: (x, y, w, h, borda suave)
     'logo': (470, 0, 732, 312, 28),
     'profile': (1210, 18, 446, 232, 8),
     'account': (20, 832, 354, 100, 7),
+    'signs': (1378, 576, 226, 268, 8),   # R184e · placas JOGUE/APRENDA/EVOLUA/SEMPRE (cortadas em celular bem largo)
 }
 art = np.asarray(Image.open(SRC).convert('RGBA')).astype(float)
 for name, (x, y, w, h, f) in PATCHES.items():

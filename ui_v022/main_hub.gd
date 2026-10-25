@@ -2908,6 +2908,7 @@ const WIDE_PATCHES := {   # recorte (mesmos números de tools/home_wide_r153.py)
     "profile": [Rect2(1210, 18, 446, 232), ["RefProfileButton", "ProfilePanel", "ProfileStack"]],
     "account": [Rect2(20, 832, 354, 100), ["AccountCard", "AccountPanel", "RefAccountAvatar", "RefAccountAvatarFrameHost"]],
     "community": [Rect2(1388, 856, 262, 64), ["CommunityButton"]],
+    "signs": [Rect2(1378, 576, 226, 268), []],   # R184e · placas JOGUE/APRENDA… (a arte cortava na borda direita)
 }
 var _wide_on := false
 var _wide_orig := {}          # nó -> posição original (para voltar ao normal)
@@ -2949,6 +2950,7 @@ func _wide_home(on: bool):
         t.stretch_mode = TextureRect.STRETCH_SCALE
         t.mouse_filter = Control.MOUSE_FILTER_IGNORE
         _wide_layer.add_child(t)
+        if key == "signs": t.z_index = 1   # R184e · por cima do espírito das águas (que passa na frente da arte)
         _wide_patch[key] = t
 
 const WIDE_MENU_X := Vector2(540, 1120)   # pilares do menu na arte: nada das laterais passa daqui
@@ -2971,6 +2973,8 @@ func _layout_wide(dims: Vector2):
         "account": [Vector2(v.position.x + m, v.end.y - (100.0 + m) * kl), kl],
         "profile": [Vector2(v.end.x - 446.0 * kr - m, v.position.y + m), kr],
         "community": [Vector2(v.end.x - (262.0 + m) * kr - m * 0.5, v.end.y - (64.0 + m) * kr - m * 0.5), kr],
+        # R184e · placas: só andam quando a borda direita da tela corta a arte; ficam coladas à direita, mesma altura
+        "signs": [Vector2(minf(1378.0, v.end.x - 228.0), 576.0), 1.0],
     }
     for key in place:
         var src: Rect2 = WIDE_PATCHES[key][0]

@@ -1059,6 +1059,8 @@ func _open_online():
 ## R181 · CONTA NOVA (acabou de escolher o apelido): o primeiro passo é uma partida do Desafio das Ligas contra o
 ## BOT MADEIRA. Dá para pular (vai para o menu). Quem já venceu o BOT MADEIRA (progresso de convidado) não vê.
 const FIRST_RIVAL := "madeira"
+const BotCrowns := preload("res://bot/bot_crowns.gd")
+var first_rival_modal = null
 func _first_challenge():
     if hub.bot_progress != null and hub.bot_progress.is_defeated(FIRST_RIVAL): return
     if mode != "home": return
@@ -1066,7 +1068,19 @@ func _first_challenge():
     if mode != "home": return
     var Ev := preload("res://telemetry/events.gd")
     Ev.send(account, "first_bot_shown")
-    hub.ask("SEU PRIMEIRO RIVAL", "Todo mundo começa na Madeira.\nVença seu primeiro rival: o BOT MADEIRA!",
+    if preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):
+        # R184e · celular/app: tela de boas-vindas com arte (sem "todo mundo começa na Madeira")
+        if first_rival_modal == null:
+            first_rival_modal = load("res://bot/first_rival_modal.gd").new()
+            first_rival_modal.name = "FirstRivalModal"
+            add_child(first_rival_modal)
+            first_rival_modal.accepted.connect(func():
+                Ev.send(account, "first_bot_accept")
+                _start_bot(FIRST_RIVAL, "w"))
+            first_rival_modal.skipped.connect(func(): Ev.send(account, "first_bot_skip"))
+        first_rival_modal.open(FIRST_RIVAL, func(id): return hub.avatar_texture(id), BotCrowns.for_bot(FIRST_RIVAL))
+        return
+    hub.ask("SEU PRIMEIRO RIVAL", "Vença seu primeiro rival: o BOT MADEIRA!",
         "DESAFIAR O BOT MADEIRA", "PULAR, IR PARA O MENU",
         func():
             Ev.send(account, "first_bot_accept")

@@ -74,6 +74,7 @@ func release_art():
     _tapete_hd = null
     _scene_full = null
     _scene_blur = null
+    _sky_tex = null
     vignette = null
     vignette_layout = ""
 ## R89 · cenas da mesa só enquanto o XEQUE está aberto (antes eram constantes: 6 MB para sempre)
@@ -185,12 +186,64 @@ static func _emulated_mouse() -> bool:
 # ---------------------------------------------------------------- primitivas
 var _wide_cache := {}
 func L() -> Dictionary:
+    if ui.layout == "portrait":
+        var te: float = float(ui.get("tall_extra"))
+        if te < 1.0: return LAYOUTS["portrait"]
+        if not _wide_cache.has(-te):
+            _wide_cache.clear()
+            _wide_cache[-te] = _tall(LAYOUTS["portrait"], te)
+        return _wide_cache[-te]
     if ui.layout != "landscape" or float(ui.get("wide_extra")) < 1.0: return LAYOUTS[ui.layout]
     var e: float = ui.wide_extra
     if not _wide_cache.has(e):
         _wide_cache.clear()
         _wide_cache[e] = _spread(LAYOUTS["landscape"], e)
     return _wide_cache[e]
+
+## R184e · celular em pé ALTO (app Android): a sobra de altura (e) vai para dentro da mesa, sem faixa espelhada.
+##   topo (botões, A MESA PEDE, rivais) desce um pouco (longe da câmera/barra do celular) e os botões ficam maiores;
+##   tabuleiro e cenário descem ~40%; seu cartão, relógio e mão ~62%; XEQUE e JOGAR CARTAS ficam no pé da tela, maiores.
+const TALL_TOP := ["title", "sub", "mesa", "help", "menu", "music", "fx", "full", "voice", "voice_ear", "chat"]
+const TALL_MID := ["scene", "board", "pile", "clock", "reveal", "mate_clock", "turn", "mate_title", "mate_line"]
+const TALL_ICONS := ["full", "music", "fx", "help", "menu", "voice", "voice_ear"]
+static func _tall(v: Dictionary, e: float) -> Dictionary:
+    var dt := minf(e * 0.22, 110.0)
+    var dm := e * 0.40
+    var dp := e * 0.62
+    var d := {}
+    for key in v:
+        var val = v[key]
+        if val == null: d[key] = null
+        elif key in TALL_TOP: d[key] = _dy(val, dt)
+        elif key in TALL_MID: d[key] = _dy(val, dm)
+        elif key in ["hand", "meter"]: d[key] = _dy(val, dp)
+        elif key == "plates":
+            var p := {}
+            for s in val: p[s] = [val[s][0]] + [_dy(val[s][1], dp if s == 0 else dt)] + val[s].slice(2)
+            d[key] = p
+        else: d[key] = val
+    # botões do topo bem maiores (112 em vez de 84; o dono não conseguia acertar os pequenos) e A MESA PEDE à direita.
+    # Tela cheia não aparece aqui (no app não existe; no celular alto ela fica na Home).
+    var i := 0
+    for key in ["music", "fx", "help", "menu", "voice", "voice_ear"]:
+        d[key] = Rect2(14 + i * 120, 14 + dt, 112, 112)
+        i += 1
+    d["full"] = Rect2(-900, -900, 1, 1)
+    d["mesa"] = Rect2(738, 5 + dt, 332, 165)
+    # pé da tela: JOGAR CARTAS / CHAT e a logo XEQUE bem maiores, colados embaixo
+    var H := 1920.0 + e
+    var play_h := 150.0
+    d["play"] = Rect2(360, H - 40.0 - play_h, 704, play_h)
+    d["xeque"] = [Vector2(180, H - 40.0 - play_h * 0.5), 1.12]
+    return d
+static func _dy(v, dy: float):
+    if v is Rect2: return Rect2((v as Rect2).position + Vector2(0, dy), (v as Rect2).size)
+    if v is Vector2: return (v as Vector2) + Vector2(0, dy)
+    if v is Array:
+        var a := []
+        for it in v: a.append(_dy(it, dy))
+        return a
+    return v
 
 ## R155 · celular deitado largo: coluna da esquerda fica, o meio anda metade da sobra, a coluna da direita anda tudo.
 static func _wx(x: float, e: float) -> float:
@@ -435,6 +488,7 @@ func _draw():
     # telas 16:9 (tutorial e resultado) usam o desenho do PC também no celular deitado
     var dsg: Vector2 = ui.design
     if ui.mode in ["tutorial", "over"] and ui.layout == "landscape": dsg = Vector2(1920, 1080)
+    if ui.mode != "game" and ui.layout == "portrait": dsg = Vector2(1080, 1920)   # R184e · só a mesa usa a altura extra
     ui.k = minf(vs.x / dsg.x, vs.y / dsg.y)
     ui.origin = (vs - dsg * ui.k) / 2.0 + ui.shake_offset() * ui.k      # R36: tremor de tela
     draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
@@ -515,6 +569,23 @@ func _draw_scene_full(a: Rect2):
         var bh := col.size.y * band
         var sh := ts.y * band
         for side in [-1, 1]:
+            if side < 0 and ui.layout == "portrait":
+                # R184e · em cima: o céu da própria arte esticado (antes: faixa espelhada = castelos de cabeça para baixo)
+                if col.position.y > view.position.y:
+                    var hh: float = col.position.y - view.position.y + 2.0
+                    draw_set_transform_matrix(base * Transform2D(Vector2(-1.0 if fx else 1.0, 0), Vector2(0, 1), Vector2(col.end.x if fx else col.position.x, view.position.y)))
+                    var sky := _sky_band(T)
+                    draw_texture_rect(sky, Rect2(Vector2.ZERO, Vector2(col.size.x, hh)), false)
+                    # emenda suave: o céu liso entra ~70 px na arte, sumindo aos poucos
+                    var fw: float = col.size.x
+                    draw_polygon(PackedVector2Array([Vector2(0, hh - 2.0), Vector2(fw, hh - 2.0), Vector2(fw, hh + 70.0), Vector2(0, hh + 70.0)]),
+                        PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0), Color(1, 1, 1, 0)]),
+                        PackedVector2Array([Vector2(0, 0.5), Vector2(1, 0.5), Vector2(1, 0.5), Vector2(0, 0.5)]), sky)
+                    # escurece suave para o alto (topo da tela mais escuro, como um céu ao entardecer)
+                    var w: float = col.size.x
+                    draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, hh), Vector2(0, hh)]),
+                        PackedColorArray([Color(0.05, 0.03, 0.06, 0.55), Color(0.05, 0.03, 0.06, 0.55), Color(0, 0, 0, 0), Color(0, 0, 0, 0)]))
+                continue
             var y0: float = col.position.y if side < 0 else col.end.y
             var k := 0
             while k < 12:
@@ -528,6 +599,21 @@ func _draw_scene_full(a: Rect2):
                 draw_texture_rect_region(T, Rect2(Vector2.ZERO, Vector2(col.size.x, bh)), src)
                 k += 1
     draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
+
+## R184e · faixa de céu lisa: a linha de cima da arte, suavizada (sem os riscos dos detalhes) e esticada para cima
+var _sky_tex: Texture2D = null
+func _sky_band(T: Texture2D) -> Texture2D:
+    if _sky_tex != null: return _sky_tex
+    var img: Image = T.get_image()
+    if img == null: return T
+    img = img.duplicate()
+    if img.is_compressed(): img.decompress()
+    img.convert(Image.FORMAT_RGBA8)
+    img.resize(24, 24, Image.INTERPOLATE_BILINEAR)
+    var row := img.get_region(Rect2i(0, 0, 24, 2))
+    row.resize(1024, 2, Image.INTERPOLATE_BILINEAR)
+    _sky_tex = ImageTexture.create_from_image(row)
+    return _sky_tex
 
 ## R156 · zoom das colunas laterais no celular deitado largo (1 = normal). Até 35% maiores, conforme a sobra.
 func side_zoom() -> float:
@@ -1247,12 +1333,15 @@ func hand_layout() -> Array:
     var hd: Array = L().hand
     var n: int = g.hands[0].size()
     # R80 · celular em pé: na SUA VEZ a mão cresce (zoom suave) e sobe um pouco, para escolher as cartas com folga
-    var z: float = hand_zoom if ui.layout == "portrait" else 0.0
-    var sc: float = hd[1] * lerpf(1.0, 1.75, z)
+    var z: float = hand_zoom if ui.layout in ["portrait", "landscape"] else 0.0
+    var land: bool = ui.layout == "landscape"
+    # R184e · deitado também: na SUA VEZ as cartas crescem 45% e sobem por cima da borda do tabuleiro (o dono achou pequenas)
+    var sc: float = hd[1] * lerpf(1.0, 1.45 if land else 1.75, z)
     var cw := 720.0 * sc
     var step := cw * lerpf(0.737, 0.70, z)
-    if n > 1: step = minf(step, (1060.0 - cw * 0.5) / float(n - 1))     # nunca sai da tela
-    var base: Vector2 = Vector2(hd[0]) + Vector2(0, -95.0 * z)
+    var room := 1060.0 if not land else 1040.0 + float(ui.get("wide_extra"))
+    if n > 1: step = minf(step, (room - cw * 0.5) / float(n - 1))     # nunca sai da tela / não entra nas colunas
+    var base: Vector2 = Vector2(hd[0]) + Vector2(0, (-150.0 if land else -95.0) * z)
     # R178j · o CHAT agora fica embaixo da mão (acima do JOGAR CARTAS): a mão usa a largura toda
     var out := []
     var mid := (n - 1) / 2.0

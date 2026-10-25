@@ -361,6 +361,9 @@ func _input(event):
         _redraw()
 
 var wide_extra := 0.0
+## R184e · celular em pé mais alto que 1080x1920 (app Android, ex.: 1080x2400): a mesa ganha altura em vez de
+## sobrar faixa espelhada em cima/embaixo — botões do topo maiores, mesa no meio, mão e JOGAR CARTAS lá embaixo.
+var tall_extra := 0.0
 func _relayout():
     if root == null: return
     var vs := root.get_viewport_rect().size
@@ -376,6 +379,11 @@ func _relayout():
     if layout == "landscape":
         wide_extra = maxf(0.0, 900.0 * vs.x / maxf(1.0, vs.y) - 1950.0)
         design.x += wide_extra
+    tall_extra = 0.0
+    if layout == "portrait":
+        tall_extra = maxf(0.0, 1080.0 * vs.y / maxf(1.0, vs.x) - 1920.0)
+        if tall_extra < 24.0: tall_extra = 0.0
+        design.y += tall_extra
     if layout == "desktop": _load_desk_art()
     else: _load_clean_cards(false)
     k = minf(vs.x / design.x, vs.y / design.y)

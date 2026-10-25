@@ -131,6 +131,8 @@ var last_move_emph := false      # lance do adversário/remoto: destaque forte q
 var last_move_age := 99.0
 var _drag_submit := []           # [from, to] do lance que o jogador acabou de soltar arrastando
 const PREMOVE_TINT := Color(0.22,0.52,0.95,0.50)
+const HINT_MARK := Color(0.07, 0.05, 0.02, 0.36)   # R184e · celular: lances possíveis discretos
+const HINT_CAPTURE := Color(0.07, 0.05, 0.02, 0.26)
 # Desktop: engrenagem e reiniciar viram botões do HUD (stage); o tabuleiro só desenha o painel de opções.
 var external_hud := false
 var external_settings := false   # R55 · com a pele do PC o painel é o CONFIGURAÇÕES dela (por cima do HUD)
@@ -548,6 +550,13 @@ func _draw():
             if c in legal_moves:
                 if premove_selecting:
                     draw_circle(r.get_center(),8,Color(0.45,0.70,1.0,0.80))
+                elif mobile_presentation:
+                    # R184e · celular: marcas discretas (o dono achou as bolinhas amarelas e o quadrado vermelho
+                    # amadores) — ponto escuro translúcido na casa livre; na captura, a casa levemente escurecida
+                    if pieces.has(c):
+                        draw_rect(r, HINT_CAPTURE)   # captura: a casa inteira levemente escurecida (sem anel/quadrado)
+                    else:
+                        draw_circle(r.get_center(), TILE * 0.15, HINT_MARK)
                 elif pieces.has(c):
                     draw_rect(r.grow(-6),Color("#d94f3d"),false,5)
                 else:
@@ -1014,16 +1023,19 @@ func _premove_targets(fr: Vector2i) -> Array[Vector2i]:
     if code.is_empty(): return out
     var me := code.substr(0,1)
     var kind := code.substr(1,1)
+    # R184e · como no chess.com/lichess: o pré-move também vale para RECAPTURAR — a casa da sua própria peça (que o
+    # adversário pode tomar) e casas atrás de peças (que podem sair do caminho) entram; na hora da vez, se o lance
+    # não for legal, ele é descartado.
     var add := func(q: Vector2i):
-        if _inside(q) and _color_at(q)!=me and q not in out: out.append(q)
+        if _inside(q) and q!=fr and q not in out: out.append(q)
     match kind:
         "P":
             var dy := -1 if me=="w" else 1
             var one := fr+Vector2i(0,dy)
-            if _inside(one) and _color_at(one)!=me:
+            if _inside(one):
                 add.call(one)
                 var start := 6 if me=="w" else 1
-                if fr.y==start and not pieces.has(one): add.call(fr+Vector2i(0,2*dy))
+                if fr.y==start: add.call(fr+Vector2i(0,2*dy))
             add.call(fr+Vector2i(-1,dy)); add.call(fr+Vector2i(1,dy))
         "N":
             for d in [Vector2i(1,2),Vector2i(2,1),Vector2i(2,-1),Vector2i(1,-2),Vector2i(-1,-2),Vector2i(-2,-1),Vector2i(-2,1),Vector2i(-1,2)]:
@@ -1042,8 +1054,8 @@ func _premove_targets(fr: Vector2i) -> Array[Vector2i]:
             if kind in ["B","Q"]: dirs += [Vector2i(1,1),Vector2i(1,-1),Vector2i(-1,1),Vector2i(-1,-1)]
             for d in dirs:
                 var q: Vector2i = fr+d
-                while _inside(q) and _color_at(q)!=me:
-                    out.append(q)
+                while _inside(q):
+                    if q not in out: out.append(q)
                     q+=d
     return out
 
