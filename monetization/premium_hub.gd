@@ -376,6 +376,15 @@ func _rebuild():
         "salao": FoundersHallUI.build(self, column)
         _: _build_hub(column)
     if Catalog.dev_tools_enabled(): _dev_tools(column)
+    if Mobile.active(get_viewport()):
+        # R185 · celular: listas longas (personalizar, club…) ganham VOLTAR também no fim, sem subir a página toda
+        var end_back = Art.Cta.new("VOLTAR", "dark", 58, 20)
+        end_back.name = "PremiumBackEnd"
+        end_back.icon_kind = ""
+        end_back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+        end_back.custom_minimum_size.x = 260
+        end_back.pressed.connect(back)
+        column.add_child(end_back)
     var tail := Control.new()
     tail.custom_minimum_size.y = 40 if narrow else 24
     column.add_child(tail)

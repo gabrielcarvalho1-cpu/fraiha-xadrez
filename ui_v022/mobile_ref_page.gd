@@ -723,6 +723,10 @@ func _build_profile():
 	var content := _content_box(92, 448, 716, 14)
 	content.name = "ProfileContentMobile"
 	mobile._profile(content, 716.0 * s)
+	# R185 · a página é longa (avatares, ícones, molduras, títulos, emotes): VOLTAR também no fim
+	var end_back: Button = mobile._button(content, "VOLTAR", func(): hub.back())
+	end_back.name = "ProfileBackEnd"
+	end_back.custom_minimum_size.y = 64
 	_fit_inside(content)   # R88 · nada passa da largura do painel (botões e linhas do Ranked saíam para fora)
 	var count: Label = content.get_node_or_null("GalleryCountMobile")
 	var gallery = content.get_node_or_null("AvatarGalleryMobile")

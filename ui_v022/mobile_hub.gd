@@ -502,6 +502,15 @@ func _touch_content(node: Node):
     if node is HSlider: node.custom_minimum_size.y = 48
     for child in node.get_children(): _touch_content(child)
 
+## R185 · tocar num item liberado abre direto a caixa "CONFIRMAR TROCA? SIM / NÃO" (antes era preciso descer até o
+## botão APLICAR). O mesmo toque pode chegar 2 vezes no celular (toque + clique emulado): só uma caixa por vez.
+var _ask_ms := 0
+func _ask_once(apply_btn: Button):
+    if Time.get_ticks_msec() - _ask_ms < 600: return
+    if get_tree().root.get_node_or_null("ConfirmBox") != null: return
+    _ask_ms = Time.get_ticks_msec()
+    apply_btn.pressed.emit()
+
 ## width > 0 (R53 · painel da referência, mobile_ref_page.gd): largura do miolo do painel; a grade fica em 3
 ## colunas como na arte, em pé e deitado. Mesmos controles e mesmas funções do hub nos dois casos.
 func _profile(content: VBoxContainer, width := 0.0):
@@ -529,7 +538,8 @@ func _profile(content: VBoxContainer, width := 0.0):
         var st: String = gallery.state_of(id)
         detail.text = hub.AvatarCatalog.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + gallery.hint(id) if st == "locked" else ("conquistado · arte em breve" if st == "no_art_unlocked" else ("EM USO" if st == "selected" else "toque em APLICAR AVATAR")))
         apply_av.disabled = st != "unlocked"
-        _set_btn(apply_av, "EM USO" if st == "selected" else ("BLOQUEADO" if st != "unlocked" else "APLICAR AVATAR")))
+        _set_btn(apply_av, "EM USO" if st == "selected" else ("BLOQUEADO" if st != "unlocked" else "APLICAR AVATAR"))
+        if st == "unlocked": _ask_once(apply_av))   # R185 · tocou num avatar liberado: já pergunta se quer trocar
     apply_av.pressed.connect(func(): preload("res://ui_kit/confirm_box.gd").ask_change(hub, "o avatar", hub.AvatarCatalog.display_name(String(chosen.avatar)), func():   # R176
         if hub.apply_avatar(String(chosen.avatar)):
             gallery.update_states()
@@ -553,7 +563,8 @@ func _profile(content: VBoxContainer, width := 0.0):
         var st: String = badges.state_of(id)
         bdetail.text = badges.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + badges.hint(id) if st == "locked" else ("EM USO" if st == "selected" else "toque em APLICAR ÍCONE"))
         apply_bd.disabled = st != "unlocked"
-        _set_btn(apply_bd, "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR ÍCONE")))
+        _set_btn(apply_bd, "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR ÍCONE"))
+        if st == "unlocked": _ask_once(apply_bd))
     apply_bd.pressed.connect(func(): preload("res://ui_kit/confirm_box.gd").ask_change(hub, "o ícone", badges.display_name(String(chosen.badge)), func():   # R176
         if hub.apply_badge(String(chosen.badge)):
             badges.update_states()
@@ -578,7 +589,8 @@ func _profile(content: VBoxContainer, width := 0.0):
         var st: String = frames.state_of(id)
         fdetail.text = frames.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + frames.hint(id) if st == "locked" else ("EM USO" if st == "selected" else "toque em APLICAR MOLDURA"))
         apply_fr.disabled = st != "unlocked"
-        _set_btn(apply_fr, "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR MOLDURA")))
+        _set_btn(apply_fr, "EM USO" if st == "selected" else ("BLOQUEADO" if st == "locked" else "APLICAR MOLDURA"))
+        if st == "unlocked": _ask_once(apply_fr))
     apply_fr.pressed.connect(func(): preload("res://ui_kit/confirm_box.gd").ask_change(hub, "a moldura", frames.display_name(String(chosen.frame)), func():   # R176
         if hub.apply_frame(String(chosen.frame)):
             frames.update_states()
@@ -605,7 +617,8 @@ func _profile(content: VBoxContainer, width := 0.0):
         var st: String = titles.state_of(id)
         tdetail.text = titles.display_name(id).to_upper() + " · " + ("BLOQUEADO · " + titles.hint(id) if st == "locked" else ("EM USO" if st == "selected" else "toque em USAR TÍTULO"))
         apply_tt.disabled = st == "selected"
-        _set_btn(apply_tt, "EM USO" if st == "selected" else ("VER NA LOJA" if st == "locked" else "USAR TÍTULO")))
+        _set_btn(apply_tt, "EM USO" if st == "selected" else ("VER NA LOJA" if st == "locked" else "USAR TÍTULO"))
+        if st != "selected" and st != "locked": _ask_once(apply_tt))
     apply_tt.pressed.connect(func():
         var tid := String(chosen.title)
         if titles.state_of(tid) == "locked":

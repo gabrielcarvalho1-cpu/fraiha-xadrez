@@ -178,15 +178,12 @@ class FraihaVoicePlugin(godot: Godot) : GodotPlugin(godot) {
             val e = ensureEngine(appId)
             if (e == null) { emit("error", JSONObject().put("stage", "sdk").put("code", "SDK_LOAD")); return }
             e.leaveChannel()
-            // R185 · mudo = NÃO publicar o microfone + volume de captura 0 (um único mecanismo; antes o
-            // muteLocalAudioStream chamado antes de entrar era desfeito pelo publishMicrophoneTrack=true do join e o
-            // estado ficava invertido: "mudo" falando, "ligado" sem som)
-            e.adjustRecordingSignalVolume(if (muted) 0 else 100)
+            e.muteLocalAudioStream(muted)
             e.muteAllRemoteAudioStreams(speakerMuted)
             val o = ChannelMediaOptions()
             o.clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
             o.channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
-            o.publishMicrophoneTrack = !muted
+            o.publishMicrophoneTrack = true
             o.autoSubscribeAudio = true
             val r = e.joinChannel(token, channel, uid, o)
             if (r < 0) emit("error", JSONObject().put("stage", "join").put("code", "JOIN_$r"))
@@ -209,16 +206,7 @@ class FraihaVoicePlugin(godot: Godot) : GodotPlugin(godot) {
     @UsedByGodot
     fun setMuted(on: Boolean) {
         muted = on
-        val e = engine
-        var r = 0
-        if (e != null) {
-            e.adjustRecordingSignalVolume(if (on) 0 else 100)
-            if (joined) {
-                val o = ChannelMediaOptions()
-                o.publishMicrophoneTrack = !on
-                r = e.updateChannelMediaOptions(o)
-            }
-        }
+        val r = engine?.muteLocalAudioStream(on) ?: 0
         Log.i("FraihaVoice", "setMuted on=$on joined=$joined r=$r")
         if (r < 0) emit("error", JSONObject().put("stage", "mute").put("code", "MUTE_FAILED").put("soft", true), false)
         emit("muted", JSONObject().put("muted", muted), false)

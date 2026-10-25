@@ -1240,7 +1240,11 @@ func _process(_d) -> void:
 	var c = st.match_chat
 	var chat_on: bool = c != null and c.active()
 	var unread: int = int(c.unread) if chat_on else 0
-	var key := "%s|%s|%s|%s|%s|%s" % [chat_on, unread, st.game.game_over, _available(), ModeSound.music_muted(st.hub), ModeSound.effects_muted(st.hub)]
+	# R185 · o estado da VOZ entra na chave: o mudo só é confirmado depois do toque (evento do provedor); sem isso o
+	# botão ficava sempre um passo atrás e parecia invertido ("Microfone" com a voz muda e "mudo" falando)
+	var vo = st.voice
+	var vkey := "%s|%s" % [String(vo.state), bool(vo.speaker_muted)] if vo != null else ""
+	var key := "%s|%s|%s|%s|%s|%s|%s" % [chat_on, unread, st.game.game_over, _available(), ModeSound.music_muted(st.hub), ModeSound.effects_muted(st.hub), vkey]
 	if key != _key:
 		_key = key
 		if orient == "p":
