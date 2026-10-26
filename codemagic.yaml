@@ -8,6 +8,12 @@ workflows:
     name: iPhone · simulador (sem conta Apple)
     instance_type: mac_mini_m2
     max_build_duration: 60
+    triggering:            # monta sozinho a cada envio para a branch do iPhone (sem precisar clicar)
+      events:
+        - push
+      branch_patterns:
+        - pattern: ios/app
+          include: true
     environment:
       xcode: "16.4"   # simulador iOS 18: ainda roda app x86_64 (o iOS 26 não roda mais)
       vars:
