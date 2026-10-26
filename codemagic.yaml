@@ -33,11 +33,13 @@ workflows:
           ls build/ios
       - name: Compilar para o simulador
         script: |
-          set -e
+          set -eo pipefail
+          # Godot 4.5.1: a biblioteca do simulador é só x86_64 → monta x86_64 (o Mac M2 roda pelo Rosetta)
+          softwareupdate --install-rosetta --agree-to-license > /dev/null 2>&1 || true
           cd build/ios
           xcodebuild -project FRAIHA.xcodeproj -scheme FRAIHA -configuration Release \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath dd CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build | tail -40
+            -derivedDataPath dd CODE_SIGNING_ALLOWED=NO ARCHS=x86_64 EXCLUDED_ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build | tail -40
       - name: Rodar no iPhone virtual e tirar prints
         script: |
           set -e
