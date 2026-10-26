@@ -307,7 +307,7 @@ protected:
 	NSString *why = nil;
 	switch (reason) {
 		case AgoraConnectionChangedReasonBannedByServer: why = @"UID_BANNED"; break;
-		case AgoraConnectionChangedReasonSameUidLogin: why = @"UID_CONFLICT"; break;
+		case AgoraConnectionChangedSameUidLogin: why = @"UID_CONFLICT"; break;
 		case AgoraConnectionChangedReasonInvalidToken: why = @"INVALID_TOKEN"; break;
 		case AgoraConnectionChangedReasonTokenExpired: why = @"TOKEN_EXPIRE"; break;
 		case AgoraConnectionChangedReasonLeaveChannel: why = @"LEAVE"; break;
@@ -361,9 +361,9 @@ protected:
 		UIImage *img = [obj isKindOfClass:[UIImage class]] ? (UIImage *)obj : nil;
 		if (img == nil) { ow->emit_image("error", "READ"); return; }
 		CGSize sz = img.size;
-		CGFloat big = MAX(sz.width, sz.height);
+		CGFloat big = fmax(sz.width, sz.height);
 		CGFloat k = big > 1600 ? 1600.0 / big : 1.0;
-		CGSize dst = CGSizeMake(MAX(1, floor(sz.width * k)), MAX(1, floor(sz.height * k)));
+		CGSize dst = CGSizeMake(fmax(1.0, floor(sz.width * k)), fmax(1.0, floor(sz.height * k)));
 		UIGraphicsImageRendererFormat *fmt = [UIGraphicsImageRendererFormat defaultFormat];
 		fmt.scale = 1;
 		fmt.opaque = YES;
