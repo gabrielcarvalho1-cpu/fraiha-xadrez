@@ -28,6 +28,9 @@ const ERR_CODE = /^[a-z_]{2,60}$/;
 // e um botão VOLTAR PARA O APP. PC (Windows) e outros: a página de sempre.
 const APP_PACKAGE = 'com.fraihaxadrez.app';
 const isAndroid = req => /Android/i.test(String((req.headers && req.headers['user-agent']) || ''));
+// R193 · app de iPhone: o Safari não abre o app sozinho por redirecionamento; a página mostra o botão VOLTAR PARA O APP
+const isIOS = req => /iPhone|iPad|iPod/i.test(String((req.headers && req.headers['user-agent']) || ''));
+const IOS_BTN = `<p style="margin-top:22px"><a href="fraihaxadrez://login" style="display:inline-block;padding:14px 22px;border-radius:10px;background:#e9b23a;color:#2a1a04;font-weight:bold;text-decoration:none;letter-spacing:1px">VOLTAR PARA O APP</a></p>`;
 const hostOf = req => { const h = String((req.headers && (req.headers['x-forwarded-host'] || req.headers.host)) || '').split(',')[0].trim(); return /^[a-z0-9.-]+(:\d+)?$/i.test(h) ? h : ''; };
 const intentUrl = fallback => 'intent://login#Intent;scheme=fraihaxadrez;package=' + APP_PACKAGE + ';' + (fallback ? 'S.browser_fallback_url=' + encodeURIComponent(fallback) + ';' : '') + 'end';
 const BACK_BTN = `<p style="margin-top:22px"><a href="${intentUrl('')}" style="display:inline-block;padding:14px 22px;border-radius:10px;background:#e9b23a;color:#2a1a04;font-weight:bold;text-decoration:none;letter-spacing:1px">VOLTAR PARA O APP</a></p>`;
@@ -103,7 +106,7 @@ class AppLogin {
       return res.end();
     }
     res.writeHead(200, { ...head, 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" });
-    if (ok && code) return res.end(PAGE('PRONTO!', 'Login com Google feito.<br><br><b>Volte para o app FRAIHA Xadrez</b> — ele entra sozinho na sua conta.'));
+    if (ok && code) return res.end(PAGE('PRONTO!', 'Login com Google feito.<br><br><b>Volte para o app FRAIHA Xadrez</b> — ele entra sozinho na sua conta.' + (isIOS(req) ? IOS_BTN : '')));
     if (ok) return res.end(PAGE('NÃO DEU CERTO', 'O Google não completou o login.<br><br>Volte para o app FRAIHA Xadrez e tente de novo.'));
     return res.end(PAGE('LINK EXPIRADO', 'Este link de login já foi usado ou expirou.<br><br>Volte para o app FRAIHA Xadrez e toque em Google de novo.'));
   }
