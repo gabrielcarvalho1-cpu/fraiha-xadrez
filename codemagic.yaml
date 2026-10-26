@@ -89,6 +89,11 @@ workflows:
           echo "--- log do Godot (user://logs)"
           D=$(xcrun simctl get_app_container "$DEV" com.fraihaxadrez.app data 2>/dev/null)
           find "$D" -name "godot*.log" -exec tail -60 {} \; 2>/dev/null || true
+          echo "--- plugin nativo carregou?"
+          find "$D" -name "fx_teste_plugin.txt" -exec cat {} \; 2>/dev/null || echo "sem bilhete do plugin"
+          APP=$(find build/ios/dd/Build/Products -name "*.app" -maxdepth 2 | head -1)
+          echo "--- Frameworks dentro do app"
+          ls "$APP/Frameworks" 2>/dev/null || echo "sem pasta Frameworks"
           echo "--- relatorio de falha"
           F=$(ls -t ~/Library/Logs/DiagnosticReports/FRAIHA* 2>/dev/null | head -1)
           [ -n "$F" ] && head -120 "$F" | grep -v "^ *0x" || echo "sem relatorio"
