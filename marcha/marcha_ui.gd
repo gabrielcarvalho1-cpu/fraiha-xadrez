@@ -1419,10 +1419,18 @@ func _portrait_layout():
     var cards := Rect2(20.0, panel.end.y + gap, 1040.0, ch)
     # ajuda da jogada: só quando há algo a escolher, por cima das placas, longe do tabuleiro
     var help := Rect2(8, 140, 1064, 104)
+    # R187 · título e ícones MAIORES (público mais velho): os ícones usam só o trecho dos 5 botões da arte (o
+    # microfone em pé fica na linha do SUA VEZ) e crescem ~40%; as placas dos jogadores descem para o meio do
+    # espaço entre a barra de cima e o tabuleiro (antes ficavam coladas em cima com um vão embaixo)
+    var tt := Rect2(0, 0, 560, 106.4)
+    var ic := Rect2(tt.end.x + 14.0, 6, 1080.0 - tt.end.x - 14.0 - 12.0, 0)
+    ic.size.y = ic.size.x * 76.0 / 350.0
+    var ptop: float = maxf(tt.end.y, ic.end.y) + 10.0
+    var py: float = maxf(ptop, (ptop + board.position.y - 155.3) / 2.0)
     portrait_game = [
-        [Rect2(0, 0, 500, 95), Rect2(0, 0, 525, 99.75)],               # 0 título
-        [Rect2(1150, 0, 500, 80), Rect2(547, 8, 525, 84)],              # 1 ícones (+ microfone/fone da voz, à esquerda)
-        [Rect2(3000, 0, 740, 108), Rect2(8, 114, 1064, 155.3)],         # 2 placas (faixa virtual)
+        [Rect2(0, 0, 500, 95), tt],                                     # 0 título
+        [Rect2(1290, 2, 350, 76), ic],                                  # 1 ícones (só os 5 botões)
+        [Rect2(3000, 0, 740, 108), Rect2(8, py, 1064, 155.3)],          # 2 placas (faixa virtual)
         [BOARD_SRC, board],                                             # 3 tabuleiro (justo na moldura)
         [Rect2(520, 735, 640, 206), cards],                             # 4 mão
         [PANEL_LOW_SRC, panel],                                         # 5 SUA VEZ + JOGAR CARTA (moldura, sem a coroa)
@@ -1465,7 +1473,7 @@ func _wide_layout():
     var help := Rect2(16, H - 16.0 - 150.0, lw, 150)          # controles do 7/10/descartar (só quando há escolha)
     # DIREITA: ícones; painel SUA VEZ + JOGAR CARTA (a arte inteira, com a moldura); cartas maiores embaixo
     var rx: float = board.end.x + 16.0
-    var iw: float = minf(rw, 500.0)
+    var iw: float = minf(rw, 640.0)                                  # R187 · ícones ~30% maiores
     var icons := Rect2(W - 16.0 - iw, 10, iw, iw * 80.0 / 500.0)
     var cw: float = minf(rw, 1000.0)
     var ch: float = (cw - 30.0) / 4.0 * R57_CARD.y / R57_CARD.x     # R186 · 4 cartas lado a lado na coluna toda
@@ -1489,7 +1497,7 @@ func _wide_layout():
         cards.position.y -= need
         panel.position.y -= need * 0.5
         chh = 54.0
-    wide_chat = Rect2(cards.end.x - 220.0, H - 40.0 - chh, 220.0, chh)
+    wide_chat = Rect2(cards.end.x - 220.0 - minf(90.0, rw * 0.12), H - 40.0 - chh, 220.0, chh)   # R187 · mais para dentro
     # R186 · mão no celular deitado: base = 4 lado a lado na coluna; NA SUA VEZ crescem para cima (sobrepondo um
     # pouco umas às outras, nunca para cima do tabuleiro), até o limite de baixo do painel SUA VEZ
     wide_hand = Rect2(cards.position.x, panel.end.y + 12.0, cards.size.x, cards.end.y - panel.end.y - 12.0)
@@ -1597,10 +1605,11 @@ func card_rect(i: int, n: int) -> Rect2:
         # sobrepondo até 25%, sempre dentro da coluna da direita (não cobrem o tabuleiro)
         var hb: Rect2 = wide_hand
         var nn: int = maxi(n, 1)
+        var slots: int = maxi(n, 4)              # R187 · tamanho de 4 cartas mesmo com 3, 2 ou 1 na mão
         var gp0 := 10.0
-        var w0: float = (hb.size.x - (nn - 1) * gp0) / nn
-        var ov: float = 0.25 if nn <= 4 else 0.20
-        var w1: float = hb.size.x / (nn - (nn - 1) * ov)
+        var w0: float = (hb.size.x - (slots - 1) * gp0) / slots
+        var ov: float = 0.25 if slots <= 4 else 0.20
+        var w1: float = hb.size.x / (slots - (slots - 1) * ov)
         w1 = minf(w1, hb.size.y * R57_CARD.x / R57_CARD.y)       # cabe na altura entre o painel e o fim da mão
         w1 = maxf(w1, w0)
         var z: float = clampf(hand_zoom, 0.0, 1.0)
@@ -1608,7 +1617,7 @@ func card_rect(i: int, n: int) -> Rect2:
         var w: float = lerpf(w0, w1, z)
         var hh: float = w * R57_CARD.y / R57_CARD.x
         var gp: float = (hb.size.x - nn * w) / float(nn - 1) if nn > 1 else 0.0
-        gp = minf(gp, gp0)
+        gp = clampf(gp, -w * ov, gp0)
         var tot: float = nn * w + (nn - 1) * gp
         return Rect2(hb.end.x - tot + i * (w + gp), hb.end.y - hh, w, hh)
     if desk and portrait and not portrait_game.is_empty():
@@ -2558,6 +2567,8 @@ class TableView extends Control:
                 var pz := 0.5 + 0.5 * sin(ui.t * 6.0)
                 for ti in tags.size():
                     var br := Rect2(local.position.x + 8, local.position.y + (8.0 if ui.desk else -16.0) + ti * 38, local.size.x - 16, 34)
+                    if ui.blk:   # R187 · celular: a faixa fica ACIMA da carta (antes cobria o número do canto)
+                        br = Rect2(local.position.x + 4, local.position.y - 40.0 - ti * 38, local.size.x - 8, 34)
                     var tc: Color = tags[ti][1]
                     draw_rect(br.grow(2 + pz * 2), Color(tc.r, tc.g, tc.b, 0.35))
                     draw_rect(br, tc)

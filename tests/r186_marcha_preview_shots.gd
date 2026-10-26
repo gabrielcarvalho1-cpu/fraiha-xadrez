@@ -58,4 +58,8 @@ func run():
 	g.turn = 1
 	await frames(40)
 	await shot("marcha_deitado_espera")
+	g.turn = 0
+	g.hands[0] = ["5"]
+	await frames(40)
+	await shot("marcha_deitado_1carta")
 	quit(0)
