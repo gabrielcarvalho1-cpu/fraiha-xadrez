@@ -16,6 +16,7 @@
 #import <PhotosUI/PhotosUI.h>
 #import <AVFoundation/AVFoundation.h>
 #import <AuthenticationServices/AuthenticationServices.h>
+#import <StoreKit/StoreKit.h>
 #import <AgoraRtcKit/AgoraRtcEngineKit.h>
 
 #include <set>
@@ -28,8 +29,13 @@
 class FraihaIOS;
 
 @interface FXBridge : NSObject <AgoraRtcEngineDelegate, PHPickerViewControllerDelegate,
-		ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding>
+		ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding,
+		SKPaymentTransactionObserver, SKProductsRequestDelegate>
 @property (nonatomic, assign) FraihaIOS *owner;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, SKProduct *> *products;   // R192 · loja da Apple
+@property (nonatomic, strong) SKProductsRequest *productsRequest;
+@property (nonatomic, copy) NSString *pendingBuy;       // produto esperando os dados da Apple para comprar
+@property (nonatomic, copy) NSString *pendingAccount;
 @property (nonatomic, strong) ASAuthorizationController *appleController;
 @end
 
@@ -59,9 +65,14 @@ public:
 	FraihaIOS() {
 		bridge = [FXBridge new];
 		bridge.owner = this;
+		bridge.products = [NSMutableDictionary new];
+		// R192 · o observador entra JÁ na abertura do app: compras que ficaram pela metade (app fechado, internet caiu)
+		// voltam para cá e são reenviadas ao servidor. O GDScript pede a lista de novo com iapPending().
+		[[SKPaymentQueue defaultQueue] addTransactionObserver:bridge];
 	}
 
 	~FraihaIOS() {
+		[[SKPaymentQueue defaultQueue] removeTransactionObserver:bridge];
 		destroy_engine();
 		bridge.owner = nullptr;
 		bridge = nil;
@@ -89,6 +100,71 @@ public:
 		} else {
 			godot::String k = kind, v = data;
 			dispatch_async(dispatch_get_main_queue(), ^{ emit_signal("image_picked", k, v); });
+		}
+	}
+
+	// R192 · tudo da loja da Apple volta pelo sinal "iap_event" com um JSON {ev, ...}
+	void emit_iap(NSDictionary *d) {
+		NSData *json = [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
+		if (json == nil) return;
+		godot::String gstr = gs([[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding]);
+		if ([NSThread isMainThread]) emit_signal("iap_event", gstr);
+		else dispatch_async(dispatch_get_main_queue(), ^{ emit_signal("iap_event", gstr); });
+	}
+
+	void emit_transaction(SKPaymentTransaction *t) {
+		BOOL restored = t.transactionState == SKPaymentTransactionStateRestored;
+		NSString *orig = t.originalTransaction.transactionIdentifier ?: t.transactionIdentifier;
+		emit_iap(@{@"ev": @"purchased", @"transaction_id": t.transactionIdentifier ?: @"", @"server_id": (restored ? orig : t.transactionIdentifier) ?: @"",
+			@"product_id": t.payment.productIdentifier ?: @"", @"restored": @(restored)});
+	}
+
+	bool iapCanPay() { return [SKPaymentQueue canMakePayments]; }
+
+	void iapProducts(const godot::PackedStringArray &ids) {
+		NSMutableSet *set = [NSMutableSet new];
+		for (int i = 0; i < ids.size(); i++) [set addObject:ns(ids[i])];
+		bridge.productsRequest = [[SKProductsRequest alloc] initWithProductIdentifiers:set];
+		bridge.productsRequest.delegate = bridge;
+		[bridge.productsRequest start];
+	}
+
+	// account = id da conta FRAIHA (UUID): a Apple devolve como appAccountToken e o servidor confere o dono
+	void iapBuy(const godot::String &product, const godot::String &account) {
+		if (![SKPaymentQueue canMakePayments]) { emit_iap(@{@"ev": @"failed", @"product_id": ns(product), @"code": @"NOT_ALLOWED", @"cancelled": @NO}); return; }
+		bridge.pendingAccount = [ns(account) lowercaseString];
+		SKProduct *p = bridge.products[ns(product)];
+		if (p == nil) {   // ainda sem os dados do produto: pede e compra quando chegar
+			bridge.pendingBuy = ns(product);
+			godot::PackedStringArray one;
+			one.push_back(product);
+			iapProducts(one);
+			return;
+		}
+		buy_now(p);
+	}
+
+	void buy_now(SKProduct *p) {
+		SKMutablePayment *pay = [SKMutablePayment paymentWithProduct:p];
+		pay.applicationUsername = bridge.pendingAccount;
+		[[SKPaymentQueue defaultQueue] addPayment:pay];
+	}
+
+	// o servidor confirmou (ou recusou de vez): só então a compra sai da fila da Apple
+	void iapFinish(const godot::String &transaction_id) {
+		NSString *tid = ns(transaction_id);
+		for (SKPaymentTransaction *t in [SKPaymentQueue defaultQueue].transactions) {
+			if ([t.transactionIdentifier isEqualToString:tid] && t.transactionState != SKPaymentTransactionStatePurchasing)
+				[[SKPaymentQueue defaultQueue] finishTransaction:t];
+		}
+	}
+
+	void iapRestore() { [[SKPaymentQueue defaultQueue] restoreCompletedTransactions]; }
+
+	// reenvia o que ainda está na fila (compras não finalizadas): chamado ao abrir e ao entrar na conta
+	void iapPending() {
+		for (SKPaymentTransaction *t in [SKPaymentQueue defaultQueue].transactions) {
+			if (t.transactionState == SKPaymentTransactionStatePurchased || t.transactionState == SKPaymentTransactionStateRestored) emit_transaction(t);
 		}
 	}
 
@@ -287,6 +363,13 @@ protected:
 		ClassDB::bind_method(D_METHOD("renew", "token"), &FraihaIOS::renew);
 		ClassDB::bind_method(D_METHOD("pickImage"), &FraihaIOS::pickImage);
 		ClassDB::bind_method(D_METHOD("signInWithApple", "nonce_sha256"), &FraihaIOS::signInWithApple);
+		ClassDB::bind_method(D_METHOD("iapCanPay"), &FraihaIOS::iapCanPay);
+		ClassDB::bind_method(D_METHOD("iapProducts", "ids"), &FraihaIOS::iapProducts);
+		ClassDB::bind_method(D_METHOD("iapBuy", "product", "account"), &FraihaIOS::iapBuy);
+		ClassDB::bind_method(D_METHOD("iapFinish", "transaction_id"), &FraihaIOS::iapFinish);
+		ClassDB::bind_method(D_METHOD("iapRestore"), &FraihaIOS::iapRestore);
+		ClassDB::bind_method(D_METHOD("iapPending"), &FraihaIOS::iapPending);
+		ADD_SIGNAL(godot::MethodInfo("iap_event", godot::PropertyInfo(godot::Variant::STRING, "json")));
 		ADD_SIGNAL(godot::MethodInfo("voice_event", godot::PropertyInfo(godot::Variant::STRING, "json")));
 		ADD_SIGNAL(godot::MethodInfo("apple_signin", godot::PropertyInfo(godot::Variant::STRING, "kind"), godot::PropertyInfo(godot::Variant::STRING, "data")));
 		ADD_SIGNAL(godot::MethodInfo("image_picked", godot::PropertyInfo(godot::Variant::STRING, "kind"), godot::PropertyInfo(godot::Variant::STRING, "data")));
@@ -403,6 +486,67 @@ protected:
 	FraihaIOS *o = self.owner; if (o == nullptr) return;
 	if (error.code == ASAuthorizationErrorCanceled) o->emit_apple("cancel", "");
 	else o->emit_apple("error", gs([NSString stringWithFormat:@"E%ld", (long)error.code]));
+}
+
+// ---------------------------------------------------------------- R192 · loja da Apple (StoreKit)
+- (void)productsRequest:(SKProductsRequest *)request didReceiveResponse:(SKProductsResponse *)response {
+	FraihaIOS *o = self.owner; if (o == nullptr) return;
+	NSMutableArray *items = [NSMutableArray new];
+	for (SKProduct *p in response.products) {
+		self.products[p.productIdentifier] = p;
+		NSNumberFormatter *f = [NSNumberFormatter new];
+		f.numberStyle = NSNumberFormatterCurrencyStyle;
+		f.locale = p.priceLocale;
+		[items addObject:@{@"id": p.productIdentifier, @"price": [f stringFromNumber:p.price] ?: @"", @"title": p.localizedTitle ?: @""}];
+	}
+	o->emit_iap(@{@"ev": @"products", @"items": items, @"invalid": response.invalidProductIdentifiers ?: @[]});
+	if (self.pendingBuy != nil) {
+		SKProduct *p = self.products[self.pendingBuy];
+		NSString *want = self.pendingBuy;
+		self.pendingBuy = nil;
+		if (p != nil) o->buy_now(p);
+		else o->emit_iap(@{@"ev": @"failed", @"product_id": want, @"code": @"PRODUCT", @"cancelled": @NO});
+	}
+}
+
+- (void)request:(SKRequest *)request didFailWithError:(NSError *)error {
+	FraihaIOS *o = self.owner; if (o == nullptr) return;
+	NSString *want = self.pendingBuy ?: @"";
+	self.pendingBuy = nil;
+	o->emit_iap(@{@"ev": @"failed", @"product_id": want, @"code": [NSString stringWithFormat:@"STORE_%ld", (long)error.code], @"cancelled": @NO});
+}
+
+- (void)paymentQueue:(SKPaymentQueue *)queue updatedTransactions:(NSArray<SKPaymentTransaction *> *)transactions {
+	FraihaIOS *o = self.owner; if (o == nullptr) return;
+	for (SKPaymentTransaction *t in transactions) {
+		switch (t.transactionState) {
+			case SKPaymentTransactionStatePurchased:
+			case SKPaymentTransactionStateRestored:
+				o->emit_transaction(t);   // NÃO finaliza aqui: só depois que o servidor confirmar (iapFinish)
+				break;
+			case SKPaymentTransactionStateFailed: {
+				BOOL cancelled = t.error != nil && t.error.code == SKErrorPaymentCancelled;
+				o->emit_iap(@{@"ev": @"failed", @"product_id": t.payment.productIdentifier ?: @"",
+					@"code": [NSString stringWithFormat:@"E%ld", (long)(t.error ? t.error.code : 0)], @"cancelled": @(cancelled)});
+				[queue finishTransaction:t];
+				break;
+			}
+			case SKPaymentTransactionStateDeferred:   // "Pedir para comprar": esperando o responsável aprovar
+				o->emit_iap(@{@"ev": @"deferred", @"product_id": t.payment.productIdentifier ?: @""});
+				break;
+			default: break;
+		}
+	}
+}
+
+- (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue *)queue {
+	FraihaIOS *o = self.owner; if (o == nullptr) return;
+	o->emit_iap(@{@"ev": @"restore_done"});
+}
+
+- (void)paymentQueue:(SKPaymentQueue *)queue restoreCompletedTransactionsFailedWithError:(NSError *)error {
+	FraihaIOS *o = self.owner; if (o == nullptr) return;
+	o->emit_iap(@{@"ev": @"restore_failed", @"code": [NSString stringWithFormat:@"E%ld", (long)error.code]});
 }
 
 - (ASPresentationAnchor)presentationAnchorForAuthorizationController:(ASAuthorizationController *)controller {

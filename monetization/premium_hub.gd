@@ -19,6 +19,7 @@ const PreviewBoard := preload("res://monetization/preview_board.gd")
 const FoundersHallUI := preload("res://monetization/founders_hall_ui.gd")
 const Mobile := preload("res://ui_v022/mobile_layout.gd")
 const Showcase := preload("res://monetization/showcase.gd")
+const AppleStore := preload("res://monetization/apple_store.gd")   # R192 · compras pela Apple (só iPhone)
 
 var state
 var gateway
@@ -50,6 +51,8 @@ var founders: Array = []      # R109 · SALÃO DOS FUNDADORES (payment_founders)
 var founders_loaded := false
 var offer := {}          # R39 · resposta do servidor (payment_offer): vagas de Fundador, provedor pronto
 var _offer_bound = null
+var _apple_bound := false   # R192
+var _confirm_source := "Mercado Pago"
 
 func _init(monetization_state = null):
     layer = 60
@@ -59,6 +62,7 @@ func _init(monetization_state = null):
     gateway = Gateway.new(state)
 
 func _ready():
+    _bind_apple()
     _build()
     get_viewport().size_changed.connect(_relayout)
     visible = false
@@ -132,7 +136,10 @@ func _request_purchases_keep():
 ## R175 · CONTINUAR um pedido aguardando pagamento (o mesmo pedido: mesmo PIX ou o formulário do cartão de novo)
 func resume_payment(item: Dictionary):
     if Catalog.is_mock(): return
-    if (OS.has_feature("android") or OS.has_feature("ios")):   # R188 · iPhone: a Apple não aceita pagamento por fora da loja → mesmo aviso do Android
+    if OS.has_feature("ios"):   # R192 · pedido aberto no site (PIX/cartão): no iPhone a compra é pela Apple
+        open_confirm("PEDIDO DO SITE", "Este pedido foi aberto no site (Mercado Pago). Termine o pagamento por lá, em jogar.fraihaxadrez.com, ou faça uma nova compra pela App Store aqui no app.", "", "ENTENDI", Callable())
+        return
+    if OS.has_feature("android"):
         open_payment(String(item.get("product_id", "")))   # R182 · mesmo aviso: compras ainda não no app
         return
     purchases_note = ""
@@ -418,6 +425,13 @@ func _build_hub(parent: VBoxContainer):
     mp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     mp.pressed.connect(func(): show_page("purchases"))
     quick.add_child(mp)
+    if OS.has_feature("ios") and AppleStore.available():   # R192 · exigência da Apple: restaurar compras
+        var rs := Art.Cta.new("RESTAURAR COMPRAS", "dark", 58 * maxf(k, 0.85), int(20 * maxf(k, 0.85)))
+        rs.name = "RestoreApple"
+        rs.icon_kind = "scroll"
+        rs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        rs.pressed.connect(func(): AppleStore.instance.restore())
+        quick.add_child(rs)
 
 func _showcase(kind: String) -> Control:
     var sc = Showcase.new(kind)
@@ -609,7 +623,7 @@ func club_plans() -> Control:
     var save := int(round(100.0 * (pm - py) / maxf(1.0, pm)))
     row.add_child(plan_card("club_yearly", "club", "CLUB · 1 ANO", "ECONOMIZE %d%%" % save, [
         "Todos os recursos do Club por 365 dias",
-        "Sai por %s por mês no PIX" % Catalog.monthly_equiv("club_yearly"),
+        ("Sai por %s por mês" % Catalog.brl(int(round(float(Catalog.product("club_yearly").get("planned_price_cents", 0)) / 12.0)))) if apple_prices() else ("Sai por %s por mês no PIX" % Catalog.monthly_equiv("club_yearly")),
         "Sem renovação automática",
     ], "RENOVAR · +1 ANO" if active else "ATIVAR 1 ANO", false, "green"))
     return row
@@ -742,7 +756,9 @@ func price_block(product_id: String, monthly: bool) -> Control:
     row.add_theme_constant_override("v_separation", 2)
     v.add_child(row)
     var days := Catalog.club_days(product_id)
-    var price := Art.label(row, Catalog.charge_price(product_id) if Catalog.is_mock() else Catalog.pix_price(product_id), fs(46), Color("fff1c0"), Art.FONT_BOLD)
+    var price_text := Catalog.charge_price(product_id) if Catalog.is_mock() else Catalog.pix_price(product_id)
+    if apple_prices(): price_text = apple_price(product_id)   # R192 · iPhone: o preço é o da App Store (sem PIX)
+    var price := Art.label(row, price_text, fs(46), Color("fff1c0"), Art.FONT_BOLD)
     price.name = "TestPrice"
     price.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     price.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -753,6 +769,10 @@ func price_block(product_id: String, monthly: bool) -> Control:
         var planned := "Preço comercial: %s no PIX · %s no cartão" % [Catalog.pix_price(product_id), Catalog.planned_price(product_id)]
         var pl := Art.label(v, planned, fs(16), Art.MUTED)
         pl.name = "PlannedPrice"
+    elif apple_prices():
+        var when_a := "pagamento único" if Catalog.product(product_id).get("kind", "") == "one_time" else ("%d dias, sem renovação automática" % days if days < 365 else "1 ano, sem renovação automática")
+        var how_a := Art.label(v, "pela App Store · %s" % when_a, fs(16), Art.MUTED)
+        how_a.name = "PriceHow"
     else:
         var pix := Art.Stamp.new("NO PIX · %d%% OFF" % Catalog.PIX_DISCOUNT_PCT, "ok", int(13 * maxf(k, 0.9)))
         pix.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -853,8 +873,47 @@ func close_modal():
         modal.queue_free()
     modal = null
 
+# ---------------------------------------------------------------- R192 · compras pela Apple (app de iPhone)
+## No iPhone os preços e a compra são os da App Store (o PIX e o cartão do Mercado Pago ficam no site e no Android).
+func apple_prices() -> bool:
+    return OS.has_feature("ios") and AppleStore.available() and not Catalog.is_mock()
+
+func apple_price(product_id: String) -> String:
+    var p := String(AppleStore.instance.price(product_id)) if AppleStore.available() else ""
+    return p if not p.is_empty() else Catalog.planned_price(product_id)
+
+func _bind_apple():
+    if _apple_bound or not OS.has_feature("ios") or not AppleStore.available(): return
+    _apple_bound = true
+    AppleStore.instance.prices_changed.connect(func(): if visible and modal == null: _rebuild())
+    AppleStore.instance.purchase_finished.connect(_on_apple_finished)
+
+func _apple_confirm(product_id: String):
+    _bind_apple()
+    var names := {"club_monthly": "CLUB FRAIHA · 30 DIAS", "club_yearly": "CLUB FRAIHA · 1 ANO", "founder": "PACOTE FUNDADOR", "founder_legend": "FUNDADOR LENDÁRIO"}
+    var what := ""
+    match product_id:
+        "club_monthly": what = "30 dias de Club. Sem renovação automática: comprar de novo soma +30 dias."
+        "club_yearly": what = "1 ano de Club. Sem renovação automática: comprar de novo soma +1 ano."
+        _: what = "Pagamento único. Fica para sempre na sua conta FRAIHA (iPhone, Android e site)."
+    var body := "%s pela App Store.\n\n%s\n\nA cobrança é feita na sua conta Apple. Termos de Uso e Privacidade: MINHA CONTA › Termos, privacidade e excluir conta." % [apple_price(product_id), what]
+    open_confirm(String(names.get(product_id, "COMPRAR")), body, "VOLTAR", "COMPRAR", func(): AppleStore.instance.buy(product_id), "club" if product_id.begins_with("club") else "test")
+
+func _on_apple_finished(product_id: String, ok: bool, message: String):
+    if ok and product_id != "" and message.begins_with("Compra confirmada"):
+        _confirm_source = "App Store"
+        payment_confirmed(product_id)
+        _confirm_source = "Mercado Pago"
+        return
+    if message.is_empty(): return   # cancelou na janela da Apple: nada a dizer
+    if visible: open_confirm("COMPRA" if ok else "COMPRA NÃO CONCLUÍDA", message, "", "ENTENDI", Callable())
+    elif main_hub != null and main_hub.has_method("show_notice"): main_hub.show_notice("COMPRA", message)
+
 ## Pagamento: real (Mercado Pago pelo servidor) na build publicada; simulado no editor/testes.
 func open_payment(product_id: String):
+    if OS.has_feature("ios") and AppleStore.available():   # R192 · iPhone: a Apple cobra (StoreKit)
+        _apple_confirm(product_id)
+        return
     if (OS.has_feature("android") or OS.has_feature("ios")):   # R188 · iPhone igual
         # Android DEV: nenhuma compra (PIX/cartão/Play Billing) até a missão de pagamentos Android.
         open_confirm("EM BREVE NO APP", "As compras pelo app chegam em breve.\n\nTudo o que você já tem na sua conta FRAIHA continua valendo aqui.", "", "ENTENDI", Callable())
@@ -882,7 +941,7 @@ func payment_confirmed(product_id: String):
             ("1 ano" if legend else "%d dias" % Catalog.FOUNDER_CLUB_DAYS) + " de Club FRAIHA inclusos", "Grupo dos Fundadores no WhatsApp"]
     else:
         lines = ["Análises ilimitadas", "MEU CLUB: estatísticas, treino dos seus erros e desafios", "Selo, avatares, moldura, tabuleiro e peças do Club"]
-    var body := "Pagamento confirmado pelo Mercado Pago. Já está liberado na sua conta:\n\n• " + "\n• ".join(lines)
+    var body := "Pagamento confirmado pelo %s. Já está liberado na sua conta:" % _confirm_source + "\n\n• " + "\n• ".join(lines)
     if main_hub != null and main_hub.entitlements != null:
         var exp := String(main_hub.entitlements.club_expires_at())
         if not exp.is_empty(): body += "\n\nClub válido até %s/%s/%s." % [exp.substr(8, 2), exp.substr(5, 2), exp.substr(0, 4)]

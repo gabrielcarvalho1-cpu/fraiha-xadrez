@@ -518,6 +518,10 @@ func _setup_account():
     add_child(account_ui)
     account_ui.setup(account)
     account_ui.open_legal = func(t): hub.open_legal(t)   # R97 · Termos / Privacidade / Excluir conta
+    if OS.has_feature("ios"):   # R192 · compras pela Apple (Club e Fundador) só no app de iPhone
+        var apple_store = load("res://monetization/apple_store.gd").new()
+        apple_store.account = account
+        add_child(apple_store)
     voice.setup(account)
     voice.changed.connect(_on_voice_changed)
     hub.bind_account(account)
