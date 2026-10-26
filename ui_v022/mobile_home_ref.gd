@@ -407,6 +407,13 @@ func _build_nav():
             "mais": action = func(): mobile.show_page("mais")
         var b := _hit(nav, item[1], item[2], action)
         b.name = "RefNav_" + id
+        # R187 · barra de baixo: o brilho que copia a arte desenhava por cima um "fantasma" transparente do botão
+        # (a arte tem ícone/texto em outra posição que a do jogo). Aqui o toque só acende o título e o ícone.
+        var gl := b.get_node_or_null("RefHover")
+        if gl != null: (gl as TextureRect).texture = null   # (sem copiar a arte: não aparece nada)
+        b.button_down.connect(func(): b.modulate = Color(1.35, 1.28, 1.12))
+        b.button_up.connect(func(): b.modulate = Color.WHITE)
+        b.mouse_exited.connect(func(): b.modulate = Color.WHITE)
         buttons[item[2]] = b
         var o: Vector2 = item[1].position
         var tr: Rect2 = item[3]

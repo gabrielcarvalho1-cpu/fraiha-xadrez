@@ -11,7 +11,7 @@ var _orig := 0.0                    # deslocamento original dela
 var _shift := 0.0
 
 static func wanted() -> bool:
-	return OS.has_feature("android") and not OS.has_feature("web")
+	return (OS.has_feature("android") or OS.has_feature("ios")) and not OS.has_feature("web")   # R187 · iPhone também
 
 func _ready():
 	name = "KeyboardLift"

@@ -18,6 +18,7 @@ static var _inst: Node = null
 static func platform() -> String:
 	if OS.has_feature("editor") or OS.has_feature("web"): return ""
 	if OS.has_feature("android"): return "android"
+	if OS.has_feature("ios"): return "ios"   # R187 · app de iPhone: login com Google pelo Safari + código (mesmo fluxo do Android)
 	if OS.has_feature("windows") and OS.has_feature("template"): return "windows"
 	return ""
 
