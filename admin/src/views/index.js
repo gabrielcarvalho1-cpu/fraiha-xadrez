@@ -11,7 +11,15 @@ function frame(ctx, title, sub, initial) {
   ctx.el.replaceChildren(h('h1', {}, title), h('p', { class: 'sub' }, sub), banner, body);
   let had = false;
   return {
-    show(...nodes) { had = true; banner.className = 'hidden'; body.replaceChildren(...nodes); },
+    show(...nodes) {
+      // R187 · a tela se atualiza sozinha (ex.: Linha do tempo da sessão): guarda a rolagem das listas e da página
+      // antes de trocar o conteúdo e devolve depois — antes a barrinha voltava para o topo a cada atualização.
+      const keep = [...body.querySelectorAll('.sslist, [data-keep-scroll]')].map(el => el.scrollTop);
+      const winY = window.scrollY;
+      had = true; banner.className = 'hidden'; body.replaceChildren(...nodes);
+      if (keep.length) [...body.querySelectorAll('.sslist, [data-keep-scroll]')].forEach((el, i) => { if (i < keep.length) el.scrollTop = keep[i]; });
+      if (winY) window.scrollTo(0, winY);
+    },
     error(err, lastOk) {
       if (!had) { body.replaceChildren(stateBox('error', err.text), h('div', { style: 'text-align:center;margin-top:12px' }, h('button', { class: 'btn', onclick: ctx.refresh }, 'Tentar de novo'))); return; }
       banner.className = 'banner err';
