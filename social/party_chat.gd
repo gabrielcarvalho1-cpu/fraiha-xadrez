@@ -485,9 +485,70 @@ func _layout():
         toggle.position = dock_rect.position
         tsz = dock_rect.size
     toggle.modulate.a = 0.0 if (dock_icon and dock_rect.size.x > 1.0) else 1.0
+    _dock_skin(dock_rect.size.x > 1.0 and not dock_icon)
     toggle.visible = not blocked
     panel.visible = opened and not blocked
     panel.scale = Vector2(s, s)
     panel.reset_size()
     var psz := panel.size * s
     panel.position = Vector2(clampf(vs.x - psz.x - 12, 8, vs.x), clampf(toggle.position.y + tsz.y + 8, 8, vs.y - psz.y - 8))
+
+# ---------------------------------------------------------------- R186 · CHAT com placa medieval (celular)
+## No lugar reservado pelo modo (celular: linha do SUA VEZ / canto da mão deitado) o botão CHAT vira uma placa
+## de moldura dourada com veludo (ui_kit/medieval_plate.gd) e um balão dourado — antes era um botão roxo liso.
+const Plate := preload("res://ui_kit/medieval_plate.gd")
+const FONT_PLATE := preload("res://account/fonts/Cinzel-Bold.woff")
+var _plate: Control
+var _skinned := false
+
+func _dock_skin(on: bool):
+    if toggle == null: return
+    if _plate == null:
+        _plate = Control.new()
+        _plate.name = "DockPlate"
+        _plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        _plate.draw.connect(_draw_plate)
+        toggle.add_child(_plate)
+    _plate.visible = on
+    if on:
+        _plate.position = Vector2.ZERO
+        _plate.size = toggle.size
+        if not _skinned:
+            for st in ["normal", "hover", "pressed", "focus"]: toggle.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+            for c in ["font_color", "font_hover_color", "font_pressed_color"]: toggle.add_theme_color_override(c, Color(0, 0, 0, 0))
+            _skinned = true
+        _plate.queue_redraw()
+    elif _skinned:
+        _skinned = false
+        _apply_theme()
+
+func _draw_plate():
+    var r := Rect2(Vector2.ZERO, _plate.size)
+    Plate.draw(_plate, r, "xeque" if game == "xeque" else "marcha", true, toggle.button_pressed)
+    var gold := Color("f6d27a")
+    var wide: bool = r.size.x > r.size.y * 1.8
+    var fs := int(clampf(r.size.y * (0.34 if wide else 0.2), 14.0, 40.0))
+    var label := "CHAT"
+    var tw: float = FONT_PLATE.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+    if wide:
+        var gs: float = r.size.y * 0.5
+        var x0: float = r.get_center().x - (gs + 10.0 + tw) / 2.0
+        Plate.chat_glyph(_plate, Rect2(Vector2(x0, r.get_center().y - gs / 2.0), Vector2(gs, gs)), gold)
+        _plate.draw_string_outline(FONT_PLATE, Vector2(x0 + gs + 10.0, r.get_center().y + fs * 0.36), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, maxi(3, fs / 6), Color("1a0d04"))
+        _plate.draw_string(FONT_PLATE, Vector2(x0 + gs + 10.0, r.get_center().y + fs * 0.36), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, gold)
+    else:
+        var gs: float = r.size.y * 0.34
+        Plate.chat_glyph(_plate, Rect2(Vector2(r.get_center().x - gs / 2.0, r.size.y * 0.2), Vector2(gs, gs)), gold)
+        var by: float = r.size.y * 0.2 + gs + fs * 1.05
+        _plate.draw_string_outline(FONT_PLATE, Vector2(r.get_center().x - tw / 2.0, by), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, maxi(3, fs / 6), Color("1a0d04"))
+        _plate.draw_string(FONT_PLATE, Vector2(r.get_center().x - tw / 2.0, by), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, gold)
+    if unread > 0:
+        var bc := Vector2(r.end.x - r.size.y * 0.2, r.size.y * 0.22)
+        var br: float = maxf(12.0, r.size.y * 0.13)
+        _plate.draw_circle(bc, br + 2.0, Color("1a0d04"))
+        _plate.draw_circle(bc, br, Color("c4161f"))
+        var n := str(mini(unread, 99))
+        var nfs := int(br * 1.1)
+        var nw: float = FONT_PLATE.get_string_size(n, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs).x
+        _plate.draw_string(FONT_PLATE, bc + Vector2(-nw / 2.0, nfs * 0.36), n, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs, Color.WHITE)
+

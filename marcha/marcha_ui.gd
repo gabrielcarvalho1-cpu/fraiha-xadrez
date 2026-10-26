@@ -152,6 +152,7 @@ var sel_target := []              # J: peça alvo
 var split_first := 0              # 7: casas do 1º peão (0 = ainda não escolhido)
 var sel_second := []              # 7: 2º peão
 var pending := {}                 # jogada completa pronta para JOGAR CARTA
+var path_style := "x_purple"      # R186 · casas do caminho: "x_purple" | "x_black" | "gold" (antigo)
 var turn_left_ms := TURN_MS
 ## R54 · prazo do turno em relógio real (Time.get_ticks_msec, que continua correndo com a aba em segundo plano).
 ## Online: vem do servidor (turn_left_ms do snapshot); o navegador só mostra. Local: o jogo marca o prazo.
@@ -531,6 +532,9 @@ func _process(delta):
     if not visible: return
     _sync_chat_block()
     t += delta
+    # R186 · celular deitado: na sua vez as cartas crescem (animado); fora dela voltam ao tamanho normal
+    var hz: float = 1.0 if (wide_land and not portrait and mode == "game" and g != null and g.turn == 0 and not busy and tut_page < 0 and not menu_open) else 0.0
+    if hand_zoom != hz: hand_zoom = move_toward(hand_zoom, hz, delta * 4.0)
     if counting():   # R176.9 · contagem na tela: o relógio da vez espera
         if mode == "game" and not online: turn_deadline += int(delta * 1000.0)
         return
@@ -1372,6 +1376,8 @@ const R57_VSEAT_X := 3000.0
 var portrait_game: Array = []
 var view_seat := 0                # R92 · cor real (reino) de quem está jogando nesta tela: 0 Marfim, 1 Rubi, 2 Ônix, 3 Esmeralda
 var wide_chat := Rect2()          # R91.3 · lugar do CHAT no celular deitado
+var wide_hand := Rect2()          # R186 · área da mão no celular deitado (embaixo do painel até o fim das cartas)
+var hand_zoom := 0.0              # R186 · 0 = mão normal, 1 = ampliada (sua vez), animado
 var portrait_row: Array = []      # R90 · [microfone, SUA VEZ, CHAT] lado a lado (celular em pé)
 ## R75.1 · em pé a tela usa a ALTURA INTEIRA do aparelho (design 1080 x altura proporcional). De cima para baixo:
 ## título/ícones, placas dos perfis, TABULEIRO (centralizado no espaço livre), faixa da ajuda da jogada (só aparece
@@ -1443,8 +1449,11 @@ func _wide_layout():
         bw = W - 1240.0
         bh = 657.0 * bw / 730.0
         side = 620.0
-    var board := Rect2((W - bw) / 2.0, (H - bh) / 2.0, bw, bh)
-    var lw: float = side - 32.0
+    # R186 · a coluna da DIREITA (mão) fica mais larga e a dos perfis mais estreita: cartas bem maiores
+    var shift: float = clampf(side * 0.24, 0.0, 150.0)
+    var board := Rect2((W - bw) / 2.0 - shift, (H - bh) / 2.0, bw, bh)
+    var lw: float = side - 32.0 - shift
+    var rw: float = side - 32.0 + shift
     # ESQUERDA: título e os três perfis ocupando a coluna inteira
     var tw: float = minf(lw, 500.0)
     var title := Rect2(16, 8, tw, tw * 95.0 / 500.0)
@@ -1456,12 +1465,12 @@ func _wide_layout():
     var help := Rect2(16, H - 16.0 - 150.0, lw, 150)          # controles do 7/10/descartar (só quando há escolha)
     # DIREITA: ícones; painel SUA VEZ + JOGAR CARTA (a arte inteira, com a moldura); cartas maiores embaixo
     var rx: float = board.end.x + 16.0
-    var iw: float = minf(lw, 500.0)
+    var iw: float = minf(rw, 500.0)
     var icons := Rect2(W - 16.0 - iw, 10, iw, iw * 80.0 / 500.0)
-    var cw: float = minf(lw, 1000.0)
-    var ch: float = cw * 203.0 / 582.0
-    var room: float = H - icons.end.y - 30.0
-    var pnw: float = minf(lw * 0.82, 520.0)
+    var cw: float = minf(rw, 1000.0)
+    var ch: float = (cw - 30.0) / 4.0 * R57_CARD.y / R57_CARD.x     # R186 · 4 cartas lado a lado na coluna toda
+    var room: float = H - icons.end.y - 30.0 - 70.0                  # 70: o CHAT embaixo
+    var pnw: float = minf(rw * 0.70, 500.0)
     var pnh: float = pnw * 280.0 / 330.0
     if ch + pnh + 30.0 > room:                                   # falta altura: o painel encolhe primeiro (as cartas são o foco)
         pnh = maxf(room - ch - 30.0, 200.0)
@@ -1470,8 +1479,8 @@ func _wide_layout():
             var f: float = room / (ch + pnh + 30.0)
             cw *= f; ch *= f; pnw *= f; pnh *= f
     var gap: float = (room - ch - pnh) / 3.0
-    var panel := Rect2(rx + (lw - pnw) / 2.0, icons.end.y + 10.0 + gap, pnw, pnh)
-    var cards := Rect2(rx + (lw - cw) / 2.0, panel.end.y + gap, cw, ch)
+    var panel := Rect2(rx + (rw - pnw) / 2.0, icons.end.y + 10.0 + gap, pnw, pnh)
+    var cards := Rect2(rx + (rw - cw) / 2.0, panel.end.y + gap, cw, ch)
     # R91.3 · celular deitado: CHAT (mesa online) no espaço livre embaixo das cartas, sem cobrir o JOGAR CARTA
     # R178i · mais para cima (no iPhone deitado a barra/canto da tela cortava): 40 de folga embaixo
     var chh: float = clampf(H - cards.end.y - 52.0, 0.0, 84.0)
@@ -1481,6 +1490,9 @@ func _wide_layout():
         panel.position.y -= need * 0.5
         chh = 54.0
     wide_chat = Rect2(cards.end.x - 220.0, H - 40.0 - chh, 220.0, chh)
+    # R186 · mão no celular deitado: base = 4 lado a lado na coluna; NA SUA VEZ crescem para cima (sobrepondo um
+    # pouco umas às outras, nunca para cima do tabuleiro), até o limite de baixo do painel SUA VEZ
+    wide_hand = Rect2(cards.position.x, panel.end.y + 12.0, cards.size.x, cards.end.y - panel.end.y - 12.0)
     portrait_game = [
         [Rect2(0, 0, 500, 95), title],
         [Rect2(1150, 0, 500, 80), icons],
@@ -1580,6 +1592,25 @@ const R57_CARD := Vector2(138, 195)
 const CARD_OVERLAP_MAX := 0.20     # R90.2 · em pé as cartas podem se sobrepor até 20% (o texto da carta continua inteiro)
 
 func card_rect(i: int, n: int) -> Rect2:
+    if desk and wide_land and not portrait and wide_hand.size.x > 0.0:
+        # R186 · celular deitado: cartas retas lado a lado na largura da coluna; na sua vez crescem (z) para cima,
+        # sobrepondo até 25%, sempre dentro da coluna da direita (não cobrem o tabuleiro)
+        var hb: Rect2 = wide_hand
+        var nn: int = maxi(n, 1)
+        var gp0 := 10.0
+        var w0: float = (hb.size.x - (nn - 1) * gp0) / nn
+        var ov: float = 0.25 if nn <= 4 else 0.20
+        var w1: float = hb.size.x / (nn - (nn - 1) * ov)
+        w1 = minf(w1, hb.size.y * R57_CARD.x / R57_CARD.y)       # cabe na altura entre o painel e o fim da mão
+        w1 = maxf(w1, w0)
+        var z: float = clampf(hand_zoom, 0.0, 1.0)
+        z = z * z * (3.0 - 2.0 * z)
+        var w: float = lerpf(w0, w1, z)
+        var hh: float = w * R57_CARD.y / R57_CARD.x
+        var gp: float = (hb.size.x - nn * w) / float(nn - 1) if nn > 1 else 0.0
+        gp = minf(gp, gp0)
+        var tot: float = nn * w + (nn - 1) * gp
+        return Rect2(hb.end.x - tot + i * (w + gp), hb.end.y - hh, w, hh)
     if desk and portrait and not portrait_game.is_empty():
         # R87 · em pé: cartas retas, grandes e lado a lado (como na referência)
         var cb: Rect2 = portrait_game[4][1]
@@ -2244,9 +2275,12 @@ class TableView extends Control:
         for j in dots.size():
             var p: Vector2 = dots[j]
             var pz := 0.85 + 0.15 * sin(ui.t * 5.0 - j * 0.5)          # acende em onda, do peão até o destino
-            draw_circle(p, 25.0, Color(1.0, 0.72, 0.15, 0.30 * pz))
-            draw_circle(p, 19.0, Color(1.0, 0.76, 0.22, 0.62 * pz))
-            draw_arc(p, 19.5, 0, TAU, 28, Color(1.0, 0.95, 0.68, 0.95), 2.5)
+            if ui.path_style == "gold" or not ui.blk:   # PC congelado: continua a bolinha dourada (blk = celular)
+                draw_circle(p, 25.0, Color(1.0, 0.72, 0.15, 0.30 * pz))
+                draw_circle(p, 19.0, Color(1.0, 0.76, 0.22, 0.62 * pz))
+                draw_arc(p, 19.5, 0, TAU, 28, Color(1.0, 0.95, 0.68, 0.95), 2.5)
+            else:
+                _path_x(p, pz)
         for p in dest:
             var hit_enemy := false
             var hit_ally := false
@@ -2420,6 +2454,19 @@ class TableView extends Control:
         draw_rect(r, col.darkened(0.15))
         draw_rect(r.grow(-3), Color(1, 0.9, 0.8, 0.5), false, 1.5)
         text(label, Vector2(r.position.x, r.get_center().y + fs * 0.36), "bold_sp", fs, Color.WHITE, r.size.x, HORIZONTAL_ALIGNMENT_CENTER, 4, Color(0.2, 0.0, 0.0))
+
+    ## R186 · casa do caminho: só um X dentro da casa, menor que ela, sem círculo (antes: bolinha amarela).
+    ## "x_purple" (roxo do salão com contorno claro) ou "x_black" (preto, aparece bem nas casas claras).
+    func _path_x(p: Vector2, pz: float):
+        var purple: bool = ui.path_style == "x_purple"
+        var ink := Color("6a2fa0") if purple else Color(0.04, 0.03, 0.03)
+        var halo := Color(1.0, 0.96, 0.86, 0.85) if purple else Color(1.0, 0.97, 0.9, 0.55)
+        p += Vector2(2.6, 1.6)     # centro visual da casa na arte (a bolinha tem brilho em cima e sombra embaixo)
+        var a := 11.0
+        for d in [Vector2(1, 1), Vector2(1, -1)]:
+            draw_line(p - d * (a + 1.2), p + d * (a + 1.2), halo, 8.5)    # contorno claro (lê em casa clara e escura)
+        for d in [Vector2(1, 1), Vector2(1, -1)]:
+            draw_line(p - d * a, p + d * a, Color(ink.r, ink.g, ink.b, 0.8 + 0.2 * pz), 5.0)
 
     func _collect_path(g, mv: Dictionary, dots: Array, dest: Array):
         var parts := []
@@ -2744,14 +2791,8 @@ class TableView extends Control:
     ## R90 · caixa do microfone/fone: no celular em pé fica na linha do SUA VEZ, roxa com borda dourada como o CHAT
     func _voice_box(r: Rect2, on: bool):
         if ui._row_ok():
-            var sb := StyleBoxFlat.new()
-            sb.bg_color = Color("3d1c57") if on else Color("261338")
-            sb.border_color = Color("d9a441") if on else Color(0.85, 0.66, 0.31, 0.6)
-            sb.set_border_width_all(3)
-            sb.set_corner_radius_all(12)
-            sb.shadow_color = Color(0, 0, 0, 0.45)
-            sb.shadow_size = 8
-            draw_style_box(sb, r)
+            # R186 · placa medieval (moldura de ouro + veludo do painel), no lugar da caixa roxa lisa
+            preload("res://ui_kit/medieval_plate.gd").draw(self, r, "marcha", on)
             return
         draw_rect(r, Color("0a0612"))
         draw_rect(r, ui.GOLD if on else Color(0.85, 0.66, 0.31, 0.45), false, 2.0)
