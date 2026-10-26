@@ -235,3 +235,15 @@ test('R184 · executável do PC: x-fraiha-app=windows → aparelho "APP PC (Wind
   const it = (await h.get('/admin/api/sessions')).body.items.find(i => i.kind === 'visitor');
   assert.equal(it.device.device, 'PC'); assert.equal(it.device.browser, 'APP PC (Windows)'); assert.equal(it.device.os, 'Windows');
 });
+
+test('R193 · app de iPhone: x-fraiha-app=ios → aparelho "APP iPhone" (versão do iOS); de outro site não vale', async t => {
+  const h = await fixture(t);
+  const site = await h.post({ sid: hex('53'), vid: hex('54'), e: [] }, { origin: 'https://site-estranho.com', 'x-fraiha-app': 'ios' });
+  assert.equal(site.status, 403);
+  const ok = await h.post({ sid: hex('55'), vid: hex('56'), st: 100, d: { w: 1179, h: 2556, lang: 'pt', app: 'ios', os: '18.5' },
+    e: [{ k: 'load', n: 'start', t: 0 }, { k: 'screen', n: 'Entrada / Login', t: 50 }] }, { 'user-agent': 'GodotEngine/4.5.1.stable (iOS)', 'x-fraiha-app': 'ios' });
+  assert.equal(ok.status, 204);
+  await flush();
+  const it = (await h.get('/admin/api/sessions')).body.items.find(i => i.kind === 'visitor');
+  assert.equal(it.device.device, 'iPhone'); assert.equal(it.device.browser, 'APP iPhone'); assert.equal(it.device.os, 'iOS 18.5');
+});

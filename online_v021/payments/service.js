@@ -15,6 +15,7 @@
 //                             ou texto = Fundador FECHADO — não existe "Fundador ilimitado". R172 fail-closed)
 //   FRAIHA_FOUNDER_WHATSAPP_URL = link do grupo dos Fundadores (só vai para quem é Fundador de verdade)
 const crypto = require('crypto');
+const { AppleIAP } = require('./apple');   // R192 · compras pela Apple (app de iPhone)
 
 // R103 · preço por forma de pagamento: PIX com 10% de desconto (arredondado para ,90). amount_cents = preço do cartão.
 const PRODUCTS = {
@@ -82,6 +83,7 @@ function createProvider(env = process.env) {
 class Payments {
   constructor({ send, backend, env = process.env }) {
     this.send = send; this.backend = backend; this.provider = createProvider(env);
+    this.apple = new AppleIAP({ payments: this, env });   // R192 · iPhone: a Apple cobra, este servidor confere e entrega
     // R172 · fail-closed: só um inteiro positivo explícito abre o Fundador (ausente/vazio/0/negativo/texto = fechado)
     const rawLimit = String(env.FRAIHA_FOUNDER_LIMIT == null ? '' : env.FRAIHA_FOUNDER_LIMIT).trim();
     this.founderLimitValid = /^[1-9][0-9]{0,6}$/.test(rawLimit);
@@ -172,7 +174,7 @@ class Payments {
     const fo = await this.founderOpen();
     const prices = {}, prices_pix = {};
     for (const [id, p] of Object.entries(PRODUCTS)) { prices[id] = p.amount_cents; prices_pix[id] = p.pix_cents; }
-    return { type: 'payment_offer', ready: this.ready(), methods: METHODS.slice(),
+    return { type: 'payment_offer', ready: this.ready(), methods: METHODS.slice(), apple_ready: this.apple.ready(),
       founder_open: fo.open, founder_until: this.founderUntil, founder_limit: this.founderLimit,
       founder_remaining: this.founderLimit > 0 ? Math.max(0, this.founderLimit - sold) : null,
       is_founder: !!(ent && ent.is_founder), founder_tier: (ent && ent.founder_tier) || null, founder_number: (ent && ent.founder_number) || null,
@@ -196,6 +198,7 @@ class Payments {
     if (a === 'payment_founders') return this.send(ws, { type: 'payment_founders', founders: await this.founders(), open: (await this.founderOpen()).open });
     if (!ws.user || !ws.profile) return this.fail(ws, 'Entre na sua conta para assinar ou comprar.', 'auth_required');
     if (a === 'payment_offer') return this.send(ws, await this.offer(ws));
+    if (a === 'payment_apple') return this.lock('user:' + ws.user.id, () => this.apple.handle(ws, m));   // R192
     // R175 · ações que mexem em pedido da conta: uma de cada vez por conta (duas abas / dois aparelhos esperam a vez)
     if (a === 'payment_create') return this.lock('user:' + ws.user.id, () => this.createOrder(ws, m));
     if (a === 'payment_card_pay') {
