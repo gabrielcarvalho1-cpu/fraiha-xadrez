@@ -4,6 +4,7 @@ extends EditorPlugin
 ## nativo com.fraiha.voice.FraihaVoicePlugin (código em android_plugin/fraiha_voice, copiado para android/build/src).
 
 const AGORA := "io.agora.rtc:voice-sdk:4.5.2"
+const BILLING := "com.android.billingclient:billing:8.0.0"   # R194 · compras pelo Google Play (só usadas no app da Play Store)
 var _exp: EditorExportPlugin
 
 func _enter_tree():
@@ -22,7 +23,7 @@ class VoiceExport extends EditorExportPlugin:
 		return platform is EditorExportPlatformAndroid
 
 	func _get_android_dependencies(_platform: EditorExportPlatform, _debug: bool) -> PackedStringArray:
-		return PackedStringArray([AGORA])
+		return PackedStringArray([AGORA, BILLING])
 
 	func _get_android_manifest_application_element_contents(_platform: EditorExportPlatform, _debug: bool) -> String:
 		return '<meta-data android:name="org.godotengine.plugin.v2.FraihaVoice" android:value="com.fraiha.voice.FraihaVoicePlugin"/>'

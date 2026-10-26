@@ -522,6 +522,10 @@ func _setup_account():
         var apple_store = load("res://monetization/apple_store.gd").new()
         apple_store.account = account
         add_child(apple_store)
+    if OS.has_feature("play"):   # R194 · compras pelo Google Play só no app da Play Store (o APK do site não tem)
+        var google_store = load("res://monetization/google_store.gd").new()
+        google_store.account = account
+        add_child(google_store)
     voice.setup(account)
     voice.changed.connect(_on_voice_changed)
     hub.bind_account(account)
