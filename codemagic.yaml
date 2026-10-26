@@ -52,7 +52,8 @@ workflows:
           xcrun simctl bootstatus "$DEV" -b
           xcrun simctl install "$DEV" "$APP"
           mkdir -p prints
-          xcrun simctl launch --console-pty "$DEV" com.fraihaxadrez.app > prints/console.log 2>&1 &
+          # o Mac da nuvem não tem placa de som: o áudio do iPhone virtual trava e o app fecha; no teste usa áudio "mudo"
+          xcrun simctl launch --console-pty "$DEV" com.fraihaxadrez.app --audio-driver Dummy > prints/console.log 2>&1 &
           sleep 25
           xcrun simctl io "$DEV" screenshot prints/01_abertura.png
           sleep 25
