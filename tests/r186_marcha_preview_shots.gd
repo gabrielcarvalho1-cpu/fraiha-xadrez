@@ -23,6 +23,9 @@ func run():
 	await frames(6)
 	var ui = hub.marcha
 	ui.tut_page = -1
+	await frames(10)
+	await shot("marcha_lobby_pe")
+	ui.tut_page = -1
 	await ui.start_game()
 	var t0 := Time.get_ticks_msec()
 	while not (ui.g.turn == 0 and not ui.busy) and Time.get_ticks_msec() - t0 < 30000: await process_frame

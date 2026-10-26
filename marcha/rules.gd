@@ -1,7 +1,7 @@
 extends RefCounted
 ## MARCHA REAL — regras (mecânica no estilo Jackaroo, pele FRAIHA). Só lógica: sem desenho, sem rede.
 ##
-## Mesa: 4 reinos em cruz; dupla Marfim(0)+Ônix(2) contra Rubi(1)+Esmeralda(3). Vez no sentido ANTI-horário 0→3→2→1 (R70).
+## Mesa: 4 reinos em cruz; dupla Marfim(0)+Ônix(2) contra Rubi(1)+Esmeralda(3). Vez no sentido HORÁRIO 0→1→2→3 (R187; antes R70 anti-horário).
 ## Cada reino tem 4 peões: Pátio (casa inicial) → Portão (saída) → Muralha (76 casas, sentido horário)
 ## → Entrada do Salão → Salão do Trono (4 casas). Peão no Salão = coroado.
 ##
@@ -25,7 +25,7 @@ extends RefCounted
 ##   • Vence a dupla que coroar os 8 peões.
 const Layout := preload("res://marcha/board_layout.gd")
 ## Versão das regras gravada no histórico (mudou regra → muda a versão).
-const RULESET_VERSION := "marcha-real-13"  # R84: Ás/Rei com mais chance (ajuda em 60%), não garantido · R70: J do aliado
+const RULESET_VERSION := "marcha-real-14"  # R187: vez no sentido HORÁRIO · R84: Ás/Rei com mais chance (ajuda em 60%), não garantido · R70: J do aliado
 
 const TRACK := 76
 const KINGDOMS := ["Marfim", "Rubi", "Ônix", "Esmeralda"]
@@ -372,7 +372,7 @@ static func _ints(a) -> Array:
 ## Próximo jogador (ordem da vez) que ainda tem carta na mão; -1 se ninguém.
 func burn_target(seat: int) -> int:
     for k in range(1, 4):
-        var s := (seat + 4 - k) % 4      # R70: ordem da vez anti-horária
+        var s := (seat + k) % 4          # R187: ordem da vez horária (o próximo jogador)
         if not hands[s].is_empty(): return s
     return -1
 
@@ -492,7 +492,7 @@ func _log(text: String):
 
 ## Passa a vez; quando todas as mãos acabam, nova rodada (reparte).
 func next_turn():
-    turn = (turn + 3) % 4      # R70 · a vez gira no sentido ANTI-horário (Marfim → Esmeralda → Ônix → Rubi); os peões andam no horário
+    turn = (turn + 1) % 4      # R187 · a vez gira no sentido HORÁRIO (Marfim → Rubi → Ônix → Esmeralda), como os peões (antes R70: anti-horário)
     var empty := true
     for s in 4:
         if not hands[s].is_empty(): empty = false

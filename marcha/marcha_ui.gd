@@ -1386,7 +1386,7 @@ func _portrait_layout():
     # R87 · em pé como a referência do dono: tabuleiro quase na largura toda, painel SUA VEZ grande logo abaixo
     # e as cartas RETAS e grandes lado a lado; espaços curtos entre os blocos (o que sobrar fica dividido em volta).
     var H: float = design.y
-    var top := 262.0
+    var top := 300.0                             # R187 · barra de cima maior: tabuleiro um pouco mais para baixo
     var ch := 352.0                              # cartas (4 lado a lado, ~248 de largura)
     # R90 · linha única de ponta a ponta: MICROFONE | SUA VEZ + JOGAR CARTA | CHAT, os três do mesmo tamanho
     # (a altura vem da arte do painel 330x280 na largura de 1/3 da tela). Mais baixa que o painel antigo:
@@ -1422,8 +1422,8 @@ func _portrait_layout():
     # R187 · título e ícones MAIORES (público mais velho): os ícones usam só o trecho dos 5 botões da arte (o
     # microfone em pé fica na linha do SUA VEZ) e crescem ~40%; as placas dos jogadores descem para o meio do
     # espaço entre a barra de cima e o tabuleiro (antes ficavam coladas em cima com um vão embaixo)
-    var tt := Rect2(0, 0, 560, 106.4)
-    var ic := Rect2(tt.end.x + 14.0, 6, 1080.0 - tt.end.x - 14.0 - 12.0, 0)
+    var tt := Rect2(8, 8, 520, 112)
+    var ic := Rect2(tt.end.x + 14.0, 10, 1080.0 - tt.end.x - 14.0 - 10.0, 0)
     ic.size.y = ic.size.x * 76.0 / 350.0
     var ptop: float = maxf(tt.end.y, ic.end.y) + 10.0
     var py: float = maxf(ptop, (ptop + board.position.y - 155.3) / 2.0)
@@ -1464,7 +1464,7 @@ func _wide_layout():
     var rw: float = side - 32.0 + shift
     # ESQUERDA: título e os três perfis ocupando a coluna inteira
     var tw: float = minf(lw, 500.0)
-    var title := Rect2(16, 8, tw, tw * 95.0 / 500.0)
+    var title := Rect2(16, 8, tw, tw * 125.0 / 500.0)   # R187 · título desenhado maior (antes recorte 500x95)
     var top_p: float = title.end.y + 20.0
     var ph: float = H - 20.0 - top_p
     var pw: float = minf(lw, ph * 240.0 / 344.0)
@@ -1473,7 +1473,7 @@ func _wide_layout():
     var help := Rect2(16, H - 16.0 - 150.0, lw, 150)          # controles do 7/10/descartar (só quando há escolha)
     # DIREITA: ícones; painel SUA VEZ + JOGAR CARTA (a arte inteira, com a moldura); cartas maiores embaixo
     var rx: float = board.end.x + 16.0
-    var iw: float = minf(rw, 640.0)                                  # R187 · ícones ~30% maiores
+    var iw: float = minf(rw, 780.0)                                  # R187 · ícones bem maiores (público mais velho)
     var icons := Rect2(W - 16.0 - iw, 10, iw, iw * 80.0 / 500.0)
     var cw: float = minf(rw, 1000.0)
     var ch: float = (cw - 30.0) / 4.0 * R57_CARD.y / R57_CARD.x     # R186 · 4 cartas lado a lado na coluna toda
@@ -1516,13 +1516,13 @@ var PORTRAIT_LOBBY: Array = []
 func _portrait_lobby_layout():
     var H: float = design.y
     var btn := Rect2(48, H - 376.0 - 40.0, 984, 376)
-    var info := Rect2(20, 128, 1040, 693.3)
+    var info := Rect2(20, 136, 1040, 693.3)
     var room: float = btn.position.y - info.end.y
-    var bs: float = clampf((room - 40.0) / 435.0, 1.1, 1.7)
+    var bs: float = clampf((room - 40.0) / 435.0, 1.1, 2.2)   # R187 · tabuleiro de amostra pode crescer mais
     var prev := Rect2((1080.0 - 465.0 * bs) / 2.0, info.end.y + (room - 435.0 * bs) / 2.0, 465.0 * bs, 435.0 * bs)
     PORTRAIT_LOBBY = [
-        [Rect2(110, 0, 430, 85), Rect2(0, 4, 473, 93.5)],
-        [Rect2(1158, 6, 310, 62), Rect2(725, 12, 341, 68.2)],
+        [Rect2(110, 0, 430, 85), Rect2(8, 6, 500, 112)],               # R187 · título desenhado, maior
+        [Rect2(1158, 6, 310, 62), Rect2(530, 10, 540, 108)],            # R187 · ícones ~60% maiores
         [Rect2(180, 135, 660, 440), info],
         [Rect2(845, 135, 465, 435), prev],
         [Rect2(440, 575, 615, 235), btn],
@@ -1670,7 +1670,7 @@ const TUTORIAL := [
         "intro": "Quatro reinos correm com seus peões ao redor da mesa.",
         "rows": [["SUA DUPLA", "Você é o MARFIM (embaixo) e joga junto com o ÔNIX (em cima)."],
             ["ADVERSÁRIOS", "RUBI e ESMERALDA, também em dupla."],
-            ["A VEZ", "Gira no sentido ANTI-horário (os peões andam no horário). Cada jogador tem 15 segundos."],
+            ["A VEZ", "Gira no sentido horário, o mesmo dos peões. Cada jogador tem 15 segundos."],
             ["OBJETIVO", "Coroar os 8 peões da sua dupla antes da outra dupla."]]},
     {"title": "O CAMINHO", "img": "res://marcha/art/tutorial/tabuleiro_com_pecas.png", "kind": "steps", "marks": true,
         "rows": [["PÁTIO", "Onde seus 4 peões começam."],
@@ -2568,7 +2568,7 @@ class TableView extends Control:
                 for ti in tags.size():
                     var br := Rect2(local.position.x + 8, local.position.y + (8.0 if ui.desk else -16.0) + ti * 38, local.size.x - 16, 34)
                     if ui.blk:   # R187 · celular: a faixa fica ACIMA da carta (antes cobria o número do canto)
-                        br = Rect2(local.position.x + 4, local.position.y - 40.0 - ti * 38, local.size.x - 8, 34)
+                        br = Rect2(local.position.x + local.size.x * 0.12, local.position.y - 40.0 - ti * 38, local.size.x * 0.76, 34)
                     var tc: Color = tags[ti][1]
                     draw_rect(br.grow(2 + pz * 2), Color(tc.r, tc.g, tc.b, 0.35))
                     draw_rect(br, tc)
@@ -2766,6 +2766,11 @@ class TableView extends Control:
                 if sm == null or not sm.supported():
                     draw_rect(dst.grow(-4), Color(0.03, 0.01, 0.06, 0.6))
                     continue
+            if ui.blk and (not lobby or ui.portrait):
+                # R187 · celular: botão desenhado em alta (moldura das placas + símbolo dourado), maior e nítido
+                _m_icon(id, dst)
+                ui.hits.append({"rect": dst, "id": id})
+                continue
             art_button(plate, rref, dst, id)
             var off := false
             if id == "mute_music": off = ui.Sound.music_muted(ui.hub)
@@ -2808,6 +2813,73 @@ class TableView extends Control:
         draw_rect(r, Color("0a0612"))
         draw_rect(r, ui.GOLD if on else Color(0.85, 0.66, 0.31, 0.45), false, 2.0)
 
+    ## R187 · título MARCHA REAL do celular desenhado (coroa em alta + letras Cinzel + linha dourada) — o recorte
+    ## da arte da mesa ficava borrado quando ampliado. Abaixo: rodada e placar de peões coroados.
+    func _m_title(T: Rect2, fixed_sub := ""):
+        var g = ui.g if fixed_sub.is_empty() else null
+        var cs: float = T.size.y * 0.92
+        var crown: Texture2D = tex("res://marcha/art/coroa_coroacao.png")
+        draw_texture_rect(crown, Rect2(T.position + Vector2(4, (T.size.y - cs) * 0.5 - 2), Vector2(cs, cs)), false)
+        var x0: float = T.position.x + cs + 14.0
+        var w: float = T.end.x - x0 - 4.0
+        var f: Font = ui.FONT_TITLE
+        var fs := int(T.size.y * 0.46)
+        while fs > 14 and f.get_string_size("MARCHA REAL", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > w: fs -= 1
+        var by: float = T.position.y + T.size.y * 0.52
+        draw_string_outline(f, Vector2(x0, by), "MARCHA REAL", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, maxi(4, fs / 7), Color("1a0b02"))
+        draw_string(f, Vector2(x0, by), "MARCHA REAL", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("f6cf68"))
+        draw_string(f, Vector2(x0, by - fs * 0.06), "MARCHA REAL", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0, 0.93, 0.7, 0.35))
+        var ly: float = by + T.size.y * 0.1
+        draw_line(Vector2(x0, ly), Vector2(T.end.x - 6.0, ly), Color("8a5a14"), 4.0)
+        draw_line(Vector2(x0, ly - 1), Vector2(T.end.x - 6.0, ly - 1), Color("f1c768"), 2.0)
+        var sub := fixed_sub if not fixed_sub.is_empty() else "MODO DE CARTAS E CORRIDA"
+        if g != null: sub = "RODADA %d · %d X %d PEÕES COROADOS" % [g.round_no, g.team_crowned(0), g.team_crowned(1)]
+        var sf: Font = ui.fonts["r57_head"]
+        var ss := int(T.size.y * 0.2)
+        while ss > 10 and sf.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, ss).x > w: ss -= 1
+        draw_string_outline(sf, Vector2(x0, ly + ss * 1.15), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, ss, 3, Color("1a0b02"))
+        draw_string(sf, Vector2(x0, ly + ss * 1.15), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, ss, Color("f2c94c"))
+
+    ## R187 · botão do canto (tela cheia, música, efeitos, ajuda, menu) do celular: placa de ouro + símbolo.
+    func _m_icon(id: String, r: Rect2):
+        var on := true
+        if id == "fullscreen":
+            var sm = ui.screen_mode()
+            on = sm != null and sm.supported()
+        preload("res://ui_kit/medieval_plate.gd").draw(self, r, "marcha", on, ui.hover_id == id)
+        var gold := Color("f6d27a") if on else Color(0.85, 0.66, 0.31, 0.45)
+        var gr := Rect2(r.get_center() - r.size * 0.33, r.size * 0.66)
+        match id:
+            "fullscreen":
+                var sm2 = ui.screen_mode()
+                preload("res://ui_v022/fullscreen_control.gd").draw_glyph(self, gr, sm2 != null and sm2.has_method("is_on") and sm2.is_on(), gold, maxf(2.5, r.size.x * 0.05))
+            "mute_music":
+                ui.Sound.glyph(self, gr, "music", ui.Sound.music_muted(ui.hub), gold)
+            "mute_fx":
+                ui.Sound.glyph(self, gr, "fx", ui.Sound.effects_muted(ui.hub), gold)
+            "lobby_back":
+                var c := gr.get_center()
+                var u: float = gr.size.x
+                var lw2: float = maxf(3.0, r.size.y * 0.08)
+                for pass_i in 2:
+                    var col: Color = Color("1a0b02") if pass_i == 0 else gold
+                    var wv: float = lw2 + (3.0 if pass_i == 0 else 0.0)
+                    draw_line(c + Vector2(u * 0.32, 0), c + Vector2(-u * 0.3, 0), col, wv)
+                    draw_line(c + Vector2(-u * 0.32, 0), c + Vector2(-u * 0.05, -u * 0.27), col, wv)
+                    draw_line(c + Vector2(-u * 0.32, 0), c + Vector2(-u * 0.05, u * 0.27), col, wv)
+            "help", "lobby_tutorial":
+                var f: Font = ui.FONT_TITLE
+                var fs := int(r.size.y * 0.52)
+                var tw: float = f.get_string_size("?", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+                draw_string_outline(f, Vector2(r.get_center().x - tw / 2.0, r.get_center().y + fs * 0.36), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color("1a0b02"))
+                draw_string(f, Vector2(r.get_center().x - tw / 2.0, r.get_center().y + fs * 0.36), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, gold)
+            "menu":
+                var lw: float = maxf(3.0, r.size.y * 0.07)
+                for k in 3:
+                    var y: float = gr.position.y + gr.size.y * (0.22 + 0.28 * k)
+                    draw_line(Vector2(gr.position.x + gr.size.x * 0.1, y), Vector2(gr.end.x - gr.size.x * 0.1, y), Color("1a0b02"), lw + 3.0)
+                    draw_line(Vector2(gr.position.x + gr.size.x * 0.1, y), Vector2(gr.end.x - gr.size.x * 0.1, y), gold, lw)
+
     func _glyph_rect(r: Rect2) -> Rect2:
         if not ui._row_ok(): return r.grow(-8)
         var s: float = minf(r.size.x, r.size.y) * 0.58
@@ -2827,9 +2899,10 @@ class TableView extends Control:
                     _soft_shadow(pr.grow(-pr.size.x * 0.03))
                     draw_texture_rect(tex("res://marcha/art/r86/painel_vez_baixo.png"), pr, false)
                     continue
+                if i == 0:
+                    _m_title(ui.portrait_game[0][1])   # R187 · título desenhado em alta (antes: recorte borrado da arte)
+                    continue
                 draw_texture_rect_region(plate, ui.portrait_game[i][1], ui.portrait_game[i][0])
-            var icons_src := Rect2(1290, 0, 360, 80)   # só os ícones da arte; à esquerda fica o lugar do microfone
-            draw_texture_rect_region(plate, ui.rr(icons_src), icons_src)
         else:
             draw_texture_rect(plate, ui.rr(Rect2(Vector2.ZERO, ui.R57_SIZE)), false)
             # R83 · PC: os morcegos voam só nas janelas roxas dos lados (o tabuleiro está na própria arte)
@@ -2841,7 +2914,7 @@ class TableView extends Control:
             draw_set_transform(ui.origin, 0.0, Vector2(ui.k, ui.k))
         var sub := "MODO DE CARTAS E CORRIDA"
         if g != null: sub = "RODADA %d - %d X %d PEÕES COROADOS" % [g.round_no, g.team_crowned(0), g.team_crowned(1)]
-        rtext(sub, Vector2(187, 64), "r57_head", 17.6, Color("f2c94c"), -1.0, HORIZONTAL_ALIGNMENT_LEFT, 305.0)
+        if not ui.blk: rtext(sub, Vector2(187, 64), "r57_head", 17.6, Color("f2c94c"), -1.0, HORIZONTAL_ALIGNMENT_LEFT, 305.0)
         if ui.mode == "game": _r57_icons(plate, ui.R57_ICONS, false)
         else: _r57_icons(plate, ui.R57_ICONS.slice(0, 3), false)
         for seat in [1, 2, 3]: _r57_seat(seat)   # R69: o painel "Você" saiu da mesa
@@ -2856,9 +2929,24 @@ class TableView extends Control:
         var g = ui.g
         var d: Dictionary = ui.r57_seat(seat)
         var box: Rect2 = ui.rr(Rect2(d.box))
-        if seat > 0: draw_texture_rect(ui.r57["placa_perfil_%d" % seat], box, false)
+        var lit: bool = g != null and g.turn == seat and ui.mode == "game"
+        var pmod := Color.WHITE
+        if ui.blk and g != null and ui.mode == "game": pmod = Color(1.12, 1.1, 1.12) if lit else Color(0.8, 0.8, 0.84)
+        if seat > 0: draw_texture_rect(ui.r57["placa_perfil_%d" % seat], box, false, pmod)
         ui.hits.append({"rect": box, "id": "seat_%d" % seat})
-        if g != null and g.turn == seat and ui.mode == "game":
+        if lit and ui.blk:
+            # R187 · celular: quem está jogando ganha um contorno NEON ROXO (filete claro + brilho que se espalha suave)
+            var pz := 0.82 + 0.18 * sin(ui.t * 3.0)
+            var sb := StyleBoxFlat.new()
+            sb.draw_center = false
+            sb.border_color = Color(0.86, 0.66, 1.0, 0.95 * pz)
+            sb.set_border_width_all(3)
+            sb.set_corner_radius_all(int(box.size.y * 0.12))
+            sb.shadow_color = Color(0.66, 0.24, 1.0, 0.85 * pz)
+            sb.shadow_size = int(box.size.y * 0.16)
+            sb.anti_aliasing = true
+            draw_style_box(sb, box.grow(-box.size.y * 0.02))
+        elif lit:
             var pz := 0.65 + 0.35 * sin(ui.t * 4.0)
             for i in 4: draw_rect(box.grow(1.0 + i * 3.0), Color(1.0, 0.84, 0.38, (0.42 - i * 0.1) * pz), false, 3.0)
         var av: Rect2 = ui.rr(Rect2(d.av))
@@ -2947,6 +3035,16 @@ class TableView extends Control:
                 var b: Array = ui.PORTRAIT_LOBBY[i]
                 # R149 · bloco dos botões: placas recortadas (sem o tapete verde em volta do CONVIDAR AMIGO)
                 if i == 4 and ui.r57.get("salao_botoes_cel") != null: draw_texture_rect(ui.r57.salao_botoes_cel, b[1], false)
+                elif i == 0: _m_title(b[1], "MODO DE CARTAS E CORRIDA")   # R187 · título nítido (não o recorte)
+                elif i == 3:
+                    # R187 · tabuleiro de amostra MAIOR, mais claro e nítido: a arte da mesa da partida (resolução maior
+                    # que a do salão), ajustada no espaço sem deformar, com uma sombra suave por baixo
+                    var pr: Rect2 = b[1]
+                    var src: Rect2 = ui.BOARD_SRC
+                    var sc: float = minf(pr.size.x / src.size.x, pr.size.y / src.size.y)
+                    var dr := Rect2(pr.get_center() - src.size * sc / 2.0, src.size * sc)
+                    _soft_shadow(dr)
+                    draw_texture_rect_region(ui.r57.mesa, dr, src, Color(1.18, 1.15, 1.1))
                 else: draw_texture_rect_region(plate, b[1], b[0])
         else: draw_texture_rect(plate, ui.lr(Rect2(Vector2.ZERO, ui.R57_LOBBY)), false)
         _r57_icons(plate, [["fullscreen", Rect2(1165, 12, 50, 50)], ["mute_music", Rect2(1222, 12, 50, 50)], ["mute_fx", Rect2(1282, 12, 50, 50)], ["lobby_tutorial", Rect2(1342, 12, 50, 50)], ["lobby_back", Rect2(1409, 12, 51, 50)]], true)
