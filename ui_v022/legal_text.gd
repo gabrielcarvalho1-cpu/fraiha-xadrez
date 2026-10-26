@@ -17,7 +17,7 @@ static func termos() -> String:
 O FRAIHA Xadrez é um jogo de xadrez e de modos especiais (MARCHA REAL e XEQUE) que pode ser jogado no navegador, contra o computador ou contra outras pessoas pela internet. Ao usar o jogo, você concorda com estes Termos.
 
 2. CONTA
-Você pode jogar como convidado ou criar uma conta (e-mail e senha ou Google). Você é responsável por manter sua senha segura e por tudo o que for feito com a sua conta. O nome de jogador não pode ser ofensivo, imitar outra pessoa nem usar marcas de terceiros; nomes assim podem ser trocados ou bloqueados.
+Você pode jogar como convidado ou criar uma conta (e-mail e senha, Google ou Apple). Você é responsável por manter sua senha segura e por tudo o que for feito com a sua conta. O nome de jogador não pode ser ofensivo, imitar outra pessoa nem usar marcas de terceiros; nomes assim podem ser trocados ou bloqueados.
 
 3. CONVIVÊNCIA (CHATS, VOZ E PARTIDAS)
 É proibido: ofender, ameaçar, assediar ou discriminar outros jogadores; enviar spam, golpes ou links maliciosos; usar programas, engines ou ajuda externa durante partidas contra pessoas; abandonar partidas de propósito para prejudicar outros; explorar falhas do jogo. Mensagens podem ser denunciadas e analisadas. Quem descumprir estas regras pode ter mensagens removidas, a conta suspensa ou excluída.
@@ -57,7 +57,7 @@ static func privacidade() -> String:
 Esta Política explica, de forma simples, quais dados o FRAIHA Xadrez usa e por quê, conforme a Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018).
 
 1. DADOS QUE USAMOS
-• Conta: e-mail, nome de jogador, avatar ou foto que você enviar, e a forma de login (e-mail ou Google).
+• Conta: e-mail, nome de jogador, avatar ou foto que você enviar, e a forma de login (e-mail, Google ou Apple). Se você entrar com a Apple e escolher ocultar o e-mail, recebemos só o endereço de encaminhamento da Apple.
 • Jogo: partidas, resultados, ligas, PL, progresso contra os bots, histórico e análises que você salvar.
 • Social: lista de amigos, pedidos, bloqueios e mensagens privadas.
 • Chats e voz: mensagens do chat da partida, da mesa e do CHAT GLOBAL. A voz é transmitida ao vivo e NÃO é gravada.
@@ -74,7 +74,7 @@ Para criar e manter sua conta, montar partidas e rankings, mostrar seu perfil pa
 Seu nome de jogador, avatar/foto, moldura e selos, liga, placar e status. Seu e-mail NUNCA é mostrado.
 
 4. COM QUEM COMPARTILHAMOS
-Apenas com os serviços que fazem o jogo funcionar: hospedagem do servidor (Render) e do site (Cloudflare), banco de dados e login (Supabase), login com Google, voz (Agora), pagamentos (Mercado Pago) e, só com o seu aceite de cookies, a Meta (medição de anúncios). Alguns desses serviços ficam fora do Brasil; nesses casos os dados são transferidos com as proteções exigidas pela LGPD. Não vendemos seus dados. Só usamos dados para medir nossos anúncios se você aceitar os cookies.
+Apenas com os serviços que fazem o jogo funcionar: hospedagem do servidor (Render) e do site (Cloudflare), banco de dados e login (Supabase), login com Google, login com a Apple, voz (Agora), pagamentos (Mercado Pago) e, só com o seu aceite de cookies, a Meta (medição de anúncios). Alguns desses serviços ficam fora do Brasil; nesses casos os dados são transferidos com as proteções exigidas pela LGPD. Não vendemos seus dados. Só usamos dados para medir nossos anúncios se você aceitar os cookies.
 
 5. POR QUANTO TEMPO
 Enquanto sua conta existir. Mensagens do CHAT GLOBAL ficam só na memória do servidor e somem quando ele reinicia. Registros de navegação (telas e botões) são apagados depois de 30 dias. Registros de pagamento são guardados pelo prazo exigido por lei.
