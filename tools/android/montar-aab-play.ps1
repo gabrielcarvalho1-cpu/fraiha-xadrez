@@ -51,6 +51,14 @@ $cfg = "$dst\build\config.gradle"
 $c = Get-Content $cfg -Raw
 $c = $c -replace "compileSdk\s*:\s*35", "compileSdk         : 36" -replace "targetSdk\s*:\s*35", "targetSdk          : 36" -replace "buildTools\s*:\s*'35\.0\.0'", "buildTools         : '36.0.0'"
 Set-Content -Path $cfg -Value $c -Encoding ascii
+# só a voz básica da Agora (sem extensões de IA/efeitos/mídia): pacote menor (mesmo corte do APK, patch-gradle.ps1)
+$bg = "$dst\build\build.gradle"
+$t = Get-Content $bg -Raw
+if ($t -notmatch 'R183 agora excludes') {
+  $add = "        exclude 'META-INF/NOTICE'`r`n        // R183 agora excludes`r`n        jniLibs { excludes += ['**/libagora_ai_echo_cancellation_extension.so', '**/libagora_ai_echo_cancellation_ll_extension.so', '**/libagora_ai_noise_suppression_extension.so', '**/libagora_ai_noise_suppression_ll_extension.so', '**/libagora_audio_beauty_extension.so', '**/libagora_lip_sync_extension.so', '**/libagora_spatial_audio_extension.so'] }"
+  $t = $t.Replace("        exclude 'META-INF/NOTICE'", $add)
+  Set-Content -Path $bg -Value $t -Encoding ascii
+}
 # plugin nativo FRAIHA (voz + foto + compras) na pasta de código do Gradle
 $plug = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'android_plugin\fraiha_voice\FraihaVoicePlugin.kt'
 if (Test-Path "$PSScriptRoot\FraihaVoicePlugin.kt") { $plug = "$PSScriptRoot\FraihaVoicePlugin.kt" }
