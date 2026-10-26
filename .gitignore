@@ -21,3 +21,7 @@ node_modules/
 *.keystore
 *.jks
 build/
+
+# iPhone (R188): plugin nativo montado só no Mac do Codemagic
+/addons/fraiha_ios/
+/ios_plugin/.work/

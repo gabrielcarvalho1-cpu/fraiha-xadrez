@@ -24,7 +24,7 @@ func open():
 ## R185 · app Android: galeria nativa pelo plugin (lê pelo ContentResolver e devolve JPEG pronto).
 ## O FileDialog do Godot devolvia um caminho ilegível no Android 10+ e a foto nunca mudava.
 func _android_native() -> bool:
-    if not OS.has_feature("android"): return false
+    if not (OS.has_feature("android") or OS.has_feature("ios")): return false   # R188 · iPhone: plugin nativo do iOS (PHPicker), mesmo singleton
     if _native == null and Engine.has_singleton("FraihaVoice"):
         var n = Engine.get_singleton("FraihaVoice")
         # (o singleton Java não lista os métodos em has_method; o sinal novo prova que o plugin tem pickImage)

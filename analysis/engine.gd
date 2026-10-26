@@ -84,7 +84,7 @@ func start() -> String:
 
 func _find_native() -> String:
     # Android: Stockfish ainda não decidido (missão própria). Nada de executar binário: FALLBACK explícito.
-    if OS.has_feature("android"): return ""
+    if (OS.has_feature("android") or OS.has_feature("ios")): return ""   # R188 · iPhone também não roda programa externo
     var names := ["stockfish.exe", "stockfish"] if OS.get_name() == "Windows" else ["stockfish"]
     for dir in [ENGINE_DIR, "user://"]:
         for n in names:

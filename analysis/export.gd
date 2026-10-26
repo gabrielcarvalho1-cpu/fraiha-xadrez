@@ -116,7 +116,7 @@ static func _save_bytes(bytes: PackedByteArray, file_name: String, mime: String)
     return "Salvo em " + path
 
 static func save_text(text: String, stem: String) -> String:
-    if OS.has_feature("android"):   # R182 · app: sem pasta de downloads acessível → copia (cola no WhatsApp, Lichess…)
+    if (OS.has_feature("android") or OS.has_feature("ios")):   # R182 · app (R188 · iPhone também): sem pasta de downloads acessível → copia (cola no WhatsApp, Lichess…)
         DisplayServer.clipboard_set(text)
         return "Copiado! Cole onde quiser (WhatsApp, Lichess, chess.com)."
     return _save_bytes(text.to_utf8_buffer(), stem + ".txt", "text/plain")

@@ -29,6 +29,9 @@ workflows:
           T="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
           mkdir -p "$T"
           unzip -q -j tpl.tpz "templates/ios.zip" "templates/version.txt" -d "$T"
+      - name: Montar o plugin nativo do iPhone (foto de perfil + voz Agora)
+        script: |
+          bash ios_plugin/build_ios_plugin.sh
       - name: Gerar o projeto Xcode
         script: |
           set -e
@@ -78,6 +81,8 @@ workflows:
             echo "IMG $(basename "$f") $(base64 -i "${f%.png}.jpg" | tr -d '\n')"
           done
           tail -30 prints/console.log || true
+          echo "--- plugin nativo (FraihaVoice / GDExtension)"
+          grep -iE "gdextension|fraiha_ios|FraihaVoice|AgoraRtcKit|dyld" prints/console.log | head -20 || echo "sem avisos do plugin"
       - name: Diagnostico (se o app fechar sozinho)
         script: |
           DEV=$(xcrun simctl list devices | grep fraiha | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')

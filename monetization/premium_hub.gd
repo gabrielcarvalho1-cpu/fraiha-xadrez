@@ -132,7 +132,7 @@ func _request_purchases_keep():
 ## R175 · CONTINUAR um pedido aguardando pagamento (o mesmo pedido: mesmo PIX ou o formulário do cartão de novo)
 func resume_payment(item: Dictionary):
     if Catalog.is_mock(): return
-    if OS.has_feature("android"):
+    if (OS.has_feature("android") or OS.has_feature("ios")):   # R188 · iPhone: a Apple não aceita pagamento por fora da loja → mesmo aviso do Android
         open_payment(String(item.get("product_id", "")))   # R182 · mesmo aviso: compras ainda não no app
         return
     purchases_note = ""
@@ -855,7 +855,7 @@ func close_modal():
 
 ## Pagamento: real (Mercado Pago pelo servidor) na build publicada; simulado no editor/testes.
 func open_payment(product_id: String):
-    if OS.has_feature("android"):
+    if (OS.has_feature("android") or OS.has_feature("ios")):   # R188 · iPhone igual
         # Android DEV: nenhuma compra (PIX/cartão/Play Billing) até a missão de pagamentos Android.
         open_confirm("EM BREVE NO APP", "As compras pelo app chegam em breve.\n\nTudo o que você já tem na sua conta FRAIHA continua valendo aqui.", "", "ENTENDI", Callable())
         return

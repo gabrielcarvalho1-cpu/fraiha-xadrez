@@ -51,7 +51,7 @@ func _ready():
     _load_pref()
     if provider == null:
         # R183 · app Android: Agora nativa (plugin); Web: Agora do navegador
-        if OS.has_feature("android"): provider = load("res://voice/agora_native_provider.gd").new()
+        if (OS.has_feature("android") or OS.has_feature("ios")): provider = load("res://voice/agora_native_provider.gd").new()   # R188 · iPhone: mesmo provedor, plugin nativo do iOS
         else: provider = preload("res://voice/agora_voice_provider.gd").new()
     if provider.get_parent() == null: add_child(provider)
     provider.event.connect(_on_provider)
@@ -141,7 +141,7 @@ func join() -> void:
     remote.clear()
     speaking.clear()
     autoplay_blocked = false
-    _to("REQUESTING_PERMISSION", "Permita o microfone." if OS.has_feature("android") else "Permita o microfone no navegador.", T_PERMISSION)
+    _to("REQUESTING_PERMISSION", "Permita o microfone." if (OS.has_feature("android") or OS.has_feature("ios")) else "Permita o microfone no navegador.", T_PERMISSION)
     _log("join requested seq=%d" % _seq)
     provider.prepare(_seq)
 
@@ -231,6 +231,7 @@ static func error_text(code: String) -> String:
     match code:
         "PERMISSION_DENIED":
             if OS.has_feature("android"): return "Microfone bloqueado. Libere em Configurações > Apps > FRAIHA Xadrez > Permissões."
+            if OS.has_feature("ios"): return "Microfone bloqueado. Libere em Ajustes > FRAIHA Xadrez > Microfone."
             return "Microfone bloqueado. Libere no cadeado da barra de endereço."
         "DEVICE_NOT_FOUND": return "Nenhum microfone encontrado."
         "NOT_SUPPORTED": return "Microfone indisponível ou bloqueado neste navegador."
