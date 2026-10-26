@@ -14,7 +14,7 @@ func _ready():
 		plugin = Engine.get_singleton("FraihaVoice")
 		plugin.connect("voice_event", _on_native)
 	if OS.has_feature("android"): get_tree().on_request_permissions_result.connect(_on_permission)
-	if OS.has_feature("ios") and "--fx-teste-convidado" in OS.get_cmdline_user_args():
+	if OS.has_feature("ios") and ("--fx-teste-convidado" in OS.get_cmdline_user_args() or "--fx-teste-modos" in OS.get_cmdline_user_args()):
 		# só no teste automático do iPhone virtual (Codemagic): deixa um bilhete dizendo se o plugin nativo carregou
 		var f := FileAccess.open("user://fx_teste_plugin.txt", FileAccess.WRITE)
 		if f != null:

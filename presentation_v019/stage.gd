@@ -179,6 +179,10 @@ func _ready():
     mobile_hud.setup(self)
     _layout()
     open_home()
+    if "--fx-teste-modos" in OS.get_cmdline_user_args():   # R189 · teste automático do app no iPhone virtual (Codemagic)
+        var autotest = load("res://presentation_v019/app_autotest.gd").new()
+        autotest.stage = self
+        add_child(autotest)
 
 func _build_backdrop():
     # Onde nada é desenhado aparecia o cinza padrão do Godot. Agora: verde-escuro + folhagem

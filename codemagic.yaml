@@ -49,36 +49,41 @@ workflows:
           xcodebuild -project FRAIHA.xcodeproj -scheme FRAIHA -configuration Release \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath dd CODE_SIGNING_ALLOWED=NO ARCHS=x86_64 EXCLUDED_ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build | tail -40
-      - name: Rodar no iPhone virtual e tirar prints
+      - name: Rodar no iPhone virtual e testar os modos
         script: |
           set -e
           APP=$(find build/ios/dd/Build/Products -name "*.app" -maxdepth 2 | head -1)
-          xcrun simctl list runtimes
           RT=$(xcrun simctl list runtimes | grep -E "^iOS 1[78]" | tail -1 | sed -E 's/.* - (com\.apple\.CoreSimulator\.SimRuntime\.[^ ]+).*/\1/')
           echo "runtime: $RT"
           DEV=$(xcrun simctl create fraiha "iPhone 15" "$RT")
           xcrun simctl boot "$DEV" || true
-          xcrun simctl bootstatus "$DEV" -b
+          xcrun simctl bootstatus "$DEV" -b > /dev/null
           xcrun simctl install "$DEV" "$APP"
           mkdir -p prints
-          # o Mac da nuvem não tem placa de som: o áudio do iPhone virtual trava e o app fecha; no teste usa áudio "mudo"
-          xcrun simctl launch --console-pty "$DEV" com.fraihaxadrez.app --audio-driver Dummy -- --fx-teste-convidado > prints/console.log 2>&1 &
-          sleep 25
-          xcrun simctl io "$DEV" screenshot prints/01_abertura.png
-          sleep 25
-          xcrun simctl io "$DEV" screenshot prints/02_carregando.png
-          sleep 30
-          xcrun simctl io "$DEV" screenshot prints/03_login.png
-          # com --fx-teste-convidado o app entra sozinho como convidado 4 s depois do login aparecer
+          # o Mac da nuvem não tem placa de som: áudio "mudo". --fx-teste-modos: o próprio jogo entra como convidado,
+          # abre xadrez × computador, MARCHA REAL, XEQUE e Online Casual, tira os prints e escreve um diário.
+          xcrun simctl launch --console-pty "$DEV" com.fraihaxadrez.app --audio-driver Dummy -- --fx-teste-modos > prints/console.log 2>&1 &
           sleep 20
-          xcrun simctl io "$DEV" screenshot prints/04_convidado.png
-          sleep 25
-          xcrun simctl io "$DEV" screenshot prints/05_home.png
+          xcrun simctl io "$DEV" screenshot prints/00_abertura.png
+          D=$(xcrun simctl get_app_container "$DEV" com.fraihaxadrez.app data)
+          for i in $(seq 1 60); do
+            DI=$(find "$D" -name diario.txt 2>/dev/null | head -1)
+            if [ -n "$DI" ] && grep -q "FIM" "$DI"; then break; fi
+            sleep 6
+          done
+          DI=$(find "$D" -name diario.txt 2>/dev/null | head -1)
+          [ -n "$DI" ] && cp "$(dirname "$DI")"/*.jpg prints/ 2>/dev/null || true
+          [ -n "$DI" ] && cp "$DI" prints/diario.txt || echo "sem diario do teste"
+          xcrun simctl io "$DEV" screenshot prints/99_final.png
       - name: Prints em texto (para conferir sem baixar)
         script: |
+          echo "--- diario do teste"
+          cat prints/diario.txt 2>/dev/null || echo "sem diario"
           for f in prints/*.png; do
             sips -s format jpeg -s formatOptions 40 -Z 520 "$f" --out "${f%.png}.jpg" > /dev/null
-            echo "IMG $(basename "$f") $(base64 -i "${f%.png}.jpg" | tr -d '\n')"
+          done
+          for f in prints/*.jpg; do
+            echo "IMG $(basename "$f") $(base64 -i "$f" | tr -d '\n')"
           done
           tail -30 prints/console.log || true
           echo "--- plugin nativo (FraihaVoice / GDExtension)"
