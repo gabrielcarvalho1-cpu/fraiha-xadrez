@@ -5,6 +5,8 @@
 //  · Voz: Agora iOS SDK (só áudio). Tudo o que acontece volta pelo sinal "voice_event" com o JSON {ev, seq, ...}
 //    igual ao do provedor da Web. O token vem do servidor do jogo (voice_join); nunca é gerado nem logado aqui.
 //  · Microfone: requestMic(seq) pede a permissão do iPhone (a janela "Permitir microfone" do próprio iOS).
+//  · R190 · Iniciar sessão com a Apple: signInWithApple(nonce_sha256) abre a janela do iPhone e devolve o id_token
+//    pelo sinal apple_signin(tipo, dados): tipo = "ok" (dados = id_token) | "cancel" | "error" (dados = código).
 //  · Foto de perfil: pickImage() abre a galeria do iPhone (PHPicker: não precisa pedir acesso às fotos), aplica a
 //    rotação da câmera, reduz para no máximo 1600 px e devolve JPEG em base64 pelo sinal image_picked(tipo, dados):
 //    tipo = "ok" | "cancel" | "error".
@@ -13,6 +15,7 @@
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
 #import <AVFoundation/AVFoundation.h>
+#import <AuthenticationServices/AuthenticationServices.h>
 #import <AgoraRtcKit/AgoraRtcEngineKit.h>
 
 #include <set>
@@ -24,8 +27,10 @@
 
 class FraihaIOS;
 
-@interface FXBridge : NSObject <AgoraRtcEngineDelegate, PHPickerViewControllerDelegate>
+@interface FXBridge : NSObject <AgoraRtcEngineDelegate, PHPickerViewControllerDelegate,
+		ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding>
 @property (nonatomic, assign) FraihaIOS *owner;
+@property (nonatomic, strong) ASAuthorizationController *appleController;
 @end
 
 static NSString *ns(const godot::String &s) {
@@ -211,7 +216,38 @@ public:
 		else emit_voice(@"renewed", nil, false);
 	}
 
+	void emit_apple(const godot::String &kind, const godot::String &data) {
+		godot::String k = kind, v = data;
+		if ([NSThread isMainThread]) emit_signal("apple_signin", k, v);
+		else dispatch_async(dispatch_get_main_queue(), ^{ emit_signal("apple_signin", k, v); });
+	}
+
+	// ------------------------------------------------------------------ R190 · Iniciar sessão com a Apple
+	void signInWithApple(const godot::String &nonce_sha256) {
+		ASAuthorizationAppleIDProvider *p = [ASAuthorizationAppleIDProvider new];
+		ASAuthorizationAppleIDRequest *req = [p createRequest];
+		req.requestedScopes = @[ASAuthorizationScopeEmail];
+		req.nonce = ns(nonce_sha256);
+		ASAuthorizationController *c = [[ASAuthorizationController alloc] initWithAuthorizationRequests:@[req]];
+		c.delegate = bridge;
+		c.presentationContextProvider = bridge;
+		bridge.appleController = c;   // segura o controlador até a resposta
+		[c performRequests];
+	}
+
 	// ------------------------------------------------------------------ foto de perfil (galeria)
+	static UIWindow *key_window() {
+		UIWindow *win = nil;
+		for (UIScene *sc in [UIApplication sharedApplication].connectedScenes) {
+			if (![sc isKindOfClass:[UIWindowScene class]]) continue;
+			for (UIWindow *w in ((UIWindowScene *)sc).windows) {
+				if (w.isKeyWindow) return w;
+				if (win == nil) win = w;
+			}
+		}
+		return win;
+	}
+
 	static UIViewController *top_controller() {
 		UIWindow *win = nil;
 		for (UIScene *sc in [UIApplication sharedApplication].connectedScenes) {
@@ -250,7 +286,9 @@ protected:
 		ClassDB::bind_method(D_METHOD("setRemoteMuted", "uid", "on"), &FraihaIOS::setRemoteMuted);
 		ClassDB::bind_method(D_METHOD("renew", "token"), &FraihaIOS::renew);
 		ClassDB::bind_method(D_METHOD("pickImage"), &FraihaIOS::pickImage);
+		ClassDB::bind_method(D_METHOD("signInWithApple", "nonce_sha256"), &FraihaIOS::signInWithApple);
 		ADD_SIGNAL(godot::MethodInfo("voice_event", godot::PropertyInfo(godot::Variant::STRING, "json")));
+		ADD_SIGNAL(godot::MethodInfo("apple_signin", godot::PropertyInfo(godot::Variant::STRING, "kind"), godot::PropertyInfo(godot::Variant::STRING, "data")));
 		ADD_SIGNAL(godot::MethodInfo("image_picked", godot::PropertyInfo(godot::Variant::STRING, "kind"), godot::PropertyInfo(godot::Variant::STRING, "data")));
 	}
 };
@@ -347,6 +385,28 @@ protected:
 	} else {
 		o->emit_voice(@"warn", @{@"code": [NSString stringWithFormat:@"E%ld", (long)err]});
 	}
+}
+
+// ---------------------------------------------------------------- R190 · Apple
+- (void)authorizationController:(ASAuthorizationController *)controller didCompleteWithAuthorization:(ASAuthorization *)authorization {
+	self.appleController = nil;
+	FraihaIOS *o = self.owner; if (o == nullptr) return;
+	if (![authorization.credential isKindOfClass:[ASAuthorizationAppleIDCredential class]]) { o->emit_apple("error", "CREDENTIAL"); return; }
+	ASAuthorizationAppleIDCredential *cred = (ASAuthorizationAppleIDCredential *)authorization.credential;
+	NSString *tok = cred.identityToken ? [[NSString alloc] initWithData:cred.identityToken encoding:NSUTF8StringEncoding] : nil;
+	if (tok.length == 0) { o->emit_apple("error", "NO_TOKEN"); return; }
+	o->emit_apple("ok", gs(tok));
+}
+
+- (void)authorizationController:(ASAuthorizationController *)controller didCompleteWithError:(NSError *)error {
+	self.appleController = nil;
+	FraihaIOS *o = self.owner; if (o == nullptr) return;
+	if (error.code == ASAuthorizationErrorCanceled) o->emit_apple("cancel", "");
+	else o->emit_apple("error", gs([NSString stringWithFormat:@"E%ld", (long)error.code]));
+}
+
+- (ASPresentationAnchor)presentationAnchorForAuthorizationController:(ASAuthorizationController *)controller {
+	return FraihaIOS::key_window();
 }
 
 // ---------------------------------------------------------------- galeria

@@ -101,6 +101,11 @@ static func icon(ci: CanvasItem, kind: String, rect: Rect2, c: Color):
             ci.draw_arc(o, s * 0.4, 0, TAU, 28, c, w)
             ci.draw_circle(o + Vector2(0, -s * 0.18), s * 0.05, c)
             ci.draw_line(o + Vector2(0, -s * 0.05), o + Vector2(0, s * 0.22), c, w * 1.2)
+        "apple":   # R190 · logo da Apple (botão "Iniciar sessão com a Apple", só no app de iPhone)
+            var tex := apple_logo()
+            var hh := s * 0.74
+            var ww := hh * tex.get_width() / float(tex.get_height())
+            ci.draw_texture_rect(tex, Rect2(o - Vector2(ww / 2.0, hh * 0.54), Vector2(ww, hh)), false, Color.BLACK)
         "google":
             var r2 := s * 0.36
             var th := s * 0.15
@@ -108,6 +113,16 @@ static func icon(ci: CanvasItem, kind: String, rect: Rect2, c: Color):
             for sg in seg:
                 ci.draw_arc(o, r2, deg_to_rad(sg[0]), deg_to_rad(sg[1]), 16, sg[2], th, true)
             ci.draw_rect(Rect2(o + Vector2(-s * 0.02, -th / 2.0), Vector2(r2 + th / 2.0 + s * 0.02, th)), Color("4285f4"))
+
+## R190 · logo da Apple em branco (recolorido no desenho), gerado uma vez do contorno vetorial
+const APPLE_SVG := '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#ffffff" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>'
+static var _apple: Texture2D
+static func apple_logo() -> Texture2D:
+    if _apple == null:
+        var img := Image.new()
+        img.load_svg_from_string(APPLE_SVG, 8.0)
+        _apple = ImageTexture.create_from_image(img)
+    return _apple
 
 static func _shoulders(base: Vector2, half: float, h: float) -> PackedVector2Array:
     var pts := PackedVector2Array()

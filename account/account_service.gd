@@ -337,6 +337,55 @@ func copy_game_link() -> void:
     if OS.has_feature("web"): JavaScriptBridge.eval("try { navigator.clipboard && navigator.clipboard.writeText(" + JSON.stringify(url) + ") } catch (e) {}")
     notice.emit("Link copiado! Cole no Chrome ou no Safari para abrir o FRAIHA.", false)
 
+## R190 · INICIAR SESSÃO COM A APPLE (só no app de iPhone; a Apple exige quando o app oferece login com Google).
+## A janela é a do próprio iPhone (plugin nativo, ios_plugin/fraiha_ios/fraiha_ios.mm). Ela devolve um id_token
+## assinado pela Apple, que o Supabase confere (grant_type=id_token, provider apple) e troca por uma sessão normal
+## — igual a entrar com e-mail ou Google. O nonce (número de uso único) impede reaproveitar um token antigo: a Apple
+## recebe o SHA-256 dele e o Supabase recebe o original. Nada disso é guardado nem vai para log.
+var _apple_nonce := ""
+var _apple_native = null
+
+func apple_native():
+    if _apple_native == null and Engine.has_singleton("FraihaVoice"):
+        var n = Engine.get_singleton("FraihaVoice")
+        if n.has_signal("apple_signin"):
+            _apple_native = n
+            _apple_native.connect("apple_signin", _on_apple_signin)
+    return _apple_native
+
+func sign_in_apple(_then_open := ""):
+    if busy or not configured(): return
+    if apple_native() == null:
+        notice.emit("Entrar com a Apple está disponível no app de iPhone.", true)
+        return
+    var crypto := Crypto.new()
+    _apple_nonce = crypto.generate_random_bytes(24).hex_encode()
+    busy = true
+    WebTrack.login("apple", "start")
+    _apple_native.signInWithApple(_apple_nonce.sha256_text())
+
+func _on_apple_signin(kind: String, data: String):
+    if kind != "ok":
+        busy = false
+        _apple_nonce = ""
+        if kind == "cancel":
+            WebTrack.login("apple", "cancel")
+        else:
+            WebTrack.login("apple", "error", data.left(40))
+            notice.emit("A Apple não completou o login. Tente de novo.", true)
+        return
+    var nonce := _apple_nonce
+    _apple_nonce = ""
+    _auth_request(HTTPClient.METHOD_POST, "/auth/v1/token?grant_type=id_token", {"provider": "apple", "id_token": data, "nonce": nonce}, func(code, body):
+        busy = false
+        if code == 200 and body.has("access_token"):
+            WebTrack.login("apple", "ok")
+            _adopt_session(body)
+            notice.emit("Pronto! Você entrou com a Apple.", false)
+        else:
+            WebTrack.login("apple", "error", error_code(code, body))
+            notice.emit(auth_error_text(code, body), true))
+
 func sign_in_google(then_open := "", force := false):
     if not configured(): return
     if not preload("res://telemetry/app_track.gd").platform().is_empty():   # R182/R184 · app Android e executável do PC: navegador + PKCE

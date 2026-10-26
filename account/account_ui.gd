@@ -143,6 +143,11 @@ func hide_ui():
 ## R181 · convidado: conecta ao servidor JÁ no clique (antes só conectava ao abrir o Online Casual, e o convidado
 ## que jogava contra bots nunca aparecia no Admin → Sessões).
 ## R181 · REGRA DO DONO: mudança de visual/letra/botão só no celular (web mobile e app). PC congelado.
+## R190 · "Iniciar sessão com a Apple": só no app de iPhone (a Apple exige quando o app tem login com Google).
+## "--fx-mostrar-apple" mostra o botão em qualquer plataforma (só para conferir o visual nos prints).
+static func apple_on() -> bool:
+    return OS.has_feature("ios") or "--fx-mostrar-apple" in OS.get_cmdline_user_args()
+
 func _mobile() -> bool:
     return is_inside_tree() and Mobile.active(get_viewport())
 
@@ -412,7 +417,21 @@ func _show(target: String):
             _input_field("email", "E-mail", false, SLOT_EMAIL)
             _input_field("password", "Senha", true, SLOT_PASSWORD).text_submitted.connect(func(_t): account.sign_in(_value("email"), _value("password")))
             _button("ENTRAR", func(): account.sign_in(_value("email"), _value("password")), true, SLOT_ENTER)
-            _button("CONTINUAR COM GOOGLE", func(): account.sign_in_google("ranked" if return_to_ranked else ""), false, SLOT_GOOGLE)
+            if apple_on():   # R190 · iPhone: Google e Apple lado a lado no lugar do botão do Google (exigência da Apple)
+                var half := (SLOT_GOOGLE.size.x - 12.0) / 2.0
+                for i in 2:
+                    var is_apple := i == 1
+                    var r := Rect2(SLOT_GOOGLE.position + Vector2((half + 12.0) * i, 0), Vector2(half, SLOT_GOOGLE.size.y))
+                    var b = _button("APPLE" if is_apple else "GOOGLE", (func(): account.sign_in_apple("ranked" if return_to_ranked else "")) if is_apple else (func(): account.sign_in_google("ranked" if return_to_ranked else "")), false, r)
+                    b.baked = false
+                    b.custom_minimum_size = r.size
+                    b.size = r.size
+                    b.side = 150.0
+                    b.font_size = 46
+                    b.icon_kind = "apple" if is_apple else "google"
+                    b.name = "AppleButton" if is_apple else "GoogleButton"
+            else:
+                _button("CONTINUAR COM GOOGLE", func(): account.sign_in_google("ranked" if return_to_ranked else ""), false, SLOT_GOOGLE)
             if not _mobile():   # PC congelado: exatamente o layout original (só o clique do convidado agora conecta ao servidor)
                 _link("Criar conta", func(): _show("signup"), SLOT_LINKS[0])
                 _link("Esqueci minha senha", func(): _show("recover"), SLOT_LINKS[1])
@@ -450,6 +469,8 @@ func _show(target: String):
             _terms_check()
             _button("CRIAR CONTA", func(): if _terms_ok(): account.sign_up(_value("email"), _value("password"), _value("nickname")), true)
             _button("CONTINUAR COM GOOGLE", func(): if _terms_ok(): account.sign_in_google("ranked" if return_to_ranked else ""))
+            if apple_on():   # R190 · iPhone
+                _button("CONTINUAR COM A APPLE", func(): if _terms_ok(): account.sign_in_apple("ranked" if return_to_ranked else "")).icon_kind = "apple"
             _link("Ler os Termos e a Privacidade", func(): if open_legal.is_valid(): open_legal.call("termos"))
             _divider()
             _link("Já tenho conta — Entrar", func(): _show("login"))

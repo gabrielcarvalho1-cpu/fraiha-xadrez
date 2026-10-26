@@ -73,7 +73,7 @@ build() {   # $1 = dev|sim  $2 = arch  $3 = sdk  $4 = lib godot-cpp  $5 = alvo d
 		$fdirs -dynamiclib -install_name @rpath/libfraiha_ios.dylib \
 		-Wl,-rpath,@executable_path/Frameworks \
 		"$ROOT/ios_plugin/fraiha_ios/fraiha_ios.mm" "$WORK/godot-cpp/$4" \
-		-framework AgoraRtcKit -framework UIKit -framework PhotosUI -framework AVFoundation -framework Foundation \
+		-framework AgoraRtcKit -framework UIKit -framework PhotosUI -framework AVFoundation -framework AuthenticationServices -framework Foundation \
 		-o "$WORK/$1/libfraiha_ios.dylib"
 	echo "  ok $1 ($2)"
 }
