@@ -59,13 +59,18 @@ workflows:
           xcrun simctl install "$DEV" "$APP"
           mkdir -p prints
           # o Mac da nuvem não tem placa de som: o áudio do iPhone virtual trava e o app fecha; no teste usa áudio "mudo"
-          xcrun simctl launch --console-pty "$DEV" com.fraihaxadrez.app --audio-driver Dummy > prints/console.log 2>&1 &
+          xcrun simctl launch --console-pty "$DEV" com.fraihaxadrez.app --audio-driver Dummy -- --fx-teste-convidado > prints/console.log 2>&1 &
           sleep 25
           xcrun simctl io "$DEV" screenshot prints/01_abertura.png
           sleep 25
           xcrun simctl io "$DEV" screenshot prints/02_carregando.png
           sleep 30
-          xcrun simctl io "$DEV" screenshot prints/03_home.png
+          xcrun simctl io "$DEV" screenshot prints/03_login.png
+          # com --fx-teste-convidado o app entra sozinho como convidado 4 s depois do login aparecer
+          sleep 20
+          xcrun simctl io "$DEV" screenshot prints/04_convidado.png
+          sleep 25
+          xcrun simctl io "$DEV" screenshot prints/05_home.png
       - name: Prints em texto (para conferir sem baixar)
         script: |
           for f in prints/*.png; do

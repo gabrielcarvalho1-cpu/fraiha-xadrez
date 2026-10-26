@@ -146,6 +146,9 @@ func hide_ui():
 func _mobile() -> bool:
     return is_inside_tree() and Mobile.active(get_viewport())
 
+func _fx_teste_convidado():
+    if dim.visible: play_as_guest()
+
 func play_as_guest():
     preload("res://telemetry/web_track.gd").login("guest", "start")
     preload("res://telemetry/web_track.gd").pixel("EntrouConvidado")
@@ -423,6 +426,11 @@ func _show(target: String):
                 guest.veil = true
                 guest.font_size = 58
                 guest.side = 300.0
+                # R187e · teste automático no iPhone virtual do Codemagic (o simulador não toca na tela):
+                # com "-- --fx-teste-convidado" o app entra sozinho como convidado depois de 4 s. Sem a opção, nada muda.
+                if "--fx-teste-convidado" in OS.get_cmdline_user_args() and not get_meta("fx_teste_feito", false):
+                    set_meta("fx_teste_feito", true)
+                    get_tree().create_timer(4.0).timeout.connect(_fx_teste_convidado)
                 var sl = _link("Criar conta", func(): _show("signup"), SLOT_SMALL[0])
                 sl.small = true
                 sl.halo = true
