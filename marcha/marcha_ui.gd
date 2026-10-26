@@ -1478,7 +1478,7 @@ func _wide_layout():
     var cw: float = minf(rw, 1000.0)
     var ch: float = (cw - 30.0) / 4.0 * R57_CARD.y / R57_CARD.x     # R186 · 4 cartas lado a lado na coluna toda
     var room: float = H - icons.end.y - 30.0 - 70.0                  # 70: o CHAT embaixo
-    var pnw: float = minf(rw * 0.70, 500.0)
+    var pnw: float = minf(rw * 0.60, 430.0)   # R187 · painel SUA VEZ um pouco menor: sobra altura para as cartas
     var pnh: float = pnw * 280.0 / 330.0
     if ch + pnh + 30.0 > room:                                   # falta altura: o painel encolhe primeiro (as cartas são o foco)
         pnh = maxf(room - ch - 30.0, 200.0)
