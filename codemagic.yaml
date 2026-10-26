@@ -53,10 +53,19 @@ workflows:
           xcrun simctl install "$DEV" "$APP"
           mkdir -p prints
           xcrun simctl launch --console-pty "$DEV" com.fraihaxadrez.app > prints/console.log 2>&1 &
-          sleep 40
+          sleep 25
           xcrun simctl io "$DEV" screenshot prints/01_abertura.png
-          sleep 20
-          xcrun simctl io "$DEV" screenshot prints/02_home.png
+          sleep 25
+          xcrun simctl io "$DEV" screenshot prints/02_carregando.png
+          sleep 30
+          xcrun simctl io "$DEV" screenshot prints/03_home.png
+      - name: Prints em texto (para conferir sem baixar)
+        script: |
+          for f in prints/*.png; do
+            sips -s format jpeg -s formatOptions 40 -Z 520 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "IMG $(basename "$f") $(base64 -i "${f%.png}.jpg" | tr -d '\n')"
+          done
+          tail -30 prints/console.log || true
     artifacts:
       - prints/*
       - export.log
