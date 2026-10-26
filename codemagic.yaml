@@ -1,0 +1,58 @@
+# FRAIHA Xadrez · montagem do app de iPhone no Mac do Codemagic (codemagic.io).
+# Fase 1 (sem conta paga da Apple): monta para o SIMULADOR de iPhone, sem assinatura, roda o jogo no
+# iPhone virtual e guarda prints das telas como artefatos da montagem.
+# Fase 2 (com a conta Apple Developer): fluxo "ios-testflight" com assinatura automática e envio ao TestFlight
+# (entra quando a conta for aprovada; as chaves ficam só nas variáveis do Codemagic, nunca neste arquivo).
+workflows:
+  ios-simulador:
+    name: iPhone · simulador (sem conta Apple)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: latest
+      vars:
+        GODOT_VERSION: "4.5.1"
+    scripts:
+      - name: Baixar o Godot e os templates de iPhone
+        script: |
+          set -e
+          V="${GODOT_VERSION}-stable"
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${V}/Godot_v${V}_macos.universal.zip"
+          unzip -q godot.zip
+          curl -sSL -o tpl.tpz "https://github.com/godotengine/godot/releases/download/${V}/Godot_v${V}_export_templates.tpz"
+          T="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$T"
+          unzip -q -j tpl.tpz "templates/ios.zip" "templates/version.txt" -d "$T"
+      - name: Gerar o projeto Xcode
+        script: |
+          set -e
+          G="$PWD/Godot.app/Contents/MacOS/Godot"
+          "$G" --headless --path . --import > import.log 2>&1 || true
+          mkdir -p build/ios
+          "$G" --headless --path . --export-release "iOS" build/ios/FRAIHA.ipa 2>&1 | tee export.log
+          ls build/ios
+      - name: Compilar para o simulador
+        script: |
+          set -e
+          cd build/ios
+          xcodebuild -project FRAIHA.xcodeproj -scheme FRAIHA -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath dd CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build | tail -40
+      - name: Rodar no iPhone virtual e tirar prints
+        script: |
+          set -e
+          APP=$(find build/ios/dd/Build/Products -name "*.app" -maxdepth 2 | head -1)
+          DEV=$(xcrun simctl list devices available | grep -E "iPhone 1[5-9]" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          xcrun simctl boot "$DEV" || true
+          xcrun simctl bootstatus "$DEV" -b
+          xcrun simctl install "$DEV" "$APP"
+          mkdir -p prints
+          xcrun simctl launch --console-pty "$DEV" com.fraihaxadrez.app > prints/console.log 2>&1 &
+          sleep 40
+          xcrun simctl io "$DEV" screenshot prints/01_abertura.png
+          sleep 20
+          xcrun simctl io "$DEV" screenshot prints/02_home.png
+    artifacts:
+      - prints/*
+      - export.log
+      - build/ios/dd/Build/Products/**/*.app
