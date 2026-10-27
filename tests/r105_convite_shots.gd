@@ -36,7 +36,7 @@ func run():
 	await frames(6)
 	s._show("list")
 	await frames(6)
-	check(s.panel.find_child("OpenReferral", true, false) != null, "AMIGOS tem CONVIDAR AMIGOS")
+	check(s.find_child("OpenReferral", true, false) != null, "AMIGOS tem CONVIDAR AMIGOS")   # R198 · no PC fica na arte (por cima do painel)
 	await shot("01_amigos_convidar")
 	s.open_ref()
 	acc.server_message.emit({"type": "ref_info", "available": true, "code": "K7QM2XA", "rules": {"games": 5, "friend_days": 7, "purchase_days": 30, "cap": 10},

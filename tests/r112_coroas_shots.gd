@@ -65,9 +65,13 @@ func run():
 	hub.crowns_client().open_panel()
 	await frames(8)
 	check(find_named(root, "CrownsMissions").is_empty() and find_named(root, "CrownsOpenMissions").size() == 1, "R176.8b: COROAS sem as missões, com o botão MISSÕES DO DIA")
-	var box: Rect2 = hub.crowns_client().panel._body_rect.grow(1.0)
+	# R198 · PC: o painel COROAS é a arte do dono (economy/crowns_art.gd)
+	var cart = hub.crowns_client().art_panel
+	var art_mode: bool = cart != null and is_instance_valid(cart) and cart.visible
+	var box: Rect2 = (cart.get_node("CrownsArtRoot/CrownsArtPanel").get_global_rect() if art_mode else hub.crowns_client().panel._body_rect).grow(1.0)
 	var fora := []
 	for n in find_named(root, "Crowns") + find_named(root, "Mission_"):
+		if String(n.name) == "CrownsArtRoot" or not (n is Control): continue   # R198 · a camada de fundo (tela toda) não conta
 		var r: Rect2 = n.get_global_rect()
 		if r.size.x > 0 and (r.position.x < box.position.x or r.end.x > box.end.x): fora.append(String(n.name))
 	check(fora.is_empty(), "painel dentro da moldura (fora: %s)" % ", ".join(fora))
@@ -75,7 +79,7 @@ func run():
 	find_named(root, "CrownsOpenMissions")[0].pressed.emit()
 	await frames(8)
 	var mp = hub.crowns_client().missions_panel
-	check(mp != null and mp.is_open() and not hub.crowns_client().panel.is_open(), "MISSÕES DO DIA abre em tela própria")
+	check(mp != null and mp.is_open() and (not art_mode or not cart.visible) and (art_mode or not hub.crowns_client().panel.is_open()), "MISSÕES DO DIA abre em tela própria")
 	check(find_named(root, "CrownsMissions").size() == 1 and find_named(root, "Mission_play3").size() == 1, "missões com progresso")
 	var box2: Rect2 = mp._body_rect.grow(1.0)
 	var fora2 := []
@@ -86,8 +90,12 @@ func run():
 	await shot("02b_missoes")
 	mp.go_back()
 	await frames(6)
-	check(hub.crowns_client().panel.is_open(), "VOLTAR das missões volta para COROAS")
-	hub.crowns_client().panel.close()
+	if art_mode:
+		check(cart.visible, "VOLTAR das missões volta para COROAS")
+		cart.close()
+	else:
+		check(hub.crowns_client().panel.is_open(), "VOLTAR das missões volta para COROAS")
+		hub.crowns_client().panel.close()
 	await frames(4)
 	acc.server_message.emit({"type": "crowns_reward", "gained": 30, "lines": ["Vitória +10", "Missão: Jogue 3 partidas online +20"], "balance": 1315})
 	await frames(10)

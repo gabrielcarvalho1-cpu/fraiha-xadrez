@@ -4,7 +4,7 @@ extends Node
 ## saiu versão nova: quando o jogador estiver no LOBBY (nunca no meio de partida/mesa), aparece a janela
 ## "NOVA ATUALIZAÇÃO · ATUALIZAR AGORA". DEPOIS adia: volta a perguntar ao sair da próxima partida ou em 10 min.
 
-const CHECK_EVERY := 180.0
+const CHECK_EVERY := 60.0   # R198 · era 180 s: o dono quer ver o aviso logo depois de publicar
 const SNOOZE := 600.0
 const JS_SETUP := """
 (function(){
@@ -36,7 +36,7 @@ const JS_RELOAD := """
 var stage
 var tracker
 var _on := false
-var _t := 30.0          # 1ª checagem 30 s depois de abrir
+var _t := 20.0          # 1ª checagem 20 s depois de abrir
 var _snooze := 0.0
 var pending := false
 var _asking := false

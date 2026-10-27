@@ -93,8 +93,7 @@ func open_creator():
 		creator_panel = load("res://economy/creator_ui.gd").new()
 		hub.add_child(creator_panel)
 		creator_panel.setup(hub, account, self)
-	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
-	if from_panel: panel.close()
+	var from_panel: bool = _leave_panel()
 	creator_panel.back_to = open_panel if from_panel else Callable()   # R168 · VOLTAR volta para COROAS
 	creator_panel.show_creator()
 
@@ -105,8 +104,7 @@ func open_pass():
 		pass_panel = load("res://economy/season_pass_ui.gd").new()
 		hub.add_child(pass_panel)
 		pass_panel.setup(hub, account, self)
-	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
-	if from_panel: panel.close()
+	var from_panel: bool = _leave_panel()
 	pass_panel.back_to = open_panel if from_panel else Callable()   # R168 · VOLTAR volta para COROAS
 	pass_panel.show_pass()
 
@@ -117,8 +115,7 @@ func open_missions():
 		missions_panel = load("res://economy/missions_ui.gd").new()
 		hub.add_child(missions_panel)
 		missions_panel.setup(hub, account, self)
-	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
-	if from_panel: panel.close()
+	var from_panel: bool = _leave_panel()
 	missions_panel.back_to = open_panel if from_panel else Callable()
 	missions_panel.show_missions()
 	request()
@@ -130,8 +127,7 @@ func open_tournament(g := "chess"):
 		tourn_panel = load("res://economy/tournament_ui.gd").new()
 		hub.add_child(tourn_panel)
 		tourn_panel.setup(hub, account, self)
-	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
-	if from_panel: panel.close()
+	var from_panel: bool = _leave_panel()
 	tourn_panel.back_to = open_panel if from_panel else Callable()   # R168 · VOLTAR volta para COROAS
 	tourn_panel.show_tournament(g)
 
@@ -140,8 +136,7 @@ func open_store(tab := "title"):
 		store_panel = load("res://economy/crown_store_ui.gd").new()
 		hub.add_child(store_panel)
 		store_panel.setup(hub, account, self)
-	var from_panel: bool = is_instance_valid(panel) and panel.is_open()
-	if from_panel: panel.close()
+	var from_panel: bool = _leave_panel()
 	store_panel.back_to = open_panel if from_panel else Callable()   # R168 · VOLTAR volta para COROAS
 	store_panel.show_store(tab)
 	request()
@@ -215,7 +210,29 @@ func _refresh_chips():
 			var sb = b.get_theme_stylebox(sn)
 			if sb != null: sb.content_margin_right = 6.0
 
+const CrownsArt := preload("res://economy/crowns_art.gd")
+
+## R168/R198 · veio do painel COROAS (o antigo ou o da arte)? Fecha ele e diz que sim (o VOLTAR da próxima tela volta)
+func _leave_panel() -> bool:
+	if is_instance_valid(art_panel) and art_panel.visible:
+		art_panel.close()
+		return true
+	if is_instance_valid(panel) and panel.is_open():
+		panel.close()
+		return true
+	return false
+var art_panel
+
 func open_panel():
+	# R198 · PC (tela deitada): o painel com a ARTE do dono
+	if CrownsArt.available() and not preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):
+		if not is_instance_valid(art_panel):
+			art_panel = CrownsArt.new()
+			hub.add_child(art_panel)
+			art_panel.setup(hub, self)
+		art_panel.show_crowns()
+		request()
+		return
 	if not is_instance_valid(panel):
 		panel = load("res://economy/crowns_ui.gd").new()
 		hub.add_child(panel)

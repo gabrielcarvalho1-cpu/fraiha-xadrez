@@ -110,6 +110,7 @@ func set_channel(cid: String):
 	_rebuild()
 
 func _style_tab(b: Button, on: bool):
+	if _style_tab_art(b, on): return
 	style_button(b, on)
 
 static func channel_of(m: Dictionary) -> String:
@@ -361,3 +362,161 @@ func _hour(iso: String) -> String:
 	var bias := int(Time.get_time_zone_from_system().get("bias", 0)) * 60
 	var d := Time.get_datetime_dict_from_unix_time(unix + bias)
 	return "%02d:%02d" % [int(d.hour), int(d.minute)]
+
+# ---------- R198 · PC (tela deitada): CHAT GLOBAL com a ARTE do dono (ui_kit/pages/chat_r198, tools/art/chat_r198.py)
+## A moldura, o campo, o balãozinho e o ENVIAR são da arte; as abas são as placas da arte (acesa/apagada, com as
+## flores-de-lis) e o jogo escreve o nome do canal; a lista rola dentro do quadro azul. Tocar fora ou ESC fecha.
+const CH_DIR := "res://ui_kit/pages/chat_r198/"
+const CH_ART := Vector2(1983, 793)
+const CH_TABS := [Rect2(160, 94, 544, 96), Rect2(712, 94, 556, 96), Rect2(1274, 94, 556, 96)]
+const CH_INFO := Rect2(196, 196, 1600, 44)
+const CH_LIST := Rect2(132, 270, 1720, 326)
+const CH_INPUT := Rect2(222, 630, 1370, 62)
+const CH_SEND := Rect2(1634, 618, 236, 86)
+var _art_root: Control
+var _art_bg: TextureRect
+var _art_moved: Array = []    # [nó, índice original no body]
+
+func _art_on() -> bool:
+	return not portrait() and ResourceLoader.exists(CH_DIR + "panel.png")
+
+func _layout():
+	if not _art_on():
+		_art_off()
+		super._layout()
+		return
+	_art_setup()
+	var vs := get_viewport().get_visible_rect().size
+	var k := minf(minf((vs.x - 24.0) / CH_ART.x, (vs.y - 24.0) / CH_ART.y) * 0.97, 1.0)
+	var o := ((vs - CH_ART * k) / 2.0).round()
+	var R := func(r: Rect2) -> Rect2: return Rect2(o + r.position * k, r.size * k)
+	_art_bg.position = o
+	_art_bg.size = CH_ART * k
+	_frame_rect = Rect2(o, CH_ART * k)
+	for i in CHANNELS.size():
+		var b: Button = tab_buttons[CHANNELS[i][0]]
+		var r: Rect2 = R.call(CH_TABS[i])
+		b.position = r.position
+		b.size = r.size
+		b.custom_minimum_size = Vector2.ZERO
+		b.add_theme_font_size_override("font_size", int(round([40.0, 27.0, 32.0][i] * k)))
+		_style_tab(b, CHANNELS[i][0] == channel)
+	var ri: Rect2 = R.call(CH_INFO)
+	online_label.position = ri.position
+	online_label.size = ri.size
+	online_label.add_theme_font_size_override("font_size", int(round(26.0 * k)))
+	var rl: Rect2 = R.call(CH_LIST)
+	muted_bar.position = rl.position
+	muted_bar.size.x = rl.size.x
+	var mh: float = muted_bar.get_combined_minimum_size().y + 6.0 if muted_bar.visible else 0.0
+	scroll.position = rl.position + Vector2(0, mh)
+	scroll.size = rl.size - Vector2(0, mh + 40.0 * k)
+	list.custom_minimum_size.x = rl.size.x - 16.0
+	status.position = Vector2(rl.position.x + 8.0 * k, rl.end.y - 40.0 * k)
+	status.size = Vector2(rl.size.x - 16.0 * k, 40.0 * k)
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	status.add_theme_font_size_override("font_size", int(round(26.0 * k)))
+	var rin: Rect2 = R.call(CH_INPUT)
+	var rs: Rect2 = R.call(CH_SEND)
+	input_row.position = Vector2.ZERO
+	input_row.size = vs
+	input.position = rin.position
+	input.size = rin.size
+	input.custom_minimum_size = Vector2.ZERO
+	input.add_theme_font_size_override("font_size", int(round(34.0 * k)))
+	send_button.position = rs.position
+	send_button.size = rs.size
+	send_button.custom_minimum_size = Vector2.ZERO
+	guest_label.position = rin.position + Vector2(10.0 * k, 0)
+	guest_label.size = Vector2(rs.end.x - rin.position.x, rin.size.y)
+	guest_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	guest_label.add_theme_font_size_override("font_size", int(round(28.0 * k)))
+
+func _process(d):
+	if _art_root != null and is_instance_valid(_art_root) and _art_root.visible: return
+	super._process(d)
+
+func _art_setup():
+	if _art_root != null and is_instance_valid(_art_root):
+		_art_root.visible = true
+		for n in [frame, body, title_label, close_button]: n.visible = false
+		return
+	_art_root = Control.new()
+	_art_root.name = "GchatArt"
+	_art_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_art_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_art_root)
+	_art_bg = TextureRect.new()
+	_art_bg.texture = load(CH_DIR + "panel.png")
+	_art_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_art_bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_art_bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	_art_root.add_child(_art_bg)
+	_art_moved.clear()
+	for n in [online_label, muted_bar, scroll, status, guest_label]:
+		_art_moved.append([n, n.get_index()])
+	for c in [tab_row, input_row]: _art_moved.append([c, c.get_index()])
+	for pair in _art_moved:
+		var n: Control = pair[0]
+		n.get_parent().remove_child(n)
+		_art_root.add_child(n)
+	# abas e linha do campo: os filhos ficam soltos (posições na arte)
+	tab_row.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	for b in tab_buttons.values():
+		b.size_flags_horizontal = Control.SIZE_FILL
+		b.reparent(_art_root)
+	input.reparent(_art_root)
+	send_button.reparent(_art_root)
+	var none := StyleBoxEmpty.new()
+	for st in ["normal", "focus", "read_only"]: input.add_theme_stylebox_override(st, none)
+	input.add_theme_font_override("font", preload("res://ui_kit/fonts/Alegreya-Medium.woff"))
+	input.add_theme_color_override("font_placeholder_color", Color("9aa0b8"))
+	var lit := StyleBoxFlat.new()
+	lit.bg_color = Color(1, 0.95, 0.75, 0.12)
+	lit.set_corner_radius_all(10)
+	for st in ["normal", "focus", "disabled"]: send_button.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	for st in ["hover", "pressed"]: send_button.add_theme_stylebox_override(st, lit)
+	send_button.text = ""
+	send_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	online_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	online_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	online_label.add_theme_color_override("font_color", Color("efe3c4"))
+	online_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	online_label.clip_text = true
+	status.add_theme_color_override("font_color", Color("efe3c4"))
+	for n in [frame, body, title_label, close_button]: n.visible = false
+
+func _art_off():
+	if _art_root == null or not is_instance_valid(_art_root) or not _art_root.visible: return
+	_art_root.visible = false
+	# volta tudo para o corpo da moldura antiga (celular em pé)
+	for b in tab_buttons.values():
+		b.reparent(tab_row)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	input.reparent(input_row)
+	send_button.reparent(input_row)
+	send_button.text = "ENVIAR"
+	for pair in _art_moved:
+		var n: Control = pair[0]
+		n.reparent(body)
+	for pair in _art_moved:
+		body.move_child(pair[0], mini(int(pair[1]), body.get_child_count() - 1))
+	for n in [frame, body, title_label, close_button]: n.visible = true
+
+func _style_tab_art(b: Button, on: bool) -> bool:
+	if _art_root == null or not is_instance_valid(_art_root) or not _art_root.visible: return false
+	var st := StyleBoxTexture.new()
+	st.texture = load(CH_DIR + ("tab_on.png" if on else "tab_off.png"))
+	for sn in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]: b.add_theme_stylebox_override(sn, st)
+	b.add_theme_font_override("font", FONT)
+	var col := Color("2a1604") if on else Color("f4ead2")
+	for cn in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(cn, col)
+	b.add_theme_color_override("font_outline_color", Color(1, 0.9, 0.6, 0.3) if on else Color(0, 0, 0, 0.8))
+	b.add_theme_constant_override("outline_size", 2 if on else 4)
+	b.text = String(CHANNELS[_chan_index(b)][1]) + ("  •" if unread.has(String(CHANNELS[_chan_index(b)][0])) else "")
+	return true
+
+func _chan_index(b: Button) -> int:
+	for i in CHANNELS.size():
+		if tab_buttons[CHANNELS[i][0]] == b: return i
+	return 0

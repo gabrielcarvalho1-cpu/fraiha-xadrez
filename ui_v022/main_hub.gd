@@ -167,6 +167,7 @@ var sound_button: Button
 var trophy_button: Button        # R96 · RANKING
 var gchat_button: Button         # R96 · CHAT GLOBAL
 var leaderboard_ui
+var ranking_art     # R198
 var legal_ui                      # R97 · TERMOS E PRIVACIDADE / EXCLUIR CONTA
 var global_chat_ui
 var volume_label: Label
@@ -3501,6 +3502,14 @@ func make_news_ticker(font_px: int, top_col: Color, bottom_col: Color) -> Button
     return t
 
 func open_leaderboard():
+    # R198 · PC (tela deitada): o RANKING com a ARTE do dono
+    if preload("res://ui_v022/ranking_art.gd").available() and not preload("res://ui_v022/mobile_layout.gd").active(get_viewport()):
+        if not is_instance_valid(ranking_art):
+            ranking_art = preload("res://ui_v022/ranking_art.gd").new()
+            add_child(ranking_art)
+            ranking_art.setup(self, account)
+        ranking_art.show_ranking()
+        return
     if not is_instance_valid(leaderboard_ui):
         leaderboard_ui = load("res://ui_v022/leaderboard_ui.gd").new()
         add_child(leaderboard_ui)
@@ -3528,6 +3537,14 @@ func ask(title: String, text: String, yes_text: String, no_text: String, action:
 
 func open_community():
     # R176.2 · COMUNIDADE reúne o Discord e o Instagram (o Instagram saiu da tela do jogo)
+    # R198 · a ARTE do dono (textos e botões na imagem): DISCORD · INSTAGRAM · AGORA NÃO
+    if ResourceLoader.exists("res://ui_kit/art/community_dialog.png"):
+        if get_tree().root.get_node_or_null("CommunityDialog") != null: return
+        preload("res://ui_kit/art_dialog.gd").open(self, "res://ui_kit/art/community_dialog.png", [
+            [Rect2(23, 365, 440, 127), CommunityLink.open],
+            [Rect2(473, 365, 458, 127), InstagramLink.open],
+            [Rect2(945, 365, 447, 127), null]], "CommunityDialog")
+        return
     if not is_instance_valid(notice_modal):
         notice_modal = load("res://ui_v022/notice_modal.gd").new()
         add_child(notice_modal)

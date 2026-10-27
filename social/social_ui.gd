@@ -64,6 +64,23 @@ var dm_scroll: ScrollContainer
 var dm_list: VBoxContainer
 var dm_input: LineEdit
 var dm_to_end := true
+## R198 · AMIGOS em ABAS lado a lado (ONLINE · EM PARTIDA · OFFLINE): só a lista da aba rola, dentro do painel;
+## busca, CONVIDAR e as abas ficam parados em cima (referência do dono).
+var friends_tab := "online"
+var list_scroll: ScrollContainer
+var list_box: VBoxContainer
+func _tgt() -> Node:
+    return list_box if (screen == "list" and is_instance_valid(list_box)) else box
+func _fill_scroll() -> ScrollContainer:
+    if screen == "dm" and is_instance_valid(dm_scroll): return dm_scroll
+    if screen == "list" and is_instance_valid(list_scroll): return list_scroll
+    return null
+func _restore_list_scroll(v: int):
+    await get_tree().process_frame
+    if is_instance_valid(list_scroll): list_scroll.scroll_vertical = v
+func set_tab(tab: String):
+    friends_tab = tab
+    if is_open() and screen == "list": _show("list")
 # Convites (Casual entre amigos): escolha do tempo; o cartão do convite fica em invite_ui.gd
 const INVITE_MODES = [["casual_3min", "RELÂMPAGO", 3], ["casual_5min", "RÁPIDA", 5], ["casual_10min", "NORMAL", 10], ["casual_20min", "CONVENCIONAL", 20]]
 var invite_peer: Dictionary = {}
@@ -468,6 +485,12 @@ func _clear():
         box.remove_child(child)
         child.queue_free()
     search_input = null
+    if is_instance_valid(_art_chrome):
+        _art_chrome.get_parent().remove_child(_art_chrome)
+        _art_chrome.queue_free()
+    _art_chrome = null
+    list_scroll = null
+    list_box = null
     dm_scroll = null
     dm_list = null
     dm_input = null
@@ -634,11 +657,11 @@ func _section(title: String, count: int):
         var sp := PanelContainer.new()
         sp.add_theme_stylebox_override("panel", Kit.box("fr_caixa_secao", WIDE_K, Vector2(14, 6)))
         sp.custom_minimum_size.y = 36
-        box.add_child(sp)
+        _tgt().add_child(sp)
         sp.add_child(h)
         h.add_child(Kit.icon(SECTION_ICON_WIDE.get(title, "fr_ico_offline"), 22))
     else:
-        box.add_child(h)
+        _tgt().add_child(h)
         if SECTION_ICON.has(title): h.add_child(Kit.icon(SECTION_ICON[title], 18))
     var l = Label.new()
     l.text = "%s (%d)" % [title, count]
@@ -659,7 +682,7 @@ func _empty(text: String):
     var c = PanelContainer.new()
     c.add_theme_stylebox_override("panel", Kit.box("fr_caixa_vazia", WIDE_K, Vector2(22, 8)) if _wide() else Kit.box("caixa_vazia", ART_K, Vector2(16, 10)))
     c.custom_minimum_size.y = 48 if _wide() else 42
-    box.add_child(c)
+    _tgt().add_child(c)
     var l = Label.new()
     l.text = text
     l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -674,7 +697,7 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
     var wide := _wide()
     holder.add_theme_stylebox_override("panel", Kit.box("fr_caixa_linha", WIDE_K, Vector2(14, 6)) if wide else Kit.box("caixa_linha", ART_K, Vector2(10, 7)))
     if wide: holder.custom_minimum_size.y = 70
-    box.add_child(holder)
+    _tgt().add_child(holder)
     var narrow := _narrow()
     var outer = VBoxContainer.new()
     outer.add_theme_constant_override("separation", 6)
@@ -765,11 +788,331 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
             b.add_theme_font_size_override("font_size", 17)
     return row
 
+# ---------- R198 · AMIGOS no PC com a ARTE do dono (peças recortadas da referência; o jogo só escreve o que muda)
+const AM := "res://ui_kit/pages/amigos_r198/"
+const AM_LIST := Rect2(112, 436, 1224, 530)       # anel dourado da lista (px da arte 1448x1086)
+const AM_LIST_IN := Rect2(132, 456, 1184, 490)    # onde a lista rola
+const AM_SEARCH := Rect2(180, 236, 600, 58)
+const AM_BUSCAR := Rect2(805, 225, 155, 73)
+const AM_INVITE := Rect2(975, 215, 375, 92)
+const AM_TABS := [Rect2(120, 325, 417, 97), Rect2(538, 325, 402, 97), Rect2(941, 325, 392, 97)]
+const AM_ROW_H := 148.0
+var _content_rect := WIDE_CONTENT
+var _art_list := false
+var _art_chrome: Control
+
+func _am_tex(n: String) -> Texture2D:
+    return load(AM + n)
+
+func _am_box(n: String, _m: float) -> StyleBoxTexture:
+    # a peça é esticada inteira (mesma proporção da arte): cantos do jeito da referência
+    var st := StyleBoxTexture.new()
+    st.texture = _am_tex(n)
+    return st
+
+func _art_ok() -> bool:
+    return ResourceLoader.exists(AM + "frame.png")
+
+func _build_art_chrome(groups: Dictionary):
+    var L := 1.0 / WIDE_LS
+    _art_chrome = Control.new()
+    _art_chrome.name = "AmigosArtChrome"
+    _art_chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _art_chrome.size = WIDE_REF * L
+    chrome.add_child(_art_chrome)
+    var ring := TextureRect.new()
+    ring.name = "AmigosListRing"
+    ring.texture = _am_tex("list_ring.png")
+    ring.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    ring.position = AM_LIST.position * L
+    ring.size = AM_LIST.size * L
+    ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    ring.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+    _art_chrome.add_child(ring)
+    # busca: campo transparente por cima do campo da arte
+    search_input = LineEdit.new()
+    preload("res://ui_v022/web_text_field.gd").attach(search_input)
+    search_input.name = "FriendSearch"
+    search_input.placeholder_text = "Buscar jogador pelo nickname"
+    search_input.max_length = 16
+    search_input.text = ""
+    search_input.position = AM_SEARCH.position * L
+    search_input.size = AM_SEARCH.size * L
+    search_input.add_theme_font_override("font", Kit.SERIF)
+    search_input.add_theme_font_size_override("font_size", 19)
+    search_input.add_theme_color_override("font_placeholder_color", Color("9a96c4"))
+    search_input.add_theme_color_override("font_color", Color("f1e6c8"))
+    for st_name in ["normal", "focus", "read_only"]: search_input.add_theme_stylebox_override(st_name, StyleBoxEmpty.new())
+    search_input.text_submitted.connect(func(t): search(t))
+    _art_chrome.add_child(search_input)
+    var input_ref = search_input
+    _art_hot(AM_BUSCAR, "AmigosBuscar", func(): search(input_ref.text))
+    _art_hot(AM_INVITE, "OpenReferral", open_ref)
+    # abas (placas da arte; a escolhida acesa)
+    var defs := [["online", "ONLINE", "fr_ico_online"], ["in_match", "EM PARTIDA", "fr_ico_partida"], ["offline", "OFFLINE", "fr_ico_offline"]]
+    for i in 3:
+        var d: Array = defs[i]
+        var id: String = d[0]
+        var on := id == friends_tab
+        var b := Button.new()
+        b.name = "FriendsTab_" + id
+        b.focus_mode = Control.FOCUS_NONE
+        b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        b.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+        var st := _am_box("tab_on.png" if on else "tab_off.png", 36)
+        var hv: StyleBoxTexture = st.duplicate()
+        hv.modulate_color = Color(1.12, 1.1, 1.06)
+        b.add_theme_stylebox_override("normal", st)
+        b.add_theme_stylebox_override("hover", hv)
+        b.add_theme_stylebox_override("pressed", hv)
+        b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+        var r: Rect2 = AM_TABS[i]
+        b.position = r.position * L
+        b.size = r.size * L
+        b.pressed.connect(func(): set_tab(id))
+        _art_chrome.add_child(b)
+        var h := HBoxContainer.new()
+        h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        h.alignment = BoxContainer.ALIGNMENT_CENTER
+        h.add_theme_constant_override("separation", 12)
+        h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        b.add_child(h)
+        var ic := Kit.icon(d[2], 30)
+        ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+        ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        h.add_child(ic)
+        var l := _art_label(h, "%s (%d)" % [d[1], groups[id].size()], 18, Color("f6dda0"))
+        l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+func _art_hot(r: Rect2, nm: String, cb: Callable) -> Button:
+    var L := 1.0 / WIDE_LS
+    var b := Button.new()
+    b.name = nm
+    b.flat = true
+    b.focus_mode = Control.FOCUS_NONE
+    b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    var lit := StyleBoxFlat.new()
+    lit.bg_color = Color(1.0, 0.9, 0.6, 0.10)
+    lit.set_corner_radius_all(6)
+    for st in ["normal", "focus", "disabled"]: b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+    for st in ["hover", "pressed"]: b.add_theme_stylebox_override(st, lit)
+    b.position = r.position * L
+    b.size = r.size * L
+    b.pressed.connect(cb)
+    _art_chrome.add_child(b)
+    return b
+
+func _art_label(parent: Node, text: String, px: int, col: Color, font: Font = null) -> Label:
+    var l := Label.new()
+    l.text = text
+    l.add_theme_font_override("font", font if font != null else Kit.FONT_BOLD)
+    l.add_theme_font_size_override("font_size", px)
+    l.add_theme_color_override("font_color", col)
+    l.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.05, 0.9))
+    l.add_theme_constant_override("outline_size", 4)
+    l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
+    l.add_theme_constant_override("shadow_offset_y", 2)
+    l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(l)
+    return l
+
+## linha de amigo na placa da arte: retrato com a moldura dourada, nome, status e botões azuis da arte
+func _art_row(p: Dictionary, status_text: String, status_color: Color, actions: Array) -> Control:
+    var L := 1.0 / WIDE_LS
+    var w := AM_LIST_IN.size.x * L - 14.0
+    var h := AM_ROW_H * L
+    var row := Control.new()
+    row.name = "FriendRow"
+    row.custom_minimum_size = Vector2(w, h)
+    row.set_meta("user_id", String(p.get("user_id", "")))
+    _tgt().add_child(row)
+    var plate := TextureRect.new()
+    plate.texture = _am_tex("row.png")
+    plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    plate.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    plate.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+    row.add_child(plate)
+    var fo := Vector2(24, 14) * L
+    var av := TextureRect.new()
+    av.set_meta("square", true)
+    av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    av.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    av.position = fo + Vector2(12, 18) * L
+    av.size = Vector2(86, 94) * L
+    _set_avatar(av, p)
+    row.add_child(av)
+    var fr := TextureRect.new()
+    fr.texture = _am_tex("avatar_frame.png")
+    fr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    fr.position = fo
+    fr.size = Vector2(110, 128) * L
+    fr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    fr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+    row.add_child(fr)
+    var x0 := 152.0 * L
+    var name_btn := Button.new()
+    name_btn.text = String(p.get("nickname", "?"))
+    name_btn.flat = true
+    name_btn.clip_text = true
+    name_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+    name_btn.focus_mode = Control.FOCUS_NONE
+    name_btn.add_theme_font_override("font", Kit.SERIF_BOLD)
+    name_btn.add_theme_font_size_override("font_size", 23)
+    name_btn.add_theme_color_override("font_color", Color("f4edda"))
+    name_btn.add_theme_color_override("font_hover_color", GOLD)
+    name_btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+    name_btn.add_theme_constant_override("outline_size", 3)
+    for state in ["normal", "hover", "pressed", "focus"]: name_btn.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+    name_btn.tooltip_text = "Ver perfil"
+    var uid = String(p.get("user_id", ""))
+    name_btn.pressed.connect(func(): open_profile(uid, screen == "search"))
+    name_btn.position = Vector2(x0, 14.0 * L)
+    name_btn.size = Vector2(w * 0.42, 34)
+    row.add_child(name_btn)
+    if not status_text.is_empty():
+        var sr := HBoxContainer.new()
+        sr.add_theme_constant_override("separation", 6)
+        sr.position = Vector2(x0 + 2, 82.0 * L)
+        sr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        row.add_child(sr)
+        var dot_name := ""
+        if status_color == PRESENCE["online"][1]: dot_name = "fr_ico_online"
+        elif status_color == PRESENCE["in_match"][1]: dot_name = "fr_ico_partida"
+        elif status_color == PRESENCE["offline"][1]: dot_name = "fr_ico_dot_off"
+        if dot_name != "": sr.add_child(Kit.icon(dot_name, 15))
+        var st := Label.new()
+        st.text = status_text
+        st.add_theme_font_override("font", Kit.SERIF)
+        st.add_theme_font_size_override("font_size", 17)
+        st.add_theme_color_override("font_color", status_color if status_color != PRESENCE["offline"][1] else Color("c9c6bd"))
+        st.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        sr.add_child(st)
+    # botões da direita (placa azul da arte), da direita para a esquerda
+    var bw := 310.0 * L * 0.86
+    var bh := 90.0 * L * 0.86
+    var x := w - 24.0 * L
+    for i in range(actions.size() - 1, -1, -1):
+        var a: Array = actions[i]
+        x -= bw
+        var b := Button.new()
+        b.name = "RowAct_" + String(a[0]).split(" ")[0]
+        b.focus_mode = Control.FOCUS_NONE
+        b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        b.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+        var st2 := _am_box("button.png", 26)
+        var hv2: StyleBoxTexture = st2.duplicate()
+        hv2.modulate_color = Color(1.15, 1.12, 1.05)
+        b.add_theme_stylebox_override("normal", st2)
+        b.add_theme_stylebox_override("hover", hv2)
+        b.add_theme_stylebox_override("pressed", hv2)
+        b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+        b.position = Vector2(x, (h - bh) / 2.0)
+        b.size = Vector2(bw, bh)
+        b.pressed.connect(a[1])
+        row.add_child(b)
+        var hb := HBoxContainer.new()
+        hb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        hb.alignment = BoxContainer.ALIGNMENT_CENTER
+        hb.add_theme_constant_override("separation", 10)
+        hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        b.add_child(hb)
+        var icn := String(a[4]) if a.size() > 4 else ""
+        if icn != "" and String(a[0]).length() <= 9:
+            var ii := Kit.icon({"ico_balao": "fr_ico_balao", "ico_espadas": "fr_ico_convidar"}.get(icn, icn), 22)
+            ii.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+            ii.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            hb.add_child(ii)
+        var bl := _art_label(hb, String(a[0]), 15 if String(a[0]).length() > 9 else 16, Color("f6dda0"))
+        bl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        bl.add_theme_constant_override("outline_size", 3)
+        x -= 8.0
+    return row
+
+func _art_section(title: String, count: int):
+    var m := MarginContainer.new()
+    m.add_theme_constant_override("margin_left", 22)
+    m.add_theme_constant_override("margin_top", 6)
+    _tgt().add_child(m)
+    var l := _art_label(m, "%s (%d)" % [title, count], 17, Color("e8b25a"))
+    l.name = "Section_" + title.replace(" ", "_")
+
+func _art_empty(text: String):
+    var l := _art_label(_tgt(), text, 17, Color("c9c6bd"), Kit.SERIF)
+    l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    l.custom_minimum_size.y = 70
+
+func _show_art_list():
+    var wf := StyleBoxTexture.new()
+    wf.texture = _am_tex("frame.png")
+    wf.content_margin_left = AM_LIST_IN.position.x / WIDE_LS
+    wf.content_margin_top = AM_LIST_IN.position.y / WIDE_LS
+    wf.content_margin_right = (WIDE_REF.x - AM_LIST_IN.end.x) / WIDE_LS
+    wf.content_margin_bottom = (WIDE_REF.y - AM_LIST_IN.end.y) / WIDE_LS
+    panel.add_theme_stylebox_override("panel", wf)
+    panel.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+    _content_rect = AM_LIST_IN
+    notice = _label(box, "", 14, ERROR, true)
+    notice.name = "FriendsNotice"
+    notice.hide()
+    var friends: Array = data["friends"]
+    var groups = {"online": [], "in_match": [], "offline": []}
+    for f in friends: groups.get(String(f.get("presence", "offline")), groups["offline"]).append(f)
+    if not groups.has(friends_tab): friends_tab = "online"
+    _build_art_chrome(groups)
+    if not has_list:
+        _art_empty("Carregando amigos…" if account.has_profile() else "Conectando sua conta ao servidor...")
+    else:
+        if data["received"].size():
+            _art_section("PEDIDOS RECEBIDOS", data["received"].size())
+            for p in data["received"]:
+                var uid = String(p.get("user_id", ""))
+                _art_row(p, "novo pedido", GOLD, [["ACEITAR", func(): _act("accept", uid), true], ["RECUSAR", func(): _act("decline", uid)]])
+        var key: String = friends_tab
+        if groups[key].is_empty():
+            var empty_txt := {"online": "Nenhum amigo online agora.", "in_match": "Nenhum amigo em partida agora.", "offline": "Nenhum amigo offline."}
+            _art_empty(String(empty_txt[key]) if friends.size() else "Você ainda não tem amigos. Busque pelo nickname acima.")
+        for f in groups[key]:
+            var fid = String(f.get("user_id", ""))
+            var unread = int(f.get("unread", 0))
+            var finfo: Dictionary = f
+            var acts := [[("MENSAGEM (%d)" % unread) if unread > 0 else "MENSAGEM", func(): open_dm(fid, finfo, "list"), false, "btn_azul", "ico_balao"]]
+            if key == "online":
+                var peer := _peer(fid, finfo)
+                acts.append(["CONVIDAR", func(): open_invite(fid, peer), true, "btn_verde", "ico_espadas"])
+            _art_row(f, PRESENCE[key][0].capitalize() if key != "in_match" else "Em partida", PRESENCE[key][1], acts)
+        if key == "offline":
+            if data["sent"].size():
+                _art_section("PEDIDOS ENVIADOS", data["sent"].size())
+                for p in data["sent"]:
+                    var uid = String(p.get("user_id", ""))
+                    _art_row(p, "aguardando resposta", DIM_TEXT, [["CANCELAR", func(): _act("cancel", uid)]])
+            if data["blocked"].size():
+                _art_section("BLOQUEADOS", data["blocked"].size())
+                for p in data["blocked"]:
+                    var uid = String(p.get("user_id", ""))
+                    _art_row(p, "bloqueado", DIM_TEXT, [["DESBLOQUEAR", func(): _act("unblock", uid)]])
+    if reconnecting and is_instance_valid(notice) and not notice.visible: notice_text("Reconectando…", GOLD)
+    dim.show(); panel.show()
+    chrome.visible = true
+    _layout()
+    _layout.call_deferred()
+
 func _show(which: String):
+    # R198 · a lista se refaz a cada 20 s: mantém a rolagem da aba
+    var keep_scroll := -1
+    if which == "list" and screen == "list" and is_instance_valid(list_scroll): keep_scroll = list_scroll.scroll_vertical
     screen = which
     _clear()
+    if keep_scroll > 0: _restore_list_scroll.call_deferred(keep_scroll)
     var narrow = _narrow()
     _wide_now = _wide()
+    _art_list = _wide_now and which == "list" and _art_ok()
+    _content_rect = WIDE_CONTENT
+    if _art_list:
+        _show_art_list()
+        return
     if _wide_now:
         # R52b · arte inteira da referência nova; VOLTAR e placa AMIGOS são da arte (VOLTAR clicável no chrome)
         var wf := StyleBoxTexture.new()
@@ -877,44 +1220,169 @@ func _build_list(_narrow_layout: bool):
     if not has_list:
         _label(box, "Carregando amigos…" if account.has_profile() else "Conectando sua conta ao servidor...", 15, GOLD, true)
         return
-    # R105 · convite por link (WhatsApp) com recompensa
-    var inv := _button(box, "CONVIDAR AMIGOS · GANHE 7 DIAS DE CLUB" if not _narrow_layout else "CONVIDAR · +7 DIAS DE CLUB", open_ref, true, false, "btn_verde", "ico_espadas")
-    inv.clip_text = true
-    inv.name = "OpenReferral"
-    inv.custom_minimum_size.y = 50
+    var wide := _wide_now
+    # R105 · convite por link (WhatsApp) com recompensa · R198: no PC fica na linha da busca (placa verde de 2 linhas)
+    if wide and is_instance_valid(search_input) and search_input.get_parent() != null:
+        var inv2 := _invite_plate()
+        search_input.get_parent().add_child(inv2)
+        for c in search_input.get_parent().get_children():   # BUSCAR mais estreito para caber a placa
+            if c is Button and c != inv2: c.custom_minimum_size.x = 118
+    else:
+        var inv := _button(box, "CONVIDAR AMIGOS · GANHE 7 DIAS DE CLUB" if not _narrow_layout else "CONVIDAR · +7 DIAS DE CLUB", open_ref, true, false, "btn_verde", "ico_espadas")
+        inv.clip_text = true
+        inv.name = "OpenReferral"
+        inv.custom_minimum_size.y = 50 if not _narrow_layout else 44
     var friends: Array = data["friends"]
     var groups = {"online": [], "in_match": [], "offline": []}
     for f in friends: groups.get(String(f.get("presence", "offline")), groups["offline"]).append(f)
+    if not groups.has(friends_tab): friends_tab = "online"
+    _tabs(groups, _narrow_layout)
+    # a lista da aba rola sozinha; o resto fica parado
+    list_scroll = ScrollContainer.new()
+    list_scroll.name = "FriendsListScroll"
+    preload("res://ui_v022/touch_scroll.gd").attach(list_scroll)
+    list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    list_scroll.custom_minimum_size.y = 200
+    box.add_child(list_scroll)
+    _style_scrollbar_of(list_scroll)
+    list_box = VBoxContainer.new()
+    list_box.name = "FriendsList"
+    list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    list_box.add_theme_constant_override("separation", 8)
+    list_scroll.add_child(list_box)
     if data["received"].size():
         _section("PEDIDOS RECEBIDOS", data["received"].size())
         for p in data["received"]:
             var uid = String(p.get("user_id", ""))
             _row(p, "novo pedido", GOLD, [["ACEITAR", func(): _act("accept", uid), true], ["RECUSAR", func(): _act("decline", uid)]])
-    for key in ["online", "in_match", "offline"]:
-        var title = PRESENCE[key][0]
-        _section(title, groups[key].size())
-        if groups[key].is_empty():
-            _empty("Ninguém por aqui." if friends.size() or key != "online" else "Você ainda não tem amigos. Busque pelo nickname acima.")
-        for f in groups[key]:
-            var fid = String(f.get("user_id", ""))
-            var unread = int(f.get("unread", 0))
-            var finfo: Dictionary = f
-            var acts := [[("MENSAGEM (%d)" % unread) if unread > 0 else "MENSAGEM", func(): open_dm(fid, finfo, "list"), false, "btn_azul", "ico_balao"]]
-            # R51 · CONVIDAR direto na lista (como na referência), para amigo online
-            if key == "online":
-                var peer := _peer(fid, finfo)
-                acts.append(["CONVIDAR", func(): open_invite(fid, peer), true, "btn_verde", "ico_espadas"])
-            _row(f, PRESENCE[key][0].capitalize() if key != "in_match" else "Em partida", PRESENCE[key][1], acts)
-    if data["sent"].size():
-        _section("PEDIDOS ENVIADOS", data["sent"].size())
-        for p in data["sent"]:
-            var uid = String(p.get("user_id", ""))
-            _row(p, "aguardando resposta", DIM_TEXT, [["CANCELAR", func(): _act("cancel", uid)]])
-    if data["blocked"].size():
-        _section("BLOQUEADOS", data["blocked"].size())
-        for p in data["blocked"]:
-            var uid = String(p.get("user_id", ""))
-            _row(p, "bloqueado", DIM_TEXT, [["DESBLOQUEAR", func(): _act("unblock", uid)]])
+    var key: String = friends_tab
+    if groups[key].is_empty():
+        var empty_txt := {"online": "Nenhum amigo online agora.", "in_match": "Nenhum amigo em partida agora.", "offline": "Nenhum amigo offline."}
+        _empty(String(empty_txt[key]) if friends.size() else "Você ainda não tem amigos. Busque pelo nickname acima.")
+    for f in groups[key]:
+        var fid = String(f.get("user_id", ""))
+        var unread = int(f.get("unread", 0))
+        var finfo: Dictionary = f
+        var acts := [[("MENSAGEM (%d)" % unread) if unread > 0 else "MENSAGEM", func(): open_dm(fid, finfo, "list"), false, "btn_azul", "ico_balao"]]
+        # R51 · CONVIDAR direto na lista (como na referência), para amigo online
+        if key == "online":
+            var peer := _peer(fid, finfo)
+            acts.append(["CONVIDAR", func(): open_invite(fid, peer), true, "btn_verde", "ico_espadas"])
+        _row(f, PRESENCE[key][0].capitalize() if key != "in_match" else "Em partida", PRESENCE[key][1], acts)
+    if key == "offline":
+        if data["sent"].size():
+            _section("PEDIDOS ENVIADOS", data["sent"].size())
+            for p in data["sent"]:
+                var uid = String(p.get("user_id", ""))
+                _row(p, "aguardando resposta", DIM_TEXT, [["CANCELAR", func(): _act("cancel", uid)]])
+        if data["blocked"].size():
+            _section("BLOQUEADOS", data["blocked"].size())
+            for p in data["blocked"]:
+                var uid = String(p.get("user_id", ""))
+                _row(p, "bloqueado", DIM_TEXT, [["DESBLOQUEAR", func(): _act("unblock", uid)]])
+
+## R198 · placa verde CONVIDAR AMIGOS / GANHE 7 DIAS DE CLUB (PC, na linha da busca)
+func _invite_plate() -> Button:
+    var b := Button.new()
+    b.name = "OpenReferral"
+    b.focus_mode = Control.FOCUS_NONE
+    b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    b.custom_minimum_size = Vector2(212, 50)
+    var mk := func(bg: Color, bd: Color) -> StyleBoxFlat:
+        var st := StyleBoxFlat.new()
+        st.bg_color = bg
+        st.border_color = bd
+        st.set_border_width_all(2)
+        st.set_corner_radius_all(6)
+        st.shadow_color = Color(0, 0, 0, 0.4)
+        st.shadow_size = 3
+        return st
+    b.add_theme_stylebox_override("normal", mk.call(Color("123a1c"), Color("d9b05a")))
+    b.add_theme_stylebox_override("hover", mk.call(Color("1a4d26"), Color("f3d27e")))
+    b.add_theme_stylebox_override("pressed", mk.call(Color("0d2c15"), Color("f3d27e")))
+    b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+    b.pressed.connect(open_ref)
+    var h := HBoxContainer.new()
+    h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    h.offset_left = 10
+    h.offset_right = -8
+    h.add_theme_constant_override("separation", 8)
+    h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    b.add_child(h)
+    var ic := Kit.icon("fr_ico_convidar", 26)
+    ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    h.add_child(ic)
+    var v := VBoxContainer.new()
+    v.alignment = BoxContainer.ALIGNMENT_CENTER
+    v.add_theme_constant_override("separation", -4)
+    v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    h.add_child(v)
+    for line in [["CONVIDAR AMIGOS", 15, Color("f4edda")], ["GANHE 7 DIAS DE CLUB", 11, Color("f4ce7f")]]:
+        var l := Label.new()
+        l.text = line[0]
+        l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        l.add_theme_font_override("font", Kit.FONT_BOLD)
+        l.add_theme_font_size_override("font_size", line[1])
+        l.add_theme_color_override("font_color", line[2])
+        l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+        l.add_theme_constant_override("outline_size", 3)
+        l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        v.add_child(l)
+    return b
+
+## R198 · as 3 abas lado a lado (a escolhida em azul aceso), com ícone e o número de amigos em cada uma
+func _tabs(groups: Dictionary, narrow: bool):
+    var bar := HBoxContainer.new()
+    bar.name = "FriendsTabs"
+    bar.add_theme_constant_override("separation", 4 if narrow else 6)
+    box.add_child(bar)
+    var defs := [["online", "ONLINE", "fr_ico_online"], ["in_match", "EM PARTIDA" if not narrow else "PARTIDA", "fr_ico_partida"], ["offline", "OFFLINE", "fr_ico_offline"]]
+    for d in defs:
+        var id: String = d[0]
+        var on := id == friends_tab
+        var b := Button.new()
+        b.name = "FriendsTab_" + id
+        b.focus_mode = Control.FOCUS_NONE
+        b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        b.custom_minimum_size.y = 52 if not narrow else 42
+        var st := StyleBoxFlat.new()
+        st.bg_color = Color("1f4fa8") if on else Color("0c1530")
+        st.border_color = Color("f3d27e") if on else Color("b8913f")
+        st.set_border_width_all(3 if on else 2)
+        st.set_corner_radius_all(6)
+        st.shadow_color = Color(0.35, 0.6, 1.0, 0.45) if on else Color(0, 0, 0, 0.35)
+        st.shadow_size = 6 if on else 2
+        var hv: StyleBoxFlat = st.duplicate()
+        hv.bg_color = st.bg_color.lightened(0.08)
+        b.add_theme_stylebox_override("normal", st)
+        b.add_theme_stylebox_override("hover", hv)
+        b.add_theme_stylebox_override("pressed", hv)
+        b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+        b.pressed.connect(func(): set_tab(id))
+        var h := HBoxContainer.new()
+        h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        h.alignment = BoxContainer.ALIGNMENT_CENTER
+        h.add_theme_constant_override("separation", 4 if narrow else 10)
+        h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        b.add_child(h)
+        var ic := Kit.icon(d[2], 18 if narrow else 30)
+        ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+        ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        h.add_child(ic)
+        var l := Label.new()
+        l.text = "%s (%d)" % [d[1], groups[id].size()]
+        l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        l.add_theme_font_override("font", Kit.FONT_BOLD)
+        l.add_theme_font_size_override("font_size", 11 if narrow else 18)
+        l.add_theme_color_override("font_color", Color("fbe7b0") if on else Color("e8cf94"))
+        l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+        l.add_theme_constant_override("outline_size", 3)
+        l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        h.add_child(l)
+        bar.add_child(b)
 
 # ---------- R105 · CONVIDAR AMIGOS (link + recompensa por indicação) ----------
 const InviteLink := preload("res://social/invite_link.gd")
@@ -1217,14 +1685,14 @@ func _layout():
     panel.scale = Vector2.ONE * ui_scale
     var width = minf(PANEL_W, (area.size.x - 16.0) / ui_scale)
     box.custom_minimum_size.x = width - 48.0
-    if screen == "dm" and is_instance_valid(dm_scroll):
+    if _fill_scroll() != null:
         # A conversa ocupa o espaço que sobra na tela (sem passar do painel).
         # R158 · desconta a moldura de verdade (antes 28 px fixos, mas o painel usa ~50): a caixa de mensagem
         # passava da borda de baixo e cortava no celular
         var sb = panel.get_theme_stylebox("panel")
         var pad: float = maxf(50.0, (sb.get_minimum_size().y if sb != null else 0.0) + 6.0)
         var avail = (area.size.y - 16.0) / ui_scale - pad
-        _set_dm_height(avail - _dm_rest() - 6.0)
+        _set_fill_height(avail - _dm_rest() - 6.0)
     var wanted = box.get_combined_minimum_size().y + 28.0
     var pad_x := 48.0
     var sb0 = panel.get_theme_stylebox("panel")
@@ -1246,10 +1714,16 @@ func _dm_rest() -> float:
     var total := 0.0
     var n := 0
     for c in box.get_children():
-        if c == dm_scroll or not (c is Control) or not c.visible: continue
+        if c == _fill_scroll() or not (c is Control) or not c.visible: continue
         total += c.get_combined_minimum_size().y
         n += 1
     return total + float(box.get_theme_constant("separation")) * n
+
+func _set_fill_height(h: float):
+    var sc := _fill_scroll()
+    if sc == null: return
+    var want := floorf(clampf(h, 120.0, 560.0 if sc == dm_scroll else 900.0))
+    if sc.custom_minimum_size.y != want: sc.custom_minimum_size.y = want
 
 func _set_dm_height(h: float):
     var want := floorf(clampf(h, 120.0, 560.0))
@@ -1262,11 +1736,11 @@ func _layout_wide():
     var k := minf(vs.x * 0.92 / WIDE_REF.x, vs.y * 0.92 / WIDE_REF.y)
     var logical := WIDE_REF / WIDE_LS
     var s := k * WIDE_LS
-    var cw := WIDE_CONTENT.size.x / WIDE_LS
-    var ch := WIDE_CONTENT.size.y / WIDE_LS
+    var cw := _content_rect.size.x / WIDE_LS
+    var ch := _content_rect.size.y / WIDE_LS
     box.custom_minimum_size.x = cw - 14.0
-    if screen == "dm" and is_instance_valid(dm_scroll):
-        _set_dm_height(ch - _dm_rest() - 6.0)
+    if _fill_scroll() != null:
+        _set_fill_height(ch - _dm_rest() - 6.0)
     scroll.custom_minimum_size = Vector2(cw, ch)
     panel.custom_minimum_size = Vector2.ZERO
     panel.reset_size()
@@ -1280,7 +1754,10 @@ func _layout_wide():
 
 ## barra de rolagem fina dourada (funcional: arrastar, roda do mouse, clique no trilho)
 func _style_scrollbar():
-    var bar := scroll.get_v_scroll_bar()
+    _style_scrollbar_of(scroll)
+
+func _style_scrollbar_of(sc: ScrollContainer):
+    var bar := sc.get_v_scroll_bar()
     if bar.has_meta("fraiha"): return
     bar.set_meta("fraiha", true)
     var tr := StyleBoxFlat.new()
