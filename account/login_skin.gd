@@ -211,15 +211,19 @@ class SkinLink extends Button:
             var sf: Font = Art.FONT_SEMI
             var sfs := 30
             while sfs > 14 and sf.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs).x > size.x - 12.0: sfs -= 1
-            var sw := sf.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs).x
             var sk: float = maxf(0.05, get_global_transform().get_scale().x)
-            var sb := Vector2((size.x - sw) / 2.0, size.y / 2.0 + sf.get_ascent(sfs) * 0.36) * sk
+            # R196 · o tamanho final em pixels também precisa caber (celular estreito: o mínimo de 9 px fazia
+            # "Criar conta" e "Esqueci minha senha" encostarem um no outro)
+            var ps := maxi(9, int(round(sfs * sk)))
+            while ps > 7 and sf.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, ps).x > (size.x - 12.0) * sk: ps -= 1
+            var swp := sf.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, ps).x
+            var sb := Vector2((size.x * sk - swp) / 2.0, (size.y / 2.0 + sf.get_ascent(sfs) * 0.36) * sk)
             draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE / sk)
             if halo:
                 for w in [14, 9, 5]:
-                    draw_string_outline(sf, sb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, int(round(sfs * sk))), int(round(w * sk)), Color(1.0, 0.82, 0.38, 0.10))
-            draw_string_outline(sf, sb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, int(round(sfs * sk))), 2, Color(0.071, 0.085, 0.113, 0.7))
-            draw_string(sf, sb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, int(round(sfs * sk))), Color("fff0c8") if lit else CREAM)
+                    draw_string_outline(sf, sb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, ps, int(round(w * sk)), Color(1.0, 0.82, 0.38, 0.10))
+            draw_string_outline(sf, sb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, ps, 2, Color(0.071, 0.085, 0.113, 0.7))
+            draw_string(sf, sb, text, HORIZONTAL_ALIGNMENT_LEFT, -1, ps, Color("fff0c8") if lit else CREAM)
             draw_set_transform(Vector2.ZERO)
             if lit: draw_rect(Rect2(Vector2(4, 4), size - Vector2(8, 8)), Color(1.0, 0.9, 0.6, 0.06))
             return

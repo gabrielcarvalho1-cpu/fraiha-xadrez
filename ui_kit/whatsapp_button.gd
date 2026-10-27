@@ -8,6 +8,11 @@ const MESSAGE := "Olá! Vim pelo FRAIHA Xadrez (beta) e quero falar sobre: "
 const F_TITLE := preload("res://account/fonts/Cinzel-Bold.woff")
 const F_INFO := preload("res://ui_kit/fonts/Alegreya-Bold.woff")
 const GOLD := Color8(232, 190, 92)
+## R196 · celular: a ARTE do dono (placa pronta, 1000x270) no lugar do desenho; o PC continua com o desenho
+const ART_PATH := "res://ui_kit/art/whatsapp_plate.png"
+const ART_ASPECT := 1000.0 / 270.0
+var art := false
+var _art_tex: Texture2D
 const CREAM := Color8(246, 236, 207)
 const GREEN := Color8(37, 190, 90)
 
@@ -29,8 +34,19 @@ func _ready():
 	mouse_entered.connect(func(): _hover = true; queue_redraw())
 	mouse_exited.connect(func(): _hover = false; queue_redraw())
 	resized.connect(queue_redraw)
+	button_down.connect(queue_redraw)
+	button_up.connect(queue_redraw)
 
 func _draw():
+	if art:
+		if _art_tex == null:
+			_art_tex = load(ART_PATH)
+			texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		var aw := minf(size.x, size.y * ART_ASPECT)
+		var ar := Rect2((size - Vector2(aw, aw / ART_ASPECT)) / 2.0, Vector2(aw, aw / ART_ASPECT))
+		var lit := is_hovered() or button_pressed or (get_draw_mode() == DRAW_PRESSED)
+		draw_texture_rect(_art_tex, ar, false, Color(1.12, 1.1, 1.05) if lit else Color.WHITE)
+		return
 	var h := size.y
 	var r := Rect2(Vector2.ZERO, size)
 	var rad := int(h * 0.22)

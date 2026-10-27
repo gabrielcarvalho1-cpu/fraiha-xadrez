@@ -514,22 +514,69 @@ func _ask_once(apply_btn: Button):
 ## width > 0 (R53 · painel da referência, mobile_ref_page.gd): largura do miolo do painel; a grade fica em 3
 ## colunas como na arte, em pé e deitado. Mesmos controles e mesmas funções do hub nos dois casos.
 func _profile(content: VBoxContainer, width := 0.0):
+    # R196 · celular: ABAS lado a lado (AVATAR · ÍCONE · MOLDURA · TÍTULO · EMOTE) em vez de uma página enorme rolando
+    # até o fim. Cada aba mostra só a sua coleção; foto, PERSONALIZAR e o nome ficam embaixo de todas.
+    var tabbar := HBoxContainer.new()
+    tabbar.name = "ProfileTabsMobile"
+    tabbar.add_theme_constant_override("separation", 3)
+    content.add_child(tabbar)
+    var secs := {}
+    var tab_btns := {}
+    for pair in [["avatars", "AVATAR"], ["icons", "ÍCONE"], ["frames", "MOLDURA"], ["titles", "TÍTULO"], ["emotes", "EMOTE"]]:
+        var sec := VBoxContainer.new()
+        sec.name = "ProfileSec_" + String(pair[0])
+        sec.add_theme_constant_override("separation", 10)
+        sec.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        content.add_child(sec)
+        secs[pair[0]] = sec
+    var show_tab := func(id: String):
+        for k in secs: secs[k].visible = k == id
+        for k in tab_btns:
+            var tb: Button = tab_btns[k]
+            tb.modulate = Color.WHITE if k == id else Color(0.55, 0.55, 0.6)
+            var on: StyleBoxFlat = tb.get_theme_stylebox("normal")
+            on.bg_color = Color("5a3a12") if k == id else Color("1b2442")
+            on.set_border_width_all(3 if k == id else 2)
+    for pair in [["avatars", "AVATAR"], ["icons", "ÍCONE"], ["frames", "MOLDURA"], ["titles", "TÍTULO"], ["emotes", "EMOTE"]]:
+        var tid: String = pair[0]
+        var b := Button.new()
+        b.name = "ProfileTabMobile_" + tid
+        b.text = pair[1]
+        b.focus_mode = Control.FOCUS_NONE
+        b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        b.custom_minimum_size = Vector2(0, 46)
+        b.clip_text = true
+        b.add_theme_font_override("font", preload("res://ui_kit/kit.gd").SERIF_BOLD)
+        b.add_theme_font_size_override("font_size", 12)
+        for st in ["normal", "hover", "pressed", "focus"]:
+            var sb := StyleBoxFlat.new()
+            sb.bg_color = Color("1b2442") if st != "pressed" else Color("2a3560")
+            sb.border_color = Color("c9a048")
+            sb.set_border_width_all(2)
+            sb.set_corner_radius_all(8)
+            sb.content_margin_left = 0
+            sb.content_margin_right = 0
+            b.add_theme_stylebox_override(st, sb)
+        for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, Color("f4ce7f"))
+        b.pressed.connect(func(): show_tab.call(tid))
+        tabbar.add_child(b)
+        tab_btns[tid] = b
     # GALERIA DE PROGRESSÃO: todos os avatares; bloqueados em cinza com o requisito (mesma do PC).
-    var count = _text(content, "", 16)
+    var count = _text(secs["avatars"], "", 16)
     count.name = "GalleryCountMobile"
     var gallery = load("res://profile/avatar_gallery.gd").new()
     gallery.name = "AvatarGalleryMobile"
     gallery.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    content.add_child(gallery)
+    secs["avatars"].add_child(gallery)
     var cols := 3 if width > 0.0 else (5 if size.x > size.y else 3)
     var cw := floorf(((width + 40.0 if width > 0.0 else size.x) - 40.0 - 10.0 * (cols - 1)) / cols)
     gallery.ref_cards = width > 0.0   # R53 · cartões no visual da referência do celular
     gallery.setup(hub, cols, Vector2(cw, roundf(cw * 296.0 / 222.0)) if width > 0.0 else Vector2(cw, cw + 48.0))
     count.text = "COLEÇÃO DE AVATARES · %d de %d" % [gallery.count_unlocked(), gallery.cards.size()]
-    var detail = _text(content, "", 14)
+    var detail = _text(secs["avatars"], "", 14)
     detail.name = "AvatarDetailMobile"
     # R32: tocar só seleciona; APLICAR AVATAR troca de verdade.
-    var apply_av = _button(content, "APLICAR AVATAR", func(): pass)
+    var apply_av = _button(secs["avatars"], "APLICAR AVATAR", func(): pass)
     apply_av.name = "ApplyAvatarMobile"
     apply_av.disabled = true
     var chosen := {"avatar": "", "badge": ""}
@@ -547,15 +594,15 @@ func _profile(content: VBoxContainer, width := 0.0):
             _set_btn(apply_av, "EM USO")
             detail.text = hub.AvatarCatalog.display_name(String(chosen.avatar)).to_upper() + " · EM USO"))
     # ÍCONE (selo ao lado do nome): separado do avatar.
-    _text(content, "SEU ÍCONE", 16).name = "BadgeTitleMobile"
+    _text(secs["icons"], "SEU ÍCONE", 16).name = "BadgeTitleMobile"
     var badges = load("res://profile/badge_gallery.gd").new()
     badges.name = "BadgeGalleryMobile"
     badges.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    content.add_child(badges)
+    secs["icons"].add_child(badges)
     badges.setup(hub, cols, Vector2(cw, cw + 48.0))
-    var bdetail = _text(content, "", 14)
+    var bdetail = _text(secs["icons"], "", 14)
     bdetail.name = "BadgeDetailMobile"
-    var apply_bd = _button(content, "APLICAR ÍCONE", func(): pass)
+    var apply_bd = _button(secs["icons"], "APLICAR ÍCONE", func(): pass)
     apply_bd.name = "ApplyBadgeMobile"
     apply_bd.disabled = true
     badges.inspected.connect(func(id):
@@ -572,15 +619,15 @@ func _profile(content: VBoxContainer, width := 0.0):
             _set_btn(apply_bd, "EM USO")
             bdetail.text = badges.display_name(String(chosen.badge)).to_upper() + " · EM USO"))
     # R168 · MOLDURA do retrato: galeria própria, como avatares e ícones.
-    _text(content, "SUA MOLDURA", 16).name = "FrameTitleMobile"
+    _text(secs["frames"], "SUA MOLDURA", 16).name = "FrameTitleMobile"
     var frames = load("res://profile/frame_gallery.gd").new()
     frames.name = "FrameGalleryMobile"
     frames.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    content.add_child(frames)
+    secs["frames"].add_child(frames)
     frames.setup(hub, cols, Vector2(cw, cw + 48.0))
-    var fdetail = _text(content, "", 14)
+    var fdetail = _text(secs["frames"], "", 14)
     fdetail.name = "FrameDetailMobile"
-    var apply_fr = _button(content, "APLICAR MOLDURA", func(): pass)
+    var apply_fr = _button(secs["frames"], "APLICAR MOLDURA", func(): pass)
     apply_fr.name = "ApplyFrameMobile"
     apply_fr.disabled = true
     chosen["frame"] = ""
@@ -598,17 +645,17 @@ func _profile(content: VBoxContainer, width := 0.0):
             _set_btn(apply_fr, "EM USO")
             fdetail.text = frames.display_name(String(chosen.frame)).to_upper() + " · EM USO"))
     # R176.9 · TÍTULO embaixo do nome (cor e brilho próprios): mesma galeria do PC
-    _text(content, "SEU TÍTULO", 16).name = "TitleTitleMobile"
+    _text(secs["titles"], "SEU TÍTULO", 16).name = "TitleTitleMobile"
     var titles = load("res://profile/title_gallery.gd").new()
     titles.name = "TitleGalleryMobile"
     titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    content.add_child(titles)
+    secs["titles"].add_child(titles)
     var tcols := 2 if cols <= 3 else 4
     var tcw := floorf(((width + 40.0 if width > 0.0 else size.x) - 40.0 - 10.0 * (tcols - 1)) / tcols)
     titles.setup(hub, tcols, Vector2(tcw, 120.0))
-    var tdetail = _text(content, "Aparece embaixo do seu nome: lobby, perfil, CHAT GLOBAL e para o adversário.", 14)
+    var tdetail = _text(secs["titles"], "Aparece embaixo do seu nome: lobby, perfil, CHAT GLOBAL e para o adversário.", 14)
     tdetail.name = "TitleDetailMobile"
-    var apply_tt = _button(content, "USAR TÍTULO", func(): pass)
+    var apply_tt = _button(secs["titles"], "USAR TÍTULO", func(): pass)
     apply_tt.name = "ApplyTitleMobile"
     apply_tt.disabled = true
     chosen["title"] = "auto"
@@ -632,16 +679,16 @@ func _profile(content: VBoxContainer, width := 0.0):
                 _set_btn(apply_tt, "EM USO")
                 tdetail.text = titles.display_name(tid).to_upper() + " · EM USO"))
     # R176.8 · EMOTES: a coleção do chat da partida (grátis, comprados e os da Loja de Coroas)
-    _text(content, "SEUS EMOTES", 16).name = "EmoteTitleMobile"
+    _text(secs["emotes"], "SEUS EMOTES", 16).name = "EmoteTitleMobile"
     var emotes = load("res://profile/emote_gallery.gd").new()
     emotes.name = "EmoteGalleryMobile"
     emotes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    content.add_child(emotes)
+    secs["emotes"].add_child(emotes)
     emotes.setup(hub, cols, Vector2(cw, cw + 48.0))
-    var edetail = _text(content, "%d de %d emotes liberados · use no chat da partida" % [emotes.count_unlocked(), emotes.cards.size()], 14)
+    var edetail = _text(secs["emotes"], "%d de %d emotes liberados · use no chat da partida" % [emotes.count_unlocked(), emotes.cards.size()], 14)
     edetail.name = "EmoteDetailMobile"
     var em_sel := {"id": ""}
-    var shop_em = _button(content, "VER NA LOJA DE COROAS", func():
+    var shop_em = _button(secs["emotes"], "VER NA LOJA DE COROAS", func():
         if emotes.state_of(String(em_sel.id)) == "pass": hub.crowns_client().open_pass()
         else: hub.crowns_client().open_store("emote"))
     shop_em.name = "EmoteShopMobile"
@@ -655,7 +702,7 @@ func _profile(content: VBoxContainer, width := 0.0):
     # Foto própria (escolher → enquadrar → salvar) e remover.
     var photo_row = HBoxContainer.new()
     photo_row.add_theme_constant_override("separation", 8)
-    content.add_child(photo_row)
+    secs["avatars"].add_child(photo_row)
     var change_photo = _button(photo_row, "ALTERAR FOTO", func(): hub.pick_photo())
     change_photo.name = "ChangePhoto"
     change_photo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -693,6 +740,7 @@ func _profile(content: VBoxContainer, width := 0.0):
             hub.profile_name.text = hub.player_name
             hub._save_preferences()
         )
+    show_tab.call("avatars")
     # R133 · sem as linhas de estatística por ritmo (pedido do dono: desnecessárias no Perfil)
 
 func _ranking(content: VBoxContainer):

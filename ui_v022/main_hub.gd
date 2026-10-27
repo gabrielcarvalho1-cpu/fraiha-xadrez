@@ -3011,14 +3011,14 @@ func _layout_wide(dims: Vector2):
     if wab != null:
         if not _wide_orig.has(wab): _wide_orig[wab] = [wab.position, wab.scale]
         wab.scale = Vector2.ONE * kl
-        wab.position = Vector2(v.position.x + m + (PASS_CARD_PC.size.x - WA_PC.size.x) * 0.5 * kl, top)
-        top += (WA_PC.size.y + 10.0) * kl
+        var solo: bool = canvas.get_node_or_null("AppDownloadButton") == null
+        wab.position = Vector2(v.position.x + m + ((PASS_CARD_PC.size.x - WA_PC.size.x) * 0.5 if solo else 0.0) * kl, top)
     var adb = canvas.get_node_or_null("AppDownloadButton")   # R184 · BAIXAR O APP embaixo do WhatsApp
     if adb != null:
         if not _wide_orig.has(adb): _wide_orig[adb] = [adb.position, adb.scale]
         adb.scale = Vector2.ONE * kl
-        adb.position = Vector2(v.position.x + m + (PASS_CARD_PC.size.x - WA_PC.size.x) * 0.5 * kl, top)
-        top += (44.0 + 10.0) * kl
+        adb.position = Vector2(v.position.x + m + (APP_PC.position.x - WA_PC.position.x) * kl, top)   # R196 · lado a lado
+    if wab != null or adb != null: top += (WA_PC.size.y + 10.0) * kl
     var bottom: float = v.end.y - (100.0 + m * 2.0) * kl
     var k2: float = minf(left_w / lsrc.size.x, (bottom - top) / lsrc.size.y)
     var lsz: Vector2 = lsrc.size * maxf(0.2, k2)
@@ -3418,7 +3418,8 @@ func make_top_button(glyph: String, tip: String, action: Callable, side := 62.0)
 const CommunityLink := preload("res://social/community_link.gd")
 const PassHomeCard := preload("res://economy/pass_home_card.gd")   # R178
 const WhatsAppButton := preload("res://ui_kit/whatsapp_button.gd")   # R180
-const WA_PC := Rect2(30, 188, 314, 50)   # R180 · embaixo do cartão do PASSE
+const WA_PC := Rect2(14, 186, 170, 46)   # R180 · embaixo do cartão do PASSE · R196: arte do dono (1000x270), lado a lado com o BAIXAR O APP
+const APP_PC := Rect2(190, 186, 170, 46)   # R196 · BAIXAR O APP à direita do WhatsApp, mesmo tamanho
 const PASS_CARD_PC := Rect2(14, 94, 346, 85)   # R178e · proporção da arte do botão (2036x502)   # R178 · embaixo da placa CLUB (topo esquerdo)
 func make_community_button(sz: Vector2, frame: Texture2D, font_px: int) -> Button:
     var b: Button = preload("res://ui_v022/hud_button.gd").make("community", "COMUNIDADE")
@@ -4323,17 +4324,22 @@ func _build_reference_chrome():
     sup.position = Vector2(784, 16)
     canvas.add_child(sup)
     # R122 · COMUNIDADE (Discord): canto de baixo à direita, espelhando o cartão ENTRAR / CRIAR CONTA
-    var community := make_community_button(Vector2(262, 64), TOP_FRAME_PC, 22)
+    # R196 · a ARTE do dono (placa COMUNIDADE pronta) no lugar do botão desenhado
+    var community: Button = preload("res://ui_kit/art_plate_button.gd").make("res://ui_kit/art/community_plate.png", "CommunityButton", Vector2(262, 64))
+    community.tooltip_text = CommunityLink.TIP
+    community.pressed.connect(open_community)   # R124 · pergunta antes de abrir o Discord
     community.position = Vector2(1388, 856)
     canvas.add_child(community)
     # R178 · PASSE DA TEMPORADA bem à vista: cartão dourado no topo esquerdo, embaixo do CLUB (toque abre o Passe)
     var pass_card := PassHomeCard.new()
     pass_card.setup(self, "card")
+    pass_card.neon = true   # R196 · neon roxo acendendo e apagando
     pass_card.position = Vector2(PASS_CARD_PC.position)
     pass_card.size = PASS_CARD_PC.size
     canvas.add_child(pass_card)
     # R180 · BETA: WhatsApp do dono embaixo do PASSE (dúvidas e bugs)
     var wa := WhatsAppButton.new()
+    wa.art = true   # R196 · a arte do dono
     wa.position = WA_PC.position
     wa.size = WA_PC.size
     canvas.add_child(wa)
@@ -4342,9 +4348,12 @@ func _build_reference_chrome():
     if AppBtn.should_show():
         var ab: Button = AppBtn.new()
         ab.name = "AppDownloadButton"
-        ab.position = WA_PC.position + Vector2(0, WA_PC.size.y + 6)
-        ab.size = Vector2(WA_PC.size.x, 44)   # um pouco mais baixo: não cobre a faixa FOCO/ESTRATÉGIA
+        ab.art = true   # R196 · a arte do dono, ao lado do WhatsApp e do mesmo tamanho
+        ab.position = APP_PC.position
+        ab.size = APP_PC.size
         canvas.add_child(ab)
+    else:
+        wa.position.x = PASS_CARD_PC.position.x + (PASS_CARD_PC.size.x - WA_PC.size.x) * 0.5   # sozinho: no meio
     # R161 · OUTDOOR: a faixa "ESTRATÉGIA PARA IR MAIS LONGE" vira a frase do Admin e abre NOVIDADES
     var ticker := make_news_ticker(19, Color("010612"), Color("030b1c"))
     ticker.position = Vector2(631, 273)

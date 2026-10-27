@@ -11,7 +11,7 @@ const ART_PATH := "res://ui_v022/assets/home_mobile_v9.png"   # R178d · v8 com 
 const DESIGN := Vector2(854, 1842)
 const NAV_TOP := 1655.0        # topo do recorte da barra (inclui a pedra azul de cima)
 const NAV_FADE := 34.0         # fileiras de cima do recorte que se misturam com a cena
-const MIN_H := 1712.0          # altura mínima da composição (menu inteiro + barra sem encostar na moldura), px da arte · R180c: +56 para o botão do WhatsApp caber entre o menu e a barra
+const MIN_H := 1750.0          # altura mínima da composição (menu inteiro + barra sem encostar na moldura), px da arte · R180c: +56 para o botão do WhatsApp caber entre o menu e a barra
 const GROUND := Rect2(0, 1600, 854, 90)   # chão da cena, estendido quando a tela é mais alta
 const RefText := preload("res://ui_v022/ref_text.gd")
 const GLOW := preload("res://ui_v022/home_button_glow.gdshader")
@@ -39,9 +39,9 @@ const NAV := [
 ]
 const NAV_ART := "res://ui_v022/assets/home_nav5.png"
 const PASS_STRIP := Rect2(146, 1110, 562, 139)   # R178d · botão do PASSE no meio do menu (a arte v9 abriu 44 px ali)
-const WA_STRIP := Rect2(197, 1462, 460, 70)   # R180
-const WA_SIDE_L := Rect2(22, 1462, 398, 70)    # R184c · WhatsApp à esquerda quando tem o BAIXAR O APP
-const WA_SIDE_R := Rect2(434, 1462, 398, 70)   # R184c · BAIXAR O APP à direita
+const WA_STRIP := Rect2(228, 1458, 398, 108)   # R180 · R196: a arte do dono (1000x270), mesmo tamanho das duas
+const WA_SIDE_L := Rect2(22, 1458, 398, 108)    # R184c · WhatsApp à esquerda quando tem o BAIXAR O APP
+const WA_SIDE_R := Rect2(434, 1458, 398, 108)   # R184c · BAIXAR O APP à direita
 const WA_MENU_END := 1446.0   # R180c · fim da moldura do menu (o botão nunca sobe por cima dela)
 const CLUB_RECT := Rect2(25, 45, 355, 73)
 const SOUND_RECT := Rect2(730, 45, 82, 75)
@@ -209,12 +209,14 @@ func _build_top():
     var pass_strip = load("res://economy/pass_home_card.gd").new()
     pass_strip.setup(hub, "card")   # R178d · com espaço: o mesmo cartão do PC
     pass_strip.name = "PassHomeStrip"
+    pass_strip.neon = true   # R196 · neon roxo acendendo e apagando (só no celular)
     pass_strip.position = PASS_STRIP.position
     pass_strip.size = PASS_STRIP.size
     top.add_child(pass_strip)
     # R180 · BETA: WhatsApp do dono embaixo do menu (dúvidas e bugs) — fica acima da barra de baixo até no MIN_H
     wa_button = load("res://ui_kit/whatsapp_button.gd").new()
     var wa = wa_button
+    wa.art = true   # R196 · a arte do dono no lugar do desenho
     wa.position = WA_STRIP.position
     wa.size = WA_STRIP.size
     top.add_child(wa)
@@ -225,6 +227,7 @@ func _build_top():
         wa.position.x = WA_SIDE_L.position.x
         wa.size = WA_SIDE_L.size
         app_button = AppBtn.new()
+        app_button.art = true
         app_button.position = WA_SIDE_R.position
         app_button.size = WA_SIDE_R.size
         top.add_child(app_button)

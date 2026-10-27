@@ -169,6 +169,13 @@ const PLATE := preload("res://economy/art/pass_button_plate.png")
 const FILL := preload("res://economy/art/pass_button_fill.png")
 const ART := Vector2(2036, 502)
 const F_SERIF := preload("res://account/fonts/Cinzel-Bold.woff")
+## R196 · celular: NEON ROXO acendendo e apagando em volta da placa (o mesmo roxo da vez do jogador na Marcha).
+## O brilho é a silhueta da placa desfocada (tools/art/home_buttons_r196.py): 1/4 do tamanho + 40 px de margem.
+const GLOW_PATH := "res://economy/art/pass_button_glow.png"
+const GLOW_Q := 4.0
+const GLOW_PAD := 40.0
+var neon := false
+var _glow: Texture2D
 func _draw():
 	_draw_art()
 
@@ -178,6 +185,13 @@ func _draw_art():
 	var at := func(p: Vector2) -> Vector2: return o + p * k
 	var glow := 0.5 + 0.5 * sin(t * 2.4)
 	var mod := Color(1, 1, 1) if not (is_hovered() or button_pressed) else Color(1.12, 1.1, 1.04)
+	if neon:
+		if _glow == null:
+			_glow = load(GLOW_PATH)
+			texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		var pz := 0.5 + 0.5 * sin(t * 2.2)   # ~2,9 s por ciclo, suave
+		var gs: Vector2 = _glow.get_size() * GLOW_Q * k
+		draw_texture_rect(_glow, Rect2(o - Vector2.ONE * GLOW_PAD * GLOW_Q * k, gs), false, Color(1, 1, 1, 0.18 + 0.72 * pz))
 	draw_texture_rect(PLATE, Rect2(o, ART * k), false, mod)
 	var has := not state.is_empty() and bool(state.get("available", true))
 	# frase de baixo (creme, como na arte)

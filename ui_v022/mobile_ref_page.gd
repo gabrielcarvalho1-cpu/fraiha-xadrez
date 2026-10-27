@@ -353,8 +353,9 @@ func _build_mais():
 	var AppBtn = load("res://ui_kit/app_download_button.gd")
 	if AppBtn.should_show():
 		var ab: Button = AppBtn.new()
+		ab.art = true   # R196 · a arte do dono
 		var bw := _w * 0.86
-		var bh := bw * 0.2
+		var bh: float = bw / float(AppBtn.ART_ASPECT)
 		ab.size = Vector2(bw, bh)
 		ab.position = Vector2((_w - bw) / 2.0, art.size.y + bh * 0.25)
 		panel.add_child(ab)
@@ -728,12 +729,12 @@ func _build_profile():
 	end_back.name = "ProfileBackEnd"
 	end_back.custom_minimum_size.y = 64
 	_fit_inside(content)   # R88 · nada passa da largura do painel (botões e linhas do Ranked saíam para fora)
-	var count: Label = content.get_node_or_null("GalleryCountMobile")
-	var gallery = content.get_node_or_null("AvatarGalleryMobile")
+	var count: Label = content.find_child("GalleryCountMobile", true, false)   # R196 · agora dentro da aba AVATAR
+	var gallery = content.find_child("AvatarGalleryMobile", true, false)
 	if count != null: count.hide()   # o número vai na faixa COLEÇÃO DE AVATARES da arte
 	# textos do Perfil (detalhe, títulos, resumo do Ranked) na fonte serifada clara do painel
-	for l in content.get_children():
-		if l is Label:
+	for l in content.find_children("*", "Label", true, false):   # R196 · inclui os textos dentro das abas
+		if l.get_parent() == content or String(l.get_parent().name).begins_with("ProfileSec_"):
 			l.add_theme_font_override("font", Kit.SERIF)
 			l.add_theme_color_override("font_color", CREAM)
 			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
