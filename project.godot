@@ -12,6 +12,7 @@ config_version=5
 
 config/name="FRAIHA Xadrez V0.30 - En Passant Temas e Perfil"
 config/name.ios="FRAIHA Xadrez"
+config/icon="res://branding/icone_pecas_256.png"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="FRAIHA Xadrez Musicas V026 Teste"
 run/main_scene="res://presentation_v019/stage.tscn"

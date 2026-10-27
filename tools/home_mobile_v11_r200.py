@@ -49,7 +49,6 @@ out = paste(out, *parts["crown"], (212, 930), 64)       # MARCHA REAL na placa g
 out = paste(out, *parts["cards"], (212, 1054), 70)      # XEQUE na placa grande de baixo
 out = paste(out, *parts["globe"], (178, 1293), 40)      # JOGAR ONLINE na placa pequena da esquerda
 out = paste(out, *parts["monitor"], (473, 1293), 38)    # CONTRA O COMPUTADOR na placa pequena da direita
-for y in (896, 1020):                                   # NOVO no canto de cima das placas grandes
-    out[y:y + novo.shape[0], 568:568 + novo.shape[1]] = novo
+# R201 · sem o selo NOVO (o dono não gostou): os dois saem da arte
 Image.fromarray(out).save(os.path.join(ROOT, "ui_v022/assets/home_mobile_v11.png"), optimize=True)
 print("ok")

@@ -427,58 +427,40 @@ func _build_top():
             st.outline_size = 3
             b.add_child(st)
 
-## R200 · CONVITE para os modos novos: uma vez por abertura do jogo, 15 s depois da Home aparecer, um balão
-## dourado em cima da placa da MARCHA REAL (ou do XEQUE) — só para quem nunca abriu aquele modo. Toque = abre o
-## modo; some sozinho em 7 s.
+## R200/R201 · CONVITE para os modos novos: um balão roxo-neon (o mesmo brilho do PASSE) do lado DIREITO da placa
+## da MARCHA REAL e, 15 s depois, da placa do XEQUE — alternando, 2 vezes cada por abertura do jogo — só para
+## quem ainda não abriu aquele modo. Toque = abre o modo; cada balão some sozinho em 7 s.
 var _invite_t := 15.0
-static var _invite_done := false
+var _invite_n := 0
+const INVITE_EVERY := 15.0
+const INVITE_MAX := 4
+const InviteBubble := preload("res://ui_v022/mode_invite_bubble.gd")
 func _tick_invite(d: float):
-    if _invite_done or not is_visible_in_tree(): return
+    if _invite_n >= INVITE_MAX or not is_visible_in_tree(): return
     _invite_t -= d
     if _invite_t > 0.0: return
-    _invite_done = true
+    _invite_t = INVITE_EVERY
+    var order := ["marcha", "xeque"]
     var id := ""
-    if not hub.mode_seen("marcha"): id = "marcha"
-    elif not hub.mode_seen("xeque"): id = "xeque"
+    for k in 2:
+        var c: String = order[(_invite_n + k) % 2]
+        if not hub.mode_seen(c) or "--convite-teste" in OS.get_cmdline_user_args():
+            id = c
+            break
+    _invite_n += 1
     if id.is_empty(): return
     var row: Rect2 = MENU[1][1] if id == "marcha" else MENU[2][1]
-    var b := Button.new()
+    var b = InviteBubble.new()
     b.name = "ModeInviteBubble"
-    b.focus_mode = Control.FOCUS_NONE
-    b.text = "NOVO! Experimente a MARCHA REAL" if id == "marcha" else "NOVO! Experimente o XEQUE"
-    b.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
-    b.add_theme_font_size_override("font_size", 26)
-    for c in ["font_color", "font_hover_color", "font_pressed_color"]: b.add_theme_color_override(c, Color("2a1604"))
-    var st := StyleBoxFlat.new()
-    st.bg_color = Color("f3c85a")
-    st.border_color = Color("fff1b0")
-    st.set_border_width_all(3)
-    st.set_corner_radius_all(18)
-    st.shadow_color = Color(0, 0, 0, 0.5)
-    st.shadow_size = 8
-    st.content_margin_left = 22; st.content_margin_right = 22; st.content_margin_top = 10; st.content_margin_bottom = 10
-    for sn in ["normal", "hover", "pressed", "focus"]: b.add_theme_stylebox_override(sn, st)
+    b.text_line = "JOGUE AGORA!"
     top.add_child(b)
-    b.reset_size()
-    b.position = Vector2(row.get_center().x - b.size.x / 2.0, row.position.y - b.size.y + 6.0)
-    b.pivot_offset = b.size / 2.0
-    b.scale = Vector2(0.6, 0.6)
-    b.modulate.a = 0.0
-    var tw := create_tween()
-    tw.tween_property(b, "modulate:a", 1.0, 0.25)
-    tw.parallel().tween_property(b, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-    var bob := create_tween().set_loops(6)
-    bob.tween_property(b, "position:y", b.position.y - 6.0, 0.55).set_trans(Tween.TRANS_SINE)
-    bob.tween_property(b, "position:y", b.position.y, 0.55).set_trans(Tween.TRANS_SINE)
+    b.size = Vector2(150, 52)
+    b.position = Vector2(row.end.x - b.size.x - 40.0, row.get_center().y - b.size.y / 2.0)   # lado direito, antes da seta
     b.pressed.connect(func():
         b.queue_free()
         if id == "marcha": hub.open_marcha()
         else: hub.open_xeque())
-    get_tree().create_timer(7.0).timeout.connect(func():
-        if is_instance_valid(b):
-            var t2 := b.create_tween()
-            t2.tween_property(b, "modulate:a", 0.0, 0.4)
-            t2.tween_callback(b.queue_free))
+    b.appear(7.0)
 
 func _build_nav():
     for item in NAV:
