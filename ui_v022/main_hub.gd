@@ -2992,15 +2992,29 @@ func _layout_wide(dims: Vector2):
         var src: Rect2 = WIDE_PATCHES[key][0]
         var at: Vector2 = place[key][0]
         var k: float = place[key][1]
+        # R199 · iPhone (sem tela cheia): o botão TELA CHEIA some; os ícones seguintes andam uma casa para a esquerda
+        # e a moldura vazia dele na arte não aparece (antes ficava um quadrado preto)
+        var fs_gone: bool = key == "icons" and is_instance_valid(fullscreen_button) and not fullscreen_button.visible
+        var after_fs := false
         for nm in WIDE_PATCHES[key][1]:
             var n = canvas.get_node_or_null(nm)
             if n == null: continue
             if not _wide_orig.has(n): _wide_orig[n] = [n.position, n.scale]
             n.scale = (_wide_orig[n][1] as Vector2) * k
             n.position = at + ((_wide_orig[n][0] as Vector2) - src.position) * k
+            if fs_gone and after_fs: n.position.x -= 72.0 * k
+            if nm == "FullscreenButton": after_fs = true
         if _wide_patch.has(key):
             _wide_patch[key].position = at
             _wide_patch[key].size = src.size * k
+            if fs_gone:
+                var at2 := AtlasTexture.new()
+                at2.atlas = load("res://ui_v022/assets/home_wide_icons.png")
+                at2.region = Rect2(0, 0, 74, 82)
+                _wide_patch[key].texture = at2
+                _wide_patch[key].size = Vector2(74, 82) * k
+            elif _wide_patch[key].texture is AtlasTexture:
+                _wide_patch[key].texture = load("res://ui_v022/assets/home_wide_icons.png")
     # logo: no meio do espaço livre da coluna da esquerda (entre os ícones e a conta), do tamanho que couber
     var lsrc: Rect2 = WIDE_PATCHES["logo"][0]
     var top: float = v.position.y + m + 90.0 * kl + 84.0 * ki
@@ -3399,6 +3413,7 @@ func refresh_fullscreen_button():
         b.glyph = "exit_fullscreen" if on else "fullscreen"
         b.tooltip_text = "Sair da tela cheia" if on else "Tela cheia"
         b.queue_redraw()
+    if _wide_on and is_instance_valid(canvas): _layout_wide(get_viewport().get_visible_rect().size)   # R199
 
 ## Web: SAIR volta para o site — o subtítulo desenhado na arte ("Até a próxima partida!") é coberto
 ## com o mesmo verde do botão e recebe "Voltar para o site".

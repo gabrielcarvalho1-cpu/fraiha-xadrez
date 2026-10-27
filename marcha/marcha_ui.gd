@@ -1491,13 +1491,15 @@ func _wide_layout():
     var cards := Rect2(rx + (rw - cw) / 2.0, panel.end.y + gap, cw, ch)
     # R91.3 · celular deitado: CHAT (mesa online) no espaço livre embaixo das cartas, sem cobrir o JOGAR CARTA
     # R178i · mais para cima (no iPhone deitado a barra/canto da tela cortava): 40 de folga embaixo
-    var chh: float = clampf(H - cards.end.y - 52.0, 0.0, 84.0)
-    if chh < 54.0:   # pouco espaço: as cartas sobem um pouco para caber o CHAT
-        var need: float = 54.0 - chh
+    var chh: float = clampf(H - cards.end.y - 52.0, 0.0, 110.0)
+    if chh < 80.0:   # pouco espaço: as cartas sobem um pouco para caber o CHAT · R199: CHAT mais alto (80)
+        var need: float = 80.0 - chh
         cards.position.y -= need
         panel.position.y -= need * 0.5
-        chh = 54.0
-    wide_chat = Rect2(cards.end.x - 220.0 - minf(90.0, rw * 0.12), H - 40.0 - chh, 220.0, chh)   # R187 · mais para dentro
+        chh = 80.0
+    # R199 · CHAT maior e CENTRADO embaixo das cartas (antes pequeno e no canto)
+    var cwid: float = clampf(cards.size.x * 0.6, 360.0, 560.0)
+    wide_chat = Rect2(cards.get_center().x - cwid / 2.0, H - 40.0 - chh, cwid, chh)
     # R186 · mão no celular deitado: base = 4 lado a lado na coluna; NA SUA VEZ crescem para cima (sobrepondo um
     # pouco umas às outras, nunca para cima do tabuleiro), até o limite de baixo do painel SUA VEZ
     wide_hand = Rect2(cards.position.x, panel.end.y + 12.0, cards.size.x, cards.end.y - panel.end.y - 12.0)

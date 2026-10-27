@@ -91,6 +91,10 @@ func _rebuild():
 	art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(art)
+	var xs := maxf(44.0, 84.0 * k)   # R199 · X de fechar (celular deitado)
+	var xb := preload("res://ui_kit/close_x.gd").make(close, xs)
+	xb.position = Vector2(minf(holder.position.x + holder.size.x - xs * 0.7, vs.x - xs - 4.0), maxf(4.0, holder.position.y - xs * 0.1))
+	_root.add_child(xb)
 	var keep := _root
 	_root = holder   # os textos vão no painel (coordenadas da arte × k)
 	_fill()

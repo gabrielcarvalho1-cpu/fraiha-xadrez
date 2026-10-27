@@ -731,14 +731,10 @@ func _row(p: Dictionary, status_text: String, status_color: Color, actions: Arra
     slot.add_child(av)
     _frame_square(av, p)
     if status_color == PRESENCE["online"][1]:
-        # bolinha verde de online no canto do retrato (como na referência)
-        var dot = Panel.new()
-        var ds = StyleBoxFlat.new()
-        ds.bg_color = Color("36c25a"); ds.set_corner_radius_all(6)
-        ds.border_color = Color("121825"); ds.set_border_width_all(1)
-        dot.add_theme_stylebox_override("panel", ds)
-        dot.size = Vector2(12, 12)
-        dot.position = av.size - Vector2(10, 10)
+        # R199 · gema verde (mesmo ícone das abas) no canto do retrato, no lugar da bolinha
+        var dot := Kit.icon("fr_ico_online", 16)
+        dot.size = Vector2(16, 16)
+        dot.position = av.size - Vector2(12, 12)
         dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
         av.add_child(dot)
     _seal(row, p, 28)

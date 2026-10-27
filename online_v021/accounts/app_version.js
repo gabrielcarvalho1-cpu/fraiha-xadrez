@@ -9,7 +9,8 @@
 // R184e · 4 = 1.0.3 (voz, foto, telas novas) · R185 · 5 = 1.0.4 (atualiza por pacote, sem baixar o APK)
 const DEFAULTS = { latest: 5, min: 1, name: '1.0.4', url: 'https://jogar.fraihaxadrez.com/app/FRAIHA-Xadrez.apk' };
 // R184 · executável do PC (Windows): FRAIHA_WINDOWS_LATEST_CODE / _MIN_CODE / _LATEST_NAME / _URL
-const WIN_DEFAULTS = { latest: 2, min: 1, name: '1.0.1', url: 'https://jogar.fraihaxadrez.com/app/FRAIHA-Xadrez-PC.exe' };
+// R199 · 5 = PC 1.0.2 (o .exe usa o mesmo APP_CODE do app; o de antes era 2 e passa a ver o aviso de versão nova)
+const WIN_DEFAULTS = { latest: 5, min: 1, name: '1.0.2', url: 'https://jogar.fraihaxadrez.com/app/FRAIHA-Xadrez-PC.exe' };
 
 function info(env = process.env) {
   return { ...plat(env, 'ANDROID', DEFAULTS, 'android'), ...plat(env, 'WINDOWS', WIN_DEFAULTS, 'windows') };

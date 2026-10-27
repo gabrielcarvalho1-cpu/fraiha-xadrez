@@ -376,6 +376,7 @@ const CH_SEND := Rect2(1634, 618, 236, 86)
 var _art_root: Control
 var _art_bg: TextureRect
 var _art_moved: Array = []    # [nó, índice original no body]
+var _art_x: Button
 
 func _art_on() -> bool:
 	return not portrait() and ResourceLoader.exists(CH_DIR + "panel.png")
@@ -392,6 +393,11 @@ func _layout():
 	var R := func(r: Rect2) -> Rect2: return Rect2(o + r.position * k, r.size * k)
 	_art_bg.position = o
 	_art_bg.size = CH_ART * k
+	# R199 · X de fechar no canto de cima à direita (no mínimo 44 px de toque)
+	var xs := maxf(44.0, 84.0 * k)
+	_art_x.size = Vector2(xs, xs)
+	_art_x.position = Vector2(minf(o.x + CH_ART.x * k - xs * 0.75, vs.x - xs - 4.0), maxf(4.0, o.y - xs * 0.15))
+	_art_root.move_child(_art_x, _art_root.get_child_count() - 1)
 	_frame_rect = Rect2(o, CH_ART * k)
 	for i in CHANNELS.size():
 		var b: Button = tab_buttons[CHANNELS[i][0]]
@@ -452,6 +458,8 @@ func _art_setup():
 	_art_bg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_art_bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	_art_root.add_child(_art_bg)
+	_art_x = preload("res://ui_kit/close_x.gd").make(func(): go_back(), 48.0)   # R199 · FECHAR (celular deitado)
+	_art_root.add_child(_art_x)
 	_art_moved.clear()
 	for n in [online_label, muted_bar, scroll, status, guest_label]:
 		_art_moved.append([n, n.get_index()])

@@ -183,6 +183,11 @@ func _rebuild():
 	_list.custom_minimum_size.x = LIST.size.x * k
 	_scroll.add_child(_list)
 	_status = _text(_holder, "", 1088.0, 460.0, 30.0, Color("cfd8e8"), F_SEMI, true, 1600.0)
+	# R199 · X de fechar (no celular deitado não sobra "fora" para tocar)
+	var xs := maxf(44.0, 84.0 * k)
+	var xb := preload("res://ui_kit/close_x.gd").make(close, xs)
+	xb.position = Vector2(minf(_holder.position.x + ART.x * k - xs * 0.7, vs.x - xs - 4.0), maxf(4.0, _holder.position.y - xs * 0.1))
+	_root.add_child(xb)
 	_me = Control.new()
 	_me.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_holder.add_child(_me)

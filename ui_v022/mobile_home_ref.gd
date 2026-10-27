@@ -7,12 +7,12 @@ extends Control
 ## Telas de outra proporção: a arte encaixa pela largura (corte de no máx. ~3% de cada lado em telas mais
 ## estreitas); a barra de baixo fica sempre colada no fim da tela — em telas mais baixas ela cobre parte da
 ## cena (gata/mochila), em telas mais altas o chão da cena se estende até ela.
-const ART_PATH := "res://ui_v022/assets/home_mobile_v9.png"   # R178d · v8 com espaço no meio do menu para o PASSE (tools/home_mobile_v9_r178.py)   # R89 · solta quando a Home some (partidas, páginas)
-const DESIGN := Vector2(854, 1842)
-const NAV_TOP := 1655.0        # topo do recorte da barra (inclui a pedra azul de cima)
+const ART_PATH := "res://ui_v022/assets/home_mobile_v10.png"   # R199 · v9 + o pé da cena que a v9 cortava (tools/home_mobile_v10_r199.py)
+const DESIGN := Vector2(854, 1938)   # R199 · +96 (a cena continua por baixo da barra)
+const NAV_TOP := 1751.0        # topo do recorte da barra (inclui a pedra azul de cima)
 const NAV_FADE := 34.0         # fileiras de cima do recorte que se misturam com a cena
 const MIN_H := 1750.0          # altura mínima da composição (menu inteiro + barra sem encostar na moldura), px da arte · R180c: +56 para o botão do WhatsApp caber entre o menu e a barra
-const GROUND := Rect2(0, 1600, 854, 90)   # chão da cena, estendido quando a tela é mais alta
+const GROUND := Rect2(0, 1700, 854, 51)   # R199 · o fim da cena estendida   # chão da cena, estendido quando a tela é mais alta
 const RefText := preload("res://ui_v022/ref_text.gd")
 const GLOW := preload("res://ui_v022/home_button_glow.gdshader")
 const ThemeCatalog := preload("res://cosmetics/theme_catalog.gd")
@@ -31,11 +31,11 @@ const MENU := [
 ## R178 · 5 abas: o PASSE entra no meio (embaixo do losango azul) — arte refeita em assets/home_nav5.png
 ## (tools/home_nav5_r178.py). Casas de 159 px a partir de x 30.
 const NAV := [
-    ["inicio", Rect2(22, 1690, 167, 130), "INÍCIO", Rect2(30, 1778, 159, 17)],
-    ["amigos", Rect2(189, 1690, 159, 130), "AMIGOS", Rect2(189, 1776, 159, 19)],
-    ["passe", Rect2(348, 1690, 159, 130), "PASSE", Rect2(348, 1776, 159, 19)],
-    ["conta", Rect2(507, 1690, 160, 130), "MINHA CONTA", Rect2(517, 1781, 140, 15)],
-    ["mais", Rect2(667, 1690, 168, 130), "MAIS", Rect2(667, 1779, 159, 16)],
+    ["inicio", Rect2(22, 1786, 167, 130), "INÍCIO", Rect2(30, 1874, 159, 17)],
+    ["amigos", Rect2(189, 1786, 159, 130), "AMIGOS", Rect2(189, 1872, 159, 19)],
+    ["passe", Rect2(348, 1786, 159, 130), "PASSE", Rect2(348, 1872, 159, 19)],
+    ["conta", Rect2(507, 1786, 160, 130), "MINHA CONTA", Rect2(517, 1877, 140, 15)],
+    ["mais", Rect2(667, 1786, 168, 130), "MAIS", Rect2(667, 1875, 159, 16)],
 ]
 const NAV_ART := "res://ui_v022/assets/home_nav5.png"
 const PASS_STRIP := Rect2(146, 1110, 562, 139)   # R178d · botão do PASSE no meio do menu (a arte v9 abriu 44 px ali)
@@ -92,7 +92,7 @@ func setup(owner_hub, owner_mobile):
     clip_contents = false
     backdrop = TextureRect.new()
     backdrop.name = "RefBackdrop"
-    backdrop.texture = _region(Rect2(0, 0, 854, 1655))
+    backdrop.texture = _region(Rect2(0, 0, 854, NAV_TOP))
     backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     backdrop.modulate = Color(0.42, 0.45, 0.42)   # sobras (telas largas): a própria cena, escurecida
@@ -175,8 +175,8 @@ func _build_fx():
         [Vector2(786, 1168), Vector2(18, 26), 26.0],    # tochinha da ponte de baixo
     ]
     fx.lantern_last = false
-    fx.water_rects = [Rect2(690, 380, 164, 1060), Rect2(470, 1380, 210, 275), Rect2(790, 1380, 64, 275)]
-    fx.leaf_rects = [Rect2(0, 0, 854, 250), Rect2(0, 250, 124, 1250), Rect2(720, 250, 134, 520), Rect2(480, 1300, 374, 355)]
+    fx.water_rects = [Rect2(690, 380, 164, 1060), Rect2(470, 1380, 210, 371), Rect2(790, 1380, 64, 371)]
+    fx.leaf_rects = [Rect2(0, 0, 854, 250), Rect2(0, 250, 124, 1250), Rect2(720, 250, 134, 520), Rect2(480, 1300, 374, 451)]
     fx.mists = [[Vector2(785, 530), 70.0], [Vector2(792, 640), 80.0], [Vector2(806, 760), 40.0], [Vector2(830, 1470), 44.0]]
     fx.belly = [Rect2(30, 1495, 190, 110), Vector2(115, 1550), Vector2(60, 32)]
     fx.sky = Rect2(580, 90, 274, 80)
