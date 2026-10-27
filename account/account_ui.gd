@@ -154,6 +154,16 @@ func _mobile() -> bool:
 func _fx_teste_convidado():
     if dim.visible: play_as_guest()
 
+## R197 · antes de entrar como convidado, avisa o que só funciona com conta (microfone, Ranqueada, progresso).
+## CRIAR CONTA abre o cadastro; JOGAR ASSIM MESMO entra; ESC ou tocar fora só fecha o aviso.
+const GUEST_WARN_TITLE := "JOGAR COMO CONVIDADO?"
+const GUEST_WARN_BODY := "Você pode jogar contra o computador e partidas online casuais.\n\nSem conta, NÃO funcionam: microfone, Ranqueada e progresso salvo (Passe e coroas)."
+func ask_guest():
+    var box = preload("res://ui_kit/confirm_box.gd").ask(self, GUEST_WARN_TITLE, GUEST_WARN_BODY, "JOGAR ASSIM MESMO", play_as_guest, "CRIAR CONTA")
+    if box != null:
+        box.name = "GuestWarnBox"
+        box.cancel_button.connect(func(): _show("signup"))
+
 func play_as_guest():
     preload("res://telemetry/web_track.gd").login("guest", "start")
     preload("res://telemetry/web_track.gd").pixel("EntrouConvidado")
@@ -435,9 +445,9 @@ func _show(target: String):
             if not _mobile():   # PC congelado: exatamente o layout original (só o clique do convidado agora conecta ao servidor)
                 _link("Criar conta", func(): _show("signup"), SLOT_LINKS[0])
                 _link("Esqueci minha senha", func(): _show("recover"), SLOT_LINKS[1])
-                _link("Jogar como convidado", play_as_guest, SLOT_LINKS[2]).name = "GuestButton"
+                _link("Jogar como convidado", ask_guest, SLOT_LINKS[2]).name = "GuestButton"
             else:   # R181 · celular: JOGAR COMO CONVIDADO é o botão PRINCIPAL; os outros dois menores, lado a lado
-                var guest = _button("Jogar como convidado", play_as_guest, true, SLOT_GUEST)   # minúsculas = versalete, como o "Entrar" da arte
+                var guest = _button("Jogar como convidado", ask_guest, true, SLOT_GUEST)   # minúsculas = versalete, como o "Entrar" da arte
                 guest.name = "GuestButton"
                 guest.baked = false   # a placa é desenhada (a arte tem só as linhas dos links aqui)
                 guest.glow = true

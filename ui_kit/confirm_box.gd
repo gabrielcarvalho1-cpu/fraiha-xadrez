@@ -6,6 +6,7 @@ const Art := preload("res://monetization/premium_art.gd")
 const Mobile := preload("res://ui_v022/mobile_layout.gd")
 
 signal answered(ok: bool)
+signal cancel_button   # R197 · tocou no botão da esquerda/de baixo (não conta ESC nem tocar fora)
 var _on_ok: Callable
 var _done := false
 
@@ -60,7 +61,9 @@ func _build(title: String, body: String, ok_text: String, cancel_text: String, o
 	var no := Art.Cta.new(cancel_text, "dark", 56 * k, int(19 * k))
 	no.name = "ConfirmBoxNo"
 	no.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	no.pressed.connect(func(): _answer(false))
+	no.pressed.connect(func():
+		if not _done: cancel_button.emit()
+		_answer(false))
 	var yes := Art.Cta.new(ok_text, "gold", 56 * k, int(19 * k))
 	yes.name = "ConfirmBoxYes"
 	yes.size_flags_horizontal = Control.SIZE_EXPAND_FILL

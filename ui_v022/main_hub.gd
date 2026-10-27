@@ -397,6 +397,9 @@ func _build():
     spirit.size = Vector2(112, 112)
     # R44 · tochas, água, passarinhos e o rabinho da gatinha (por baixo do espírito e dos painéis)
     var fx = preload("res://ui_v022/home_fx.gd").new()
+    # R197 · folhas balançando e névoa da cachoeira também no PC
+    fx.leaf_rects = [Rect2(0, 0, 620, 140), Rect2(430, 100, 170, 600), Rect2(1040, 0, 632, 330), Rect2(1080, 560, 592, 381), Rect2(0, 380, 130, 320)]
+    fx.mists = [[Vector2(1410, 520), 60.0], [Vector2(1190, 650), 50.0], [Vector2(1230, 690), 50.0], [Vector2(1350, 590), 30.0]]
     canvas.add_child(fx)
     canvas.add_child(spirit)
     var main = Control.new()

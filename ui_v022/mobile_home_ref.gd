@@ -110,6 +110,7 @@ func setup(owner_hub, owner_mobile):
     art.size = Vector2(854, NAV_TOP)
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     top.add_child(art)
+    _build_fx()
     ground = TextureRect.new()
     ground.name = "RefGround"
     ground.texture = _region(GROUND)
@@ -154,6 +155,34 @@ func _notification(what):
             _art = null
         elif (_atlases[0] as AtlasTexture).atlas == null:
             for t in _atlases: (t as AtlasTexture).atlas = _art_tex()
+
+## R197 · VIDA na Home do celular em pé (a mesma animação da Home do PC, home_fx.gd, com as posições desta arte):
+## tochas mais vivas e suaves com fagulhas, água correndo com reflexos e névoa, folhas balançando com o vento,
+## a gatinha respirando, passarinhos voando e cantando bem baixinho. Tudo por cima da arte e por baixo dos botões.
+var fx: Control
+func _build_fx():
+    fx = preload("res://ui_v022/home_fx.gd").new()
+    fx.name = "HomeFxMobile"
+    fx.auto_build = false
+    fx.forest_path = ART_PATH
+    fx.art_size = Vector2(854, NAV_TOP)
+    fx.torches = [
+        [Vector2(98, 1190), Vector2(36, 62), 58.0],     # pilar esquerdo do menu
+        [Vector2(752, 1192), Vector2(36, 62), 58.0],    # pilar direito do menu
+        [Vector2(740, 408), Vector2(16, 24), 24.0],     # tochas da ponte (lá no fundo)
+        [Vector2(795, 400), Vector2(16, 24), 24.0],
+        [Vector2(822, 388), Vector2(14, 22), 22.0],
+        [Vector2(786, 1168), Vector2(18, 26), 26.0],    # tochinha da ponte de baixo
+    ]
+    fx.lantern_last = false
+    fx.water_rects = [Rect2(690, 380, 164, 1060), Rect2(470, 1380, 210, 275), Rect2(790, 1380, 64, 275)]
+    fx.leaf_rects = [Rect2(0, 0, 854, 250), Rect2(0, 250, 124, 1250), Rect2(720, 250, 134, 520), Rect2(480, 1300, 374, 355)]
+    fx.mists = [[Vector2(785, 530), 70.0], [Vector2(792, 640), 80.0], [Vector2(806, 760), 40.0], [Vector2(830, 1470), 44.0]]
+    fx.belly = [Rect2(30, 1495, 190, 110), Vector2(115, 1550), Vector2(60, 32)]
+    fx.sky = Rect2(580, 90, 274, 80)
+    fx.noses = []
+    top.add_child(fx)
+    fx.set_awake(true)
 
 func _region(r: Rect2) -> AtlasTexture:
     var t := AtlasTexture.new()
