@@ -4,11 +4,26 @@ extends RefCounted
 ## escuro delas por dentro e um brilho roxo em cima, como o botão JOGAR CARTA. Antes era uma caixa roxa lisa.
 ## Desenhada em 9 partes: os cantos com as volutas ficam na proporção certa em qualquer tamanho de botão.
 
-const PLATE := preload("res://marcha/art/r57/placa_vazia.png")
+## R195 · carregada só na hora de desenhar: no site a arte vem no CONTEÚDO EXTRA (baixado depois da Home); o preload
+## quebrava a compilação deste script (e do chat e da stage) na abertura do jogo, antes do conteúdo chegar.
+const PLATE_PATH := "res://marcha/art/r57/placa_vazia.png"
+static var _plate: Texture2D
+static func plate() -> Texture2D:
+	if _plate == null and ResourceLoader.exists(PLATE_PATH): _plate = load(PLATE_PATH)
+	return _plate
 const SRC := Vector2(240, 108)
 const M := 24.0                      # margem da moldura na arte (cantos com volutas)
 
 static func draw(ci: CanvasItem, r: Rect2, _tone := "marcha", on := true, pressed := false) -> void:
+	var PLATE := plate()
+	if PLATE == null:   # conteúdo extra ainda não chegou: só o veludo roxo com borda dourada
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.2, 0.08, 0.28, 0.92)
+		sb.border_color = Color("c9a048")
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(int(minf(r.size.x, r.size.y) * 0.18))
+		ci.draw_style_box(sb, r)
+		return
 	var k: float = clampf(minf(r.size.x / SRC.x, r.size.y / SRC.y) * 1.25, 0.6, 3.0)
 	var md: float = minf(M * k, minf(r.size.x, r.size.y) * 0.32)
 	var mod := Color.WHITE if on else Color(0.62, 0.6, 0.62)
