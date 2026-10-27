@@ -7,7 +7,7 @@ extends Control
 ## Telas de outra proporção: a arte encaixa pela largura (corte de no máx. ~3% de cada lado em telas mais
 ## estreitas); a barra de baixo fica sempre colada no fim da tela — em telas mais baixas ela cobre parte da
 ## cena (gata/mochila), em telas mais altas o chão da cena se estende até ela.
-const ART_PATH := "res://ui_v022/assets/home_mobile_v10.png"   # R199 · v9 + o pé da cena que a v9 cortava (tools/home_mobile_v10_r199.py)
+const ART_PATH := "res://ui_v022/assets/home_mobile_v11.png"   # R200 · Marcha/Xeque nas placas grandes   # R199 · v9 + o pé da cena que a v9 cortava (tools/home_mobile_v10_r199.py)
 const DESIGN := Vector2(854, 1938)   # R199 · +96 (a cena continua por baixo da barra)
 const NAV_TOP := 1751.0        # topo do recorte da barra (inclui a pedra azul de cima)
 const NAV_FADE := 34.0         # fileiras de cima do recorte que se misturam com a cena
@@ -20,10 +20,12 @@ const ThemeCatalog := preload("res://cosmetics/theme_catalog.gd")
 ## [título do botão da Home, retângulo do botão na arte, título (x, topo, largura, maiúsculas), fonte, subtítulo, (x, topo, largura)]
 const MENU := [
     ["JOGAR RANQUEADO", Rect2(140, 738, 575, 120), "JOGAR RANQUEADO", Rect2(279, 765, 346, 29), "default", "Compita e conquiste seu lugar", Rect2(281, 805, 341, 0)],
-    ["JOGAR ONLINE", Rect2(142, 877, 573, 108), "JOGAR ONLINE", Rect2(280, 902, 241, 25), "default", "Partida casual · fila automática", Rect2(282, 939, 325, 0)],
-    ["JOGAR CONTRA O COMPUTADOR", Rect2(140, 1002, 575, 105), "CONTRA O COMPUTADOR", Rect2(283, 1025, 354, 24), "default", "Treine e evolua seu jogo", Rect2(282, 1059, 268, 0)],
-    ["MARCHA REAL", Rect2(138, 1256, 282, 75), "MARCHA REAL", Rect2(217, 1284, 112, 17), "squeeze", "", Rect2()],
-    ["XEQUE", Rect2(433, 1256, 282, 75), "XEQUE", Rect2(542, 1284, 60, 17), "squeeze", "", Rect2()],
+    # R200 · MARCHA REAL e XEQUE nas placas grandes (estavam apagados nas pequenas); ONLINE e COMPUTADOR descem
+    # para as pequenas com a observação "Xadrez" (arte v11: ícones trocados, tools/home_mobile_v11_r200.py)
+    ["MARCHA REAL", Rect2(142, 877, 573, 108), "MARCHA REAL", Rect2(280, 902, 260, 25), "default", "Corrida com cartas · até 4 jogadores", Rect2(282, 939, 330, 17)],
+    ["XEQUE", Rect2(140, 1002, 575, 105), "XEQUE", Rect2(283, 1025, 200, 24), "default", "Jogo de cartas e blefe", Rect2(282, 1059, 300, 17)],
+    ["JOGAR ONLINE", Rect2(138, 1256, 282, 75), "JOGAR ONLINE", Rect2(214, 1268, 170, 16), "squeeze", "Xadrez", Rect2(216, 1294, 160, 13)],
+    ["JOGAR CONTRA O COMPUTADOR", Rect2(433, 1256, 282, 75), "CONTRA O PC", Rect2(510, 1268, 150, 16), "squeeze", "Xadrez", Rect2(512, 1294, 160, 13)],
     ["LIGAS E RANKING", Rect2(138, 1346, 282, 75), "LIGAS E RANKING", Rect2(229, 1372, 161, 19), "squeeze", "", Rect2()],
     ["HISTÓRICO DE PARTIDAS", Rect2(433, 1346, 282, 75), "HISTÓRICO", Rect2(544, 1372, 109, 19), "squeeze", "", Rect2()],
 ]
@@ -420,10 +422,63 @@ func _build_top():
         b.add_child(t)
         if not String(row[5]).is_empty():
             var sr: Rect2 = row[6]
-            var st = RefText.make(row[5], Rect2(sr.position - o, Vector2(sr.size.x, 0)), "default", Color("f6f2e8"))
+            var st = RefText.make(row[5], Rect2(sr.position - o, sr.size), "default", Color("f6f2e8"))   # R200 · altura limita a letra
             st.name = "RefSubtitle"
             st.outline_size = 3
             b.add_child(st)
+
+## R200 · CONVITE para os modos novos: uma vez por abertura do jogo, 15 s depois da Home aparecer, um balão
+## dourado em cima da placa da MARCHA REAL (ou do XEQUE) — só para quem nunca abriu aquele modo. Toque = abre o
+## modo; some sozinho em 7 s.
+var _invite_t := 15.0
+static var _invite_done := false
+func _tick_invite(d: float):
+    if _invite_done or not is_visible_in_tree(): return
+    _invite_t -= d
+    if _invite_t > 0.0: return
+    _invite_done = true
+    var id := ""
+    if not hub.mode_seen("marcha"): id = "marcha"
+    elif not hub.mode_seen("xeque"): id = "xeque"
+    if id.is_empty(): return
+    var row: Rect2 = MENU[1][1] if id == "marcha" else MENU[2][1]
+    var b := Button.new()
+    b.name = "ModeInviteBubble"
+    b.focus_mode = Control.FOCUS_NONE
+    b.text = "NOVO! Experimente a MARCHA REAL" if id == "marcha" else "NOVO! Experimente o XEQUE"
+    b.add_theme_font_override("font", preload("res://account/fonts/Cinzel-Bold.woff"))
+    b.add_theme_font_size_override("font_size", 26)
+    for c in ["font_color", "font_hover_color", "font_pressed_color"]: b.add_theme_color_override(c, Color("2a1604"))
+    var st := StyleBoxFlat.new()
+    st.bg_color = Color("f3c85a")
+    st.border_color = Color("fff1b0")
+    st.set_border_width_all(3)
+    st.set_corner_radius_all(18)
+    st.shadow_color = Color(0, 0, 0, 0.5)
+    st.shadow_size = 8
+    st.content_margin_left = 22; st.content_margin_right = 22; st.content_margin_top = 10; st.content_margin_bottom = 10
+    for sn in ["normal", "hover", "pressed", "focus"]: b.add_theme_stylebox_override(sn, st)
+    top.add_child(b)
+    b.reset_size()
+    b.position = Vector2(row.get_center().x - b.size.x / 2.0, row.position.y - b.size.y + 6.0)
+    b.pivot_offset = b.size / 2.0
+    b.scale = Vector2(0.6, 0.6)
+    b.modulate.a = 0.0
+    var tw := create_tween()
+    tw.tween_property(b, "modulate:a", 1.0, 0.25)
+    tw.parallel().tween_property(b, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    var bob := create_tween().set_loops(6)
+    bob.tween_property(b, "position:y", b.position.y - 6.0, 0.55).set_trans(Tween.TRANS_SINE)
+    bob.tween_property(b, "position:y", b.position.y, 0.55).set_trans(Tween.TRANS_SINE)
+    b.pressed.connect(func():
+        b.queue_free()
+        if id == "marcha": hub.open_marcha()
+        else: hub.open_xeque())
+    get_tree().create_timer(7.0).timeout.connect(func():
+        if is_instance_valid(b):
+            var t2 := b.create_tween()
+            t2.tween_property(b, "modulate:a", 0.0, 0.4)
+            t2.tween_callback(b.queue_free))
 
 func _build_nav():
     for item in NAV:
@@ -524,6 +579,7 @@ func refresh():
     sound_button.queue_redraw()
 
 func _process(_delta):
+    _tick_invite(_delta)
     # nome/liga podem mudar fora da Home (conta, Ranked): confere barato enquanto aparece
     if is_visible_in_tree() and hub != null:
         var key := "%s|%s|%s|%s|%s|%s" % [hub.player_name, hub.league_profile.data.current_league, hub.league_profile.data.lp, hub.avatar_id, hub.title_pref, hub.frame_pref]

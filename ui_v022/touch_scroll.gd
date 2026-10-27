@@ -44,7 +44,10 @@ func _input(event):
         return
     if event is InputEventScreenTouch:
         if event.pressed:
-            if _index == -1 and _rect().has_point(event.position) and not _covered():
+            # R199 · rolagem desligada nas duas direções (ex.: painel de AMIGOS, onde só a lista de dentro rola):
+            # não pega o dedo — antes ele "segurava" o toque e a lista de dentro não rolava
+            var off := scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED and scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED
+            if _index == -1 and not off and _rect().has_point(event.position) and not _covered():
                 _vel = Vector2.ZERO
                 _index = event.index
                 _last_t = Time.get_ticks_usec()

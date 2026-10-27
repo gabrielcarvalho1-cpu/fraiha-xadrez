@@ -472,7 +472,7 @@ func refresh_online(on: bool):
     var rs = b.find_child("RefSubtitle", true, false)
     if rs != null:
         rs.color = Color("f6f2e8") if on else Color("ffb08f")
-        rs.set_text("Partida casual · fila automática" if on else hub.ONLINE_OFF_TEXT)
+        rs.set_text("Xadrez" if on else "Indisponível")   # R200 · placa pequena: observação curta
     var rt = b.find_child("RefTitle", true, false)
     if rt != null: rt.modulate = Color.WHITE if on else Color(1, 1, 1, 0.6)
 
@@ -559,6 +559,14 @@ func _profile(content: VBoxContainer, width := 0.0):
             b.add_theme_stylebox_override(st, sb)
         for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]: b.add_theme_color_override(c, Color("f4ce7f"))
         b.pressed.connect(func(): show_tab.call(tid))
+        # R199 · o texto encolhe até caber inteiro na aba (MOLDURA cortava o A no celular estreito)
+        # (o mesmo tamanho nas 5 abas: o da que tem o nome mais comprido)
+        b.resized.connect(func():
+            var fs := 12
+            for bb in tab_btns.values():
+                var fnt: Font = bb.get_theme_font("font")
+                while fs > 7 and fnt.get_string_size(bb.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > bb.size.x - 6.0: fs -= 1
+            for bb in tab_btns.values(): bb.add_theme_font_size_override("font_size", fs))
         tabbar.add_child(b)
         tab_btns[tid] = b
     # GALERIA DE PROGRESSÃO: todos os avatares; bloqueados em cinza com o requisito (mesma do PC).

@@ -2957,12 +2957,25 @@ func _wide_home(on: bool):
         if key == "community" or key == "profile": continue
         var t := TextureRect.new()
         t.name = "Wide_" + key
-        t.texture = load("res://ui_v022/assets/home_wide_%s.png" % key)
+        t.texture = load("res://ui_v022/assets/home_wide_%s.png" % ("signs_only" if key == "signs" else key))   # R199 · placas sem o fundo
         t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         t.stretch_mode = TextureRect.STRETCH_SCALE
         t.mouse_filter = Control.MOUSE_FILTER_IGNORE
         _wide_layer.add_child(t)
-        if key == "signs": t.z_index = 1   # R184e · por cima do espírito das águas (que passa na frente da arte)
+        if key == "signs":
+            t.z_index = 1   # R184e · por cima do espírito das águas (que passa na frente da arte)
+            # R199 · capa de folhagem por cima das placas ORIGINAIS da arte (apareciam pela borda quando as placas andam)
+            var cv := TextureRect.new()
+            cv.name = "Wide_signs_cover"
+            cv.texture = load("res://ui_v022/assets/home_wide_signs_cover.png")
+            cv.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+            cv.stretch_mode = TextureRect.STRETCH_SCALE
+            cv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            cv.position = Vector2(1380, 600)
+            cv.size = Vector2(220, 280)
+            _wide_layer.add_child(cv)
+            _wide_layer.move_child(cv, t.get_index())
+            _wide_patch["signs_cover"] = cv
         _wide_patch[key] = t
 
 const WIDE_MENU_X := Vector2(540, 1120)   # pilares do menu na arte: nada das laterais passa daqui
@@ -3015,6 +3028,17 @@ func _layout_wide(dims: Vector2):
                 _wide_patch[key].size = Vector2(74, 82) * k
             elif _wide_patch[key].texture is AtlasTexture:
                 _wide_patch[key].texture = load("res://ui_v022/assets/home_wide_icons.png")
+    # R199 · placas andaram para a esquerda: a capa cobre as originais e o espírito das águas vai para a esquerda
+    # das placas (antes ficava escondido atrás delas)
+    var sgn = _wide_patch.get("signs")
+    var cov = _wide_patch.get("signs_cover")
+    var moved: bool = sgn != null and sgn.position.x < 1377.0
+    if cov != null: cov.visible = moved
+    var spirit = canvas.get_node_or_null("WaterSpirit")
+    if spirit != null:
+        if not _wide_orig.has(spirit): _wide_orig[spirit] = [spirit.position, spirit.scale]
+        spirit.position = _wide_orig[spirit][0]
+        if moved: spirit.position.x = minf(spirit.position.x, sgn.position.x - spirit.size.x + 6.0)
     # logo: no meio do espaço livre da coluna da esquerda (entre os ícones e a conta), do tamanho que couber
     var lsrc: Rect2 = WIDE_PATCHES["logo"][0]
     var top: float = v.position.y + m + 90.0 * kl + 84.0 * ki
@@ -3613,10 +3637,22 @@ func open_premium(page_id := "hub"):
 func open_club():
     open_premium("club")
 
+## R200 · já abriu a MARCHA / o XEQUE neste aparelho? (o convite da Home só aparece para quem nunca abriu)
+const MODES_SEEN := "user://modes_seen.cfg"
+static func mode_seen(id: String) -> bool:
+    var c := ConfigFile.new()
+    return c.load(MODES_SEEN) == OK and bool(c.get_value("seen", id, false))
+func mark_mode_seen(id: String):
+    var c := ConfigFile.new()
+    c.load(MODES_SEEN)
+    c.set_value("seen", id, true)
+    c.save(MODES_SEEN)
+
 ## R32 · MARCHA REAL (novo modo; Club ilimitado, sem Club 1 partida por dia).
 var marcha = null
 var xeque = null
 func open_xeque():
+    mark_mode_seen("xeque")   # R200
     if not await preload("res://web_content/conteudo_extra.gd").ensure("XEQUE"): return   # R115
     if xeque == null:
         xeque = load("res://xeque/xeque_ui.gd").new()
@@ -3627,6 +3663,7 @@ func open_xeque():
     xeque.open()
 
 func open_marcha():
+    mark_mode_seen("marcha")   # R200
     if not await preload("res://web_content/conteudo_extra.gd").ensure("MARCHA REAL"): return   # R115
     if marcha == null:
         marcha = load("res://marcha/marcha_ui.gd").new()

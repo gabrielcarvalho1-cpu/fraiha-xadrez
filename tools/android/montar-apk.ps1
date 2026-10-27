@@ -20,6 +20,14 @@ $env:ANDROID_HOME = 'C:\Android\Sdk'; $env:ANDROID_SDK_ROOT = 'C:\Android\Sdk'
 $env:GRADLE_USER_HOME = 'C:\Android\gradle-home'
 $env:TEMP = 'C:\Android\tmp'; $env:TMP = 'C:\Android\tmp'
 "sdk.dir=C\:\\Android\\Sdk" | Out-File "$dst\build\local.properties" -Encoding ascii
+# R200 · abertura do Android 12+: o fundo usava a imagem do ícone como "cor" (o Android ignora e mostra BRANCO, com as
+# peças em volta). Fundo escuro de verdade (o mesmo da tela de carregamento do jogo).
+$th = "$dst\build\res\values\themes.xml"
+if (Test-Path $th) {
+  $x = Get-Content $th -Raw
+  $x = $x.Replace('<item name="android:windowSplashScreenBackground">@mipmap/icon_background</item>', '<item name="android:windowSplashScreenBackground">#FF080503</item>')
+  Set-Content -Path $th -Value $x -Encoding utf8
+}
 Set-Location "$dst\build"
 $props = @{ addons_directory = "$dst\addons_vazio"; export_package_name = 'com.fraihaxadrez.app'; export_version_code = '5';
   export_version_name = '1.0.4-teste'; export_version_min_sdk = '24'; export_version_target_sdk = '35';

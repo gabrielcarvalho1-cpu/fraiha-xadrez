@@ -161,6 +161,7 @@ func setup(service, avatar_callable: Callable = Callable()):
     account.changed.connect(func(): if is_open() and screen == "list" and not has_list: _request_list())
     account.changed.connect(_bg_list)   # R162 · ao entrar na conta: busca a lista (mensagens não lidas) mesmo com Amigos fechado
     get_viewport().size_changed.connect(_layout)
+    get_viewport().size_changed.connect(_on_rotate)
     hide_ui()
 
 # ---------- Abrir / fechar ----------
@@ -1096,6 +1097,7 @@ func _show_art_list():
     _layout.call_deferred()
 
 func _show(which: String):
+    _form = "%s%s%s" % [_narrow(), _wide(), _short()]
     # R198 · a lista se refaz a cada 20 s: mantém a rolagem da aba
     var keep_scroll := -1
     if which == "list" and screen == "list" and is_instance_valid(list_scroll): keep_scroll = list_scroll.scroll_vertical
@@ -1223,6 +1225,11 @@ func _build_list(_narrow_layout: bool):
         search_input.get_parent().add_child(inv2)
         for c in search_input.get_parent().get_children():   # BUSCAR mais estreito para caber a placa
             if c is Button and c != inv2: c.custom_minimum_size.x = 118
+    elif _short() and is_instance_valid(search_input) and search_input.get_parent() != null:
+        # R199 · celular deitado (tela baixa): CONVIDAR vai para a linha da busca, sobra altura para a lista rolar
+        var inv3 := _button(search_input.get_parent(), "CONVIDAR", open_ref, true, true, "btn_verde", "ico_espadas")
+        inv3.name = "OpenReferral"
+        inv3.custom_minimum_size = Vector2(130, 46)
     else:
         var inv := _button(box, "CONVIDAR AMIGOS · GANHE 7 DIAS DE CLUB" if not _narrow_layout else "CONVIDAR · +7 DIAS DE CLUB", open_ref, true, false, "btn_verde", "ico_espadas")
         inv.clip_text = true
@@ -1343,7 +1350,7 @@ func _tabs(groups: Dictionary, narrow: bool):
         b.focus_mode = Control.FOCUS_NONE
         b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
         b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        b.custom_minimum_size.y = 52 if not narrow else 42
+        b.custom_minimum_size.y = (52 if not narrow else 42) if not _short() else 40
         var st := StyleBoxFlat.new()
         st.bg_color = Color("1f4fa8") if on else Color("0c1530")
         st.border_color = Color("f3d27e") if on else Color("b8913f")
@@ -1679,6 +1686,11 @@ func _layout():
     dim.size = get_viewport().get_visible_rect().size
     var ui_scale = 1.0 if mobile else 1.4
     panel.scale = Vector2.ONE * ui_scale
+    # R199 · na lista de AMIGOS quem rola é só a lista da aba (o painel de fora parado: um rolamento dentro do outro
+    # travava no celular deitado)
+    var inner := screen == "list" and is_instance_valid(list_scroll)
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED if inner else (ScrollContainer.SCROLL_MODE_SHOW_NEVER if mobile else ScrollContainer.SCROLL_MODE_AUTO)
+    if inner and scroll.scroll_vertical != 0: scroll.scroll_vertical = 0
     var width = minf(PANEL_W, (area.size.x - 16.0) / ui_scale)
     box.custom_minimum_size.x = width - 48.0
     if _fill_scroll() != null:
@@ -1688,7 +1700,7 @@ func _layout():
         var sb = panel.get_theme_stylebox("panel")
         var pad: float = maxf(50.0, (sb.get_minimum_size().y if sb != null else 0.0) + 6.0)
         var avail = (area.size.y - 16.0) / ui_scale - pad
-        _set_fill_height(avail - _dm_rest() - 6.0)
+        _set_fill_height(avail - _dm_rest() - (6.0 if screen == "dm" else 40.0))   # R199 · lista de AMIGOS: cabe inteira no painel
     var wanted = box.get_combined_minimum_size().y + 28.0
     var pad_x := 48.0
     var sb0 = panel.get_theme_stylebox("panel")
@@ -1715,10 +1727,25 @@ func _dm_rest() -> float:
         n += 1
     return total + float(box.get_theme_constant("separation")) * n
 
+## R199 · virou o celular (em pé ↔ deitado): a tela de AMIGOS é montada de novo para o formato novo (antes ficava
+## com a montagem do outro formato: maior que a tela, cortada dos lados)
+var _form := ""
+func _on_rotate():
+    var f := "%s%s%s" % [_narrow(), _wide(), _short()]
+    if f == _form: return
+    var was := _form
+    _form = f
+    if was == "" or not is_open(): return
+    if screen in ["list", "search", "profile", "ref", "inbox", "invite_friends", "invite_pick", "invite_table"]: _show.call_deferred(screen)
+
+## R199 · celular deitado: tela baixa (a lista da aba precisa do espaço)
+func _short() -> bool:
+    return Mobile.active(get_viewport()) and get_viewport().get_visible_rect().size.y < 520.0
+
 func _set_fill_height(h: float):
     var sc := _fill_scroll()
     if sc == null: return
-    var want := floorf(clampf(h, 120.0, 560.0 if sc == dm_scroll else 900.0))
+    var want := floorf(clampf(h, 120.0 if sc == dm_scroll else 70.0, 560.0 if sc == dm_scroll else 900.0))
     if sc.custom_minimum_size.y != want: sc.custom_minimum_size.y = want
 
 func _set_dm_height(h: float):
