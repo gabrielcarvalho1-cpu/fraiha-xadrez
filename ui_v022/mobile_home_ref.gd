@@ -66,6 +66,8 @@ const BAR := Rect2(300, 604, 291, 14)
 var hub
 var mobile                     # ui_v022/mobile_hub.gd (dono da página e dos botões de som/Club)
 var backdrop: TextureRect
+var back_edges: Array = []
+var art_fade: ShaderMaterial   # R203 · bordas da arte da frente se fundem na de trás
 var top: Control               # px da arte, linhas 0 → NAV_TOP
 var ground: TextureRect
 var nav: Control               # px da arte, a barra (linhas NAV_TOP → fim)
@@ -94,10 +96,23 @@ func setup(owner_hub, owner_mobile):
     clip_contents = false
     backdrop = TextureRect.new()
     backdrop.name = "RefBackdrop"
-    backdrop.texture = _region(Rect2(0, 0, 854, 1655))   # R201 · o mesmo recorte de antes da R199 (a imagem de trás, ampliada)
+    # R203 · tela mais larga que a arte: a ARTE DE TRÁS é a mesma cena ESTICADA na largura da tela (mesma altura
+    # da arte da frente, só mais larga) e a arte da frente se funde nela pelas bordas (degradê) — sem faixa
+    # escura, sem emenda, sem a cena repetida
+    backdrop.texture = _region(Rect2(0, 0, 854, NAV_TOP))
     backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-    backdrop.modulate = Color(0.42, 0.45, 0.42)   # sobras (telas largas): a própria cena, escurecida
+    backdrop.stretch_mode = TextureRect.STRETCH_SCALE
+    # na faixa de cima (SEJA MEMBRO e ícones) a arte de trás não pode mostrar a ponta da placa: ali as laterais
+    # usam só a beirada da cena (folhagem / céu)
+    for side in 2:
+        var tc := TextureRect.new()
+        tc.name = "RefBackTopEdge%d" % side
+        tc.texture = _region(Rect2(0 if side == 0 else 836, 0, 18, 140))
+        tc.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        tc.stretch_mode = TextureRect.STRETCH_SCALE
+        tc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        backdrop.add_child(tc)
+        back_edges.append(tc)
     backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(backdrop)
     top = Control.new()
@@ -111,6 +126,11 @@ func setup(owner_hub, owner_mobile):
     art.stretch_mode = TextureRect.STRETCH_SCALE
     art.size = Vector2(854, NAV_TOP)
     art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var fm := ShaderMaterial.new()
+    fm.shader = Shader.new()
+    fm.shader.code = "shader_type canvas_item;\nuniform float fx = 0.0;\nuniform float y0 = 0.09;\nvoid fragment(){ vec4 c = texture(TEXTURE, UV); float a = 1.0; if (fx > 0.0001) { float e = smoothstep(0.0, fx, UV.x) * smoothstep(0.0, fx, 1.0 - UV.x); a = mix(1.0, e, smoothstep(y0 - 0.02, y0 + 0.02, UV.y)); } COLOR = vec4(c.rgb, c.a * a); }"
+    art.material = fm
+    art_fade = fm
     top.add_child(art)
     _build_fx()
     ground = TextureRect.new()
@@ -502,8 +522,16 @@ func layout(box: Rect2, full: Rect2):
     var k := maxf(w / DESIGN.x, minf(h / DESIGN.y, w * 1.06 / DESIGN.x))
     if k * MIN_H > h: k = h / MIN_H
     var x0 := (w - DESIGN.x * k) / 2.0
-    backdrop.position = full.position - box.position
-    backdrop.size = full.size
+    backdrop.position = Vector2.ZERO
+    backdrop.size = Vector2(w, NAV_TOP * k)
+    backdrop.visible = x0 > 0.5
+    for i in back_edges.size():
+        var tc: TextureRect = back_edges[i]
+        tc.size = Vector2(x0 + 2.0, 140.0 * k)
+        tc.position = Vector2(0.0 if i == 0 else w - x0 - 2.0, 0.0)
+    # degradê de ~34 px da arte nas bordas (abaixo da faixa do SEJA MEMBRO/ícones, que não somem)
+    art_fade.set_shader_parameter("fx", (34.0 / DESIGN.x) if x0 > 0.5 else 0.0)
+    art_fade.set_shader_parameter("y0", 140.0 / NAV_TOP)
     top.scale = Vector2.ONE * k
     top.position = Vector2(x0, 0)
     var nav_y := h - (DESIGN.y - NAV_TOP) * k     # topo do recorte da barra, colado no fim da tela
