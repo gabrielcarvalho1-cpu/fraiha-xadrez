@@ -11,7 +11,7 @@ const ART_PATH := "res://ui_v022/assets/home_mobile_v11.png"   # R200 · Marcha/
 const DESIGN := Vector2(854, 1938)   # R199 · +96 (a cena continua por baixo da barra)
 const NAV_TOP := 1751.0        # topo do recorte da barra (inclui a pedra azul de cima)
 const NAV_FADE := 34.0         # fileiras de cima do recorte que se misturam com a cena
-const MIN_H := 1750.0          # altura mínima da composição (menu inteiro + barra sem encostar na moldura), px da arte · R180c: +56 para o botão do WhatsApp caber entre o menu e a barra
+const MIN_H := 1712.0          # altura mínima da composição (menu inteiro + barra sem encostar na moldura), px da arte · R180c: +56 para o botão do WhatsApp caber entre o menu e a barra
 const GROUND := Rect2(0, 1700, 854, 51)   # R199 · o fim da cena estendida   # chão da cena, estendido quando a tela é mais alta
 const RefText := preload("res://ui_v022/ref_text.gd")
 const GLOW := preload("res://ui_v022/home_button_glow.gdshader")
@@ -94,7 +94,7 @@ func setup(owner_hub, owner_mobile):
     clip_contents = false
     backdrop = TextureRect.new()
     backdrop.name = "RefBackdrop"
-    backdrop.texture = _region(Rect2(0, 0, 854, NAV_TOP))
+    backdrop.texture = _region(Rect2(0, 0, 854, 1655))   # R201 · o mesmo recorte de antes da R199 (a imagem de trás, ampliada)
     backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
     backdrop.modulate = Color(0.42, 0.45, 0.42)   # sobras (telas largas): a própria cena, escurecida
@@ -517,9 +517,21 @@ func layout(box: Rect2, full: Rect2):
     # R180c · o WhatsApp fica SEMPRE visível entre o menu e a barra de baixo (em tela baixa a barra sobe e
     # cobria o botão): encosta logo acima da barra, sem subir além do fim do menu
     if wa_button != null:
-        var above_nav := (nav_y + 26.0 * k) / k - WA_STRIP.size.y
-        wa_button.position.y = clampf(above_nav, WA_MENU_END, WA_STRIP.position.y)
-        if app_button != null: app_button.position.y = wa_button.position.y
+        # R201 · tela baixa: o botão do WhatsApp (e o BAIXAR O APP) encolhe para caber entre o menu e a barra — antes a
+        # Home inteira encolhia (MIN_H 1750 da R196) e sobravam faixas escuras nas laterais do celular
+        var room: float = (nav_y + 26.0 * k) / k - WA_MENU_END
+        var hh: float = clampf(room, 62.0, WA_STRIP.size.y)
+        var ww: float = hh * (WA_SIDE_L.size.x / WA_SIDE_L.size.y)
+        var above_nav := (nav_y + 26.0 * k) / k - hh
+        var yy: float = clampf(above_nav, WA_MENU_END, WA_STRIP.position.y)
+        if app_button != null:
+            wa_button.size = Vector2(ww, hh)
+            app_button.size = Vector2(ww, hh)
+            wa_button.position = Vector2(WA_SIDE_L.end.x - ww, yy)
+            app_button.position = Vector2(WA_SIDE_R.position.x, yy)
+        else:
+            wa_button.size = Vector2(ww, hh)
+            wa_button.position = Vector2(DESIGN.x / 2.0 - ww / 2.0, yy)
 
 func refresh():
     if hub == null: return
